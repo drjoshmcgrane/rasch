@@ -20,9 +20,8 @@ if (requireNamespace("RaschR", quietly = TRUE)) {
   tau_true <- lapply(mvec, function(m) sort(rnorm(m, 0, 0.9)))
   tau_true[[2]] <- c(1.2, -1.3, 0.6)                       # disordered item
   th <- rnorm(Np, 0, 1.4); grp <- rep(c("ref", "foc"), each = Np / 2)
-  shift <- numeric(Np); 
   X <- sapply(seq_along(mvec), function(i) {
-    sft <- if (i == 5) ifelse(grp == "foc", 0.9, 0) else 0  # uniform DIF planted on item 5
+    sft <- if (i == 5) ifelse(grp == "foc", 0.9, 0) else numeric(Np)  # uniform DIF planted on item 5
     sapply(seq_len(Np), function(n) sample(0:mvec[i], 1, prob = simP(th[n] - sft[n], tau_true[[i]])))
   })
   colnames(X) <- sprintf("Q%02d", seq_along(mvec))
