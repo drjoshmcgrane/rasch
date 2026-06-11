@@ -1,0 +1,21 @@
+Package: RaschR
+Type: Package
+Title: Pairwise Rasch Measurement Analysis and Diagnostics
+Version: 0.1.0
+Authors@R: person("Josh", "McGrane", role = c("aut", "cre"),
+    email = "you@example.org")
+Description: Pairwise conditional estimation of dichotomous and polytomous
+    Rasch models (partial credit and rating scale), with Warm's weighted
+    likelihood person estimates, the item-trait interaction chi-square,
+    person separation, threshold and category diagnostics, residual
+    principal-components dimensionality testing, local dependence by
+    residual correlation, and differential item functioning by two-way
+    residual analysis of variance. Implemented from published measurement
+    theory (Choppin 1985; Andrich & Luo 1993; Warm 1989) in base R, with
+    no dependence on other estimation engines.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Imports: stats, graphics, grDevices
+Suggests: testthat (>= 3.0.0), shiny
+RoxygenNote: 7.3.1
+Config/testthat/edition: 3
