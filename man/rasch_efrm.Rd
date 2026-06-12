@@ -69,6 +69,21 @@ is reported in a common arbitrary unit, and the returned object is also a
 full \code{\link{rasch}} fit at the item-by-group level, so the package's
 diagnostic tables and plots apply.
 }
+\details{
+Humphry (2005) states the model for dichotomous responses. The polytomous
+form fitted here, with the frame unit multiplying the whole exponent over
+the item's partial-credit thresholds, is this package's extension of that
+statement. It is the form characterised by preserving the two properties
+the model's logic rests on: the partial credit model holds within every
+frame in the frame's natural unit (so the pairwise conditional
+cancellation remains valid), and the weighted score remains sufficient
+for the person parameter. It reduces exactly to the dichotomous model
+when items are scored 0/1 and to the ordinary partial credit model when
+all units equal one. One interpretive consequence: category widths in
+natural units scale with the frame unit, so a high-unit frame makes
+proportionally sharper category distinctions; frame-level fit and the
+per-frame category curves are where a violation of this would appear.
+}
 \examples{
 \donttest{
 set.seed(1); Np <- 400

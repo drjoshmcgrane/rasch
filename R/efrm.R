@@ -8,8 +8,24 @@
 #
 # Within a frame all curves are parallel, so the partial credit model holds
 # in the frame's natural unit and the pairwise conditional logic of
-# Andrich & Luo (2003) applies unchanged within frames. Estimation is in
-# two routes, each assigned to the data structure that identifies it:
+# Andrich & Luo (2003) applies unchanged within frames.
+#
+# Humphry (2005) states the model for dichotomous responses; the polytomous
+# form above is this package's extension of it. It is characterised by the
+# properties the model's logic requires: the unit multiplies the whole
+# exponent, so (i) within every frame the partial credit model holds in the
+# frame's natural unit (natural thresholds rho*(delta - c), parallel
+# curves), which is what makes the pairwise conditional cancellation valid;
+# (ii) the weighted score sum_i rho_i x_i remains sufficient for the person
+# parameter; and (iii) it reduces exactly to the dichotomous statement when
+# every item has two categories and to the ordinary PCM when every unit is
+# one. Per-threshold discriminations would destroy (i) and with it Rasch
+# measurement; a unit on only part of the exponent would destroy the
+# natural-unit reading. A consequence worth noting when interpreting
+# results: category widths in natural units scale with the frame unit.
+#
+# Estimation is in two routes, each assigned to the data structure that
+# identifies it:
 #
 # Route 1 (person-free, within-frame pairwise conditional ML): the centred,
 # alpha-absorbed set thresholds dtilde (sum-zero per set) and the person
@@ -318,6 +334,20 @@
 #' is reported in a common arbitrary unit, and the returned object is also a
 #' full \code{\link{rasch}} fit at the item-by-group level, so the package's
 #' diagnostic tables and plots apply.
+#'
+#' Humphry (2005) states the model for dichotomous responses. The polytomous
+#' form fitted here, with the frame unit multiplying the whole exponent over
+#' the item's partial-credit thresholds, is this package's extension of that
+#' statement. It is the form characterised by preserving the two properties
+#' the model's logic rests on: the partial credit model holds within every
+#' frame in the frame's natural unit (so the pairwise conditional
+#' cancellation remains valid), and the weighted score remains sufficient
+#' for the person parameter. It reduces exactly to the dichotomous model
+#' when items are scored 0/1 and to the ordinary partial credit model when
+#' all units equal one. One interpretive consequence: category widths in
+#' natural units scale with the frame unit, so a high-unit frame makes
+#' proportionally sharper category distinctions; frame-level fit and the
+#' per-frame category curves are where a violation of this would appear.
 #'
 #' @param data Persons-by-items data (matrix or data frame, like
 #'   \code{\link{rasch}}), plus a person-group column.

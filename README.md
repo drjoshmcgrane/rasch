@@ -178,7 +178,14 @@ downloads the entire analysis as a ZIP archive.
   reconciled over the linking graph. Person measures use weighted-score
   sufficiency, and per-group score curves replace the raw-score table.
   Includes frame fit pooling, an equal-unit model comparison, the frame-unit
-  caterpillar plot, and fanned cross-frame ICCs.
+  caterpillar plot, and fanned cross-frame ICCs. Humphry (2005) states the
+  model for dichotomous responses; the polytomous form fitted here (the
+  frame unit multiplying the whole exponent over the item's partial-credit
+  thresholds) is this package's extension of that statement, characterised
+  by preserving within-frame partial-credit structure — hence the validity
+  of the pairwise conditional cancellation — and weighted-score
+  sufficiency, and reducing exactly to the dichotomous model and the
+  ordinary PCM in the corresponding special cases.
 - `save_outputs()` writes the complete analysis (all tables, all plots, a
   text summary) to a folder in one call.
 
