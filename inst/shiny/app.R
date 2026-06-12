@@ -140,8 +140,11 @@ css <- HTML("
   table.dataTable { font-size: .85rem; }
 ")
 
-# Card with a plot and PNG/PDF download buttons in the header.
-plotCard <- function(id, title, height = "430px") {
+# Card with a plot and PNG/PDF download buttons in the header. The body is
+# non-fillable so flex sizing can never compress the fixed-height plot
+# (the cause of the squashed plots), and a percentage height is avoided
+# because it races the layout and renders a zero-height device.
+plotCard <- function(id, title, height = "560px") {
   card(
     full_screen = TRUE,
     card_header(div(class = "d-flex justify-content-between align-items-center",
@@ -149,7 +152,7 @@ plotCard <- function(id, title, height = "430px") {
       div(class = "btn-group",
           downloadButton(paste0(id, "_png"), "PNG", class = "btn-outline-secondary btn-xs"),
           downloadButton(paste0(id, "_pdf"), "PDF", class = "btn-outline-secondary btn-xs")))),
-    card_body(plotOutput(id, height = height), padding = 8)
+    card_body(plotOutput(id, height = height), padding = 8, fillable = FALSE)
   )
 }
 
@@ -167,6 +170,8 @@ tableCard <- function(id, title, note = NULL) {
 ui <- page_navbar(
   title = span("RaschR"),
   theme = theme,
+  # normal scrolling pages: never compress content to fit the viewport
+  fillable = FALSE,
   header = tags$head(tags$style(css)),
 
   # ----------------------------------------------------------------- DATA --
@@ -279,13 +284,13 @@ ui <- page_navbar(
                        class = "btn-outline-secondary mb-3")),
     tableCard("items_tbl", "Item statistics",
               "Click a row to inspect that item's curves below. Location and SE from the pairwise conditional likelihood; fit residual ~ N(0,1) under fit; item-trait chi-square over class intervals; misfit flag uses BH-adjusted probabilities."),
-    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+    layout_columns(col_widths = 12,
       plotCard("icc", "Item characteristic curve"),
       plotCard("ccc", "Category probability curves")),
-    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+    layout_columns(col_widths = 12,
       plotCard("tpc", "Threshold probability curves"),
       plotCard("cfreq", "Category frequencies")),
-    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+    layout_columns(col_widths = 12,
       tableCard("distractor_tbl", "Distractor analysis",
                 "Multiple-choice analyses only (provide a key). Locations use the rest measure; a distractor whose takers are abler than the keyed option's flags a possible miskey."),
       plotCard("distractor_plot", "Option curves"))
@@ -295,20 +300,20 @@ ui <- page_navbar(
   nav_panel("Persons",
     tableCard("person_tbl", "Person estimates",
               "Warm WLE location and SE per person, with raw score, fit statistics, and your ID and factor columns."),
-    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+    layout_columns(col_widths = 12,
       plotCard("pfit", "Person fit"),
       plotCard("pim_p", "Person-item threshold distribution"))
   ),
 
   # ----------------------------------------------------------------- TEST --
   nav_panel("Test plots",
-    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+    layout_columns(col_widths = 12,
       plotCard("thrmap", "Threshold map"),
       plotCard("imap", "Item map: location by fit residual")),
-    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+    layout_columns(col_widths = 12,
       plotCard("tcc", "Test characteristic curve"),
       plotCard("tif", "Test information & SEM")),
-    plotCard("guttman", "Guttman scalogram", height = "560px")
+    plotCard("guttman", "Guttman scalogram", height = "640px")
   ),
 
   # ------------------------------------------------------------------ DIF --
@@ -374,7 +379,7 @@ ui <- page_navbar(
         tableCard("frame_tbl", "Frames: units, origins, pooled fit"),
         div(tableCard("phi_tbl", "Person group units (phi)"),
             tableCard("alpha_tbl", "Item set units (alpha) and locations"))),
-      layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+      layout_columns(col_widths = 12,
         plotCard("frame_plot", "Frame units"),
         plotCard("frame_icc", "ICC across frames")),
       card(card_header("Equal-unit comparison"),
@@ -395,11 +400,11 @@ ui <- page_navbar(
                      class = "btn-outline-primary w-100"),
         p(class = "text-muted small mt-2",
           "Leave both empty (and press the button) to return to the first-contrast split. Persons extreme on either subset are excluded; the proportion of significant tests carries an exact binomial confidence interval.")),
-      layout_columns(col_widths = breakpoints(sm = 12, xl = c(5, 7)),
+      layout_columns(col_widths = 12,
         card(card_header("Unidimensionality t-test (Smith)"),
              card_body(verbatimTextOutput("dim_txt"))),
         plotCard("scree", "Scree of the residual components")),
-      layout_columns(col_widths = breakpoints(sm = 12, xl = c(5, 7)),
+      layout_columns(col_widths = 12,
         plotCard("pca_plot", "Residual first contrast"),
         tableCard("loadings_tbl", "Component loadings (first 10)")),
       tableCard("eigen_tbl", "Residual eigenvalues (first 10)")
@@ -408,8 +413,8 @@ ui <- page_navbar(
 
   # ------------------------------------------------------ LOCAL DEPENDENCE --
   nav_panel("Local dependence",
-    layout_columns(col_widths = breakpoints(sm = 12, xl = c(7, 5)),
-      plotCard("rcor", "Residual correlations", height = "520px"),
+    layout_columns(col_widths = 12,
+      plotCard("rcor", "Residual correlations", height = "640px"),
       div(
         tableCard("rpairs_tbl", "Flagged dependent pairs",
                   "Pairs more than 0.2 above the average off-diagonal residual correlation."),
