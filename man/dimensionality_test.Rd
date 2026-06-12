@@ -4,23 +4,42 @@
 \alias{dimensionality_test}
 \title{Residual-component test of unidimensionality}
 \usage{
-dimensionality_test(fit, alpha = 0.05)
+dimensionality_test(
+  fit,
+  alpha = 0.05,
+  items_positive = NULL,
+  items_negative = NULL
+)
 }
 \arguments{
 \item{fit}{A fitted object from \code{\link{rasch}}.}
 
 \item{alpha}{Nominal significance level for the per-person t-tests.}
+
+\item{items_positive, items_negative}{Optional character vectors naming the
+two item subsets; both must be given (disjoint, at least two items
+each), otherwise the first residual contrast defines the split.}
 }
 \value{
-A list with the proportion of significant tests, its confidence
-  interval, the item split, and a \code{multidimensional} verdict.
+A list with the proportion of significant tests, its exact
+  confidence interval, the sample sizes (\code{n} used,
+  \code{n_excluded_extreme}), the item split and its source, and a
+  \code{multidimensional} verdict.
 }
 \description{
-Splits the items by the sign of their first residual-contrast loading,
-estimates each person on each subset, and compares the two estimates with a
-per-person t-test (Smith 2002). A proportion of significant tests whose
-lower binomial confidence bound exceeds \code{alpha} signals
-multidimensionality.
+Estimates each person separately on two item subsets and compares the two
+estimates with a per-person t-test (Smith 2002). By default the subsets
+are defined by the sign of the first residual-contrast loading; they can
+also be nominated manually (for example, by content). Under
+unidimensionality and local independence the two subset estimates are
+independent given the person location, so
+\code{t = (theta_A - theta_B) / sqrt(se_A^2 + se_B^2)} is approximately
+standard normal and about \code{alpha} of the tests should reach
+significance. Persons with an extreme score on either subset are excluded
+(their weighted-likelihood estimates are most biased there). The
+proportion of significant tests is reported with an exact
+(Clopper-Pearson) binomial confidence interval; a lower bound above
+\code{alpha} signals multidimensionality.
 }
 \examples{
 set.seed(1)

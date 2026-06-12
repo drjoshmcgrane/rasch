@@ -4,19 +4,26 @@
 \alias{residual_pca}
 \title{Principal components of the residual correlations}
 \usage{
-residual_pca(fit)
+residual_pca(fit, n_components = 10)
 }
 \arguments{
 \item{fit}{A fitted object from \code{\link{rasch}}.}
+
+\item{n_components}{Number of leading components to return loadings and
+eigenvalue rows for (capped at the number of items).}
 }
 \value{
 A list with the residual \code{eigenvalues}, their
-  \code{prop}ortions, the first-contrast \code{loadings}, and the
-  \code{first_eigen}value.
+  \code{prop}ortions, the first-contrast \code{loadings} (sorted), the
+  \code{loadings_matrix} for the leading components, the
+  \code{eigen_table} (component, eigenvalue, proportion, cumulative), and
+  the \code{first_eigen}value.
 }
 \description{
 The first residual contrast (PC1) carries any second dimension; items with
 opposing loadings define the split used by the unidimensionality t-test.
+Loadings for the leading components and the eigenvalue table support
+inspection beyond the first contrast.
 }
 \examples{
 set.seed(1)

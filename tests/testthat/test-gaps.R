@@ -183,3 +183,45 @@ test_that("multiple-choice scoring and miskey detection work", {
   expect_equal(fit2$items$location, fit$items$location)
   expect_error(distractor_analysis(rasch(fit$X)), "no key")
 })
+
+test_that("dimensionality: 10-component PCA, scree, manual subsets, exact CI", {
+  set.seed(2); Np <- 1200; L <- 16
+  d <- scale(seq(-2, 2, length.out = L), scale = FALSE)[, 1]
+  thA <- rnorm(Np, 0, 1.4); thB <- 0.3 * thA + sqrt(1 - 0.3^2) * rnorm(Np, 0, 1.4)
+  XA <- matrix(rbinom(Np * 8, 1, plogis(outer(thA, d[1:8], "-"))), Np, 8)
+  XB <- matrix(rbinom(Np * 8, 1, plogis(outer(thB, d[9:16], "-"))), Np, 8)
+  X <- cbind(XA, XB); colnames(X) <- sprintf("D%02d", 1:16)
+  fit <- rasch(X)
+
+  pc <- residual_pca(fit)
+  expect_equal(ncol(pc$loadings_matrix), 11)        # item + PC1..PC10
+  expect_equal(nrow(pc$eigen_table), 10)
+  expect_true(all(diff(pc$eigen_table$eigenvalue) <= 1e-10))
+  expect_equal(pc$eigen_table$cumulative[10],
+               sum(pc$eigenvalues[1:10]) / sum(pc$eigenvalues))
+  et <- plot_scree(fit)
+  expect_equal(nrow(et), 10)
+
+  # default split detects the planted second dimension; exact CI fields present
+  dt <- dimensionality_test(fit)
+  expect_true(dt$multidimensional)
+  expect_identical(dt$split, "first residual contrast")
+  expect_true(dt$ci[1] >= 0 && dt$ci[2] <= 1 && dt$ci[1] < dt$ci[2])
+  expect_true(dt$n + dt$n_excluded_extreme >= dt$n)
+
+  # manual subsets matching the true structure also detect it
+  dtm <- dimensionality_test(fit, items_positive = sprintf("D%02d", 1:8),
+                             items_negative = sprintf("D%02d", 9:16))
+  expect_true(dtm$multidimensional)
+  expect_identical(dtm$split, "manual")
+  expect_gt(dtm$prop_significant, 0.05)
+
+  expect_error(dimensionality_test(fit, items_positive = sprintf("D%02d", 1:8)),
+               "both item subsets")
+  expect_error(dimensionality_test(fit, items_positive = c("D01", "D02"),
+                                   items_negative = c("D02", "D03")),
+               "disjoint")
+  expect_error(dimensionality_test(fit, items_positive = c("D01", "ZZ"),
+                                   items_negative = c("D03", "D04")),
+               "not in the fit")
+})

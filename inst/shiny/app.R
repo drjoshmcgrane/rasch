@@ -176,7 +176,13 @@ ui <- page_navbar(
         h6("Data source"),
         fileInput("file", NULL, accept = c(".csv", ".txt", ".tsv"),
                   buttonLabel = "Browse…", placeholder = "CSV / TSV file"),
-        checkboxInput("demo", "Use built-in demo data", TRUE),
+        selectInput("demo_choice", "Or pick an example dataset",
+                    c("(none)" = "none",
+                      "Multiple choice, dichotomous" = "dich",
+                      "Polytomous (PCM)" = "pcm",
+                      "Rating scale (RSM)" = "rsm",
+                      "Ratings, long format (MFRM)" = "mfrm",
+                      "Item sets x groups (EFRM)" = "efrm")),
         radioButtons("model_type", "Model",
                      c("Dichotomous" = "dich",
                        "Partial credit (PCM)" = "pcm",
@@ -227,8 +233,6 @@ ui <- page_navbar(
             "Each item x facet combination is calibrated jointly; facet severities are reported with SEs and fit. An interaction lets one facet be more or less severe on particular items.")
         ),
         sliderInput("ng", "Class intervals", min = 2, max = 16, value = 8),
-        numericInput("adjN", "Adjust chi-square to sample size (blank = off)",
-                     value = NA, min = 50),
         actionButton("run", "Run analysis", class = "btn-primary w-100 btn-lg mt-2"),
         p(class = "text-muted small mt-3",
           "Estimation: pairwise conditional maximum likelihood (Andrich & Luo 2003).",
@@ -255,6 +259,10 @@ ui <- page_navbar(
 
   # ---------------------------------------------------------------- ITEMS --
   nav_panel("Items",
+    div(class = "mb-2",
+        numericInput("adjN",
+                     "Adjust the item-trait chi-square to a reference sample size (blank = off)",
+                     value = NA, min = 50, width = "420px")),
     tableCard("items_tbl", "Item statistics",
               "Click a row to inspect that item's curves below. Location and SE from the pairwise conditional likelihood; fit residual ~ N(0,1) under fit; item-trait chi-square over class intervals; misfit flag uses BH-adjusted probabilities."),
     layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
@@ -362,13 +370,26 @@ ui <- page_navbar(
 
   # ------------------------------------------------------- DIMENSIONALITY --
   nav_panel("Dimensionality",
-    layout_columns(col_widths = breakpoints(sm = 12, xl = c(5, 7)),
-      card(card_header("Unidimensionality t-test (Smith)"),
-           card_body(verbatimTextOutput("dim_txt"))),
-      plotCard("pca_plot", "Residual first contrast")),
-    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
-      tableCard("loadings_tbl", "PC1 loadings"),
-      tableCard("eigen_tbl", "Residual eigenvalues"))
+    layout_sidebar(
+      sidebar = sidebar(width = 300, open = "always",
+        h6("t-test item subsets"),
+        selectizeInput("dim_pos", "Subset A", NULL, multiple = TRUE,
+                       options = list(placeholder = "default: positive PC1 loadings")),
+        selectizeInput("dim_neg", "Subset B", NULL, multiple = TRUE,
+                       options = list(placeholder = "default: negative PC1 loadings")),
+        actionButton("dim_apply", "Run t-test with these subsets",
+                     class = "btn-outline-primary w-100"),
+        p(class = "text-muted small mt-2",
+          "Leave both empty (and press the button) to return to the first-contrast split. Persons extreme on either subset are excluded; the proportion of significant tests carries an exact binomial confidence interval.")),
+      layout_columns(col_widths = breakpoints(sm = 12, xl = c(5, 7)),
+        card(card_header("Unidimensionality t-test (Smith)"),
+             card_body(verbatimTextOutput("dim_txt"))),
+        plotCard("scree", "Scree of the residual components")),
+      layout_columns(col_widths = breakpoints(sm = 12, xl = c(5, 7)),
+        plotCard("pca_plot", "Residual first contrast"),
+        tableCard("loadings_tbl", "Component loadings (first 10)")),
+      tableCard("eigen_tbl", "Residual eigenvalues (first 10)")
+    )
   ),
 
   # ------------------------------------------------------ LOCAL DEPENDENCE --
@@ -415,11 +436,21 @@ ui <- page_navbar(
 server <- function(input, output, session) {
 
   # ------------------------------------------------------------- data in --
+  # picking an example dataset also selects the matching model; uploading a
+  # file clears the example selection
+  observeEvent(input$demo_choice, {
+    if (!identical(input$demo_choice, "none"))
+      updateRadioButtons(session, "model_type", selected = input$demo_choice)
+  }, ignoreInit = TRUE)
+  observeEvent(input$file,
+    updateSelectInput(session, "demo_choice", selected = "none"))
+
   raw_data <- reactive({
-    if (isTRUE(input$demo) || is.null(input$file))
-      return(switch(input$model_type %||% "pcm",
+    if (!identical(input$demo_choice %||% "none", "none"))
+      return(switch(input$demo_choice,
                     dich = .demo_dich(), rsm = .demo_rsm(),
                     mfrm = .demo_long(), efrm = .demo_efrm(), .demo_data()))
+    req(input$file)
     ext <- tolower(tools::file_ext(input$file$name))
     sep <- if (ext %in% c("tsv", "txt")) "\t" else ","
     read.csv(input$file$datapath, sep = sep, check.names = FALSE,
@@ -516,6 +547,9 @@ server <- function(input, output, session) {
   }, ignoreInit = TRUE)
 
   output$data_info <- renderUI({
+    if (identical(input$demo_choice %||% "none", "none") && is.null(input$file))
+      return(p(class = "text-muted",
+               "Upload a CSV/TSV file, or pick an example dataset in the sidebar, to begin."))
     df <- raw_data()
     p(class = "text-muted",
       sprintf("%d rows x %d columns. Nominate the column roles in the sidebar, then run the analysis. Missing responses may be left blank or coded as -1; any negative score is read as missing.",
@@ -534,7 +568,8 @@ server <- function(input, output, session) {
 
   analysis <- eventReactive(input$run, {
     df <- raw_data()
-    adjN <- if (is.na(input$adjN) || input$adjN <= 0) NA else input$adjN
+    adjN <- NA   # the chi-square sample-size adjustment is a display option
+                 # on the Items page, applied without refitting
     withProgress(message = "Estimating (pairwise conditional ML)…", value = 0.3, {
       fit <- tryCatch({
         if (identical(input$model_type, "efrm")) {
@@ -571,7 +606,7 @@ server <- function(input, output, session) {
               mc_key <- kf
             else showNotification("Key CSV needs columns item,key - ignored.",
                                   type = "warning")
-          } else if (isTRUE(input$demo) && identical(input$model_type, "dich")) {
+          } else if (identical(input$demo_choice, "dich")) {
             mc_key <- .demo_dich_key()
           }
           # anchors match by item name; rows for absent items are ignored
@@ -627,6 +662,8 @@ server <- function(input, output, session) {
     fi <- if (inherits(fit(), "rasch_efrm"))
       unique(fit()$virtual_map$item) else NONE
     updateSelectInput(session, "frame_item", choices = fi, selected = fi[1])
+    updateSelectizeInput(session, "dim_pos", choices = its, selected = character(0))
+    updateSelectizeInput(session, "dim_neg", choices = its, selected = character(0))
   })
 
   observeEvent(input$make_subtest, {
@@ -776,8 +813,22 @@ server <- function(input, output, session) {
   })
 
   # ---------------------------------------------------------------- items --
-  register_table("items_tbl", function() fit()$items, function() {
+  # item table with the optional chi-square sample-size adjustment applied
+  # on display (the chi-square scales linearly in N, so no refit is needed)
+  items_view <- reactive({
     d <- fit()$items
+    adjN <- input$adjN
+    if (!is.null(adjN) && !is.na(adjN) && adjN > 0) {
+      n_used <- sum(!is.na(fit()$person$class_interval))
+      d$chisq <- d$chisq * adjN / n_used
+      d$p <- pchisq(d$chisq, d$df, lower.tail = FALSE)
+      d$p_adj <- p.adjust(d$p, method = "BH")
+      d$misfit <- d$p_adj < 0.05
+    }
+    d
+  })
+  register_table("items_tbl", function() items_view(), function() {
+    d <- items_view()
     d$misfit <- ifelse(d$misfit, "*", "")
     num_dt(d, selection = "single") |>
       formatSignif(c("p", "p_adj"), 3)
@@ -978,29 +1029,46 @@ server <- function(input, output, session) {
   })
 
   # --------------------------------------------------------- dimensionality --
+  dim_subsets <- reactiveVal(NULL)
+  observeEvent(input$run, dim_subsets(NULL), priority = 9)
+  observeEvent(input$dim_apply, {
+    if (length(input$dim_pos) >= 2 && length(input$dim_neg) >= 2) {
+      if (length(intersect(input$dim_pos, input$dim_neg))) {
+        showNotification("The two subsets must be disjoint.", type = "error")
+      } else dim_subsets(list(pos = input$dim_pos, neg = input$dim_neg))
+    } else if (!length(input$dim_pos) && !length(input$dim_neg)) {
+      dim_subsets(NULL)
+      showNotification("Reset to the first-contrast split.", type = "message")
+    } else {
+      showNotification("Nominate at least two items in each subset (or leave both empty).",
+                       type = "warning")
+    }
+  })
+  dim_res <- reactive({
+    s <- dim_subsets()
+    if (is.null(s)) dimensionality_test(fit())
+    else dimensionality_test(fit(), items_positive = s$pos,
+                             items_negative = s$neg)
+  })
   output$dim_txt <- renderPrint({
-    dt <- dimensionality_test(fit())
+    dt <- dim_res()
     if (!is.null(dt$note)) { cat(dt$note); return(invisible()) }
+    cat(sprintf("Item split: %s\n", dt$split))
     cat(sprintf("First residual eigenvalue: %.2f\n", dt$first_eigenvalue))
-    cat(sprintf("Significant person t-tests: %.1f%%  (95%% CI %.1f%% to %.1f%%, n = %d)\n",
+    cat(sprintf("Significant person t-tests: %.1f%%  (exact 95%% CI %.1f%% to %.1f%%, n = %d)\n",
                 100 * dt$prop_significant, 100 * dt$ci[1], 100 * dt$ci[2], dt$n))
+    cat(sprintf("Persons excluded (extreme on a subset): %d\n", dt$n_excluded_extreme))
     cat(sprintf("Verdict: %s\n", if (dt$multidimensional)
       "lower CI exceeds 5% - unidimensionality is questionable"
       else "consistent with unidimensionality"))
-    cat("\nPositive contrast items:\n ", paste(dt$items_positive, collapse = ", "), "\n")
-    cat("Negative contrast items:\n ", paste(dt$items_negative, collapse = ", "), "\n")
+    cat("\nSubset A items:\n ", paste(dt$items_positive, collapse = ", "), "\n")
+    cat("Subset B items:\n ", paste(dt$items_negative, collapse = ", "), "\n")
   })
-  register_table("loadings_tbl", function() residual_pca(fit())$loadings,
-                 function() num_dt(residual_pca(fit())$loadings))
-  register_table("eigen_tbl", function() {
-    pc <- residual_pca(fit())
-    data.frame(component = seq_along(pc$eigenvalues),
-               eigenvalue = pc$eigenvalues, proportion = pc$prop)
-  }, function() {
-    pc <- residual_pca(fit())
-    num_dt(data.frame(component = seq_along(pc$eigenvalues),
-                      eigenvalue = pc$eigenvalues, proportion = pc$prop))
-  })
+  register_plot("scree", function() plot_scree(fit()))
+  register_table("loadings_tbl", function() residual_pca(fit())$loadings_matrix,
+                 function() num_dt(residual_pca(fit())$loadings_matrix))
+  register_table("eigen_tbl", function() residual_pca(fit())$eigen_table,
+                 function() num_dt(residual_pca(fit())$eigen_table))
   register_plot("pca_plot", function() plot_pca(fit()))
 
   # -------------------------------------------------------- local dependence --

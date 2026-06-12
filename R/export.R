@@ -78,7 +78,8 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
                   check.names = FALSE), "residual_correlations")
   if (nrow(rc$flagged)) wtab(rc$flagged, "local_dependence_flagged")
   pc <- residual_pca(fit)
-  wtab(pc$loadings, "pca_loadings")
+  wtab(pc$loadings_matrix, "pca_loadings")
+  wtab(pc$eigen_table, "residual_eigenvalues")
   cf <- do.call(rbind, lapply(fit$thresholds_diag, function(d)
     data.frame(item = d$item, category = seq_along(d$category_counts) - 1L,
                count = d$category_counts)))
@@ -136,6 +137,7 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
   sp(function() plot_person_fit(fit), "person_fit")
   sp(function() plot_resid_cor(fit), "residual_correlations")
   sp(function() plot_pca(fit), "pca_loadings")
+  sp(function() plot_scree(fit), "scree")
   sp(function() plot_guttman(fit), "guttman_scalogram")
   if (inherits(fit, "rasch_mfrm")) {
     for (f in fit$facet_spec) local({
