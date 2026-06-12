@@ -1,7 +1,7 @@
 Package: RaschR
 Type: Package
 Title: Pairwise Conditional Rasch Measurement Analysis and Diagnostics
-Version: 0.5.0
+Version: 0.6.0
 Authors@R: person("Josh", "McGrane", role = c("aut", "cre"),
     email = "drjoshmcgrane@gmail.com")
 Description: Pairwise conditional maximum likelihood estimation of dichotomous
@@ -10,13 +10,15 @@ Description: Pairwise conditional maximum likelihood estimation of dichotomous
     a Godambe sandwich estimator. Person measures are
     Warm's (1989) weighted likelihood estimates, computed per missing-data
     pattern. The diagnostic suite covers item and person fit residuals,
-    infit and outfit, the item-trait interaction chi-square and class
-    interval analysis of variance, the person separation index with and
+    infit and outfit, the item-trait interaction chi-square over class
+    intervals, the person separation index with and
     without extremes, Cronbach's alpha, targeting, the score-to-measure
     table, test information, threshold and category diagnostics, residual
     principal-components dimensionality testing, local dependence by
     residual correlation, and differential item functioning by two-way
-    residual analysis of variance over any number of person factors. Also
+    residual analysis of variance over any number of person factors,
+    factor-at-a-time or as a full factorial with Tukey HSD comparisons and
+    false-discovery-rate adjustment. Also
     included: anchored estimation for test equating (individual threshold
     and average item-location anchors), common-item equating tests and
     plots, item splitting to resolve invariance violations, the many-facet

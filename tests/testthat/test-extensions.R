@@ -146,3 +146,30 @@ test_that("subtests absorb local dependence", {
   expect_error(combine_items(fit, list("U01")), "at least two")
   expect_error(combine_items(fit, list(c("U01", "ZZ"))), "not in the fit")
 })
+
+test_that("MFRM handles two facets jointly (rater x occasion)", {
+  set.seed(21); Np <- 300
+  persons <- sprintf("P%03d", seq_len(Np))
+  raters <- paste0("R", 1:3); occs <- paste0("T", 1:2)
+  th <- setNames(rnorm(Np, 0, 1.3), persons)
+  rho_r <- setNames(c(-0.5, 0, 0.5), raters)
+  rho_o <- setNames(c(-0.3, 0.3), occs)
+  tau <- list(A = c(-1, 1), B = c(-0.4, 1.1), C = c(-1.1, 0.5))
+  d <- expand.grid(person = persons, item = names(tau), rater = raters,
+                   occasion = occs, stringsAsFactors = FALSE)
+  d$score <- mapply(function(p, i, r, o)
+    sample(0:2, 1, prob = simP(th[p], tau[[i]] + rho_r[r] + rho_o[o])),
+    d$person, d$item, d$rater, d$occasion)
+
+  fit <- rasch_mfrm(d, "person", "item", "score",
+                    facets = c("rater", "occasion"))
+  expect_true(fit$est$converged)
+  expect_setequal(names(fit$facet_effects), c("rater", "occasion"))
+  fr <- fit$facet_effects$rater; fo <- fit$facet_effects$occasion
+  expect_lt(max(abs(fr$severity - (rho_r - mean(rho_r)))), 0.15)
+  expect_lt(max(abs(fo$severity - (rho_o - mean(rho_o)))), 0.15)
+  expect_equal(sum(fr$severity), 0, tolerance = 1e-8)
+  expect_equal(sum(fo$severity), 0, tolerance = 1e-8)
+  # virtual items = item x rater x occasion cells
+  expect_equal(ncol(fit$X), 3 * 3 * 2)
+})

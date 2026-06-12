@@ -29,7 +29,7 @@ fit <- rasch(responses, model = "PCM",
              id = "person_id", factors = c("gender", "site"))
 
 summary(fit)         # full test-of-fit report
-fit$items            # location + SE, fit residual, infit/outfit, chi-square, ANOVA F
+fit$items            # location + SE, fit residual, infit/outfit, chi-square
 fit$person           # WLE + SE per person, with ID, factors, raw score, person fit
 fit$thresholds       # every threshold with its standard error
 score_table(fit)     # raw score to measure conversion
@@ -47,7 +47,9 @@ plot_resid_cor(fit); plot_pca(fit)
 
 dimensionality_test(fit)   # residual-PCA contrast + person t-test
 residual_correlations(fit) # local dependence
-dif_anova(fit)             # uniform and non-uniform DIF for every nominated factor
+dif_anova(fit)             # uniform and non-uniform DIF per factor (BH-adjusted)
+dif_anova_factorial(fit)   # all factors jointly: factorial ANOVA per item,
+                           # interaction-precedence, Tukey HSD on group terms
 
 # local dependence remedy: combine dependent items into a subtest and refit
 fit2 <- combine_items(fit, list(c("Q04", "Q05")))
@@ -137,8 +139,8 @@ downloads the entire analysis as a ZIP archive.
   computed per missing-data pattern; extremes flagged.
 - Item and person fit residuals (Wilson-Hilferty standardised mean squares
   with a degrees-of-freedom correction for the estimated person locations),
-  infit and outfit; item-trait interaction chi-square and class-interval
-  ANOVA F with Bonferroni adjustment and an optional sample-size adjustment.
+  infit and outfit; item-trait interaction chi-square over class intervals
+  with Benjamini-Hochberg adjustment and an optional sample-size adjustment.
 - Person Separation Index with and without extreme persons, Cronbach's alpha,
   targeting, the power-of-test-of-fit assessment, the score-to-measure table,
   and the test information function.

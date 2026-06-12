@@ -4,7 +4,7 @@
 \alias{dif_anova}
 \title{Differential item functioning by two-way residual ANOVA}
 \usage{
-dif_anova(fit, factors = NULL, n_groups = NULL)
+dif_anova(fit, factors = NULL, n_groups = NULL, p_adjust = "BH", alpha = 0.05)
 }
 \arguments{
 \item{fit}{A fitted object from \code{\link{rasch}}.}
@@ -16,17 +16,25 @@ fit.}
 
 \item{n_groups}{Number of trait class intervals; defaults to the value used
 in the fit.}
+
+\item{p_adjust}{Multiplicity adjustment method passed to
+\code{\link[stats]{p.adjust}}; default \code{"BH"}.}
+
+\item{alpha}{Significance level applied to the adjusted probabilities.}
 }
 \value{
 A data frame of uniform and non-uniform DIF statistics per item and
-  factor, with mean squares, F statistics, probabilities, and Bonferroni
-  flags.
+  factor, with F statistics, raw and adjusted probabilities, and flags.
 }
 \description{
-For each item and each person factor, analyses the standardised residuals
-by factor group and trait class interval. The group main effect indicates
-uniform DIF and the group-by-interval interaction indicates non-uniform
-DIF, with Bonferroni flagging across items within each factor.
+For each item and each person factor separately, analyses the
+standardised residuals by factor group and trait class interval. The
+group main effect indicates uniform DIF and the group-by-interval
+interaction indicates non-uniform DIF. Probabilities are adjusted across
+items within each factor by the Benjamini-Hochberg false-discovery-rate
+procedure (or any \code{\link[stats]{p.adjust}} method). With several
+factors, consider \code{\link{dif_anova_factorial}}, which models them
+jointly.
 }
 \examples{
 set.seed(1); n <- 600

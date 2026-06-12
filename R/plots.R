@@ -97,8 +97,9 @@ plot_icc <- function(fit, item, group = NULL, n_groups = fit$n_groups,
       lines(obsTh, obsX, col = colr, lwd = 1.4, lty = 3)
       points(obsTh, obsX, pch = 21, bg = colr, col = "white", cex = 1.5, lwd = 1.2)
     }
-    .rr_legend("topleft", c("Model", levs), lwd = c(3, rep(1.4, length(levs))),
-               col = c(.rr$ink, .rr$pal[seq_along(levs)]))
+    .rr_legend("topleft", levs, lwd = 1.4, lty = 3, pch = 21,
+               pt.bg = .rr$pal[seq_along(levs)],
+               col = .rr$pal[seq_along(levs)], pt.cex = 1.3)
   }
   invisible(NULL)
 }

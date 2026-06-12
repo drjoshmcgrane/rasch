@@ -38,7 +38,8 @@
 #'   analyses; \code{"none"} compares raw locations, appropriate when both
 #'   analyses are already on a shared (anchored) scale.
 #' @return A list with the comparison \code{table} (locations, standard
-#'   errors, difference, t, p, Bonferroni flag), the estimated \code{shift},
+#'   errors, difference, t, raw and BH-adjusted p, drift flag), the
+#'   estimated \code{shift},
 #'   the location \code{correlation}, the root mean square difference after
 #'   shifting (\code{rmsd}), and the number of common items \code{n}.
 #' @examples
@@ -66,12 +67,13 @@ equate_tests <- function(fit, reference, shift = c("mean", "none")) {
   t <- (d - c0) / sqrt(pmax(v, 1e-10))
   p <- 2 * pnorm(-abs(t))
   n <- length(common)
+  p_adj <- p.adjust(p, method = "BH")
   tab <- data.frame(item = common,
                     location_1 = a$location, se_1 = a$se,
                     location_2 = b$location, se_2 = b$se,
                     difference = d, adj_difference = d - c0,
-                    t = t, p = p, p_bonf = pmin(p * n, 1),
-                    drift = p < 0.05 / n)
+                    t = t, p = p, p_adj = p_adj,
+                    drift = p_adj < 0.05)
   rownames(tab) <- NULL
   list(table = tab, shift = c0,
        correlation = cor(a$location, b$location),
@@ -81,8 +83,8 @@ equate_tests <- function(fit, reference, shift = c("mean", "none")) {
 #' Plot a test-equating comparison
 #'
 #' Scatter of the two calibrations' common-item locations with the shifted
-#' identity line and per-item 95 per cent bands; drifting items (Bonferroni)
-#' are highlighted and labelled.
+#' identity line and per-item 95 per cent bands; drifting items
+#' (BH-adjusted) are highlighted and labelled.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param reference A second \code{\link{rasch}} fit, or a data frame with

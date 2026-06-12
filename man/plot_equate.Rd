@@ -20,8 +20,8 @@ Called for its plotting side effect; invisibly the
 }
 \description{
 Scatter of the two calibrations' common-item locations with the shifted
-identity line and per-item 95 per cent bands; drifting items (Bonferroni)
-are highlighted and labelled.
+identity line and per-item 95 per cent bands; drifting items
+(BH-adjusted) are highlighted and labelled.
 }
 \examples{
 set.seed(1); d <- seq(-1.5, 1.5, length.out = 8)

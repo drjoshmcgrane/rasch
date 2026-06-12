@@ -10,7 +10,7 @@ save_outputs(
   formats = c("png", "pdf"),
   width = 9,
   height = 6,
-  dpi = 150,
+  dpi = 300,
   item_plots = TRUE
 )
 }
@@ -23,7 +23,7 @@ save_outputs(
 
 \item{width, height}{Plot size in inches.}
 
-\item{dpi}{PNG resolution.}
+\item{dpi}{PNG resolution; the default 300 is publication quality.}
 
 \item{item_plots}{Also write the per-item plot set (one ICC, category curve,
 threshold curve, and frequency chart per item).}

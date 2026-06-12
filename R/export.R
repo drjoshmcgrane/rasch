@@ -38,7 +38,7 @@
 #' @param dir Output directory; created if absent.
 #' @param formats Plot formats, any of \code{"png"} and \code{"pdf"}.
 #' @param width,height Plot size in inches.
-#' @param dpi PNG resolution.
+#' @param dpi PNG resolution; the default 300 is publication quality.
 #' @param item_plots Also write the per-item plot set (one ICC, category curve,
 #'   threshold curve, and frequency chart per item).
 #' @return Invisibly, the vector of files written.
@@ -51,7 +51,7 @@
 #' save_outputs(rasch(X), out, formats = "png", item_plots = FALSE)
 #' @export
 save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
-                         height = 6, dpi = 150, item_plots = TRUE) {
+                         height = 6, dpi = 300, item_plots = TRUE) {
   formats <- match.arg(formats, c("png", "pdf"), several.ok = TRUE)
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)
   tdir <- file.path(dir, "tables"); pdir <- file.path(dir, "plots")

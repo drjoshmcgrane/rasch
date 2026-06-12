@@ -18,7 +18,8 @@ analyses are already on a shared (anchored) scale.}
 }
 \value{
 A list with the comparison \code{table} (locations, standard
-  errors, difference, t, p, Bonferroni flag), the estimated \code{shift},
+  errors, difference, t, raw and BH-adjusted p, drift flag), the
+  estimated \code{shift},
   the location \code{correlation}, the root mean square difference after
   shifting (\code{rmsd}), and the number of common items \code{n}.
 }

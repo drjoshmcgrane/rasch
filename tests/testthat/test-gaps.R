@@ -95,3 +95,52 @@ test_that("interactive facet mode recovers a planted item-by-rater effect", {
   expect_error(rasch_mfrm(d, "person", "item", "score", facets = "rater",
                           interaction = "nope"), "must name one of the facets")
 })
+
+test_that("factorial DIF detects the planted factor with Tukey output", {
+  set.seed(1); n <- 1200
+  d <- seq(-1.5, 1.5, length.out = 8)
+  g1 <- rep(c("a", "b"), each = n / 2)
+  g2 <- sample(c("x", "y"), n, replace = TRUE)
+  th <- rnorm(n)
+  X <- sapply(seq_along(d), function(i)
+    rbinom(n, 1, plogis(th - d[i] - if (i == 3) ifelse(g1 == "b", 1, 0) else 0)))
+  colnames(X) <- paste0("I", 1:8)
+  fit <- rasch(data.frame(X, g1 = g1, g2 = g2), factors = c("g1", "g2"))
+
+  df <- dif_anova_factorial(fit)
+  t3 <- df$terms[df$terms$item == "I3", ]
+  expect_true(t3$significant[t3$term == "g1"])
+  expect_false(t3$significant[t3$term == "g2"])
+  expect_false(t3$superseded[t3$term == "g1"])
+  tk3 <- df$tukey[df$tukey$item == "I3" & df$tukey$term == "g1", ]
+  expect_equal(nrow(tk3), 1)
+  expect_lt(tk3$p_tukey, 0.001)
+  # per-factor analysis with BH agrees on the planted item
+  da <- dif_anova(fit)
+  expect_true(da$uniform_DIF[da$factor == "g1" & da$item == "I3"])
+  expect_true("p_uniform_adj" %in% names(da))
+})
+
+test_that("a significant interaction supersedes its main effects", {
+  set.seed(2); n <- 1600
+  d <- seq(-1, 1, length.out = 6)
+  g1 <- rep(c("a", "b"), each = n / 2)
+  g2 <- rep(c("x", "y"), times = n / 2)
+  th <- rnorm(n)
+  # DIF only in the (b, y) cell: pure g1:g2 interaction structure
+  sh <- ifelse(g1 == "b" & g2 == "y", 1.2, 0)
+  X <- sapply(seq_along(d), function(i)
+    rbinom(n, 1, plogis(th - d[i] - if (i == 2) sh else 0)))
+  colnames(X) <- paste0("I", 1:6)
+  fit <- rasch(data.frame(X, g1 = g1, g2 = g2), factors = c("g1", "g2"))
+  df <- dif_anova_factorial(fit)
+  t2 <- df$terms[df$terms$item == "I2", ]
+  expect_true(t2$significant[t2$term == "g1:g2"])
+  # the cell-shift induces main effects too; they must be marked superseded
+  for (tt in c("g1", "g2"))
+    if (t2$significant[t2$term == tt]) expect_true(t2$superseded[t2$term == tt])
+  expect_false(t2$superseded[t2$term == "g1:g2"])
+  # Tukey on the interaction compares the four cells
+  tki <- df$tukey[df$tukey$item == "I2" & df$tukey$term == "g1:g2", ]
+  expect_equal(nrow(tki), 6)   # choose(4, 2) cell contrasts
+})

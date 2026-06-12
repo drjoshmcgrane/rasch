@@ -204,8 +204,7 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
                          infit_ms = ifit$infit_ms, outfit_ms = ifit$outfit_ms,
                          fit_resid = ifit$fit_resid,
                          chisq = it$chisq, df = it$df, p = it$p,
-                         p_bonf = it$p_bonf, misfit = it$misfit_bonf,
-                         F_value = it$F_value, p_F = it$p_F)
+                         p_adj = it$p_adj, misfit = it$misfit)
   rownames(items_df) <- NULL
 
   # --- score table (complete responders; raw score is only sufficient when
@@ -275,7 +274,7 @@ summary.rasch <- function(object, ...) {
   cat(sprintf("Item fit residual mean %.2f SD %.2f; person fit residual mean %.2f SD %.2f\n",
               x$item_fit_summary$mean, x$item_fit_summary$sd,
               x$person_fit_summary$mean, x$person_fit_summary$sd))
-  cat(sprintf("Items flagged misfitting (Bonferroni): %d of %d\n\n",
+  cat(sprintf("Items flagged misfitting (BH-adjusted): %d of %d\n\n",
               sum(x$items$misfit, na.rm = TRUE), nrow(x$items)))
   print(x$items, digits = 3)
   dis <- vapply(x$thresholds_diag, function(d) !d$ordered, TRUE) &

@@ -39,6 +39,37 @@ if (requireNamespace("RaschR", quietly = TRUE)) {
              group = grp, sex = sex, check.names = FALSE)
 }
 
+# dichotomous demo: 15 items, DIF planted on I05 by group
+.demo_dich <- function(seed = 41, Np = 1000) {
+  set.seed(seed)
+  d <- seq(-2, 2, length.out = 15)
+  grp <- rep(c("reference", "focal"), each = Np / 2)
+  sex <- sample(c("female", "male"), Np, replace = TRUE)
+  th <- rnorm(Np, 0, 1.3)
+  X <- sapply(seq_along(d), function(i) {
+    sft <- if (i == 5) ifelse(grp == "focal", 0.8, 0) else 0
+    rbinom(Np, 1, plogis(th - d[i] - sft))
+  })
+  colnames(X) <- sprintf("I%02d", seq_along(d))
+  data.frame(person_id = sprintf("P%04d", seq_len(Np)), X,
+             group = grp, sex = sex, check.names = FALSE)
+}
+
+# rating scale demo: common step structure, item locations vary
+.demo_rsm <- function(seed = 51, Np = 1000) {
+  set.seed(seed)
+  simP <- function(theta, tau) { x <- 0:length(tau); p <- exp(x * theta - c(0, cumsum(tau))); p / sum(p) }
+  loc <- seq(-1.2, 1.2, length.out = 8)
+  step <- c(-0.9, 0.0, 0.9)
+  grp <- rep(c("reference", "focal"), each = Np / 2)
+  th <- rnorm(Np, 0, 1.3)
+  X <- sapply(loc, function(b) sapply(th, function(t)
+    sample(0:3, 1, prob = simP(t, b + step))))
+  colnames(X) <- sprintf("R%02d", seq_along(loc))
+  data.frame(person_id = sprintf("P%04d", seq_len(Np)), X,
+             group = grp, check.names = FALSE)
+}
+
 # long-format rated demo: 5 items, 6 raters (one erratic), incomplete design
 .demo_long <- function(seed = 21, Np = 250) {
   set.seed(seed)
@@ -126,7 +157,7 @@ tableCard <- function(id, title, note = NULL) {
 }
 
 ui <- page_navbar(
-  title = span("RaschR", span(class = "fw-light", " · pairwise Rasch measurement")),
+  title = span("RaschR"),
   theme = theme,
   header = tags$head(tags$style(css)),
 
@@ -138,12 +169,14 @@ ui <- page_navbar(
         fileInput("file", NULL, accept = c(".csv", ".txt", ".tsv"),
                   buttonLabel = "Browse…", placeholder = "CSV / TSV file"),
         checkboxInput("demo", "Use built-in demo data", TRUE),
-        radioButtons("layout", "Data layout",
-                     c("Wide: persons x items" = "wide",
-                       "Long: rated responses (many-facet)" = "long",
-                       "Wide + frames (extended frame of reference)" = "efrm")),
+        radioButtons("model_type", "Model",
+                     c("Dichotomous" = "dich",
+                       "Partial credit (PCM)" = "pcm",
+                       "Rating scale (RSM)" = "rsm",
+                       "Many-facet (MFRM)" = "mfrm",
+                       "Extended frames (EFRM)" = "efrm")),
         hr(),
-        conditionalPanel("input.layout == 'wide'",
+        conditionalPanel("['dich','pcm','rsm'].indexOf(input.model_type) > -1",
           h6("Column roles"),
           selectInput("id_col", "ID variable", NONE),
           selectizeInput("factor_cols", "Person factors (DIF groups)", NULL,
@@ -152,14 +185,14 @@ ui <- page_navbar(
           selectizeInput("item_cols", "Item columns", NULL, multiple = TRUE,
                          options = list(placeholder = "all remaining columns")),
           hr(),
-          h6("Model"),
-          radioButtons("model", NULL,
-                       c("Partial credit (PCM)" = "PCM", "Rating scale (RSM)" = "RSM"),
-                       inline = TRUE),
           fileInput("anchor_file", "Anchors for equating (CSV: item,k,tau; blank k = anchor the item mean)",
-                    accept = ".csv", placeholder = "optional")
+                    accept = ".csv", placeholder = "optional"),
+          downloadButton("dl_anchors", "Save anchors from this analysis (CSV)",
+                         class = "btn-outline-secondary w-100 btn-sm"),
+          p(class = "text-muted small mt-1",
+            "Saved anchors match by item name when uploaded to a later analysis; rows for items not present are ignored.")
         ),
-        conditionalPanel("input.layout == 'efrm'",
+        conditionalPanel("input.model_type == 'efrm'",
           h6("Column roles"),
           selectInput("ef_id", "ID variable", NONE),
           selectInput("ef_group", "Person group column", NONE),
@@ -171,7 +204,7 @@ ui <- page_navbar(
           p(class = "text-muted small",
             "Each item-set by group cell is a frame with its own unit. Group units come from the person-free pairwise comparisons; set units from persons common to the sets.")
         ),
-        conditionalPanel("input.layout == 'long'",
+        conditionalPanel("input.model_type == 'mfrm'",
           h6("Column roles (one row per response)"),
           selectInput("lp_person", "Person column", NONE),
           selectInput("lp_item", "Item column", NONE),
@@ -199,11 +232,11 @@ ui <- page_navbar(
   # -------------------------------------------------------------- SUMMARY --
   nav_panel("Summary",
     uiOutput("vboxes"),
-    layout_columns(col_widths = c(6, 6),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       card(card_header("Test of fit"), card_body(verbatimTextOutput("fit_summary"))),
       card(card_header("Targeting & reliability"), card_body(verbatimTextOutput("targeting")))
     ),
-    layout_columns(col_widths = c(6, 6),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       tableCard("score_tbl", "Score-to-measure table",
                 "WLE location and SE for every raw score (complete responders)."),
       tableCard("thr_tbl", "Thresholds with standard errors")
@@ -213,11 +246,11 @@ ui <- page_navbar(
   # ---------------------------------------------------------------- ITEMS --
   nav_panel("Items",
     tableCard("items_tbl", "Item statistics",
-              "Click a row to inspect that item's curves below. Location and SE from the pairwise conditional likelihood; fit residual ~ N(0,1) under fit; chi-square and ANOVA F over class intervals; misfit flag is Bonferroni-adjusted."),
-    layout_columns(col_widths = c(6, 6),
+              "Click a row to inspect that item's curves below. Location and SE from the pairwise conditional likelihood; fit residual ~ N(0,1) under fit; item-trait chi-square over class intervals; misfit flag uses BH-adjusted probabilities."),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       plotCard("icc", "Item characteristic curve"),
       plotCard("ccc", "Category probability curves")),
-    layout_columns(col_widths = c(6, 6),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       plotCard("tpc", "Threshold probability curves"),
       plotCard("cfreq", "Category frequencies"))
   ),
@@ -226,17 +259,17 @@ ui <- page_navbar(
   nav_panel("Persons",
     tableCard("person_tbl", "Person estimates",
               "Warm WLE location and SE per person, with raw score, fit statistics, and your ID and factor columns."),
-    layout_columns(col_widths = c(6, 6),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       plotCard("pfit", "Person fit"),
       plotCard("pim_p", "Person-item threshold distribution"))
   ),
 
   # ----------------------------------------------------------------- TEST --
   nav_panel("Test plots",
-    layout_columns(col_widths = c(6, 6),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       plotCard("thrmap", "Threshold map"),
       plotCard("imap", "Item map: location by fit residual")),
-    layout_columns(col_widths = c(6, 6),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       plotCard("tcc", "Test characteristic curve"),
       plotCard("tif", "Test information & SEM")),
     plotCard("guttman", "Guttman scalogram", height = "560px")
@@ -249,13 +282,15 @@ ui <- page_navbar(
         selectInput("dif_factor", "Person factor", NONE),
         selectInput("dif_item", "Item for ICC by group", NONE),
         p(class = "text-muted small",
-          "Two-way ANOVA of standardised residuals: factor main effect = uniform DIF; factor x class-interval interaction = non-uniform DIF. Flags are Bonferroni-adjusted across items."),
+          "ANOVA of standardised residuals: factor effects = uniform DIF; factor x class-interval terms = non-uniform DIF. Probabilities are BH-adjusted across items. With several factors, choose the factorial option to model them jointly: significant interactions supersede their main effects, and Tukey HSD compares the levels of each significant group term."),
         hr(),
         actionButton("make_split", "Resolve: split this item by this factor",
                      class = "btn-outline-primary w-100"),
         p(class = "text-muted small mt-2",
           "Replaces the selected item with one item per group level (each level keeps only its own responses) and re-analyses; the split locations quantify the DIF.")),
       tableCard("dif_tbl", "DIF analysis of variance"),
+      tableCard("dif_tukey_tbl", "Tukey HSD comparisons",
+                "Pairwise level comparisons for significant, non-superseded group terms (factorial mode)."),
       plotCard("dif_icc", "ICC by group (DIF plot)")
     )
   ),
@@ -299,11 +334,11 @@ ui <- page_navbar(
         selectInput("frame_item", "Item for ICC across frames", NONE),
         p(class = "text-muted small",
           "Units rho = alpha (set) x phi (group) on a common arbitrary scale. Within a frame all curves are parallel; across frames they fan with the unit. Extended frame of reference analyses only.")),
-      layout_columns(col_widths = c(7, 5),
+      layout_columns(col_widths = breakpoints(sm = 12, xl = c(7, 5)),
         tableCard("frame_tbl", "Frames: units, origins, pooled fit"),
         div(tableCard("phi_tbl", "Person group units (phi)"),
             tableCard("alpha_tbl", "Item set units (alpha) and locations"))),
-      layout_columns(col_widths = c(6, 6),
+      layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
         plotCard("frame_plot", "Frame units"),
         plotCard("frame_icc", "ICC across frames")),
       card(card_header("Equal-unit comparison"),
@@ -313,18 +348,18 @@ ui <- page_navbar(
 
   # ------------------------------------------------------- DIMENSIONALITY --
   nav_panel("Dimensionality",
-    layout_columns(col_widths = c(5, 7),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(5, 7)),
       card(card_header("Unidimensionality t-test (Smith)"),
            card_body(verbatimTextOutput("dim_txt"))),
       plotCard("pca_plot", "Residual first contrast")),
-    layout_columns(col_widths = c(6, 6),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       tableCard("loadings_tbl", "PC1 loadings"),
       tableCard("eigen_tbl", "Residual eigenvalues"))
   ),
 
   # ------------------------------------------------------ LOCAL DEPENDENCE --
   nav_panel("Local dependence",
-    layout_columns(col_widths = c(7, 5),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(7, 5)),
       plotCard("rcor", "Residual correlations", height = "520px"),
       div(
         tableCard("rpairs_tbl", "Flagged dependent pairs",
@@ -342,7 +377,7 @@ ui <- page_navbar(
 
   # --------------------------------------------------------------- EXPORT --
   nav_panel("Export",
-    layout_columns(col_widths = c(6, 6),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       card(card_header("Download everything"),
         card_body(
           p("One archive containing every table (CSV), every plot (in the formats chosen), and a plain-text analysis summary."),
@@ -368,8 +403,9 @@ server <- function(input, output, session) {
   # ------------------------------------------------------------- data in --
   raw_data <- reactive({
     if (isTRUE(input$demo) || is.null(input$file))
-      return(switch(input$layout %||% "wide",
-                    long = .demo_long(), efrm = .demo_efrm(), .demo_data()))
+      return(switch(input$model_type %||% "pcm",
+                    dich = .demo_dich(), rsm = .demo_rsm(),
+                    mfrm = .demo_long(), efrm = .demo_efrm(), .demo_data()))
     ext <- tolower(tools::file_ext(input$file$name))
     sep <- if (ext %in% c("tsv", "txt")) "\t" else ","
     read.csv(input$file$datapath, sep = sep, check.names = FALSE,
@@ -487,7 +523,7 @@ server <- function(input, output, session) {
     adjN <- if (is.na(input$adjN) || input$adjN <= 0) NA else input$adjN
     withProgress(message = "Estimating (pairwise conditional ML)…", value = 0.3, {
       fit <- tryCatch({
-        if (identical(input$layout, "efrm")) {
+        if (identical(input$model_type, "efrm")) {
           if (is.null(input$ef_group) || input$ef_group == NONE)
             stop("nominate the person group column")
           rasch_efrm(df,
@@ -497,7 +533,7 @@ server <- function(input, output, session) {
                        input$ef_id else NULL,
                      items = names(ef_setmap()),
                      n_groups = input$ng, adjust_N = adjN)
-        } else if (identical(input$layout, "long")) {
+        } else if (identical(input$model_type, "mfrm")) {
           if (any(c(input$lp_person, input$lp_item, input$lp_score) == NONE) ||
               !length(input$lp_facets))
             stop("nominate the person, item, score, and at least one facet column")
@@ -511,8 +547,24 @@ server <- function(input, output, session) {
           idc <- if (!is.null(input$id_col) && input$id_col != NONE) input$id_col else NULL
           fac <- if (length(input$factor_cols)) input$factor_cols else NULL
           its <- if (length(input$item_cols)) input$item_cols else NULL
-          rasch(df, model = input$model, id = idc, factors = fac, items = its,
-                n_groups = input$ng, adjust_N = adjN, anchors = anchors_in())
+          # anchors match by item name; rows for absent items are ignored
+          anc <- anchors_in()
+          if (!is.null(anc)) {
+            cand <- if (!is.null(its)) its else setdiff(names(df), c(idc, fac))
+            present <- as.character(anc$item) %in% cand
+            if (!all(present))
+              showNotification(sprintf("%d anchor row(s) ignored (items not in this dataset)",
+                                       sum(!present)), type = "warning")
+            anc <- anc[present, , drop = FALSE]
+            if (!nrow(anc)) anc <- NULL
+          }
+          f0 <- rasch(df, model = if (identical(input$model_type, "rsm")) "RSM" else "PCM",
+                      id = idc, factors = fac, items = its,
+                      n_groups = input$ng, adjust_N = adjN, anchors = anc)
+          if (identical(input$model_type, "dich") && any(f0$m > 1L))
+            showNotification("Some items have more than two categories; they were fitted with partial credit thresholds.",
+                             type = "warning", duration = 10)
+          f0
         }
       }, error = function(e) e)
     })
@@ -538,9 +590,10 @@ server <- function(input, output, session) {
     updateSelectInput(session, "dif_item", choices = its, selected = its[1])
     updateSelectizeInput(session, "subtest_items", choices = its, selected = character(0))
     fac <- names(fit()$factors)
-    updateSelectInput(session, "dif_factor",
-                      choices = if (length(fac)) fac else NONE,
-                      selected = if (length(fac)) fac[1] else NONE)
+    dif_choices <- if (length(fac) > 1) c(fac, FACTORIAL) else
+      if (length(fac)) fac else NONE
+    updateSelectInput(session, "dif_factor", choices = dif_choices,
+                      selected = dif_choices[1])
     fs <- if (inherits(fit(), "rasch_mfrm")) fit()$facet_spec else NONE
     updateSelectInput(session, "facet_sel", choices = fs, selected = fs[1])
     fi <- if (inherits(fit(), "rasch_efrm"))
@@ -591,13 +644,14 @@ server <- function(input, output, session) {
 
   # ------------------------------------------------------- plot plumbing --
   register_plot <- function(id, fun, w = 9, h = 6) {
-    output[[id]] <- renderPlot(fun(), res = 100)
+    output[[id]] <- renderPlot(fun(), res = 96)
     for (fmt in c("png", "pdf")) local({
       fmt_ <- fmt
       output[[paste0(id, "_", fmt_)]] <- downloadHandler(
         filename = function() paste0("RaschR_", id, ".", fmt_),
         content = function(file) {
-          if (fmt_ == "png") png(file, width = w, height = h, units = "in", res = 200)
+          # 300 dpi PNG (and vector PDF) for publication
+          if (fmt_ == "png") png(file, width = w, height = h, units = "in", res = 300)
           else pdf(file, width = w, height = h)
           fun(); dev.off()
         })
@@ -643,7 +697,7 @@ server <- function(input, output, session) {
                 f$item_fit_summary$mean, f$item_fit_summary$sd))
     cat(sprintf("Person fit residual: mean %6.2f  SD %5.2f  (ideal 0, 1)\n",
                 f$person_fit_summary$mean, f$person_fit_summary$sd))
-    cat(sprintf("Items flagged misfitting (Bonferroni): %d of %d\n",
+    cat(sprintf("Items flagged misfitting (BH-adjusted): %d of %d\n",
                 sum(f$items$misfit, na.rm = TRUE), nrow(f$items)))
     dis <- names(which(vapply(f$thresholds_diag, function(d)
       !d$ordered && length(d$thresholds) > 1, TRUE)))
@@ -698,7 +752,7 @@ server <- function(input, output, session) {
     d <- fit()$items
     d$misfit <- ifelse(d$misfit, "*", "")
     num_dt(d, selection = "single") |>
-      formatSignif(c("p", "p_bonf", "p_F"), 3)
+      formatSignif(c("p", "p_adj"), 3)
   })
   register_plot("icc",  function() plot_icc(fit(), sel_item()))
   register_plot("ccc",  function() plot_ccc(fit(), sel_item()))
@@ -724,17 +778,41 @@ server <- function(input, output, session) {
   register_plot("guttman", function() plot_guttman(fit()), h = 7)
 
   # ------------------------------------------------------------------ DIF --
+  FACTORIAL <- "(all factors: factorial)"
   dif_res <- reactive({
     f <- fit(); req(!is.null(f$factors), length(names(f$factors)) > 0)
     dif_anova(f)
   })
-  register_table("dif_tbl", function() dif_res(), function() {
-    d <- dif_res()
-    if (!is.null(input$dif_factor) && input$dif_factor %in% d$factor)
-      d <- d[d$factor == input$dif_factor, ]
-    d$uniform_DIF <- ifelse(d$uniform_DIF, "*", "")
-    d$nonuniform_DIF <- ifelse(d$nonuniform_DIF, "*", "")
-    num_dt(d) |> formatSignif(c("p_uniform", "p_nonuniform"), 3)
+  dif_fact <- reactive({
+    f <- fit(); req(!is.null(f$factors), length(names(f$factors)) > 1)
+    dif_anova_factorial(f)
+  })
+  register_table("dif_tbl", function() {
+    if (identical(input$dif_factor, FACTORIAL)) dif_fact()$terms else dif_res()
+  }, function() {
+    if (identical(input$dif_factor, FACTORIAL)) {
+      d <- dif_fact()$terms
+      d$significant <- ifelse(d$significant, "*", "")
+      d$superseded <- ifelse(d$superseded, "(superseded)", "")
+      num_dt(d) |> formatSignif(c("p", "p_adj"), 3)
+    } else {
+      d <- dif_res()
+      if (!is.null(input$dif_factor) && input$dif_factor %in% d$factor)
+        d <- d[d$factor == input$dif_factor, ]
+      d$uniform_DIF <- ifelse(d$uniform_DIF, "*", "")
+      d$nonuniform_DIF <- ifelse(d$nonuniform_DIF, "*", "")
+      num_dt(d) |> formatSignif(c("p_uniform", "p_nonuniform",
+                                  "p_uniform_adj", "p_nonuniform_adj"), 3)
+    }
+  })
+  register_table("dif_tukey_tbl", function() dif_fact()$tukey, function() {
+    validate(need(identical(input$dif_factor, FACTORIAL),
+                  "Choose the factorial option in the sidebar to see Tukey HSD comparisons."))
+    tk <- dif_fact()$tukey
+    if (!nrow(tk))
+      return(datatable(data.frame(note = "no significant group terms to compare"),
+                       rownames = FALSE, options = list(dom = "t")))
+    num_dt(tk) |> formatSignif("p_tukey", 3)
   })
   register_plot("dif_icc", function() {
     f <- fit()
@@ -794,12 +872,21 @@ server <- function(input, output, session) {
     eq <- eq_res()
     d <- eq$table
     d$drift <- ifelse(d$drift, "*", "")
-    num_dt(d) |> formatSignif(c("p", "p_bonf"), 3)
+    num_dt(d) |> formatSignif(c("p", "p_adj"), 3)
   })
   register_plot("eq_plot", function() {
     req(input$eq_file)
     plot_equate(fit(), eq_ref(), shift = input$eq_shift)
   })
+  output$dl_anchors <- downloadHandler(
+    filename = function() format(Sys.time(), "RaschR_anchors_%Y%m%d_%H%M.csv"),
+    content = function(file) {
+      f <- fit()
+      thr <- f$thresholds
+      write.csv(data.frame(item = f$items$item[thr$item], k = thr$k,
+                           tau = thr$tau), file, row.names = FALSE)
+    })
+
   output$dl_calib <- downloadHandler(
     filename = function() format(Sys.time(), "RaschR_calibration_%Y%m%d_%H%M.csv"),
     content = function(file) {

@@ -81,11 +81,10 @@
   g
 }
 
-# Item-trait interaction chi-square and class-interval ANOVA F per item.
+# Item-trait interaction chi-square over class intervals, per item.
 .item_trait <- function(X, Z, mo, ci, adjust_N = NA) {
   L <- ncol(X); G <- max(ci, na.rm = TRUE)
   chi <- setNames(numeric(L), colnames(X))
-  Fv <- pF <- rep(NA_real_, L)
   for (i in seq_len(L)) {
     for (gg in seq_len(G)) {
       sel <- which(ci == gg & !is.na(X[, i]))
@@ -94,20 +93,14 @@
       Ebar <- mean(mo$E[sel, i]); Vbar <- mean(mo$V[sel, i])
       chi[i] <- chi[i] + length(sel) * (Obar - Ebar)^2 / Vbar
     }
-    d <- data.frame(z = Z[, i], g = factor(ci))
-    d <- d[stats::complete.cases(d), ]
-    a <- tryCatch(stats::anova(stats::lm(z ~ g, data = d)), error = function(e) NULL)
-    if (!is.null(a) && "g" %in% rownames(a)) {
-      Fv[i] <- a["g", "F value"]; pF[i] <- a["g", "Pr(>F)"]
-    }
   }
   df_i <- G - 1
   n_used <- sum(!is.na(ci))
   if (!is.na(adjust_N)) chi <- chi * (adjust_N / n_used)
   p <- pchisq(chi, df_i, lower.tail = FALSE)
+  p_adj <- p.adjust(p, method = "BH")
   data.frame(item = colnames(X), chisq = chi, df = df_i, p = p,
-             p_bonf = pmin(p * L, 1), misfit_bonf = p < 0.05 / L,
-             F_value = Fv, p_F = pF)
+             p_adj = p_adj, misfit = p_adj < 0.05)
 }
 
 # Person separation index (separation reliability; Andrich 1982).
