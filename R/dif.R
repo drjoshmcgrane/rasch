@@ -133,11 +133,18 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
 #' @param p_adjust Multiplicity adjustment across items within each term;
 #'   default \code{"BH"}.
 #' @param alpha Significance level applied to the adjusted probabilities.
-#' @return A list with \code{terms} (per item and term: df, F, raw and
-#'   adjusted p, significance, and whether a higher-order significant
-#'   interaction supersedes the term) and \code{tukey} (per item, term, and
-#'   level comparison: difference, 95 per cent interval, and Tukey-adjusted
-#'   p), plus the \code{alpha} and adjustment used.
+#' @param effects \code{"factorial"} (default) crosses every person factor
+#'   with every other and with the class interval; \code{"main"} fits the
+#'   factors additively (each factor's main effect and its interaction with
+#'   the class interval, but no factor-by-factor terms).
+#' @return A list with \code{terms}, the complete per-item analysis of
+#'   variance table (term, df, sum of squares, mean square, F, raw and
+#'   adjusted p, significance, supersession, including the residual row),
+#'   and \code{tukey} (per item, term, and level comparison: difference,
+#'   95 per cent interval, and Tukey-adjusted p), plus the \code{alpha} and
+#'   adjustment used. Tukey comparisons are reported for significant,
+#'   non-superseded group terms except two-level main effects, where the
+#'   F test is already the only comparison.
 #' @examples
 #' set.seed(1); n <- 800
 #' d <- seq(-1.5, 1.5, length.out = 6)
@@ -150,7 +157,9 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
 #' dif_anova_factorial(fit)$terms
 #' @export
 dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
-                                p_adjust = "BH", alpha = 0.05) {
+                                p_adjust = "BH", alpha = 0.05,
+                                effects = c("factorial", "main")) {
+  effects <- match.arg(effects)
   Z <- fit$residuals; L <- ncol(Z)
   factors <- .dif_factors(fit, factors)
   if (is.null(n_groups)) n_groups <- fit$n_groups
@@ -158,7 +167,8 @@ dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
 
   fnames <- names(factors)
   safe <- paste0("f", seq_along(fnames))           # syntactic stand-ins
-  form <- stats::as.formula(paste("z ~ (", paste(safe, collapse = " * "), ") * ci"))
+  op <- if (effects == "factorial") " * " else " + "
+  form <- stats::as.formula(paste("z ~ (", paste(safe, collapse = op), ") * ci"))
 
   fits <- vector("list", L); rows <- list()
   for (i in seq_len(L)) {
@@ -171,19 +181,18 @@ dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
     if (is.null(a)) next
     fits[[i]] <- a
     sm <- summary(a)[[1]]
-    tn <- trimws(rownames(sm))
-    keep <- tn != "Residuals"
     rows[[length(rows) + 1L]] <- data.frame(
-      item = colnames(Z)[i], term = tn[keep], df = sm$Df[keep],
-      F_value = sm$`F value`[keep], p = sm$`Pr(>F)`[keep])
+      item = colnames(Z)[i], term = trimws(rownames(sm)), df = sm$Df,
+      sum_sq = sm$`Sum Sq`, mean_sq = sm$`Mean Sq`,
+      F_value = sm$`F value`, p = sm$`Pr(>F)`)
   }
   if (!length(rows)) stop("no item yielded an estimable factorial ANOVA")
   terms <- do.call(rbind, rows)
   rownames(terms) <- NULL
 
-  # adjust across items within each term
+  # adjust across items within each term (the residual rows carry no test)
   terms$p_adj <- NA_real_
-  for (tt in unique(terms$term)) {
+  for (tt in setdiff(unique(terms$term), "Residuals")) {
     sel <- terms$term == tt
     terms$p_adj[sel] <- p.adjust(terms$p[sel], method = p_adjust)
   }
@@ -211,8 +220,11 @@ dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
     a <- fits[[i]]; if (is.null(a)) next
     it <- colnames(Z)[i]
     cand <- terms[terms$item == it & terms$significant & !terms$superseded, ]
-    cand <- cand$term[!vapply(cand$term, function(tt)
-      "ci" %in% .term_vars(tt), TRUE)]
+    # group terms only; and no comparisons for a two-level main effect,
+    # where the F test is already the only contrast
+    keep_t <- !vapply(cand$term, function(tt) "ci" %in% .term_vars(tt), TRUE) &
+      !(cand$df == 1L & !grepl(":", cand$term, fixed = TRUE))
+    cand <- cand$term[keep_t]
     if (!length(cand)) next
     th <- tryCatch(stats::TukeyHSD(a, which = cand), error = function(e) NULL)
     if (is.null(th)) next

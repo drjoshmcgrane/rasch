@@ -96,26 +96,44 @@ test_that("interactive facet mode recovers a planted item-by-rater effect", {
                           interaction = "nope"), "must name one of the facets")
 })
 
-test_that("factorial DIF detects the planted factor with Tukey output", {
-  set.seed(1); n <- 1200
+test_that("factorial DIF: full table, Tukey rules, main-effects mode", {
+  set.seed(1); n <- 1500
   d <- seq(-1.5, 1.5, length.out = 8)
-  g1 <- rep(c("a", "b"), each = n / 2)
-  g2 <- sample(c("x", "y"), n, replace = TRUE)
+  g1 <- rep(c("a", "b"), each = n / 2)                      # 2 levels, DIF on I3
+  g2 <- sample(c("x", "y", "z"), n, replace = TRUE)         # 3 levels, DIF on I6
   th <- rnorm(n)
+  sh <- matrix(0, n, 8)
+  sh[g1 == "b", 3] <- 1
+  sh[g2 == "z", 6] <- 1
   X <- sapply(seq_along(d), function(i)
-    rbinom(n, 1, plogis(th - d[i] - if (i == 3) ifelse(g1 == "b", 1, 0) else 0)))
+    rbinom(n, 1, plogis(th - d[i] - sh[, i])))
   colnames(X) <- paste0("I", 1:8)
   fit <- rasch(data.frame(X, g1 = g1, g2 = g2), factors = c("g1", "g2"))
 
   df <- dif_anova_factorial(fit)
+  # the complete ANOVA table: SS/MS columns and the residual row per item
+  expect_true(all(c("sum_sq", "mean_sq") %in% names(df$terms)))
+  expect_true(all(table(df$terms$item[df$terms$term == "Residuals"]) == 1))
+  expect_true(all(is.na(df$terms$p_adj[df$terms$term == "Residuals"])))
+
   t3 <- df$terms[df$terms$item == "I3", ]
   expect_true(t3$significant[t3$term == "g1"])
-  expect_false(t3$significant[t3$term == "g2"])
   expect_false(t3$superseded[t3$term == "g1"])
-  tk3 <- df$tukey[df$tukey$item == "I3" & df$tukey$term == "g1", ]
-  expect_equal(nrow(tk3), 1)
-  expect_lt(tk3$p_tukey, 0.001)
-  # per-factor analysis with BH agrees on the planted item
+  # two-level main effect: significant, but no Tukey (the F test suffices)
+  expect_equal(nrow(df$tukey[df$tukey$item == "I3" & df$tukey$term == "g1", ]), 0)
+  # three-level main effect: Tukey gives the choose(3, 2) level contrasts
+  t6 <- df$terms[df$terms$item == "I6", ]
+  expect_true(t6$significant[t6$term == "g2"])
+  tk6 <- df$tukey[df$tukey$item == "I6" & df$tukey$term == "g2", ]
+  expect_equal(nrow(tk6), 3)
+  expect_lt(min(tk6$p_tukey), 0.01)
+
+  # main-effects mode drops the factor-by-factor terms
+  dm <- dif_anova_factorial(fit, effects = "main")
+  expect_false(any(grepl("g1:g2", dm$terms$term)))
+  expect_true(dm$terms$significant[dm$terms$item == "I3" & dm$terms$term == "g1"])
+
+  # per-factor analysis with BH agrees on the planted items
   da <- dif_anova(fit)
   expect_true(da$uniform_DIF[da$factor == "g1" & da$item == "I3"])
   expect_true("p_uniform_adj" %in% names(da))

@@ -321,6 +321,10 @@ ui <- page_navbar(
     layout_sidebar(
       sidebar = sidebar(width = 280, open = "always",
         selectInput("dif_factor", "Person factor", NONE),
+        conditionalPanel("input.dif_factor == '(all factors: factorial)'",
+          radioButtons("dif_effects", "Model",
+                       c("Full factorial" = "factorial",
+                         "Main effects only" = "main"))),
         selectInput("dif_item", "Item for ICC by group", NONE),
         p(class = "text-muted small",
           "ANOVA of standardised residuals: factor effects = uniform DIF; factor x class-interval terms = non-uniform DIF. Probabilities are BH-adjusted across items. With several factors, choose the factorial option to model them jointly: significant interactions supersede their main effects, and Tukey HSD compares the levels of each significant group term."),
@@ -707,8 +711,7 @@ server <- function(input, output, session) {
     updateSelectInput(session, "dif_item", choices = its, selected = its[1])
     updateSelectizeInput(session, "subtest_items", choices = its, selected = character(0))
     fac <- names(fit()$factors)
-    dif_choices <- if (length(fac) > 1) c(fac, FACTORIAL) else
-      if (length(fac)) fac else NONE
+    dif_choices <- if (length(fac)) c(fac, FACTORIAL) else NONE
     updateSelectInput(session, "dif_factor", choices = dif_choices,
                       selected = dif_choices[1])
     fs <- if (inherits(fit(), "rasch_mfrm")) fit()$facet_spec else NONE
@@ -937,8 +940,8 @@ server <- function(input, output, session) {
     dif_anova(f)
   })
   dif_fact <- reactive({
-    f <- fit(); req(!is.null(f$factors), length(names(f$factors)) > 1)
-    dif_anova_factorial(f)
+    f <- fit(); req(!is.null(f$factors), length(names(f$factors)) >= 1)
+    dif_anova_factorial(f, effects = input$dif_effects %||% "factorial")
   })
   register_table("dif_tbl", function() {
     if (identical(input$dif_factor, FACTORIAL)) dif_fact()$terms else dif_res()

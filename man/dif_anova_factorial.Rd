@@ -9,7 +9,8 @@ dif_anova_factorial(
   factors = NULL,
   n_groups = NULL,
   p_adjust = "BH",
-  alpha = 0.05
+  alpha = 0.05,
+  effects = c("factorial", "main")
 )
 }
 \arguments{
@@ -25,13 +26,21 @@ used in the fit.}
 default \code{"BH"}.}
 
 \item{alpha}{Significance level applied to the adjusted probabilities.}
+
+\item{effects}{\code{"factorial"} (default) crosses every person factor
+with every other and with the class interval; \code{"main"} fits the
+factors additively (each factor's main effect and its interaction with
+the class interval, but no factor-by-factor terms).}
 }
 \value{
-A list with \code{terms} (per item and term: df, F, raw and
-  adjusted p, significance, and whether a higher-order significant
-  interaction supersedes the term) and \code{tukey} (per item, term, and
-  level comparison: difference, 95 per cent interval, and Tukey-adjusted
-  p), plus the \code{alpha} and adjustment used.
+A list with \code{terms}, the complete per-item analysis of
+  variance table (term, df, sum of squares, mean square, F, raw and
+  adjusted p, significance, supersession, including the residual row),
+  and \code{tukey} (per item, term, and level comparison: difference,
+  95 per cent interval, and Tukey-adjusted p), plus the \code{alpha} and
+  adjustment used. Tukey comparisons are reported for significant,
+  non-superseded group terms except two-level main effects, where the
+  F test is already the only comparison.
 }
 \description{
 Models all nominated person factors jointly: for each item the
