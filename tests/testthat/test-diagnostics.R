@@ -27,15 +27,24 @@ test_that("local dependence is flagged for a near-duplicated item", {
                   (fl$item_a == "U05" & fl$item_b == "U04")))
 })
 
-test_that("uniform DIF is detected on planted items only", {
+test_that("uniform DIF is detected on planted items only, across two factors", {
   set.seed(4); Np <- 2000; L <- 15
   d <- scale(seq(-2, 2, length.out = L), scale = FALSE)[, 1]
-  grp <- rep(c("ref", "foc"), each = Np / 2); th <- rnorm(Np, 0, 1.4)
+  grp <- rep(c("ref", "foc"), each = Np / 2)
+  sex <- sample(c("f", "m"), Np, replace = TRUE)
+  th <- rnorm(Np, 0, 1.4)
   shift <- matrix(0, Np, L); shift[grp == "foc", 3] <- 1.0; shift[grp == "foc", 10] <- -1.0
-  X <- matrix(rbinom(Np * L, 1, plogis(outer(th, d, "-") - shift)), Np, L); colnames(X) <- sprintf("G%02d", 1:L)
-  dif <- dif_anova(rasch(X, model = "PCM"), group = grp, n_groups = 6)
-  expect_true(dif$uniform_DIF[3]); expect_true(dif$uniform_DIF[10])
-  expect_equal(sum(dif$uniform_DIF[-c(3, 10)]), 0)
+  X <- matrix(rbinom(Np * L, 1, plogis(outer(th, d, "-") - shift)), Np, L)
+  colnames(X) <- sprintf("G%02d", 1:L)
+
+  fit <- rasch(data.frame(X, group = grp, sex = sex), factors = c("group", "sex"),
+               n_groups = 6)
+  dif <- dif_anova(fit)
+  expect_setequal(unique(dif$factor), c("group", "sex"))
+  dg <- dif[dif$factor == "group", ]
+  expect_true(dg$uniform_DIF[3]); expect_true(dg$uniform_DIF[10])
+  expect_equal(sum(dg$uniform_DIF[-c(3, 10)]), 0)
+  expect_equal(sum(dif$uniform_DIF[dif$factor == "sex"]), 0)
 })
 
 test_that("threshold disordering is detected", {
@@ -46,6 +55,66 @@ test_that("threshold disordering is detected", {
              sapply(th, function(t) sample(0:3, 1, prob = simP(t, tau_ok + 0.4))))
   colnames(X) <- c("DIS", "ok1", "ok2")
   td <- rasch(X, model = "PCM", n_groups = 6)$thresholds_diag
-  expect_false(td[["1"]]$ordered)
-  expect_true(td[["2"]]$ordered)
+  expect_false(td[["DIS"]]$ordered)
+  expect_true(td[["ok1"]]$ordered)
+})
+
+test_that("ID and factors carry through to the person table", {
+  set.seed(6); Np <- 400; L <- 8
+  d <- scale(seq(-1.5, 1.5, length.out = L), scale = FALSE)[, 1]
+  X <- matrix(rbinom(Np * L, 1, plogis(outer(rnorm(Np), d, "-"))), Np, L)
+  colnames(X) <- paste("My item", 1:L)   # names with spaces survive
+  df <- data.frame(sid = sprintf("S%03d", 1:Np), X, grp = rep(c("a", "b"), Np / 2),
+                   check.names = FALSE)
+  fit <- rasch(df, id = "sid", factors = "grp")
+  expect_identical(fit$person$id, df$sid)
+  expect_identical(as.character(fit$person$grp), df$grp)
+  expect_identical(fit$items$item, paste("My item", 1:L))
+  expect_identical(colnames(fit$residuals), paste("My item", 1:L))
+})
+
+test_that("data preparation collapses gaps and drops constants with notes", {
+  set.seed(8); Np <- 500
+  th <- rnorm(Np)
+  x1 <- rbinom(Np, 1, plogis(th)) * 2L              # categories 0, 2 -> collapse
+  x2 <- rbinom(Np, 1, plogis(th - 0.5))
+  x3 <- rbinom(Np, 1, plogis(th + 0.5))
+  x4 <- rep(1L, Np)                                  # constant -> dropped
+  fit <- rasch(cbind(a = x1, b = x2, c = x3, d = x4))
+  expect_equal(ncol(fit$X), 3)
+  expect_equal(max(fit$X[, "a"]), 1)
+  expect_true(any(grepl("rescored", fit$notes)))
+  expect_true(any(grepl("constant", fit$notes)))
+})
+
+test_that("reliability and fit summaries are coherent", {
+  set.seed(9); Np <- 1000; L <- 15
+  d <- scale(seq(-2, 2, length.out = L), scale = FALSE)[, 1]
+  X <- matrix(rbinom(Np * L, 1, plogis(outer(rnorm(Np, 0, 1.5), d, "-"))), Np, L)
+  colnames(X) <- sprintf("I%02d", 1:L)
+  fit <- rasch(X)
+  expect_gt(fit$psi$PSI, 0.5); expect_lt(fit$psi$PSI, 1)
+  expect_gt(fit$alpha$alpha, 0.5); expect_lt(fit$alpha$alpha, 1)
+  expect_gt(fit$total_chisq_p, 1e-6)   # well-fitting data should not collapse
+  expect_lt(abs(fit$item_fit_summary$mean), 1)
+  expect_false(any(fit$items$misfit))
+  expect_true(fit$power_of_fit %in% c("reasonable", "good", "excellent"))
+})
+
+test_that("save_outputs writes the full set of tables and plots", {
+  set.seed(10); Np <- 300; L <- 6
+  d <- scale(seq(-1.5, 1.5, length.out = L), scale = FALSE)[, 1]
+  X <- matrix(rbinom(Np * L, 1, plogis(outer(rnorm(Np), d, "-"))), Np, L)
+  colnames(X) <- sprintf("I%02d", 1:L)
+  fit <- rasch(data.frame(X, g = rep(c("x", "y"), Np / 2)), factors = "g")
+  out <- file.path(tempdir(), paste0("rr-test-", as.integer(runif(1, 1, 1e6))))
+  files <- save_outputs(fit, out, formats = "png", item_plots = TRUE)
+  expect_true(file.exists(file.path(out, "tables", "item_statistics.csv")))
+  expect_true(file.exists(file.path(out, "tables", "person_estimates.csv")))
+  expect_true(file.exists(file.path(out, "tables", "dif_anova.csv")))
+  expect_true(file.exists(file.path(out, "summary.txt")))
+  expect_true(file.exists(file.path(out, "plots", "test_information.png")))
+  expect_true(file.exists(file.path(out, "plots", "items", "I01_icc.png")))
+  expect_gte(length(files), 8 + 8 + 4 * L)
+  unlink(out, recursive = TRUE)
 })

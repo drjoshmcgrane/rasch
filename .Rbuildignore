@@ -3,3 +3,7 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
+^\.claude$
+^RUMM$
+^Humphry EFRM thesis\.html$
+^Humphry EFRM thesis\.rtf$

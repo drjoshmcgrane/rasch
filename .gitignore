@@ -18,3 +18,9 @@ inst/doc
 .DS_Store
 *~
 .vscode/
+
+# Local reference material - never commit (proprietary / copyrighted)
+RUMM/
+Humphry EFRM thesis.*
+02Whole_unlocked.pdf
+.claude/
