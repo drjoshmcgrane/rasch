@@ -208,6 +208,22 @@ downloads the entire analysis as a ZIP archive.
 - `save_outputs()` writes the complete analysis (all tables, all plots, a
   text summary) to a folder in one call.
 
+## Case study: wording effects as frame units
+
+`inst/casestudies/wording_units_selfesteem.R` applies the extended frame of
+reference model to the public Rosenberg Self-Esteem Scale dataset of the
+Open Source Psychometrics Project (downloaded from the source at run time),
+treating positively and negatively worded items as two item sets. The
+positively worded items carry a unit about 27 per cent larger than the
+reverse-scored negative items (alpha ratio 1.266, 95 per cent CI 1.246 to
+1.286; Wald p < 1e-89), and it matters: persons with identical raw scores
+differ by up to 0.85 logits once the wording units are modelled, over half
+of all respondents move by more than 0.1 logits, and the male-female gap is
+understated by about 10 per cent under equal units. With a single person
+group the pairwise equal-unit comparison is invariant to set units by
+construction, so the Wald tests on the log units carry the evidence -- the
+fit object reports both and says which applies.
+
 ## Methodological references
 
 Andrich & Luo (2003) and Zwinderman (1995) conditional pairwise estimation;

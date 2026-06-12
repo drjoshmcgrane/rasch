@@ -246,3 +246,38 @@ test_that("EFRM standard error methods are coherent", {
   expect_equal(fit$item_arbitrary$location, fb$item_arbitrary$location,
                tolerance = 1e-10)
 })
+
+test_that("unit Wald tests accompany the equal-unit comparison", {
+  set.seed(16); per_g <- 300; L <- 10
+  phi_true <- c(0.75, 4 / 3); phi_true <- phi_true / exp(mean(log(phi_true)))
+  d <- seq(-1.5, 1.5, length.out = L)
+  grp <- rep(c("a", "b"), each = per_g); Np <- length(grp)
+  th <- rnorm(Np, 0, 1.3)
+  X <- sapply(seq_len(L), function(i)
+    rbinom(Np, 1, plogis(phi_true[match(grp, c("a", "b"))] * (th - d[i]))))
+  colnames(X) <- sprintf("I%02d", 1:L)
+  fit <- rasch_efrm(data.frame(X, g = grp), groups = "g",
+                    item_sets = list(core = colnames(X)))
+  ut <- fit$efrm_vs_rasch$unit_tests
+  expect_true(all(grepl("phi", ut$parameter)))
+  expect_true(all(ut$p < 0.01))            # planted units strongly detected
+  expect_match(fit$efrm_vs_rasch$informative_for, "phi")
+
+  # sets-only design: pairwise comparison declared uninformative,
+  # alpha Wald tests carry the evidence
+  set.seed(17); Np2 <- 500
+  alpha_true <- c(0.7, 10 / 7); alpha_true <- alpha_true / exp(mean(log(alpha_true)))
+  sets <- rep(1:2, each = 6)
+  d2 <- rep(seq(-1, 1, length.out = 6), 2)
+  th2 <- rnorm(Np2, 0, 1.3)
+  X2 <- sapply(seq_along(sets), function(i) sapply(th2, function(t)
+    sample(0:2, 1, prob = simEF(t, d2[i] + c(-0.5, 0.5), alpha_true[sets[i]]))))
+  colnames(X2) <- sprintf("S%dI%02d", sets, seq_along(sets))
+  f2 <- rasch_efrm(data.frame(X2, g = "all"), groups = "g",
+                   item_sets = split(colnames(X2), sets))
+  expect_lt(abs(f2$efrm_vs_rasch$two_delta_ll), 1e-3)   # invariant by construction
+  expect_match(f2$efrm_vs_rasch$informative_for, "person-side")
+  ut2 <- f2$efrm_vs_rasch$unit_tests
+  expect_true(all(grepl("alpha", ut2$parameter)))
+  expect_true(all(ut2$p < 0.01))
+})

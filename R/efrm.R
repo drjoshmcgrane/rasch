@@ -741,10 +741,28 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
   }))
   rownames(fit$frames) <- NULL
 
-  # equal-unit comparison and score curves
+  # equal-unit comparison and score curves. The pairwise comparison is only
+  # informative about the group units (phi): the within-frame likelihood is
+  # invariant to the set units (alpha), which are identified person-side, so
+  # their evidence is the Wald test on log alpha.
+  ut <- rbind(
+    if (G > 1L) data.frame(parameter = paste0("log phi[", glevs, "]"),
+                           estimate = log(phi),
+                           se = fit$phi_table$se_log_phi),
+    if (S > 1L) data.frame(parameter = paste0("log alpha[", sets_u, "]"),
+                           estimate = log(alpha),
+                           se = fit$alpha_table$se_log_alpha))
+  if (!is.null(ut)) {
+    ut$z <- ut$estimate / ut$se
+    ut$p <- 2 * pnorm(-abs(ut$z))
+    rownames(ut) <- NULL
+  }
   fit$efrm_vs_rasch <- list(ll_efrm = sol$loglik, ll_equal = glh0$ll,
                             two_delta_ll = 2 * (sol$loglik - glh0$ll),
-                            extra_parameters = G - 1L)
+                            extra_parameters = G - 1L,
+                            informative_for = if (G > 1L) "group units (phi)"
+                              else "nothing: single group, set units are identified person-side",
+                            unit_tests = ut)
   grid <- seq(-6, 6, by = 0.1)
   fit$score_curves <- do.call(rbind, lapply(glevs, function(g) {
     r_i <- alpha[set_of] * phi[g]
@@ -781,7 +799,12 @@ print.rasch_efrm <- function(x, ...) {
         digits = 3, row.names = FALSE)
   cat(sprintf("\nEqual-unit comparison: 2(ll_EFRM - ll_equal) = %.3f with %d extra unit parameter(s)\n",
               x$efrm_vs_rasch$two_delta_ll, x$efrm_vs_rasch$extra_parameters))
-  cat("(composite likelihood: descriptive, not a calibrated chi-square)\n")
+  cat("(composite likelihood: descriptive; informative for ",
+      x$efrm_vs_rasch$informative_for, ")\n", sep = "")
+  if (!is.null(x$efrm_vs_rasch$unit_tests)) {
+    cat("Wald tests of the units (H0: unit = 1):\n")
+    print(x$efrm_vs_rasch$unit_tests, digits = 3, row.names = FALSE)
+  }
   if (length(x$notes)) cat("\nNotes:", paste(x$notes, collapse = "; "), "\n")
   invisible(x)
 }

@@ -1077,7 +1077,12 @@ server <- function(input, output, session) {
                 cmp$ll_efrm, cmp$ll_equal))
     cat(sprintf("2 x improvement: %.3f with %d extra unit parameter(s)\n",
                 cmp$two_delta_ll, cmp$extra_parameters))
-    cat("(composite likelihood: descriptive, not a calibrated chi-square)\n")
+    cat("(composite likelihood: descriptive; informative for ",
+        cmp$informative_for, ")\n", sep = "")
+    if (!is.null(cmp$unit_tests)) {
+      cat("\nWald tests of the units (H0: unit = 1):\n")
+      print(cmp$unit_tests, digits = 3, row.names = FALSE)
+    }
     cat(sprintf("\nItem fit residual SD under the frames model: %.3f\n",
                 f$item_fit_summary$sd))
   })
