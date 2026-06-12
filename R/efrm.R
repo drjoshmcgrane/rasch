@@ -411,6 +411,21 @@
 #' propagated into the common-unit parameters; and resampling replaces
 #' analytic plug-in variances for the person-side linking stage.
 #'
+#' Measurement-theoretic status: within every frame the model is strictly
+#' Rasch, with person-free item comparisons by conditioning. Across frames
+#' it is an argued extension of the theory of the unit (Humphry 2005;
+#' Humphry and Andrich 2008): on this account the unit was always a
+#' frame-dependent empirical property that the ordinary model leaves
+#' implicit, and the extension makes it explicit; the orthodox reading of
+#' Rasch measurement contests this, and applied reports should present it
+#' as an extension rather than settled doctrine. Two concessions are
+#' intrinsic to the model rather than to this implementation: the item-set
+#' units are identified only from the person side (their conditional
+#' identification is impossible, as documented above), so that step uses
+#' distributional information; and person measures rest on weighted-score
+#' sufficiency with estimated weights, whose uncertainty is propagated
+#' rather than ignored.
+#'
 #' @param data Persons-by-items data (matrix or data frame, like
 #'   \code{\link{rasch}}), plus a person-group column.
 #' @param item_sets A named list mapping set names to item-column names, or

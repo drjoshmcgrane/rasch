@@ -65,6 +65,11 @@
 #'   \code{gamma[item, level]} with double sum-to-zero constraints on top of
 #'   the additive severities, so each level may be more or less severe on
 #'   particular items; estimates are returned in \code{interaction_effects}.
+#'   The interactive model remains in the Rasch class (all discriminations
+#'   equal one and the parameters are additive), but a significant
+#'   interaction qualifies specific objectivity in practice: comparisons of
+#'   the interacting facet's levels become item-dependent, which is itself
+#'   the substantive finding.
 #' @param maxit,tol Newton-Raphson iteration cap and convergence tolerance.
 #' @return An object of classes \code{"rasch_mfrm"} and \code{"rasch"}. In
 #'   addition to every component of a \code{\link{rasch}} fit (computed over

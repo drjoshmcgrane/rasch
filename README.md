@@ -208,6 +208,34 @@ downloads the entire analysis as a ZIP archive.
 - `save_outputs()` writes the complete analysis (all tables, all plots, a
   text summary) to a folder in one call.
 
+## Measurement-theoretic status
+
+Everything in the package that claims to be Rasch measurement is
+conditionally estimated, sufficiency-respecting, and invariance-preserving:
+item comparisons are person-free by pairwise conditioning, and the partial
+credit, rating scale, and additive many-facet models are members of the
+Rasch class. The diagnostics (fit residuals, item-trait chi-square,
+residual components, DIF analysis of variance, threshold ordering) exist to
+police the theory's requirements, and the structural remedies (subtests,
+item splitting, anchoring) are orthodox practice that restore rather than
+parameterise away invariance.
+
+Departures from the classical model are deliberate and labelled. Warm's
+weighted likelihood adds a penalty beyond the conditional likelihood (this
+is what makes extreme-score estimates finite). Cronbach's alpha and the
+distractor point-biserials are classical-test-theory companions, reported
+as descriptives only. Interactive facet mode remains in the Rasch class but
+a significant item-by-facet interaction qualifies specific objectivity in
+practice: comparisons of the interacting facet's levels become
+item-dependent. The extended frame of reference model is strictly Rasch
+within every frame; across frames it is an argued extension of the theory
+of the unit (Humphry 2005; Humphry & Andrich 2008) whose status the
+literature still debates, and its item-set units are necessarily identified
+from the person side (we show conditional identification is impossible), a
+departure from purely distribution-free comparison that belongs to the
+model, not the implementation. The free-slope model used in the case study
+is a diagnostic of the frame restriction, never a measurement model.
+
 ## Case study: wording effects as frame units
 
 `inst/casestudies/wording_units_selfesteem.R` applies the extended frame of
