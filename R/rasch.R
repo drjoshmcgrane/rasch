@@ -241,7 +241,7 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
                se = unname(pe_full$se))
   } else NULL
   if (is.null(sc))
-    notes <- c(notes, "raw score is not sufficient under unequal frame units; see score_curves")
+    notes <- c(notes, "person measures use the weighted score; per-group score curves replace the raw-score table (see score_curves)")
 
   # --- threshold diagnostics --------------------------------------------------
   td <- lapply(seq_len(L), function(i) {

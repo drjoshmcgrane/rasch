@@ -680,8 +680,13 @@ server <- function(input, output, session) {
                        type = "error", duration = NULL)
       return(NULL)
     }
+    # routine handling notes are informational; only real problems warn
     if (length(fit$notes))
-      showNotification(paste(fit$notes, collapse = "\n"), type = "warning", duration = 12)
+      showNotification(paste(fit$notes, collapse = "\n"), type = "message",
+                       duration = 8)
+    if (!isTRUE(fit$est$converged))
+      showNotification("Estimation did not converge; consider raising the maximum iterations or loosening the convergence criterion.",
+                       type = "warning", duration = NULL)
     override_fit(NULL)
     try(nav_select("Summary", session = session), silent = TRUE)
     fit
