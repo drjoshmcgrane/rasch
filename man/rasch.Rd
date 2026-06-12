@@ -13,7 +13,8 @@ rasch(
   n_groups = 10,
   adjust_N = NA,
   anchors = NULL,
-  na_codes = -1
+  na_codes = -1,
+  key = NULL
 )
 }
 \arguments{
@@ -48,6 +49,13 @@ directly comparable across separately analysed datasets.}
 \item{na_codes}{Values to read as missing. Defaults to \code{-1}, the
 conventional missing-response code; any negative score is also treated as
 missing, since valid category scores start at zero.}
+
+\item{key}{Optional multiple-choice scoring key: a named vector mapping
+item names to the correct response, or a data frame with columns
+\code{item} and \code{key}. Keyed items are scored 0/1 against the key
+(case-insensitive after trimming; blanks become missing) and the raw
+responses are retained in \code{fit$mc} for
+\code{\link{distractor_analysis}} and \code{\link{plot_distractors}}.}
 }
 \value{
 An object of class \code{"rasch"}: a list with the item summary

@@ -1,7 +1,7 @@
 Package: RaschR
 Type: Package
 Title: Pairwise Conditional Rasch Measurement Analysis and Diagnostics
-Version: 0.6.0
+Version: 0.7.0
 Authors@R: person("Josh", "McGrane", role = c("aut", "cre"),
     email = "drjoshmcgrane@gmail.com")
 Description: Pairwise conditional maximum likelihood estimation of dichotomous
@@ -24,8 +24,9 @@ Description: Pairwise conditional maximum likelihood estimation of dichotomous
     plots, item splitting to resolve invariance violations, the many-facet
     Rasch model (Linacre 1989) for rated long-format data with facet
     severities, fit, and optional item-by-facet interactions, subtest
-    formation for locally dependent items, the Guttman scalogram with the
-    coefficient of reproducibility, and the first software implementation of
+    formation for locally dependent items, multiple-choice scoring against a
+    key with rest-measure distractor analysis and option curves, the Guttman
+    scalogram with the coefficient of reproducibility, and the first software implementation of
     the extended frame of reference model (Humphry 2005; Humphry and Andrich
     2008), in which the unit of the latent scale differs across item-set by
     person-group frames: group units are estimated by person-free

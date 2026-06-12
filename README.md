@@ -80,6 +80,12 @@ mfi <- rasch_mfrm(ratings, person = "person", item = "criterion",
                   score = "score", facets = "rater", interaction = "rater")
 mfi$interaction_effects   # item-by-rater gamma with SEs
 
+# multiple choice: score raw responses against a key, keep them for
+# distractor analysis (rest-measure based, with miskey flagging)
+mc <- rasch(responses_raw, key = c(Q1 = "A", Q2 = "C", Q3 = "B"))
+distractor_analysis(mc)    # per option: n, proportion, mean location, point-biserial
+plot_distractors(mc, "Q2") # option curves over class intervals
+
 # extended frame of reference model: the unit of the scale differs across
 # item-set by person-group frames (rho = alpha_set x phi_group)
 ef <- rasch_efrm(responses, item_sets = list(numeracy = num_items,
@@ -170,6 +176,12 @@ downloads the entire analysis as a ZIP archive.
   the offending item.
 - The Guttman scalogram (`guttman_table`, `plot_guttman`) with the
   coefficient of reproducibility.
+- Multiple-choice support: raw responses scored 0/1 against a key
+  (`rasch(..., key = )`), with the raw options retained for
+  `distractor_analysis` (count, proportion, mean rest-measure location, and
+  point-biserial per option, miskeys flagged) and `plot_distractors` option
+  curves. The rest measure excludes the analysed item, so the keyed option
+  cannot credit its own takers.
 - The extended frame of reference model (`rasch_efrm`; Humphry 2005;
   Humphry & Andrich 2008) — to our knowledge its first software
   implementation. Frames are item-set by person-group cells with units

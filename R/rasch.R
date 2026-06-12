@@ -89,6 +89,12 @@
 #' @param na_codes Values to read as missing. Defaults to \code{-1}, the
 #'   conventional missing-response code; any negative score is also treated as
 #'   missing, since valid category scores start at zero.
+#' @param key Optional multiple-choice scoring key: a named vector mapping
+#'   item names to the correct response, or a data frame with columns
+#'   \code{item} and \code{key}. Keyed items are scored 0/1 against the key
+#'   (case-insensitive after trimming; blanks become missing) and the raw
+#'   responses are retained in \code{fit$mc} for
+#'   \code{\link{distractor_analysis}} and \code{\link{plot_distractors}}.
 #' @return An object of class \code{"rasch"}: a list with the item summary
 #'   (\code{items}), \code{thresholds} (with standard errors), the person
 #'   table (\code{person}, including ID and factors), the score table,
@@ -106,7 +112,7 @@
 #' @export
 rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
                   items = NULL, n_groups = 10, adjust_N = NA, anchors = NULL,
-                  na_codes = -1) {
+                  na_codes = -1, key = NULL) {
   model <- match.arg(model)
 
   # --- split data frame into ID, factors, and item columns ---------------
@@ -130,7 +136,22 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
   }
   if (is.null(id_vec)) id_vec <- seq_len(nrow(X))
 
+  # score multiple-choice items against the key, keeping the raw responses
+  mc <- NULL
+  if (!is.null(key)) {
+    key <- .resolve_key(key)
+    sc <- .score_mc(X, key)
+    X[, colnames(sc$scored)] <- sc$scored
+    mc <- list(key = sc$key, raw = sc$raw)
+  }
+
   prep <- .prepare_X(X, na_codes = na_codes); X <- prep$X
+  if (!is.null(mc)) {
+    prep$notes <- c(prep$notes,
+                    sprintf("%d item(s) scored 0/1 against the key", ncol(mc$raw)))
+    gone <- setdiff(colnames(mc$raw), colnames(X))
+    if (length(gone)) mc$raw <- mc$raw[, setdiff(colnames(mc$raw), gone), drop = FALSE]
+  }
   m <- apply(X, 2, max, na.rm = TRUE); L <- ncol(X)
 
   if (!is.null(anchors)) {
@@ -152,7 +173,10 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
 
   # --- item estimation ----------------------------------------------------
   est <- pcml(X, model = model, anchors = anchors)
-  .assemble_fit(model, X, est, id_vec, fac_df, n_groups, adjust_N, prep$notes)
+  fit <- .assemble_fit(model, X, est, id_vec, fac_df, n_groups, adjust_N,
+                       prep$notes)
+  fit$mc <- mc
+  fit
 }
 
 # Post-estimation pipeline shared by rasch(), rasch_mfrm(), and rasch_efrm():

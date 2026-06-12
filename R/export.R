@@ -86,6 +86,7 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
   gt <- guttman_table(fit)
   wtab(data.frame(id = rownames(gt$matrix), gt$matrix, check.names = FALSE),
        "guttman_ordered_responses")
+  if (!is.null(fit$mc)) wtab(distractor_analysis(fit), "distractor_analysis")
   if (inherits(fit, "rasch_mfrm")) {
     wtab(fit$item_effects, "item_effects")
     wtab(fit$item_thresholds, "item_structural_thresholds")
@@ -154,6 +155,14 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
   }
 
   # --- per-item plots ------------------------------------------------------------
+  if (item_plots && !is.null(fit$mc)) {
+    for (it in colnames(fit$mc$raw)) local({
+      it_ <- it
+      files <<- c(files, .rr_save_plot(function() plot_distractors(fit, it_),
+        paste0(gsub("[^A-Za-z0-9_.-]", "_", it_), "_options"),
+        idir, formats, width, height, dpi))
+    })
+  }
   if (item_plots) {
     for (it in fit$items$item) {
       safe <- gsub("[^A-Za-z0-9_.-]", "_", it)

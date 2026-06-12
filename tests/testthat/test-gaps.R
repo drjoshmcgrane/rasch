@@ -144,3 +144,42 @@ test_that("a significant interaction supersedes its main effects", {
   tki <- df$tukey[df$tukey$item == "I2" & df$tukey$term == "g1:g2", ]
   expect_equal(nrow(tki), 6)   # choose(4, 2) cell contrasts
 })
+
+test_that("multiple-choice scoring and miskey detection work", {
+  set.seed(5); Np <- 800
+  th <- rnorm(Np)
+  d <- seq(-1.2, 1.2, length.out = 8)
+  keyv <- setNames(rep("A", 8), sprintf("M%02d", 1:8))
+  keyv["M04"] <- "B"                                  # miskey: true correct is C
+  raw <- sapply(seq_along(d), function(i) {
+    correct <- if (i == 4) "C" else "A"
+    ok <- rbinom(Np, 1, plogis(th - d[i]))
+    ifelse(ok == 1, correct,
+           sample(setdiff(c("A", "B", "C", "D"), correct), Np, replace = TRUE))
+  })
+  colnames(raw) <- sprintf("M%02d", 1:8)
+  raw[sample(length(raw), 60)] <- ""                  # blanks become missing
+
+  fit <- rasch(raw, key = keyv)
+  expect_false(is.null(fit$mc))
+  expect_true(all(fit$m == 1))
+  expect_true(any(grepl("scored 0/1 against the key", fit$notes)))
+  # scoring matches a manual comparison (blanks NA)
+  manual <- ifelse(raw[, "M01"] == "", NA_integer_,
+                   as.integer(raw[, "M01"] == "A"))
+  expect_identical(unname(fit$X[, "M01"]), manual)
+
+  da <- distractor_analysis(fit)
+  m4 <- da[da$item == "M04", ]
+  expect_true(m4$flag[m4$option == "C"])              # the real correct option
+  expect_false(any(m4$flag[m4$option != "C"]))
+  expect_equal(sum(da$flag[da$item != "M04"]), 0)     # clean items stay clean
+  # the keyed option carries the top point-biserial on clean items
+  clean <- da[da$item == "M01", ]
+  expect_identical(clean$option[which.max(clean$point_biserial)], "A")
+
+  # key as a data frame, case-insensitive matching
+  fit2 <- rasch(raw, key = data.frame(item = names(keyv), key = tolower(keyv)))
+  expect_equal(fit2$items$location, fit$items$location)
+  expect_error(distractor_analysis(rasch(fit$X)), "no key")
+})

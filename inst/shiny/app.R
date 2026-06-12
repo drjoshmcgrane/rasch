@@ -39,7 +39,8 @@ if (requireNamespace("RaschR", quietly = TRUE)) {
              group = grp, sex = sex, check.names = FALSE)
 }
 
-# dichotomous demo: 15 items, DIF planted on I05 by group
+# dichotomous demo: 15 multiple-choice items (raw A-D responses), DIF planted
+# on I05 by group, and I07 deliberately miskeyed (true correct C, key says A)
 .demo_dich <- function(seed = 41, Np = 1000) {
   set.seed(seed)
   d <- seq(-2, 2, length.out = 15)
@@ -48,12 +49,19 @@ if (requireNamespace("RaschR", quietly = TRUE)) {
   th <- rnorm(Np, 0, 1.3)
   X <- sapply(seq_along(d), function(i) {
     sft <- if (i == 5) ifelse(grp == "focal", 0.8, 0) else 0
-    rbinom(Np, 1, plogis(th - d[i] - sft))
+    correct <- if (i == 7) "C" else "A"
+    ok <- rbinom(Np, 1, plogis(th - d[i] - sft))
+    ifelse(ok == 1, correct,
+           sample(setdiff(c("A", "B", "C", "D"), correct), Np, replace = TRUE))
   })
   colnames(X) <- sprintf("I%02d", seq_along(d))
   data.frame(person_id = sprintf("P%04d", seq_len(Np)), X,
              group = grp, sex = sex, check.names = FALSE)
 }
+
+# the demo key: all "A" (so I07 is the discoverable miskey)
+.demo_dich_key <- function()
+  setNames(rep("A", 15), sprintf("I%02d", 1:15))
 
 # rating scale demo: common step structure, item locations vary
 .demo_rsm <- function(seed = 51, Np = 1000) {
@@ -185,6 +193,8 @@ ui <- page_navbar(
           selectizeInput("item_cols", "Item columns", NULL, multiple = TRUE,
                          options = list(placeholder = "all remaining columns")),
           hr(),
+          fileInput("key_file", "Multiple-choice key (CSV: item,key)",
+                    accept = ".csv", placeholder = "optional"),
           fileInput("anchor_file", "Anchors for equating (CSV: item,k,tau; blank k = anchor the item mean)",
                     accept = ".csv", placeholder = "optional"),
           downloadButton("dl_anchors", "Save anchors from this analysis (CSV)",
@@ -252,7 +262,11 @@ ui <- page_navbar(
       plotCard("ccc", "Category probability curves")),
     layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       plotCard("tpc", "Threshold probability curves"),
-      plotCard("cfreq", "Category frequencies"))
+      plotCard("cfreq", "Category frequencies")),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+      tableCard("distractor_tbl", "Distractor analysis",
+                "Multiple-choice analyses only (provide a key). Locations use the rest measure; a distractor whose takers are abler than the keyed option's flags a possible miskey."),
+      plotCard("distractor_plot", "Option curves"))
   ),
 
   # -------------------------------------------------------------- PERSONS --
@@ -547,6 +561,19 @@ server <- function(input, output, session) {
           idc <- if (!is.null(input$id_col) && input$id_col != NONE) input$id_col else NULL
           fac <- if (length(input$factor_cols)) input$factor_cols else NULL
           its <- if (length(input$item_cols)) input$item_cols else NULL
+          # multiple-choice key: uploaded CSV, or the demo key for the demo
+          mc_key <- NULL
+          if (!is.null(input$key_file)) {
+            kf <- tryCatch(read.csv(input$key_file$datapath,
+                                    stringsAsFactors = FALSE),
+                           error = function(e) NULL)
+            if (!is.null(kf) && all(c("item", "key") %in% names(kf)))
+              mc_key <- kf
+            else showNotification("Key CSV needs columns item,key - ignored.",
+                                  type = "warning")
+          } else if (isTRUE(input$demo) && identical(input$model_type, "dich")) {
+            mc_key <- .demo_dich_key()
+          }
           # anchors match by item name; rows for absent items are ignored
           anc <- anchors_in()
           if (!is.null(anc)) {
@@ -560,7 +587,8 @@ server <- function(input, output, session) {
           }
           f0 <- rasch(df, model = if (identical(input$model_type, "rsm")) "RSM" else "PCM",
                       id = idc, factors = fac, items = its,
-                      n_groups = input$ng, adjust_N = adjN, anchors = anc)
+                      n_groups = input$ng, adjust_N = adjN, anchors = anc,
+                      key = mc_key)
           if (identical(input$model_type, "dich") && any(f0$m > 1L))
             showNotification("Some items have more than two categories; they were fitted with partial credit thresholds.",
                              type = "warning", duration = 10)
@@ -758,6 +786,26 @@ server <- function(input, output, session) {
   register_plot("ccc",  function() plot_ccc(fit(), sel_item()))
   register_plot("tpc",  function() plot_threshold_prob(fit(), sel_item()))
   register_plot("cfreq", function() plot_catfreq(fit(), sel_item()))
+  mc_dat <- reactive({
+    f <- fit()
+    validate(need(!is.null(f$mc),
+                  "Provide a multiple-choice key (CSV: item,key) to see distractor analysis."))
+    distractor_analysis(f)
+  })
+  register_table("distractor_tbl", function() mc_dat(), function() {
+    d <- mc_dat()
+    d$keyed <- ifelse(d$keyed, "*", "")
+    d$flag <- ifelse(d$flag, "MISKEY?", "")
+    num_dt(d)
+  })
+  register_plot("distractor_plot", function() {
+    f <- fit()
+    validate(need(!is.null(f$mc),
+                  "Provide a multiple-choice key (CSV: item,key) to see option curves."))
+    it <- if (sel_item() %in% colnames(f$mc$raw)) sel_item() else
+      colnames(f$mc$raw)[1]
+    plot_distractors(f, it)
+  })
 
   # -------------------------------------------------------------- persons --
   register_table("person_tbl", function() fit()$person, function() {
