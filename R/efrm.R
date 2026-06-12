@@ -394,6 +394,23 @@
 #' threshold covariance come from the replicate spread; slower, but captures
 #' all cross-dependencies jointly.
 #'
+#' Relation to Humphry (2005, sections 5.3 and 5.4): the two-stage
+#' architecture implemented here operationalises the estimation approach
+#' proposed in section 5.3 of the thesis (conditional estimation within
+#' frames, with the item-set units obtained through person estimates from
+#' linked sets), and retains the thesis's error-variance correction (its
+#' equation 2.29, after Andrich 1982) and its transformation of standard
+#' errors into the common unit by the inverse discrimination. The standard
+#' errors themselves go further than the thesis's section 5.4, which inverts
+#' each diagonal element of the joint-likelihood information separately and
+#' therefore conditions on the remaining parameters, including the person
+#' locations, being treated as known. Here full covariance matrices are used
+#' throughout; the item-side covariance carries the Godambe sandwich
+#' correction required for a pairwise composite likelihood; the unit
+#' uncertainty that the thesis's transformation treats as fixed is
+#' propagated into the common-unit parameters; and resampling replaces
+#' analytic plug-in variances for the person-side linking stage.
+#'
 #' @param data Persons-by-items data (matrix or data frame, like
 #'   \code{\link{rasch}}), plus a person-group column.
 #' @param item_sets A named list mapping set names to item-column names, or
