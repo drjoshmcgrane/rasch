@@ -225,3 +225,31 @@ test_that("dimensionality: 10-component PCA, scree, manual subsets, exact CI", {
                                    items_negative = c("D03", "D04")),
                "not in the fit")
 })
+
+test_that("compare_fits contrasts nested models on the same data", {
+  set.seed(3); Np <- 700
+  simP <- function(th, tau) { x <- 0:length(tau); p <- exp(x * th - c(0, cumsum(tau))); p / sum(p) }
+  th <- rnorm(Np)
+  loc <- seq(-1, 1, length.out = 6); step <- c(-0.8, 0, 0.8)
+  X <- sapply(loc, function(b) sapply(th, function(t)
+    sample(0:3, 1, prob = simP(t, b + step))))
+  colnames(X) <- paste0("R", 1:6)
+  pcm <- rasch(X, model = "PCM"); rsm <- rasch(X, model = "RSM")
+
+  cmp <- compare_fits(PCM = pcm, RSM = rsm)
+  expect_s3_class(cmp, "rasch_compare")
+  expect_identical(attr(cmp, "reference"), "PCM")
+  expect_true(all(cmp$same_data))
+  # RSM is nested in PCM: fewer parameters, lower (or equal) loglik
+  expect_lt(cmp$parameters[2], cmp$parameters[1])
+  expect_lte(cmp$two_delta_ll[2], 1e-8)
+  expect_equal(cmp$delta_parameters[2],
+               cmp$parameters[2] - cmp$parameters[1])
+  # different data -> no loglik comparison, descriptive columns still there
+  X2 <- X[, 1:5]
+  cmp2 <- compare_fits(full = pcm, short = rasch(X2))
+  expect_false(cmp2$same_data[2])
+  expect_true(is.na(cmp2$two_delta_ll[2]))
+  expect_true(all(is.finite(cmp2$chisq_per_df)))
+  expect_error(compare_fits(pcm), "at least two")
+})

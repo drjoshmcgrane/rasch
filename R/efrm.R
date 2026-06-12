@@ -560,7 +560,8 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
   thr_v$anchored <- FALSE
   est <- list(model = "EFRM", thr = thr_v, cov_tau = cov_tau,
               loglik = sol$loglik, iterations = sol$iterations,
-              converged = sol$converged, m = m_v, anchors = NULL)
+              converged = sol$converged, m = m_v, anchors = NULL,
+              n_parameters = (Md - S) + (G - 1L) + 2L * (S - 1L))
 
   fac_all <- data.frame(g = as.character(grp), stringsAsFactors = FALSE)
   names(fac_all) <- grp_name
@@ -644,7 +645,7 @@ print.rasch_efrm <- function(x, ...) {
   cat("\nItem set units (alpha) and locations:\n")
   print(merge(x$alpha_table, x$set_table[, c("set", "mu", "n_items")], by = "set"),
         digits = 3, row.names = FALSE)
-  cat(sprintf("\nEqual-unit comparison: 2(ll_EFRM - ll_equal) = %.1f with %d extra unit parameter(s)\n",
+  cat(sprintf("\nEqual-unit comparison: 2(ll_EFRM - ll_equal) = %.3f with %d extra unit parameter(s)\n",
               x$efrm_vs_rasch$two_delta_ll, x$efrm_vs_rasch$extra_parameters))
   cat("(composite likelihood: descriptive, not a calibrated chi-square)\n")
   if (length(x$notes)) cat("\nNotes:", paste(x$notes, collapse = "; "), "\n")
@@ -746,7 +747,7 @@ plot_icc_frames <- function(fit, item, n_groups = fit$n_groups,
     }
   }
   .rr_legend("topleft",
-             sprintf("%s (rho %.2f)", vm$group[rows], fit$disc[rows]),
+             sprintf("%s (rho %.3f)", vm$group[rows], fit$disc[rows]),
              lwd = 2.6, col = .rr$pal[seq_along(rows)])
   invisible(NULL)
 }

@@ -289,7 +289,8 @@ pcml <- function(X, model = c("PCM", "RSM"), anchors = NULL) {
     thr$anchored <- seq_len(M) %in% a_id | thr$item %in% mean_items
     return(list(model = model, thr = thr, cov_tau = sol$cov_tau,
                 loglik = sol$loglik, iterations = sol$iterations,
-                converged = sol$converged, m = m, anchors = anchors))
+                converged = sol$converged, m = m, anchors = anchors,
+                n_parameters = ncol(B)))
   }
 
   if (model == "RSM") {
@@ -327,5 +328,6 @@ pcml <- function(X, model = c("PCM", "RSM"), anchors = NULL) {
 
   list(model = model, thr = thr, cov_tau = sol$cov_tau,
        loglik = sol$loglik, iterations = sol$iterations,
-       converged = sol$converged, m = m, anchors = NULL)
+       converged = sol$converged, m = m, anchors = NULL,
+       n_parameters = ncol(B))
 }

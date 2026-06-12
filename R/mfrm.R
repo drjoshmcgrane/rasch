@@ -193,7 +193,8 @@ rasch_mfrm <- function(data, person, item, score, facets, n_groups = 10,
   thr_v$tau <- sol$tau; thr_v$se <- sol$se_tau; thr_v$anchored <- FALSE
   est <- list(model = "MFRM", thr = thr_v, cov_tau = sol$cov_tau,
               loglik = sol$loglik, iterations = sol$iterations,
-              converged = sol$converged, m = m_v, anchors = NULL)
+              converged = sol$converged, m = m_v, anchors = NULL,
+              n_parameters = P)
 
   fit <- .assemble_fit("MFRM", Xv, est, persons_u, NULL, n_groups, adjust_N,
                        notes)

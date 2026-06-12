@@ -76,7 +76,7 @@ plot_icc <- function(fit, item, group = NULL, n_groups = fit$n_groups,
   op <- .rr_canvas(range(grid), c(0, mmax), "Person location (logits)",
                    "Expected score",
                    paste0("ICC \u2013 ", fit$items$item[i],
-                          sprintf("  (location %.2f)", fit$items$location[i])))
+                          sprintf("  (location %.3f)", fit$items$location[i])))
   on.exit(par(op))
   lines(grid, Ecurve, lwd = 3, col = .rr$ink)
   ci <- cut(rank(th[ok], ties.method = "first"), n_groups, labels = FALSE)
@@ -177,7 +177,7 @@ plot_threshold_prob <- function(fit, item, grid = seq(-6, 6, 0.05)) {
     lines(grid, plogis(.disc_of(fit, i) * (grid - tau_i[k])), lwd = 2.6, col = colr)
     points(tau_i[k], 0.5, pch = 21, bg = colr, col = "white", cex = 1.4)
   }
-  .rr_legend("topleft", sprintf("threshold %d (%.2f)", seq_along(tau_i), tau_i),
+  .rr_legend("topleft", sprintf("threshold %d (%.3f)", seq_along(tau_i), tau_i),
              lwd = 2.6, col = .rr$pal[seq_along(tau_i)])
   invisible(NULL)
 }
@@ -221,9 +221,9 @@ plot_pimap <- function(fit, bins = 35) {
   rect(brk[-length(brk)], 0, brk[-1], pp, col = .rr$blue, border = "white", lwd = 0.6)
   rect(brk[-length(brk)], -pi, brk[-1], 0, col = .rr$amber, border = "white", lwd = 0.6)
   segments(mean(th), 0, mean(th), ymax * 0.95, col = .rr$ink, lty = 2)
-  text(mean(th), ymax * 0.98, sprintf("persons: %.2f (%.2f)", mean(th), sd(th)),
+  text(mean(th), ymax * 0.98, sprintf("persons: %.3f (%.3f)", mean(th), sd(th)),
        col = .rr$ink, cex = 0.8, adj = -0.02)
-  text(mean(tau), ymin * 0.98, sprintf("thresholds: %.2f (%.2f)", mean(tau), sd(tau)),
+  text(mean(tau), ymin * 0.98, sprintf("thresholds: %.3f (%.3f)", mean(tau), sd(tau)),
        col = .rr$ink, cex = 0.8, adj = -0.02)
   .rr_legend("topleft", c("Persons", "Item thresholds"),
              fill = c(.rr$blue, .rr$amber), border = NA)
@@ -469,7 +469,7 @@ plot_pca <- function(fit) {
   loc <- fit$items$location
   op <- .rr_canvas(range(loc) + c(-0.5, 0.5), range(ld) * 1.25,
                    "Item location (logits)", "PC1 loading",
-                   sprintf("Residual first contrast (eigenvalue %.2f, %.0f%%)",
+                   sprintf("Residual first contrast (eigenvalue %.3f, %.1f%%)",
                            pc$first_eigen, 100 * pc$prop[1]), grid_x = TRUE)
   on.exit(par(op))
   abline(h = 0, lty = 2, col = .rr$soft)

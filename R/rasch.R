@@ -282,7 +282,7 @@ print.rasch <- function(x, ...) {
               x$est$iterations))
   cat(sprintf("PSI %.3f (no extremes %.3f), alpha %.3f, power of fit: %s\n",
               x$psi$PSI, x$psi_noext$PSI, x$alpha$alpha, x$power_of_fit))
-  cat(sprintf("Total item-trait chi-square %.1f on %d df, p = %.4g\n",
+  cat(sprintf("Total item-trait chi-square %.3f on %d df, p = %.3f\n",
               x$total_chisq, x$total_df, x$total_chisq_p))
   if (length(x$notes)) cat("Notes:", paste(x$notes, collapse = "; "), "\n")
   invisible(x)
@@ -292,10 +292,10 @@ print.rasch <- function(x, ...) {
 summary.rasch <- function(object, ...) {
   x <- object
   print(x)
-  cat(sprintf("\nTargeting: person mean %.2f (SD %.2f); thresholds span %.2f to %.2f\n",
+  cat(sprintf("\nTargeting: person mean %.3f (SD %.3f); thresholds span %.3f to %.3f\n",
               x$targeting$person_mean, x$targeting$person_sd,
               x$targeting$threshold_range[1], x$targeting$threshold_range[2]))
-  cat(sprintf("Item fit residual mean %.2f SD %.2f; person fit residual mean %.2f SD %.2f\n",
+  cat(sprintf("Item fit residual mean %.3f SD %.3f; person fit residual mean %.3f SD %.3f\n",
               x$item_fit_summary$mean, x$item_fit_summary$sd,
               x$person_fit_summary$mean, x$person_fit_summary$sd))
   cat(sprintf("Items flagged misfitting (BH-adjusted): %d of %d\n\n",

@@ -117,7 +117,7 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
   summary(fit)
   dt <- dimensionality_test(fit)
   if (is.null(dt$note)) {
-    cat(sprintf("\nUnidimensionality t-test: %.1f%% significant (95%% CI %.1f%% to %.1f%%), %s\n",
+    cat(sprintf("\nUnidimensionality t-test: %.1f%% significant (exact 95%% CI %.1f%% to %.1f%%), %s\n",
                 100 * dt$prop_significant, 100 * dt$ci[1], 100 * dt$ci[2],
                 if (dt$multidimensional) "MULTIDIMENSIONAL" else "consistent with one dimension"))
   }

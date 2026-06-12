@@ -410,6 +410,21 @@ ui <- page_navbar(
             uiOutput("subtest_status")))))
   ),
 
+  # -------------------------------------------------------------- COMPARE --
+  nav_panel("Compare",
+    layout_sidebar(
+      sidebar = sidebar(width = 300, open = "always",
+        actionButton("keep_fit", "Keep current fit for comparison",
+                     class = "btn-primary w-100"),
+        actionButton("clear_fits", "Clear kept fits",
+                     class = "btn-outline-secondary w-100 mt-2"),
+        p(class = "text-muted small mt-3",
+          "Run an analysis, keep it, change the model or settings, run again, and keep that too. For fits of the same data the pairwise conditional log-likelihoods are compared directly (descriptive, composite likelihood; most meaningful for nested structures such as RSM inside PCM). Across different data preparations, compare the calibration-free columns: chi-square per df, fit residual SDs (ideal 1), PSI, and alpha.")),
+      tableCard("cmp_tbl", "Model comparison",
+                "Reference for two_delta_ll is the first kept fit.")
+    )
+  ),
+
   # --------------------------------------------------------------- EXPORT --
   nav_panel("Export",
     layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
@@ -745,7 +760,7 @@ server <- function(input, output, session) {
                 p(class = "small mb-0", sprintf("%.3f no extremes", f$psi_noext$PSI))),
       value_box("Alpha", sprintf("%.3f", f$alpha$alpha), theme = "success",
                 p(class = "small mb-0", sprintf("n = %d complete", f$alpha$n))),
-      value_box("Item-trait p", sprintf("%.3g", f$total_chisq_p),
+      value_box("Item-trait p", sprintf("%.3f", f$total_chisq_p),
                 theme = if (f$total_chisq_p < 0.05) "danger" else "secondary"),
       value_box("Power of fit", f$power_of_fit, theme = "secondary")
     )
@@ -756,7 +771,7 @@ server <- function(input, output, session) {
     cat(sprintf("Model: %s  |  Estimation: pairwise conditional ML (%s, %d iterations)\n",
                 f$model, if (f$est$converged) "converged" else "NOT CONVERGED",
                 f$est$iterations))
-    cat(sprintf("Total item-trait chi-square: %.1f on %d df, p = %.4g\n",
+    cat(sprintf("Total item-trait chi-square: %.3f on %d df, p = %.3f\n",
                 f$total_chisq, f$total_df, f$total_chisq_p))
     cat(sprintf("Item fit residual:   mean %6.2f  SD %5.2f  (ideal 0, 1)\n",
                 f$item_fit_summary$mean, f$item_fit_summary$sd))
@@ -772,14 +787,14 @@ server <- function(input, output, session) {
 
   output$targeting <- renderPrint({
     f <- fit(); t <- f$targeting
-    cat(sprintf("Person mean (SD):     %6.2f (%.2f) logits\n", t$person_mean, t$person_sd))
-    cat(sprintf("Person mean, no extremes: %.2f\n", t$person_mean_noext))
+    cat(sprintf("Person mean (SD):     %6.3f (%.3f) logits\n", t$person_mean, t$person_sd))
+    cat(sprintf("Person mean, no extremes: %.3f\n", t$person_mean_noext))
     cat(sprintf("Item mean:             0.00 (constrained)\n"))
-    cat(sprintf("Threshold range:      %6.2f to %.2f\n",
+    cat(sprintf("Threshold range:      %6.3f to %.3f\n",
                 t$threshold_range[1], t$threshold_range[2]))
     cat(sprintf("Persons beyond thresholds: %.1f%% below, %.1f%% above\n",
                 100 * t$prop_below, 100 * t$prop_above))
-    cat(sprintf("\nPSI: %.3f (separation %.2f)\n", f$psi$PSI, f$psi$separation))
+    cat(sprintf("\nPSI: %.3f (separation %.3f)\n", f$psi$PSI, f$psi$separation))
     cat(sprintf("PSI without extremes: %.3f (n = %d)\n", f$psi_noext$PSI, f$psi_noext$n))
     cat(sprintf("Cronbach alpha: %.3f (n = %d complete cases)\n", f$alpha$alpha, f$alpha$n))
   })
@@ -831,7 +846,7 @@ server <- function(input, output, session) {
     d <- items_view()
     d$misfit <- ifelse(d$misfit, "*", "")
     num_dt(d, selection = "single") |>
-      formatSignif(c("p", "p_adj"), 3)
+      formatRound(c("p", "p_adj"), 3)
   })
   register_plot("icc",  function() plot_icc(fit(), sel_item()))
   register_plot("ccc",  function() plot_ccc(fit(), sel_item()))
@@ -893,15 +908,15 @@ server <- function(input, output, session) {
       d <- dif_fact()$terms
       d$significant <- ifelse(d$significant, "*", "")
       d$superseded <- ifelse(d$superseded, "(superseded)", "")
-      num_dt(d) |> formatSignif(c("p", "p_adj"), 3)
+      num_dt(d) |> formatRound(c("p", "p_adj"), 3)
     } else {
       d <- dif_res()
       if (!is.null(input$dif_factor) && input$dif_factor %in% d$factor)
         d <- d[d$factor == input$dif_factor, ]
       d$uniform_DIF <- ifelse(d$uniform_DIF, "*", "")
       d$nonuniform_DIF <- ifelse(d$nonuniform_DIF, "*", "")
-      num_dt(d) |> formatSignif(c("p_uniform", "p_nonuniform",
-                                  "p_uniform_adj", "p_nonuniform_adj"), 3)
+      num_dt(d) |> formatRound(c("p_uniform", "p_nonuniform",
+                                "p_uniform_adj", "p_nonuniform_adj"), 3)
     }
   })
   register_table("dif_tukey_tbl", function() dif_fact()$tukey, function() {
@@ -911,7 +926,7 @@ server <- function(input, output, session) {
     if (!nrow(tk))
       return(datatable(data.frame(note = "no significant group terms to compare"),
                        rownames = FALSE, options = list(dom = "t")))
-    num_dt(tk) |> formatSignif("p_tukey", 3)
+    num_dt(tk) |> formatRound("p_tukey", 3)
   })
   register_plot("dif_icc", function() {
     f <- fit()
@@ -971,7 +986,7 @@ server <- function(input, output, session) {
     eq <- eq_res()
     d <- eq$table
     d$drift <- ifelse(d$drift, "*", "")
-    num_dt(d) |> formatSignif(c("p", "p_adj"), 3)
+    num_dt(d) |> formatRound(c("p", "p_adj"), 3)
   })
   register_plot("eq_plot", function() {
     req(input$eq_file)
@@ -1019,12 +1034,12 @@ server <- function(input, output, session) {
   })
   output$efrm_cmp <- renderPrint({
     f <- efrm_fit(); cmp <- f$efrm_vs_rasch
-    cat(sprintf("Pairwise conditional log-likelihood: frames model %.1f, equal units %.1f\n",
+    cat(sprintf("Pairwise conditional log-likelihood: frames model %.3f, equal units %.3f\n",
                 cmp$ll_efrm, cmp$ll_equal))
-    cat(sprintf("2 x improvement: %.1f with %d extra unit parameter(s)\n",
+    cat(sprintf("2 x improvement: %.3f with %d extra unit parameter(s)\n",
                 cmp$two_delta_ll, cmp$extra_parameters))
     cat("(composite likelihood: descriptive, not a calibrated chi-square)\n")
-    cat(sprintf("\nItem fit residual SD under the frames model: %.2f\n",
+    cat(sprintf("\nItem fit residual SD under the frames model: %.3f\n",
                 f$item_fit_summary$sd))
   })
 
@@ -1054,7 +1069,7 @@ server <- function(input, output, session) {
     dt <- dim_res()
     if (!is.null(dt$note)) { cat(dt$note); return(invisible()) }
     cat(sprintf("Item split: %s\n", dt$split))
-    cat(sprintf("First residual eigenvalue: %.2f\n", dt$first_eigenvalue))
+    cat(sprintf("First residual eigenvalue: %.3f\n", dt$first_eigenvalue))
     cat(sprintf("Significant person t-tests: %.1f%%  (exact 95%% CI %.1f%% to %.1f%%, n = %d)\n",
                 100 * dt$prop_significant, 100 * dt$ci[1], 100 * dt$ci[2], dt$n))
     cat(sprintf("Persons excluded (extreme on a subset): %d\n", dt$n_excluded_extreme))
@@ -1078,6 +1093,33 @@ server <- function(input, output, session) {
     fl <- residual_correlations(fit())$flagged
     if (!nrow(fl)) fl <- data.frame(note = "no item pairs exceed the flag threshold")
     num_dt(fl)
+  })
+
+  # ---------------------------------------------------------------- compare --
+  kept_fits <- reactiveVal(list())
+  observeEvent(input$keep_fit, {
+    f <- fit()
+    k <- kept_fits()
+    lab <- sprintf("%d_%s", length(k) + 1L, f$model)
+    k[[lab]] <- f
+    kept_fits(k)
+    showNotification(sprintf("Kept '%s' (%d fit(s) held).", lab, length(k)),
+                     type = "message", duration = 5)
+  })
+  observeEvent(input$clear_fits, {
+    kept_fits(list())
+    showNotification("Cleared kept fits.", type = "message", duration = 4)
+  })
+  cmp_res <- reactive({
+    k <- kept_fits()
+    validate(need(length(k) >= 2,
+                  "Keep at least two fits (run, keep, change settings, run, keep) to compare."))
+    as.data.frame(do.call(compare_fits, k))
+  })
+  register_table("cmp_tbl", function() cmp_res(), function() {
+    d <- cmp_res()
+    d$same_data <- ifelse(d$same_data, "yes", "no")
+    num_dt(d)
   })
 
   # ----------------------------------------------------------------- export --

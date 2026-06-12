@@ -106,7 +106,7 @@ plot_equate <- function(fit, reference, shift = c("mean", "none")) {
   rng <- range(c(tab$location_1, tab$location_2)) + c(-0.4, 0.4)
   op <- .rr_canvas(rng, rng, "Reference location (logits)",
                    "Current location (logits)",
-                   sprintf("Test equating: %d common items, shift %.2f, r = %.3f",
+                   sprintf("Test equating: %d common items, shift %.3f, r = %.3f",
                            eq$n, eq$shift, eq$correlation), grid_x = TRUE)
   on.exit(par(op))
   abline(eq$shift, 1, col = .rr$ink, lwd = 2)

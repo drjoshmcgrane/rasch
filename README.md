@@ -96,6 +96,11 @@ ef$frames                      # one row per frame: unit, origin, pooled fit
 plot_frames(ef)                # unit caterpillar
 plot_icc_frames(ef, "Q07")     # fanned ICCs: parallel within, fanned across
 
+# compare model fits: same-data fits get the pairwise conditional
+# log-likelihood difference (descriptive); all fits get calibration-free
+# fit descriptors (chi-square/df, fit residual SDs, PSI, alpha)
+compare_fits(PCM = fit, RSM = rasch(responses, model = "RSM"))
+
 save_outputs(fit, "results/")   # every table (CSV), every plot (PNG + PDF), summary.txt
 ```
 
