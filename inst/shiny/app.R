@@ -213,7 +213,8 @@ ui <- page_navbar(
         conditionalPanel("input.model_type == 'efrm'",
           h6("Column roles"),
           selectInput("ef_id", "ID variable", NONE),
-          selectInput("ef_group", "Person group column", NONE),
+          selectInput("ef_group", "Person group column ((none) = single group; units differ by item set only)",
+                      NONE),
           selectizeInput("ef_items", "Item columns", NULL, multiple = TRUE,
                          options = list(placeholder = "all remaining columns")),
           fileInput("ef_sets", "Item-set map (CSV: item,set)",
@@ -601,11 +602,11 @@ server <- function(input, output, session) {
     withProgress(message = "Estimating (pairwise conditional ML)…", value = 0.3, {
       fit <- tryCatch({
         if (identical(input$model_type, "efrm")) {
-          if (is.null(input$ef_group) || input$ef_group == NONE)
-            stop("nominate the person group column")
           rasch_efrm(df,
                      item_sets = ef_setmap(),
-                     groups = input$ef_group,
+                     groups = if (is.null(input$ef_group) ||
+                                  input$ef_group == NONE)
+                       rep("(all)", nrow(df)) else input$ef_group,
                      id = if (!is.null(input$ef_id) && input$ef_id != NONE)
                        input$ef_id else NULL,
                      items = names(ef_setmap()),
