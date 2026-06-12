@@ -219,8 +219,13 @@ reverse-scored negative items (alpha ratio 1.266, 95 per cent CI 1.246 to
 1.286; Wald p < 1e-89), and it matters: persons with identical raw scores
 differ by up to 0.85 logits once the wording units are modelled, over half
 of all respondents move by more than 0.1 logits, and the male-female gap is
-understated by about 10 per cent under equal units. With a single person
-group the pairwise equal-unit comparison is invariant to set units by
+understated by about 10 per cent under equal units. A free-slope
+generalized partial credit model agrees at the set level (geometric-mean
+slope ratio about 1.25), and sensitivity analysis localises part of the
+effect: the unit ratio is 1.115 without the scale's well-known ambivalent
+item Q8 (1.196 also dropping the weakest positive item), still
+significantly above one in every configuration. With a single person group
+the pairwise equal-unit comparison is invariant to set units by
 construction, so the Wald tests on the log units carry the evidence -- the
 fit object reports both and says which applies.
 
