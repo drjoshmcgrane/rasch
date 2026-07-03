@@ -171,7 +171,17 @@ with notes recorded on the fit.
 rmt::run_app()
 ```
 
-A bslib (Bootstrap 5) interface: upload a CSV/TSV, nominate the ID variable,
+A modern bslib (Bootstrap 5) interface with a guided workflow: a landing
+page with one-tap example datasets, run settings grouped into accordions, a
+task-button estimation flow with busy indication, navbar status badges
+(model, sample, PSI) once a fit exists, dark mode, and per-statistic
+tooltips citing the conventions. Every plot and table lives in a
+full-screen-capable card with downloads; tables use a publication-style
+skin with tabular numerals and traffic-lit fit columns; dynamic
+interpretation notes summarise each table's verdicts in words. An "R code
+for this analysis" panel shows the exact rmt call reproducing the current
+run, and a one-click, single-file HTML report (report_html) captures the
+whole analysis for sharing. Upload a CSV/TSV, nominate the ID variable,
 any number of person factors, and the item columns, then run. Long-format
 (rated) data is supported too: nominate the person, item, score, and facet
 columns (optionally with an item-by-facet interaction) and the app fits the

@@ -12,7 +12,7 @@
 #' if (interactive()) run_app()
 #' @export
 run_app <- function(...) {
-  for (pkg in c("shiny", "bslib", "DT")) {
+  for (pkg in c("shiny", "bslib", "DT", "bsicons")) {
     if (!requireNamespace(pkg, quietly = TRUE))
       stop("the rmt app needs the '", pkg, "' package: install.packages(\"", pkg, "\")")
   }

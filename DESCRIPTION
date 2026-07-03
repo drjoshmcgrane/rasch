@@ -1,7 +1,7 @@
 Package: rmt
 Type: Package
 Title: Pairwise Conditional Rasch Measurement Analysis and Diagnostics
-Version: 0.9.13
+Version: 0.9.14
 Authors@R: person("Josh", "McGrane", role = c("aut", "cre"),
     email = "drjoshmcgrane@gmail.com")
 Description: Pairwise conditional maximum likelihood estimation of dichotomous
@@ -72,6 +72,6 @@ Description: Pairwise conditional maximum likelihood estimation of dichotomous
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports: stats, graphics, grDevices, utils
-Suggests: testthat (>= 3.0.0), shiny, bslib, DT
+Suggests: testthat (>= 3.0.0), shiny, bslib, DT, bsicons
 RoxygenNote: 7.3.3
 Config/testthat/edition: 3

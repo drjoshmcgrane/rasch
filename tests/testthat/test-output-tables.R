@@ -108,3 +108,33 @@ test_that("summary blocks carry the distribution statistics", {
   Xm <- X; Xm[1, 1] <- NA
   expect_false(rasch(Xm)$alpha$applicable)
 })
+
+test_that("report_html writes a complete self-contained report", {
+  set.seed(3)
+  d <- seq(-1.5, 1.5, length.out = 6)
+  X <- matrix(rbinom(250 * 6, 1, plogis(outer(rnorm(250), d, "-"))), 250, 6)
+  colnames(X) <- paste0("I", 1:6)
+  fit <- rasch(data.frame(X, g = rep(c("a", "b"), each = 125)), factors = "g")
+  out <- file.path(tempdir(), "rmt_report_test.html")
+  on.exit(unlink(out), add = TRUE)
+  report_html(fit, out, title = "Test report")
+  expect_true(file.exists(out))
+  html <- paste(readLines(out, warn = FALSE), collapse = "\n")
+  # self-contained: plots embedded, no external references
+  expect_gt(lengths(regmatches(html, gregexpr("data:image/png;base64", html))), 5)
+  expect_false(grepl("src=\"http", html))
+  for (sec in c("Summary", "Item statistics", "Thresholds", "Score to measure",
+                "Dimensionality", "Local dependence", "Classical companions",
+                "Differential item functioning", "Person estimates"))
+    expect_true(grepl(paste0("<h2>", sec), html), label = sec)
+  # the base-R base64 encoder matches the RFC 4648 test vectors
+  enc <- function(txt) {
+    p <- tempfile(); on.exit(unlink(p), add = TRUE)
+    writeBin(charToRaw(txt), p)
+    .b64(p)
+  }
+  expect_equal(enc("Man"), "TWFu")
+  expect_equal(enc("Ma"), "TWE=")
+  expect_equal(enc("M"), "TQ==")
+  expect_equal(enc("foobar"), "Zm9vYmFy")
+})

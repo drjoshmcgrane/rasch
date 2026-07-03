@@ -206,3 +206,183 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
   }
   invisible(files)
 }
+
+# base-R base64 encoder (RFC 4648), used to embed plot images in the
+# self-contained HTML report without adding dependencies
+.b64 <- function(path) {
+  raw <- readBin(path, "raw", file.info(path)$size)
+  alphabet <- strsplit("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/", "")[[1]]
+  n <- length(raw)
+  pad <- (3 - n %% 3) %% 3
+  raw <- c(raw, as.raw(rep(0, pad)))
+  m <- matrix(as.integer(raw), nrow = 3)
+  b1 <- m[1, ] %/% 4
+  b2 <- (m[1, ] %% 4) * 16 + m[2, ] %/% 16
+  b3 <- (m[2, ] %% 16) * 4 + m[3, ] %/% 64
+  b4 <- m[3, ] %% 64
+  out <- alphabet[rbind(b1, b2, b3, b4) + 1L]
+  if (pad > 0) out[(length(out) - pad + 1):length(out)] <- "="
+  paste(out, collapse = "")
+}
+
+.report_css <- "
+  body { font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+         sans-serif; color: #0f172a; margin: 0; background: #f8fafc; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.15rem; margin: 2.2rem 0 .6rem; padding-bottom: .3rem;
+       border-bottom: 2px solid #e2e8f0; }
+  .meta { color: #64748b; font-size: .85rem; margin-bottom: 1.5rem; }
+  .note { color: #64748b; font-size: .82rem; margin: .3rem 0 .8rem; }
+  table { border-collapse: collapse; width: 100%; font-size: .82rem;
+          background: #fff; margin: .4rem 0 1rem; }
+  th { text-align: left; font-weight: 600; border-bottom: 2px solid #cbd5e1;
+       padding: .35rem .55rem; white-space: nowrap; }
+  td { border-bottom: 1px solid #eef2f7; padding: .3rem .55rem; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:hover td { background: #f1f5f9; }
+  img { max-width: 100%; background: #fff; border: 1px solid #e2e8f0;
+        border-radius: 8px; margin: .4rem 0 1rem; }
+  .flag { color: #dc2626; font-weight: 600; }
+  .chip { display: inline-block; background: #eff6ff; color: #1d4ed8;
+          border-radius: 999px; padding: .1rem .6rem; font-size: .78rem;
+          margin-right: .35rem; }
+"
+
+.html_table <- function(d, digits = 3, max_rows = 500) {
+  if (is.null(d) || !nrow(d)) return("")
+  trunc_note <- ""
+  if (nrow(d) > max_rows) {
+    trunc_note <- sprintf("<p class='note'>Showing the first %d of %d rows.</p>",
+                          max_rows, nrow(d))
+    d <- d[seq_len(max_rows), , drop = FALSE]
+  }
+  esc <- function(x) gsub("<", "&lt;", gsub("&", "&amp;", as.character(x)))
+  num <- vapply(d, is.numeric, TRUE)
+  cells <- vapply(seq_len(ncol(d)), function(j) {
+    v <- d[[j]]
+    if (num[j]) formatC(round(v, digits), format = "g", digits = digits + 2)
+    else esc(v)
+  }, character(nrow(d)))
+  if (is.null(dim(cells))) cells <- matrix(cells, nrow = 1)
+  head_html <- paste0("<th>", esc(names(d)), "</th>", collapse = "")
+  body_html <- paste(vapply(seq_len(nrow(d)), function(i) {
+    paste0("<tr>", paste0("<td", ifelse(num, " class='num'", ""), ">",
+                          cells[i, ], "</td>", collapse = ""), "</tr>")
+  }, ""), collapse = "\n")
+  paste0(trunc_note, "<table><thead><tr>", head_html,
+         "</tr></thead><tbody>", body_html, "</tbody></table>")
+}
+
+#' Write a self-contained HTML report of a Rasch analysis
+#'
+#' Builds a single portable HTML file containing the complete analysis:
+#' the summary statistics, every diagnostic table, and every test-level
+#' plot embedded as an image, styled for reading and sharing. The file has
+#' no external dependencies, so it can be e-mailed or archived as the
+#' record of an analysis.
+#'
+#' @param fit A fitted object from \code{\link{rasch}}.
+#' @param file Path of the HTML file to write.
+#' @param title Report title.
+#' @param dpi Resolution of the embedded plots.
+#' @return Invisibly, \code{file}.
+#' @examples
+#' set.seed(1)
+#' d <- seq(-2, 2, length.out = 6)
+#' X <- matrix(rbinom(300 * 6, 1, plogis(outer(rnorm(300), d, "-"))), 300, 6)
+#' colnames(X) <- paste0("I", 1:6)
+#' out <- file.path(tempdir(), "report.html")
+#' report_html(rasch(X), out)
+#' @export
+report_html <- function(fit, file, title = "Rasch measurement analysis",
+                        dpi = 150) {
+  tmp <- tempfile("rmtplots"); dir.create(tmp)
+  on.exit(unlink(tmp, recursive = TRUE), add = TRUE)
+  shot <- function(f, name, w = 9, h = 5.4) {
+    path <- file.path(tmp, paste0(name, ".png"))
+    ok <- tryCatch({
+      png(path, width = w, height = h, units = "in", res = dpi)
+      f(); dev.off(); TRUE
+    }, error = function(e) { try(dev.off(), silent = TRUE); FALSE })
+    if (!ok) return("")
+    sprintf("<img src='data:image/png;base64,%s' alt='%s'/>", .b64(path), name)
+  }
+  s <- function(...) paste0(...)
+  chips <- s("<span class='chip'>", fit$model, "</span>",
+             "<span class='chip'>", nrow(fit$X), " persons</span>",
+             "<span class='chip'>", ncol(fit$X), " items</span>",
+             sprintf("<span class='chip'>PSI %.3f</span>", fit$psi$PSI),
+             sprintf("<span class='chip'>alpha %.3f</span>", fit$alpha$alpha))
+  summ <- s(
+    sprintf("<p>Pairwise conditional estimation %s in %d iterations. ",
+            if (isTRUE(fit$est$converged)) "converged" else "did <b>not</b> converge",
+            fit$est$iterations),
+    sprintf("Total item-trait chi-square %.2f on %d df (p = %.3f). ",
+            fit$total_chisq, fit$total_df, fit$total_chisq_p),
+    sprintf("Item fit residual mean %.2f, SD %.2f; person fit residual mean %.2f, SD %.2f. ",
+            fit$item_fit_summary$mean, fit$item_fit_summary$sd,
+            fit$person_fit_summary$mean, fit$person_fit_summary$sd),
+    sprintf("PSI %.3f (%.3f without extremes); item separation %.3f; power of the test of fit: %s.</p>",
+            fit$psi$PSI, fit$psi_noext$PSI, fit$isi$PSI, fit$power_of_fit),
+    if (length(fit$notes))
+      s("<p class='note'>Notes: ", paste(fit$notes, collapse = "; "), "</p>")
+    else "")
+  rc <- residual_correlations(fit)
+  dt <- dimensionality_test(fit)
+  dim_html <- if (is.null(dt$note))
+    sprintf("<p>%.1f%% of person subset t-tests significant (95%% CI %.1f-%.1f%%): %s.</p>",
+            100 * dt$prop_significant, 100 * dt$ci[1], 100 * dt$ci[2],
+            if (dt$multidimensional) "<span class='flag'>evidence of multidimensionality</span>"
+            else "consistent with one dimension")
+  else sprintf("<p class='note'>%s</p>", dt$note)
+  ctt <- tryCatch(ctt_table(fit), error = function(e) NULL)
+
+  html <- s(
+    "<!DOCTYPE html><html><head><meta charset='utf-8'/>",
+    "<meta name='viewport' content='width=device-width, initial-scale=1'/>",
+    "<title>", title, "</title><style>", .report_css, "</style></head><body>",
+    "<div class='wrap'>",
+    "<h1>", title, "</h1>",
+    "<p class='meta'>", format(Sys.time(), "%Y-%m-%d %H:%M"),
+    " &middot; rmt ", as.character(utils::packageVersion("rmt")), "</p>",
+    "<p>", chips, "</p>",
+    "<h2>Summary</h2>", summ,
+    "<h2>Targeting</h2>",
+    shot(function() plot_pimap(fit), "targeting"),
+    "<h2>Item statistics</h2>", .html_table(fit$items),
+    shot(function() plot_item_map(fit), "item_map"),
+    "<h2>Thresholds</h2>",
+    .html_table({ th <- fit$thresholds
+                  th$item <- fit$items$item[th$item]
+                  th[, c("item", "k", "tau", "se")] }),
+    shot(function() plot_threshold_map(fit), "threshold_map"),
+    "<h2>Test characteristic and information</h2>",
+    shot(function() plot_tcc(fit), "tcc"),
+    shot(function() plot_tif(fit), "tif"),
+    "<h2>Score to measure</h2>",
+    .html_table(score_table(fit)),
+    "<h2>Fit residual distributions</h2>",
+    shot(function() plot_resid_dist(fit, "items"), "resid_items"),
+    shot(function() plot_resid_dist(fit, "persons"), "resid_persons"),
+    "<h2>Dimensionality</h2>", dim_html,
+    shot(function() plot_scree(fit), "scree"),
+    "<h2>Local dependence</h2>",
+    sprintf("<p>Average residual correlation %.3f; %d flagged pair(s).</p>",
+            rc$average, nrow(rc$flagged)),
+    if (nrow(rc$flagged)) .html_table(rc$flagged) else "",
+    shot(function() plot_resid_cor(fit), "residcor"),
+    if (!is.null(ctt)) s("<h2>Classical companions</h2>",
+      sprintf("<p class='note'>Complete cases n = %d; raw mean %.2f, SD %.2f; alpha %.3f; classical SEM %.2f.</p>",
+              ctt$n, ctt$mean, ctt$sd, ctt$alpha, ctt$sem),
+      .html_table(ctt$table)) else "",
+    if (!is.null(fit$factors)) {
+      da <- tryCatch(dif_anova(fit), error = function(e) NULL)
+      if (!is.null(da)) s("<h2>Differential item functioning</h2>",
+                          .html_table(da)) else ""
+    } else "",
+    "<h2>Person estimates</h2>", .html_table(fit$person),
+    "</div></body></html>")
+  writeLines(html, file, useBytes = TRUE)
+  invisible(file)
+}
