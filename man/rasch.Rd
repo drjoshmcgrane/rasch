@@ -10,11 +10,12 @@ rasch(
   id = NULL,
   factors = NULL,
   items = NULL,
-  n_groups = 10,
+  n_groups = NULL,
   adjust_N = NA,
   anchors = NULL,
   na_codes = -1,
   key = NULL,
+  pc_components = NULL,
   maxit = 60,
   tol = 1e-08
 )
@@ -36,7 +37,12 @@ carried through to the person estimates.}
 \item{items}{Optional character vector naming the item columns; by default
 every column not named in \code{id} or \code{factors}.}
 
-\item{n_groups}{Number of class intervals for the item-trait chi-square.}
+\item{n_groups}{Number of class intervals for the item-trait chi-square
+and ANOVA item fit. The default \code{NULL} applies the rule of Andrich
+and Marais (2019, ch. 15): as
+many intervals of at least 50 non-extreme persons as the sample allows,
+at most 10, at least 2. The resolved value is stored in
+\code{fit$n_groups}.}
 
 \item{adjust_N}{Optional reference sample size; if supplied, item-trait
 chi-squares are rescaled to this size (a sample-size adjustment for the
@@ -52,12 +58,28 @@ directly comparable across separately analysed datasets.}
 conventional missing-response code; any negative score is also treated as
 missing, since valid category scores start at zero.}
 
-\item{key}{Optional multiple-choice scoring key: a named vector mapping
-item names to the correct response, or a data frame with columns
-\code{item} and \code{key}. Keyed items are scored 0/1 against the key
-(case-insensitive after trimming; blanks become missing) and the raw
-responses are retained in \code{fit$mc} for
-\code{\link{distractor_analysis}} and \code{\link{plot_distractors}}.}
+\item{key}{Optional multiple-choice scoring key, in any of three forms. (1) A named vector or data frame with columns \code{item}
+and \code{key} naming each item's correct option: scored 0/1
+(case-insensitive after trimming; blanks become missing). (2) Double
+keying: several correct options separated by \code{"/"} (for example
+\code{"A/C"}), all scoring 1. (3) Polytomous option scoring (Andrich
+and Styles 2011): a data frame with columns \code{item},
+\code{option}, and \code{score} assigning an integer score to every
+credited option (unlisted options score 0), so informative
+distractors receive partial credit and the item is fitted as
+polytomous; see \code{\link{distractor_rescore}} for an
+evidence-based proposal. Raw responses are retained in \code{fit$mc}
+for \code{\link{distractor_analysis}} and
+\code{\link{plot_distractors}}.}
+
+\item{pc_components}{\code{NULL} (default) estimates every PCM threshold
+freely. An integer 1 to 4 instead estimates each item's thresholds
+through the Andrich principal-components reparameterisation (see
+\code{\link{pcml_pc}}): 1 = location only, 2 = + spread (the dispersion
+model of Andrich 1982), 3 = + skewness, 4 = + kurtosis (the full
+principal-components model; Pedler 1987). Useful when some categories are sparsely
+populated; the component estimates are returned in
+\code{fit$est$components}. PCM only, and not combinable with anchors.}
 
 \item{maxit, tol}{Newton-Raphson iteration cap and convergence
 tolerance of the pairwise conditional estimation.}
@@ -66,18 +88,39 @@ tolerance of the pairwise conditional estimation.}
 An object of class \code{"rasch"}: a list with the item summary
   (\code{items}), \code{thresholds} (with standard errors), the person
   table (\code{person}, including ID and factors), the score table,
-  residuals, reliability (\code{psi}, \code{psi_noext}, \code{alpha}),
-  targeting, item-trait statistics, threshold diagnostics, and estimation
+  residuals, reliability (\code{psi}, \code{psi_noext}, the item
+  separation index \code{isi}, \code{alpha}), targeting, item-trait
+  statistics (\code{item_trait}, \code{item_anova}), the
+  summary distribution block (\code{summary_stats}: location and fit
+  residual mean/SD/skewness/kurtosis, fit-location correlations, and the
+  cell degrees-of-freedom factor), threshold diagnostics, and estimation
   details (\code{est}).
 }
 \description{
 Runs a complete Rasch analysis: Andrich and Luo pairwise conditional
 maximum likelihood item estimation (see \code{\link{pcml}}), Warm weighted
 likelihood person estimates per missing-data pattern, item and person fit
-residuals, infit and outfit, the item-trait interaction chi-square and
-class-interval ANOVA F, the person separation index with and without
-extremes, Cronbach's alpha, targeting, threshold diagnostics, and the
+residuals (the log-of-mean-square statistic of Andrich and Marais 2019,
+ch. 23, with its
+untransformed natural form and degrees of freedom), infit and outfit,
+the item-trait interaction chi-square and the class-interval ANOVA
+item-fit F, the person separation index with and without extremes,
+Cronbach's alpha, targeting, threshold diagnostics, and the
 score-to-measure table.
+}
+\details{
+The fit residual follows Andrich and Marais (2019, ch. 23) exactly:
+standardised residuals are
+squared and summed over each item's (person's) observed cells among
+non-extreme persons, compared with the summed cell degrees of freedom
+(the model-testing degrees of freedom, cells minus estimated parameters,
+apportioned equally over cells), and symmetrised by the
+log-of-mean-square transform \eqn{f (\ln Y^2 - \ln f)/\sqrt{V[Y^2]}} with
+model-based variance \eqn{V[Y^2] = \sum (C_4/V^2 - 1)}. Values are
+approximately N(0,1) under fit; the conventional flagging value is 2.5
+(Andrich and Marais 2019, ch. 15).
+Negative values indicate over-discrimination (Guttman-like responses),
+positive values under-discrimination.
 }
 \examples{
 set.seed(1)

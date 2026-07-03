@@ -1,4 +1,4 @@
-# RaschR :: estimation
+# rmt :: estimation
 # ===========================================================================
 # Pairwise conditional maximum likelihood after Andrich & Luo (2003) and
 # Zwinderman (1995). For items i, j with maximum scores m_i,
@@ -187,7 +187,7 @@ threshold_index <- function(m) {
   covb <- Hinv %*% Jb %*% Hinv
   covt <- B %*% covb %*% t(B)
   list(tau = drop(offset + B %*% beta), beta = beta, cov_beta = covb,
-       cov_tau = covt, se_tau = sqrt(pmax(diag(covt), 0)),
+       cov_tau = covt, se_tau = sqrt(pmax(diag(covt), 0)), H_beta = Hb,
        loglik = glh$ll, iterations = it,
        converged = max(abs(drop(crossprod(B, glh$g)))) < 1e-4)
 }
@@ -332,5 +332,166 @@ pcml <- function(X, model = c("PCM", "RSM"), anchors = NULL,
   list(model = model, thr = thr, cov_tau = sol$cov_tau,
        loglik = sol$loglik, iterations = sol$iterations,
        converged = sol$converged, m = m, anchors = NULL,
-       n_parameters = ncol(B))
+       n_parameters = ncol(B), B = B, cov_beta = sol$cov_beta,
+       H_beta = sol$H_beta)
+}
+
+# ---------------------------------------------------------------------------
+# Andrich principal-components reparameterisation (Andrich 1978, 1985; Pedler
+# 1987): an optional alternative to the free-threshold pcml() above, useful
+# when some categories are sparsely populated. Each item's mi thresholds are
+# re-expressed as up to four orthogonal-polynomial components in the
+# category score x = 0, ..., mi: location (linear), spread (quadratic),
+# skewness (cubic), and kurtosis (quartic),
+#
+#   L_i(x) = x.omega_1i - x(mi-x).omega_2i - x(mi-x)(2x-mi).omega_3i - ...
+#
+# with tau_ik = L_i(k) - L_i(k-1) (Andrich 1985, eqs 1.6-1.7). Every
+# component's coefficient differences telescope to zero across an item's
+# thresholds except location's (which differences to a constant 1), so
+# location is exactly the item's mean threshold and carries the same
+# across-item additive-shift redundancy as in .start_tau; it is sum-zero
+# constrained across items the same way pcml()'s RSM delta is. The
+# higher-order components are free per item, capped at an item's own
+# threshold count (a dichotomous item has location only). The family stops
+# at the quartic (kurtosis) term, so this reproduces pcml()'s free-PCM
+# thresholds exactly only while every item has at most 3 thresholds (location
+# + spread + skewness then span it exactly); from 4 thresholds on it is
+# necessarily a reduced-rank smoothing of the thresholds to a polynomial
+# trend across categories, however large n_components is set, because no
+# fifth component has been derived (Pedler 1987) and, at exactly 4
+# thresholds, the quartic is collinear with the cubic (see .pc_select).
+# ---------------------------------------------------------------------------
+.pc_gcoefs <- function(mi) {
+  x <- 0:mi
+  G <- cbind(x,
+             -x * (mi - x),
+             -x * (mi - x) * (2 * x - mi),
+             -x * (mi - x) * (2 * x - mi) * (5 * x^2 - 5 * x * mi + mi^2 + 1))
+  G[-1, , drop = FALSE] - G[-nrow(G), , drop = FALSE]
+}
+
+# The quartic (kurtosis) column is collinear with the cubic (skewness) column
+# at exactly 4 thresholds (it is the only such case up to 14 thresholds,
+# checked exhaustively): both are non-zero only at the two threshold rows
+# equidistant from the item's centre, where the quartic factor takes the same
+# value by symmetry, so kurtosis carries no information beyond skewness
+# there. Selecting components by incremental rank, rather than assuming
+# n_components - 1 of them are always identified, catches this (and any
+# other such coincidence) instead of silently returning an unidentified
+# parameter and an unstable standard error.
+.pc_select <- function(G, ncomp, tol = 1e-8) {
+  if (ncomp < 2L) return(integer(0))
+  base <- G[, 1, drop = FALSE]; r0 <- qr(base, tol = tol)$rank
+  keep <- integer(0)
+  for (l in 2:ncomp) {
+    test <- cbind(base, G[, l])
+    r1 <- qr(test, tol = tol)$rank
+    if (r1 > r0) { keep <- c(keep, l); base <- test; r0 <- r1 }
+  }
+  keep
+}
+
+#' Estimate Rasch thresholds via the Andrich principal-components reparameterisation
+#'
+#' An optional alternative to \code{\link{pcml}}'s free-threshold estimation,
+#' useful when some response categories are sparsely populated. Each item's
+#' thresholds are re-expressed as up to four orthogonal polynomial
+#' components in the category score: location, spread, skewness, and
+#' kurtosis (Andrich 1978, 1985; Pedler 1987). Location is always estimated;
+#' spread, skewness, and kurtosis are added in turn as an item's number of
+#' thresholds and \code{n_components} allow. Estimation uses the same
+#' pairwise conditional likelihood as \code{pcml} (Andrich and Luo 2003), so
+#' it inherits the same missing-data handling and sandwich standard errors.
+#' The component family stops at the quartic (kurtosis) term, so the
+#' reparameterisation is exact, matching \code{pcml}'s free partial credit
+#' thresholds and log-likelihood, only while every item has at most 3
+#' thresholds (4 categories); from 4 thresholds on \code{pcml_pc} is
+#' necessarily a reduced-rank smoothing of the thresholds to a polynomial
+#' trend across categories, however large \code{n_components} is set,
+#' trading flexibility for the stability that comes from pooling information
+#' across all of an item's categories -- useful when a category has low or
+#' zero frequency.
+#'
+#' @param X Persons-by-items integer score matrix (categories from 0).
+#'   Missing values are handled by pairwise deletion.
+#' @param n_components Maximum number of components per item: 1 (location
+#'   only) up to 4 (location, spread, skewness, kurtosis; the highest
+#'   derived by Pedler 1987). Capped per item at its own number of
+#'   thresholds, and further wherever a component would be collinear with
+#'   lower-order ones for that item's threshold count (kurtosis is
+#'   unidentified, and dropped, at exactly 4 thresholds).
+#' @param maxit,tol Newton-Raphson iteration cap and convergence tolerance.
+#' @return A list with the threshold table \code{thr} (columns \code{id},
+#'   \code{item}, \code{k}, \code{tau}, \code{se}), the component table
+#'   \code{components} (one row per item, with \code{location},
+#'   \code{spread}, \code{skewness}, \code{kurtosis} and their standard
+#'   errors, \code{NA} where an item's rank does not support that
+#'   component), the threshold covariance matrix \code{cov_tau}, the
+#'   pairwise conditional log-likelihood, the iteration count, a convergence
+#'   flag, and the max-score vector \code{m}.
+#' @examples
+#' set.seed(1)
+#' d <- seq(-1.5, 1.5, length.out = 6)
+#' X <- matrix(rbinom(400 * 6, 1, plogis(outer(rnorm(400), d, "-"))), 400, 6)
+#' colnames(X) <- paste0("I", 1:6)
+#' pcml_pc(X)$components
+#' @export
+pcml_pc <- function(X, n_components = 4, maxit = 60, tol = 1e-8) {
+  if (n_components < 1) stop("n_components must be at least 1")
+  X <- as.matrix(X); storage.mode(X) <- "integer"
+  m <- apply(X, 2, max, na.rm = TRUE); L <- ncol(X)
+  thr <- threshold_index(m); M <- nrow(thr)
+  ncomp <- pmin(m, n_components, 4L)
+
+  Gs <- lapply(m, .pc_gcoefs)
+  keep <- Map(.pc_select, Gs, ncomp)
+  extra <- lengths(keep)
+
+  # column layout: (L - 1) sum-zero location columns, then one free column
+  # per item for each higher-order component actually identified for it
+  P <- (L - 1L) + sum(extra)
+  B <- matrix(0, M, P)
+  off <- (L - 1L) + cumsum(c(0L, extra))[seq_len(L)]
+
+  for (i in seq_len(L)) {
+    rows <- which(thr$item == i)
+    G <- Gs[[i]]
+    if (i < L) B[rows, i] <- G[, 1] else B[rows, seq_len(L - 1L)] <- -G[, 1]
+    if (extra[i] > 0L)
+      B[rows, off[i] + seq_len(extra[i])] <- G[, keep[[i]], drop = FALSE]
+  }
+
+  st <- .start_tau(X, thr)
+  loc <- vapply(seq_len(L), function(i) mean(st[thr$item == i]), 0)
+  loc <- loc - mean(loc)
+  beta0 <- c(loc[-L], numeric(sum(extra)))
+
+  sol <- .pcml_solve(X, thr, m, B, beta0, maxit = maxit, tol = tol)
+  thr$tau <- sol$tau; thr$se <- sol$se_tau
+
+  labs <- c("spread", "skewness", "kurtosis")
+  comp <- data.frame(item = colnames(X),
+                     location = c(sol$beta[seq_len(L - 1L)],
+                                  -sum(sol$beta[seq_len(L - 1L)])),
+                     location_se = NA_real_,
+                     spread = NA_real_, spread_se = NA_real_,
+                     skewness = NA_real_, skewness_se = NA_real_,
+                     kurtosis = NA_real_, kurtosis_se = NA_real_)
+  Bloc <- rbind(diag(L - 1L), rep(-1, L - 1L))
+  cov_loc <- Bloc %*% sol$cov_beta[seq_len(L - 1L), seq_len(L - 1L), drop = FALSE] %*% t(Bloc)
+  comp$location_se <- sqrt(pmax(diag(cov_loc), 0))
+  for (i in seq_len(L)) if (extra[i] > 0L) {
+    cols <- off[i] + seq_len(extra[i])
+    for (j in seq_along(keep[[i]])) {
+      lab <- labs[keep[[i]][j] - 1L]
+      comp[[lab]][i] <- sol$beta[cols[j]]
+      comp[[paste0(lab, "_se")]][i] <- sqrt(pmax(sol$cov_beta[cols[j], cols[j]], 0))
+    }
+  }
+
+  list(model = "PCM", n_components = n_components, thr = thr,
+       components = comp, cov_tau = sol$cov_tau, loglik = sol$loglik,
+       iterations = sol$iterations, converged = sol$converged, m = m,
+       anchors = NULL, n_parameters = ncol(B))
 }

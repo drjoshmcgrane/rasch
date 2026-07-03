@@ -10,7 +10,7 @@ rasch_mfrm(
   item,
   score,
   facets,
-  n_groups = 10,
+  n_groups = NULL,
   adjust_N = NA,
   na_codes = -1,
   interaction = NULL,
@@ -31,7 +31,10 @@ collapsed per item with a note).}
 \item{facets}{Character vector naming one or more facet columns (for
 example a rater column).}
 
-\item{n_groups}{Number of class intervals for the item-trait chi-square.}
+\item{n_groups}{Number of class intervals for the item-trait chi-square;
+\code{NULL} (the default) applies the class-interval rule of Andrich and
+Marais (2019, ch. 15) (at least 50
+non-extreme persons per interval, at most 10 intervals, at least 2).}
 
 \item{adjust_N}{Optional reference sample size for the chi-square.}
 
@@ -58,7 +61,18 @@ An object of classes \code{"rasch_mfrm"} and \code{"rasch"}. In
   severity, standard error, observation count, pooled fit),
   \code{item_effects} (underlying item locations and pooled fit),
   \code{item_thresholds} (the structural \code{delta_ik} with standard
-  errors), and \code{facet_spec}.
+  errors), and \code{facet_spec}. Two fit residuals are reported per
+  facet level and per underlying item. \code{fit_resid} is the
+  facet-margin statistic of the published three-facet fit tables
+  (Andrich and Marais 2019, ch. 26 and app. C), the mean of the
+  constituent virtual items'
+  fit residuals; it weighs each virtual item equally, so an erratic level
+  shows the average of its per-item misfit. \code{fit_resid_pooled} is
+  the log-of-mean-square statistic summed over the margin's
+  observed cells of non-extreme persons, with its degrees of freedom in
+  \code{df_fit}; it weighs each response equally and is the more
+  powerful statistic when misfit is spread evenly over the level's
+  cells.
 }
 \description{
 Estimates the many-facet Rasch model (Linacre 1989) for long-format data

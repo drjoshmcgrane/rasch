@@ -1,4 +1,4 @@
-# RaschR :: extended frame of reference model
+# rmt :: extended frame of reference model
 # ===========================================================================
 # Humphry's extended frame of reference model (Humphry 2005; Humphry &
 # Andrich 2008). A frame F_sg is one item-set by person-group cell, with
@@ -472,7 +472,7 @@
 #' }
 #' @export
 rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
-                       items = NULL, n_groups = 10, adjust_N = NA,
+                       items = NULL, n_groups = NULL, adjust_N = NA,
                        na_codes = -1, maxit = 50, tol = 1e-7,
                        min_link_persons = 30,
                        se_method = c("hybrid", "bootstrap"),
@@ -742,7 +742,9 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
   fit$frames <- do.call(rbind, lapply(seq_len(nrow(fr)), function(j) {
     cols <- which(vmap$set == fr$set[j] & vmap$group == fr$group[j])
     npers <- sum(rowSums(!is.na(Xv[, cols, drop = FALSE])) > 0)
-    gf <- .group_col_fit(fit$residuals, fit$moments, cols, disc = rho_v)
+    gf <- .group_col_fit(fit$residuals, fit$moments, cols, disc = rho_v,
+                         extreme = fit$person$extreme,
+                         f_cell = fit$summary_stats$df_factor)
     data.frame(set = fr$set[j], group = fr$group[j],
                n_persons = npers, n_items = length(cols),
                alpha = unname(alpha[fr$set[j]]), phi = unname(phi[fr$group[j]]),
@@ -800,7 +802,7 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
 
 #' @export
 print.rasch_efrm <- function(x, ...) {
-  cat(sprintf("RaschR extended frame of reference analysis: %d items in %d set(s) x %d group(s) = %d frames, %d persons\n",
+  cat(sprintf("rmt extended frame of reference analysis: %d items in %d set(s) x %d group(s) = %d frames, %d persons\n",
               length(x$set_of), nrow(x$alpha_table), nrow(x$phi_table),
               nrow(x$frames), nrow(x$X)))
   cat(sprintf("Within-frame pairwise conditional ML: %s in %d iterations\n",

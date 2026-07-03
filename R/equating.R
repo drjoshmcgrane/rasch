@@ -1,4 +1,4 @@
-# RaschR :: test equating
+# rmt :: test equating
 # ===========================================================================
 # Comparison of common-item locations across two separately analysed
 # datasets. Because each analysis fixes its own origin, the comparison

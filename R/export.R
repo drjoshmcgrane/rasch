@@ -1,4 +1,4 @@
-# RaschR :: export
+# rmt :: export
 # ===========================================================================
 # save_outputs() writes the complete analysis to disk: every table as CSV,
 # every plot as PNG (and optionally PDF), and a plain-text summary. The
@@ -68,11 +68,20 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
 
   # --- tables ---------------------------------------------------------------
   wtab(fit$items, "item_statistics")
+  wtab(fit$item_anova, "item_anova_fit")
   thr <- fit$thresholds
   thr$item <- fit$items$item[thr$item]
   wtab(thr[, c("item", "k", "tau", "se")], "thresholds")
+  if (!is.null(fit$est$components)) wtab(fit$est$components, "principal_components")
   wtab(fit$person, "person_estimates")
-  wtab(fit$score_table, "score_to_measure")
+  if (!is.null(fit$score_table)) wtab(score_table(fit), "score_to_measure")
+  ctt <- tryCatch(ctt_table(fit), error = function(e) NULL)
+  if (!is.null(ctt)) wtab(ctt$table, "traditional_statistics")
+  cd_all <- do.call(rbind, lapply(fit$items$item, function(it) {
+    cd <- chisq_detail(fit, it)
+    cbind(item = cd$item, cd$intervals)
+  }))
+  wtab(cd_all, "chisq_class_interval_detail")
   rc <- residual_correlations(fit)
   wtab(data.frame(item = rownames(rc$matrix), round(rc$matrix, 4),
                   check.names = FALSE), "residual_correlations")
@@ -108,6 +117,17 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
   if (!is.null(fit$factors)) {
     dif <- tryCatch(dif_anova(fit), error = function(e) NULL)
     if (!is.null(dif)) wtab(dif, "dif_anova")
+    if (ncol(fit$factors) > 1) {
+      fa <- tryCatch(dif_anova_factorial(fit), error = function(e) NULL)
+      if (!is.null(fa)) {
+        wtab(fa$terms, "dif_factorial_terms")
+        if (nrow(fa$tukey)) wtab(fa$tukey, "dif_factorial_tukey")
+      }
+    }
+  }
+  if (any(fit$person$extreme)) {
+    pe <- tryCatch(person_extrapolated(fit), error = function(e) NULL)
+    if (!is.null(pe)) wtab(pe, "person_estimates_extrapolated")
   }
 
   # --- summary ---------------------------------------------------------------
@@ -123,6 +143,9 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
   }
   cat(sprintf("Average residual correlation: %.3f; %d flagged dependent pair(s)\n",
               rc$average, nrow(rc$flagged)))
+  if (!is.null(ctt))
+    cat(sprintf("Traditional statistics (complete cases n = %d): raw mean %.2f, SD %.2f, alpha %.3f, SEM %.2f\n",
+                ctt$n, ctt$mean, ctt$sd, ctt$alpha, ctt$sem))
   sink(); close(con); on.exit()
   files <- c(files, spath)
 
@@ -139,6 +162,8 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
   sp(function() plot_pca(fit), "pca_loadings")
   sp(function() plot_scree(fit), "scree")
   sp(function() plot_guttman(fit), "guttman_scalogram")
+  sp(function() plot_resid_dist(fit, "items"), "item_residual_distribution")
+  sp(function() plot_resid_dist(fit, "persons"), "person_residual_distribution")
   if (inherits(fit, "rasch_mfrm")) {
     for (f in fit$facet_spec) local({
       f_ <- f

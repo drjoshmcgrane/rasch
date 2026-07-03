@@ -16,8 +16,9 @@ flag.}
 }
 \value{
 A data frame with one row per item-option: \code{item},
-  \code{option}, \code{keyed}, \code{n}, \code{prop},
-  \code{mean_location}, \code{point_biserial}, and \code{flag}.
+  \code{option}, its assigned \code{score}, \code{keyed} (full credit),
+  \code{n}, \code{prop}, \code{mean_location}, \code{point_biserial},
+  and \code{flag}.
 }
 \description{
 For every keyed item and response option: the count and proportion

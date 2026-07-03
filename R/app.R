@@ -1,6 +1,6 @@
-# RaschR :: Shiny launcher
+# rmt :: Shiny launcher
 
-#' Launch the RaschR graphical interface
+#' Launch the rmt graphical interface
 #'
 #' Opens the Shiny application: data upload with ID, person-factor, and item
 #' column nomination; the full analysis; interactive tables and
@@ -14,9 +14,9 @@
 run_app <- function(...) {
   for (pkg in c("shiny", "bslib", "DT")) {
     if (!requireNamespace(pkg, quietly = TRUE))
-      stop("the RaschR app needs the '", pkg, "' package: install.packages(\"", pkg, "\")")
+      stop("the rmt app needs the '", pkg, "' package: install.packages(\"", pkg, "\")")
   }
-  dir <- system.file("shiny", package = "RaschR")
-  if (dir == "") stop("app not found: reinstall RaschR")
+  dir <- system.file("shiny", package = "rmt")
+  if (dir == "") stop("app not found: reinstall rmt")
   shiny::runApp(dir, ...)
 }

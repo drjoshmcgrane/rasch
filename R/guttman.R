@@ -1,4 +1,4 @@
-# RaschR :: Guttman display
+# rmt :: Guttman display
 # ===========================================================================
 # The Guttman (1944) scalogram: persons and items are sorted by location, so
 # under a perfectly deterministic (Guttman) response pattern the matrix splits

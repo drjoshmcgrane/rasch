@@ -1,4 +1,4 @@
-# RaschR :: dimensionality and local dependence
+# rmt :: dimensionality and local dependence
 # ===========================================================================
 # Residual correlations for local dependence, principal components of the
 # residuals, and the Smith (2002) paired t-test of unidimensionality on the
@@ -157,8 +157,10 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 20) {
 #'   each), otherwise the first residual contrast defines the split.
 #' @return A list with the proportion of significant tests, its exact
 #'   confidence interval, the sample sizes (\code{n} used,
-#'   \code{n_excluded_extreme}), the item split and its source, and a
-#'   \code{multidimensional} verdict.
+#'   \code{n_excluded_extreme}), the item split and its source, a
+#'   \code{multidimensional} verdict, and \code{paired_t}, the paired t-test
+#'   of the two subset means (the group-level comparison, which requires
+#'   pairing because both estimates come from the same persons).
 #' @examples
 #' set.seed(1)
 #' d <- seq(-2, 2, length.out = 8)
@@ -206,10 +208,101 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
   if (n < 10) return(list(note = "fewer than 10 usable persons for the t-test"))
   n_sig <- sum(abs(t) > qnorm(1 - alpha / 2))
   bt <- stats::binom.test(n_sig, n, p = alpha)
+  # paired t-test of the two subset means (the group-level comparison: the
+  # two estimates come from the same persons, so the means need pairing;
+  # Andrich & Marais 2019, ch. 24)
+  dd <- a$theta[ok] - b$theta[ok]
+  pt <- stats::t.test(dd)
   list(prop_significant = n_sig / n, ci = as.numeric(bt$conf.int), n = n,
        n_excluded_extreme = sum(usable) - n,
        multidimensional = bt$conf.int[1] > alpha,
        split = split_source,
        items_positive = colnames(X)[pos], items_negative = colnames(X)[neg],
-       first_eigenvalue = pca$first_eigen)
+       first_eigenvalue = pca$first_eigen,
+       paired_t = list(mean_difference = mean(dd),
+                       t = unname(pt$statistic), df = unname(pt$parameter),
+                       p = pt$p.value))
+}
+
+#' Magnitude of multidimensionality from a subtest analysis
+#'
+#' Estimates how strongly two or more hypothesised subscales measure
+#' distinct traits, by Andrich's (2016) comparison of two reliability
+#' calculations: one treating all items as independent (which inflates
+#' reliability under multidimensionality) and one on the subtest analysis
+#' in which each subscale is combined into a single polytomous super-item
+#' (which absorbs the unique subscale variance). Under the bifactor
+#' formalisation \eqn{\beta_{ns} = \beta_n + c\,\beta'_{ns}} (Marais and
+#' Andrich 2008), with \eqn{S} subscales of \eqn{K} items,
+#' \deqn{c^2 = S\,(r_1/r_2 - 1) \frac{SK - 1}{S(K - 1)},}
+#' the latent correlation between subscales is \eqn{\rho = 1/(1 + c^2)},
+#' and \eqn{A = S/(S + c^2)} is the proportion of common (non-unique,
+#' non-error) variance. Both the person separation index and coefficient
+#' alpha versions are reported (Andrich and Marais 2019, ch. 24).
+#'
+#' @param fit A fitted object from \code{\link{rasch}}.
+#' @param subtests A list of character vectors assigning \emph{every} item
+#'   of the fit to one subscale (at least two subscales of two or more
+#'   items). Unequal subscale sizes use their mean as \eqn{K}.
+#' @return A list of class \code{"rmt_dim_magnitude"}: the comparison
+#'   \code{table} (rows PSI and alpha; columns \code{run1}, \code{subtest},
+#'   \code{c2}, \code{c}, \code{rho}, \code{A}), the subtest \code{refit},
+#'   and the design constants \code{S} and \code{K}.
+#' @references Andrich, D. (2016). Components of variance of scales with a
+#'   bifactor structure from two calculations of coefficient alpha.
+#'   Educational Measurement: Issues and Practice, 35(4), 25-30.
+#' @examples
+#' set.seed(1); N <- 500
+#' common <- rnorm(N); u1 <- rnorm(N); u2 <- rnorm(N)
+#' d <- rep(seq(-1, 1, length.out = 5), 2)
+#' X <- sapply(1:10, function(i) rbinom(N, 1,
+#'   plogis(common + 0.8 * (if (i <= 5) u1 else u2) - d[i])))
+#' colnames(X) <- paste0("I", 1:10)
+#' fit <- rasch(X)
+#' dimensionality_magnitude(fit,
+#'   list(paste0("I", 1:5), paste0("I", 6:10)))$table
+#' @export
+dimensionality_magnitude <- function(fit, subtests) {
+  if (!inherits(fit, "rasch")) stop("dimensionality_magnitude needs a rasch fit")
+  if (!is.list(subtests) || length(subtests) < 2)
+    stop("supply a list of at least two subscales")
+  allit <- unlist(subtests)
+  if (!setequal(allit, fit$items$item) || anyDuplicated(allit))
+    stop("subtests must assign every item of the fit to exactly one subscale")
+  S <- length(subtests)
+  K <- mean(lengths(subtests))
+  g <- S * (K - 1) / (S * K - 1)
+  refit <- combine_items(fit, subtests)
+  ratio <- function(r1, r2) {
+    if (any(!is.finite(c(r1, r2))) || r2 <= 0) return(rep(NA_real_, 4))
+    c2 <- max(S * (r1 / r2 - 1) / g, 0)
+    c(c2, sqrt(c2), 1 / (1 + c2), S / (S + c2))
+  }
+  psi_row <- ratio(fit$psi$PSI, refit$psi$PSI)
+  alp_row <- ratio(fit$alpha$alpha, refit$alpha$alpha)
+  tab <- data.frame(index = c("PSI", "alpha"),
+                    run1 = c(fit$psi$PSI, fit$alpha$alpha),
+                    subtest = c(refit$psi$PSI, refit$alpha$alpha),
+                    c2 = c(psi_row[1], alp_row[1]),
+                    c = c(psi_row[2], alp_row[2]),
+                    rho = c(psi_row[3], alp_row[3]),
+                    A = c(psi_row[4], alp_row[4]))
+  out <- list(table = tab, refit = refit, S = S, K = K,
+              alpha_applicable = fit$alpha$applicable)
+  class(out) <- "rmt_dim_magnitude"
+  out
+}
+
+#' @export
+print.rmt_dim_magnitude <- function(x, ...) {
+  cat(sprintf("Magnitude of multidimensionality (Andrich 2016): %d subscales, mean %.1f items\n",
+              x$S, x$K))
+  tab <- x$table
+  num <- vapply(tab, is.numeric, TRUE)
+  tab[num] <- lapply(tab[num], round, 3)
+  print(tab, row.names = FALSE)
+  cat("rho = latent correlation between subscales; A = proportion of common variance\n")
+  if (isFALSE(x$alpha_applicable))
+    cat("note: alpha computed on complete cases only (missing data present)\n")
+  invisible(x)
 }

@@ -1,4 +1,4 @@
-# RaschR :: structure amendments (subtests and item splitting)
+# rmt :: structure amendments (subtests and item splitting)
 # ===========================================================================
 # Two standard remedies applied by re-analysis. Local dependence: combine the
 # dependent items into a single polytomous super-item (the subtest) whose

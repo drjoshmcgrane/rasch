@@ -18,13 +18,23 @@ fit.}
 in the fit.}
 
 \item{p_adjust}{Multiplicity adjustment method passed to
-\code{\link[stats]{p.adjust}}; default \code{"BH"}.}
+\code{\link[stats]{p.adjust}}; \code{"BH"} (default) controls the false
+discovery rate, \code{"holm"} or \code{"bonferroni"} the familywise
+error rate.}
 
 \item{alpha}{Significance level applied to the adjusted probabilities.}
 }
 \value{
-A data frame of uniform and non-uniform DIF statistics per item and
-  factor, with F statistics, raw and adjusted probabilities, and flags.
+A data frame per item and factor with the full two-way table
+  (Andrich and Marais 2019, ch. 16): the group main effect (uniform
+  DIF), the
+  group-by-interval interaction (non-uniform DIF), and the
+  class-interval main effect, each with its F statistic; raw and
+  adjusted probabilities and flags for the two DIF terms; and partial
+  eta-squared effect sizes (\code{eta2_uniform}, \code{eta2_nonuniform}),
+  the proportion of residual-plus-effect variance the term accounts for.
+  For DIF magnitude on the logit scale, where practical significance is
+  judged, see \code{\link{dif_size}}.
 }
 \description{
 For each item and each person factor separately, analyses the

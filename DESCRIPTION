@@ -1,32 +1,66 @@
-Package: RaschR
+Package: rmt
 Type: Package
 Title: Pairwise Conditional Rasch Measurement Analysis and Diagnostics
-Version: 0.9.2
+Version: 0.9.12
 Authors@R: person("Josh", "McGrane", role = c("aut", "cre"),
     email = "drjoshmcgrane@gmail.com")
 Description: Pairwise conditional maximum likelihood estimation of dichotomous
     and polytomous Rasch models (partial credit and rating scale) after
     Andrich and Luo (2003) and Zwinderman (1995), with standard errors from
-    a Godambe sandwich estimator. Person measures are
+    a Godambe sandwich estimator. An optional alternative estimator
+    reparameterises each item's thresholds as Andrich's (1978, 1985)
+    orthogonal-polynomial principal components (location, spread, skewness,
+    and kurtosis; Pedler 1987), exact for items with up to 3 thresholds and a
+    smoothed reduced-rank model for items with more, useful when some
+    categories are sparsely populated. Person measures are
     Warm's (1989) weighted likelihood estimates, computed per missing-data
-    pattern. The diagnostic suite covers item and person fit residuals,
-    infit and outfit, the item-trait interaction chi-square over class
-    intervals, the person separation index with and
-    without extremes, Cronbach's alpha, targeting, the score-to-measure
-    table, test information, threshold and category diagnostics, residual
+    pattern. The diagnostic suite follows the conventions set out in
+    Andrich and Marais (2019): the
+    log-of-mean-square fit residual with apportioned degrees of freedom
+    (and its natural form), infit and outfit, the item-trait interaction
+    chi-square over automatically sized class intervals with its per-interval detail
+    table, the class-interval ANOVA item-fit F, the person separation index
+    with and without extremes and the item separation index, Cronbach's
+    alpha, summary distribution statistics with skewness and kurtosis,
+    targeting, the score-to-measure table with maximum likelihood and
+    geometric extreme-score extrapolation options, test information,
+    threshold and category diagnostics, residual
     principal-components dimensionality testing, local dependence by
     residual correlation, and differential item functioning by two-way
     residual analysis of variance over any number of person factors,
-    factor-at-a-time or as a full factorial with Tukey HSD comparisons and
-    false-discovery-rate adjustment. Also
+    factor-at-a-time (the full two-way table with partial eta-squared
+    effect sizes) or as a full factorial with interaction precedence,
+    Tukey HSD post-hoc comparisons on significant group terms and
+    interaction cells, false-discovery-rate or familywise adjustment, and
+    DIF magnitudes in logits by resolved-item locations with a
+    practical-significance criterion. Violations of
+    independence are quantified, not just flagged: the magnitude of
+    response dependence between two items by the resolution method of
+    Andrich and Kreiner (2010; polytomous form Andrich, Humphry and Marais
+    2012), the spread-parameter least-upper-bound screen (Andrich 1985),
+    and the magnitude of multidimensionality (latent subscale correlation
+    and common-variance proportion) from Andrich's (2016) two-calculation
+    reliability comparison. A likelihood-ratio test of the partial credit
+    against the rating parameterisation is reported both raw, as
+    conventionally displayed, and with a first-order composite-likelihood calibration
+    (Kent 1982) from the Godambe matrices. Also
     included: anchored estimation for test equating (individual threshold
     and average item-location anchors), common-item equating tests and
-    plots, item splitting to resolve invariance violations, the many-facet
+    plots, item splitting to resolve invariance violations, tailored
+    analysis for guessing with the four-step anchored comparison (Andrich,
+    Marais and Humphry 2012), classical test theory companion statistics,
+    racked and stacked reshaping for repeated measurements, the many-facet
     Rasch model (Linacre 1989) for rated long-format data with facet
     severities, fit, and optional item-by-facet interactions, subtest
-    formation for locally dependent items, multiple-choice scoring against a
-    key with rest-measure distractor analysis and option curves, the Guttman
-    scalogram with the coefficient of reproducibility, and the first software implementation of
+    formation for locally dependent items, multiple-choice scoring against
+    a key with double keying and polytomous option scoring of informative
+    distractors (Andrich and Styles 2011, with an evidence-based rescoring
+    proposal), rest-measure distractor analysis and option curves, the Guttman
+    scalogram with the coefficient of reproducibility, the
+    Bradley-Terry-Luce model for paired comparisons (Bradley and Terry
+    1952; Luce 1959) as the conditional form of the dichotomous Rasch model
+    (Andrich 1978), estimated by the same conventions with judge-clustered
+    sandwich errors and judge fit diagnostics, and the first software implementation of
     the extended frame of reference model (Humphry 2005; Humphry and Andrich
     2008), in which the unit of the latent scale differs across item-set by
     person-group frames: group units are estimated by person-free

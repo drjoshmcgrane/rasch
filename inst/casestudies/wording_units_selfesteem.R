@@ -13,7 +13,7 @@
 #
 # Run time: a few minutes (subsampled to 6,000 respondents).
 # ===========================================================================
-library(RaschR)
+library(rmt)
 set.seed(2026)
 
 src <- "http://openpsychometrics.org/_rawdata/RSE.zip"

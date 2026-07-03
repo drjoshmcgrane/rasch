@@ -1,4 +1,4 @@
-# RaschR :: differential item functioning
+# rmt :: differential item functioning
 # ===========================================================================
 # DIF by analysis of variance of the standardised residuals (Hagquist &
 # Andrich 2017). For each item, residuals are analysed by person factor and
@@ -48,10 +48,20 @@
 #' @param n_groups Number of trait class intervals; defaults to the value used
 #'   in the fit.
 #' @param p_adjust Multiplicity adjustment method passed to
-#'   \code{\link[stats]{p.adjust}}; default \code{"BH"}.
+#'   \code{\link[stats]{p.adjust}}; \code{"BH"} (default) controls the false
+#'   discovery rate, \code{"holm"} or \code{"bonferroni"} the familywise
+#'   error rate.
 #' @param alpha Significance level applied to the adjusted probabilities.
-#' @return A data frame of uniform and non-uniform DIF statistics per item and
-#'   factor, with F statistics, raw and adjusted probabilities, and flags.
+#' @return A data frame per item and factor with the full two-way table
+#'   (Andrich and Marais 2019, ch. 16): the group main effect (uniform
+#'   DIF), the
+#'   group-by-interval interaction (non-uniform DIF), and the
+#'   class-interval main effect, each with its F statistic; raw and
+#'   adjusted probabilities and flags for the two DIF terms; and partial
+#'   eta-squared effect sizes (\code{eta2_uniform}, \code{eta2_nonuniform}),
+#'   the proportion of residual-plus-effect variance the term accounts for.
+#'   For DIF magnitude on the logit scale, where practical significance is
+#'   judged, see \code{\link{dif_size}}.
 #' @examples
 #' set.seed(1); n <- 600
 #' d <- seq(-2, 2, length.out = 8); g <- rep(c("a", "b"), each = n / 2)
@@ -72,7 +82,10 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
     grp <- factor(factors[[fname]])
     out <- data.frame(factor = fname, item = colnames(Z),
                       F_uniform = NA_real_, p_uniform = NA_real_,
-                      F_nonuniform = NA_real_, p_nonuniform = NA_real_)
+                      eta2_uniform = NA_real_,
+                      F_nonuniform = NA_real_, p_nonuniform = NA_real_,
+                      eta2_nonuniform = NA_real_,
+                      F_class = NA_real_, p_class = NA_real_)
     for (i in seq_len(L)) {
       d <- data.frame(z = Z[, i], g = grp, ci = ci)
       d <- d[stats::complete.cases(d), ]
@@ -81,12 +94,19 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
                     error = function(e) NULL)
       if (is.null(a)) next
       rn <- rownames(a)
+      ss_res <- if ("Residuals" %in% rn) a["Residuals", "Sum Sq"] else NA_real_
+      peta <- function(term) a[term, "Sum Sq"] / (a[term, "Sum Sq"] + ss_res)
       if ("g" %in% rn) {
         out$F_uniform[i] <- a["g", "F value"]; out$p_uniform[i] <- a["g", "Pr(>F)"]
+        out$eta2_uniform[i] <- peta("g")
       }
       if ("g:ci" %in% rn) {
         out$F_nonuniform[i] <- a["g:ci", "F value"]
         out$p_nonuniform[i] <- a["g:ci", "Pr(>F)"]
+        out$eta2_nonuniform[i] <- peta("g:ci")
+      }
+      if ("ci" %in% rn) {
+        out$F_class[i] <- a["ci", "F value"]; out$p_class[i] <- a["ci", "Pr(>F)"]
       }
     }
     out$p_uniform_adj <- p.adjust(out$p_uniform, method = p_adjust)
@@ -137,14 +157,24 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
 #'   with every other and with the class interval; \code{"main"} fits the
 #'   factors additively (each factor's main effect and its interaction with
 #'   the class interval, but no factor-by-factor terms).
+#' @param sizes Also compute DIF magnitudes in logits (\code{\link{dif_size}})
+#'   for every significant, non-superseded group term: the item is resolved
+#'   by the term's levels (interaction terms by their cells) and all
+#'   pairwise location differences are returned with Holm familywise
+#'   adjustment and the practical-significance flag. Each size involves a
+#'   re-analysis, so this costs one refit per flagged item-term.
 #' @return A list with \code{terms}, the complete per-item analysis of
-#'   variance table (term, df, sum of squares, mean square, F, raw and
-#'   adjusted p, significance, supersession, including the residual row),
+#'   variance table (term, df, sum of squares, mean square, F, partial
+#'   eta-squared, raw and adjusted p, significance, supersession, including
+#'   the residual row),
 #'   and \code{tukey} (per item, term, and level comparison: difference,
 #'   95 per cent interval, and Tukey-adjusted p), plus the \code{alpha} and
 #'   adjustment used. Tukey comparisons are reported for significant,
 #'   non-superseded group terms except two-level main effects, where the
-#'   F test is already the only comparison.
+#'   F test is already the only comparison. With \code{sizes = TRUE},
+#'   \code{sizes} holds the logit DIF magnitudes per item, term, and level
+#'   pair (two-level main effects included, since the single difference is
+#'   exactly the DIF size).
 #' @examples
 #' set.seed(1); n <- 800
 #' d <- seq(-1.5, 1.5, length.out = 6)
@@ -158,7 +188,8 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
 #' @export
 dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
                                 p_adjust = "BH", alpha = 0.05,
-                                effects = c("factorial", "main")) {
+                                effects = c("factorial", "main"),
+                                sizes = FALSE) {
   effects <- match.arg(effects)
   Z <- fit$residuals; L <- ncol(Z)
   factors <- .dif_factors(fit, factors)
@@ -189,6 +220,17 @@ dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
   if (!length(rows)) stop("no item yielded an estimable factorial ANOVA")
   terms <- do.call(rbind, rows)
   rownames(terms) <- NULL
+
+  # partial eta-squared per term within each item's table
+  terms$eta2_partial <- NA_real_
+  for (it in unique(terms$item)) {
+    sel <- terms$item == it
+    ss_res <- terms$sum_sq[sel & terms$term == "Residuals"]
+    if (length(ss_res) == 1)
+      terms$eta2_partial[sel & terms$term != "Residuals"] <-
+        terms$sum_sq[sel & terms$term != "Residuals"] /
+        (terms$sum_sq[sel & terms$term != "Residuals"] + ss_res)
+  }
 
   # adjust across items within each term (the residual rows carry no test)
   terms$p_adj <- NA_real_
@@ -250,5 +292,162 @@ dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
   terms$term <- relabel(terms$term)
   tukey$term <- relabel(tukey$term)
 
-  list(terms = terms, tukey = tukey, alpha = alpha, p_adjust = p_adjust)
+  # DIF magnitudes in logits for the significant, non-superseded group
+  # terms (interaction terms resolved by their cells)
+  size_tab <- NULL
+  if (isTRUE(sizes)) {
+    sz <- list()
+    cand <- terms[terms$significant & !terms$superseded &
+                  !vapply(terms$term, function(tt)
+                    "ci" %in% .term_vars(tt), TRUE), , drop = FALSE]
+    for (r in seq_len(nrow(cand))) {
+      it <- cand$item[r]; tt <- cand$term[r]
+      ds <- tryCatch(dif_size(fit, it, by = .term_vars(tt)),
+                     error = function(e) NULL)
+      if (is.null(ds)) next
+      p <- ds$pairs
+      sz[[length(sz) + 1L]] <- data.frame(item = it, term = tt, p,
+                                          row.names = NULL)
+    }
+    size_tab <- if (length(sz)) do.call(rbind, sz) else
+      data.frame(item = character(), term = character())
+  }
+
+  out <- list(terms = terms, tukey = tukey, alpha = alpha,
+              p_adjust = p_adjust)
+  if (isTRUE(sizes)) out$sizes <- size_tab
+  out
+}
+
+#' DIF magnitude in logits with pairwise comparisons
+#'
+#' Quantifies differential item functioning on the measurement scale
+#' itself, where practical significance is judged: the item is resolved
+#' into one copy per group (or per cell of a factor combination), the
+#' model is refitted, and the distance between the resolved locations is
+#' the DIF size in logits (Andrich & Marais 2019, ch. 16: a simulated
+#' shift of 0.71 was recovered as 0.75 by exactly this method). Every
+#' pair of levels is compared with a Wald test using the full sandwich
+#' covariance of the resolved locations (the persons behind different
+#' levels are disjoint, but the shared calibration of the other items
+#' still couples the estimates, so the covariance is used rather than
+#' assumed zero), with familywise adjustment over the pairs. Differences
+#' at least \code{flag_logits} in absolute size are flagged as practically
+#' significant; half a logit is a common working criterion, to be weighed
+#' against the test's targeting and purpose.
+#'
+#' For an interaction, supply several factor names: levels are then the
+#' factor-combination cells, which is the post-hoc follow-up to a
+#' significant factor-by-factor term in \code{\link{dif_anova_factorial}}.
+#'
+#' @param fit A fitted object from \code{\link{rasch}}.
+#' @param item Item name or index.
+#' @param by One or more person-factor names nominated in the fit (several
+#'   names give interaction cells), or a grouping vector/data frame with
+#'   one entry per person.
+#' @param p_adjust Familywise adjustment over the pairwise comparisons;
+#'   default \code{"holm"}.
+#' @param alpha Significance level for the adjusted probabilities.
+#' @param flag_logits Absolute difference flagged as practically
+#'   significant.
+#' @param min_n Levels with fewer responders to the item are dropped (their
+#'   resolved locations would be too unstable to compare), with a note.
+#' @return A list of class \code{"rmt_dif_size"}: \code{levels} (resolved
+#'   location and SE per level, with its n), \code{pairs} (per comparison:
+#'   difference in logits, SE, z, raw and adjusted p, 95 per cent interval,
+#'   \code{significant}, \code{practical}), the settings, and any notes.
+#' @examples
+#' set.seed(1); n <- 600
+#' d <- seq(-2, 2, length.out = 8); g <- rep(c("a", "b"), each = n / 2)
+#' sh <- matrix(0, n, 8); sh[g == "b", 3] <- 0.8
+#' X <- matrix(rbinom(n * 8, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 8)
+#' colnames(X) <- paste0("I", 1:8)
+#' fit <- rasch(data.frame(X, grp = g), factors = "grp")
+#' dif_size(fit, "I3", by = "grp")
+#' @export
+dif_size <- function(fit, item, by, p_adjust = "holm", alpha = 0.05,
+                     flag_logits = 0.5, min_n = 20) {
+  i <- .item_idx(fit, item)
+  if (is.na(i)) stop("no such item")
+  item <- fit$items$item[i]
+  if (is.character(by) && length(by) < nrow(fit$X)) {
+    bad <- if (is.null(fit$factors)) by else setdiff(by, names(fit$factors))
+    if (length(bad))
+      stop("not a person factor nominated in the fit: ",
+           paste(bad, collapse = ", "))
+  }
+  factors <- .dif_factors(fit, by)
+  grp <- if (ncol(factors) == 1L) factor(factors[[1]])
+         else interaction(factors, sep = ":", drop = TRUE)
+  notes <- character(0)
+
+  # drop levels too thin on this item to resolve
+  n_lev <- table(grp[!is.na(fit$X[, i]) & !is.na(grp)])
+  thin <- names(n_lev)[n_lev < min_n]
+  if (length(thin)) {
+    notes <- c(notes, sprintf("level(s) dropped with fewer than %d responders: %s",
+                              min_n, paste(thin, collapse = ", ")))
+    grp <- factor(ifelse(as.character(grp) %in% thin, NA, as.character(grp)))
+  }
+  if (nlevels(droplevels(grp)) < 2)
+    stop("fewer than two usable levels for item ", item)
+  grp <- droplevels(grp)
+
+  refit <- split_items(fit, item, by = grp)
+  levs <- levels(grp)
+  split_names <- paste0(item, " (", levs, ")")
+  idx <- match(split_names, refit$items$item)
+  if (anyNA(idx))
+    stop("resolved item(s) missing after re-analysis (too little data): ",
+         paste(split_names[is.na(idx)], collapse = ", "))
+
+  # location covariance from the sandwich: var(mean of a threshold block)
+  thr <- refit$thresholds; cv <- refit$est$cov_tau
+  block <- lapply(idx, function(k) thr$id[thr$item == k])
+  loc <- refit$items$location[idx]
+  vloc <- matrix(NA_real_, length(levs), length(levs))
+  for (a in seq_along(levs)) for (b in seq_along(levs))
+    vloc[a, b] <- mean(cv[block[[a]], block[[b]], drop = FALSE])
+
+  n_item <- as.integer(table(grp[!is.na(fit$X[, i]) & !is.na(grp)])[levs])
+  levels_df <- data.frame(level = levs, location = loc,
+                          se = sqrt(pmax(diag(vloc), 0)), n = n_item)
+
+  pr <- t(utils::combn(seq_along(levs), 2))
+  pairs <- data.frame(
+    level_a = levs[pr[, 1]], level_b = levs[pr[, 2]],
+    difference = loc[pr[, 1]] - loc[pr[, 2]],
+    se = sqrt(pmax(diag(vloc)[pr[, 1]] + diag(vloc)[pr[, 2]] -
+                   2 * vloc[cbind(pr[, 1], pr[, 2])], 1e-12)))
+  pairs$z <- pairs$difference / pairs$se
+  pairs$p <- 2 * pnorm(-abs(pairs$z))
+  pairs$p_adj <- p.adjust(pairs$p, method = p_adjust)
+  pairs$lower <- pairs$difference - qnorm(0.975) * pairs$se
+  pairs$upper <- pairs$difference + qnorm(0.975) * pairs$se
+  pairs$significant <- pairs$p_adj < alpha
+  pairs$practical <- abs(pairs$difference) >= flag_logits
+
+  out <- list(item = item, by = paste(names(factors), collapse = ":"),
+              levels = levels_df, pairs = pairs, alpha = alpha,
+              p_adjust = p_adjust, flag_logits = flag_logits, notes = notes)
+  class(out) <- "rmt_dif_size"
+  out
+}
+
+#' @export
+print.rmt_dif_size <- function(x, ...) {
+  cat(sprintf("DIF size for %s by %s (resolved locations, logits)\n",
+              x$item, x$by))
+  lv <- x$levels; lv[-1] <- lapply(lv[-1], round, 3)
+  print(lv, row.names = FALSE)
+  pr <- x$pairs
+  num <- vapply(pr, is.numeric, TRUE)
+  pr[num] <- lapply(pr[num], round, 3)
+  pr$significant <- ifelse(pr$significant, "*", "")
+  pr$practical <- ifelse(pr$practical, sprintf(">= %.2f", x$flag_logits), "")
+  print(pr, row.names = FALSE)
+  cat(sprintf("p adjusted by %s over %d pairwise comparison(s); practical criterion %.2f logits\n",
+              x$p_adjust, nrow(pr), x$flag_logits))
+  if (length(x$notes)) cat("notes:", paste(x$notes, collapse = "; "), "\n")
+  invisible(x)
 }

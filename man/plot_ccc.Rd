@@ -4,7 +4,13 @@
 \alias{plot_ccc}
 \title{Plot category probability curves}
 \usage{
-plot_ccc(fit, item, grid = seq(-6, 6, 0.05))
+plot_ccc(
+  fit,
+  item,
+  grid = seq(-6, 6, 0.05),
+  observed = FALSE,
+  n_groups = fit$n_groups
+)
 }
 \arguments{
 \item{fit}{A fitted object from \code{\link{rasch}}.}
@@ -12,6 +18,11 @@ plot_ccc(fit, item, grid = seq(-6, 6, 0.05))
 \item{item}{Item name or column index.}
 
 \item{grid}{Logit grid over which to draw the curves.}
+
+\item{observed}{Overlay the observed category proportions per class
+interval (Andrich and Marais 2019, ch. 20).}
+
+\item{n_groups}{Class intervals for the observed points.}
 }
 \value{
 Called for its plotting side effect; invisibly \code{NULL}.
@@ -25,5 +36,5 @@ simP <- function(th, t) { x <- 0:length(t); p <- exp(x * th - c(0, cumsum(t))); 
 th <- rnorm(400)
 X <- sapply(1:4, function(i) sapply(th, function(t) sample(0:3, 1, prob = simP(t, c(-1, 0, 1)))))
 colnames(X) <- sprintf("P\%02d", 1:4)
-plot_ccc(rasch(X), "P01")
+plot_ccc(rasch(X), "P01", observed = TRUE)
 }

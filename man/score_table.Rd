@@ -4,22 +4,52 @@
 \alias{score_table}
 \title{Raw score to measure conversion table}
 \usage{
-score_table(fit)
+score_table(
+  fit,
+  method = c("wle", "mle"),
+  extremes = c("model", "extrapolated")
+)
 }
 \arguments{
 \item{fit}{A fitted object from \code{\link{rasch}}.}
+
+\item{method}{\code{"wle"} (Warm, default) or \code{"mle"}.}
+
+\item{extremes}{\code{"model"} keeps the estimator's own extreme-score
+values (\code{NA} for MLE); \code{"extrapolated"} applies the geometric
+extrapolation.}
 }
 \value{
-A data frame with \code{score}, \code{theta}, and \code{se}.
+A data frame with \code{score}, \code{theta}, \code{se},
+  \code{freq}, \code{cum_pct}, and \code{extrapolated}; \code{NULL} for
+  fits without a common raw-score metric (EFRM).
 }
 \description{
 The score-to-logit conversion for complete responders: every possible raw
-score with its WLE location and standard error.
+score with its location, standard error, and the frequency and cumulative
+percentage of complete responders at that score (the complete-data
+estimates table of Andrich and Marais 2019, ch. 10).
+}
+\details{
+Two estimators are available. \code{"wle"} (the default) is Warm's
+weighted likelihood estimate, finite at the extreme scores. \code{"mle"}
+is the plain maximum likelihood estimate, infinite at the
+extremes. \code{extremes = "extrapolated"} replaces the extreme-score
+entries by the geometric extrapolation described in Andrich and Marais
+(2019, ch. 10): successive score-to-score
+differences grow towards the extremes, so the last difference is
+continued geometrically -- the extrapolated top difference \eqn{d} solves
+\eqn{b = \sqrt{a d}} where \eqn{a, b} are the two preceding differences
+(equivalently \eqn{d = b^2/a}), and symmetrically at zero. The standard
+error at an extrapolated location is \eqn{1/\sqrt{I(\theta)}} evaluated
+there. With \code{method = "wle"} the extrapolation replaces the finite
+Warm estimates at the extremes, giving the extrapolated form of the
+conversion table from a WLE analysis.
 }
 \examples{
 set.seed(1)
 d <- seq(-1.5, 1.5, length.out = 6)
 X <- matrix(rbinom(300 * 6, 1, plogis(outer(rnorm(300), d, "-"))), 300, 6)
 colnames(X) <- paste0("I", 1:6)
-score_table(rasch(X))
+score_table(rasch(X), method = "mle", extremes = "extrapolated")
 }

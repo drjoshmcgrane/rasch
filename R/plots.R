@@ -1,4 +1,4 @@
-# RaschR :: plots
+# rmt :: plots
 # ===========================================================================
 # The Rasch diagnostic plot suite in base graphics with a modern flat style:
 # item characteristic curves (with group overlay for DIF), category
@@ -112,6 +112,9 @@ plot_icc <- function(fit, item, group = NULL, n_groups = fit$n_groups,
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param item Item name or column index.
 #' @param grid Logit grid over which to draw the curves.
+#' @param observed Overlay the observed category proportions per class
+#'   interval (Andrich and Marais 2019, ch. 20).
+#' @param n_groups Class intervals for the observed points.
 #' @return Called for its plotting side effect; invisibly \code{NULL}.
 #' @examples
 #' set.seed(1)
@@ -119,9 +122,10 @@ plot_icc <- function(fit, item, group = NULL, n_groups = fit$n_groups,
 #' th <- rnorm(400)
 #' X <- sapply(1:4, function(i) sapply(th, function(t) sample(0:3, 1, prob = simP(t, c(-1, 0, 1)))))
 #' colnames(X) <- sprintf("P%02d", 1:4)
-#' plot_ccc(rasch(X), "P01")
+#' plot_ccc(rasch(X), "P01", observed = TRUE)
 #' @export
-plot_ccc <- function(fit, item, grid = seq(-6, 6, 0.05)) {
+plot_ccc <- function(fit, item, grid = seq(-6, 6, 0.05), observed = FALSE,
+                     n_groups = fit$n_groups) {
   i <- .item_idx(fit, item); tau_i <- fit$tau_list[[i]]; mmax <- length(tau_i)
   P <- vapply(grid, function(th)
     item_moments(th, tau_i, disc = .disc_of(fit, i))$P, numeric(mmax + 1))
@@ -134,6 +138,16 @@ plot_ccc <- function(fit, item, grid = seq(-6, 6, 0.05)) {
   for (cat in 0:mmax)
     lines(grid, P[cat + 1, ], lwd = 2.6,
           col = .rr$pal[cat %% length(.rr$pal) + 1L])
+  if (observed) {
+    th <- fit$person$theta; x <- fit$X[, i]; ok <- !is.na(th) & !is.na(x)
+    ci <- cut(rank(th[ok], ties.method = "first"), n_groups, labels = FALSE)
+    obsTh <- tapply(th[ok], ci, mean)
+    for (cat in 0:mmax) {
+      obsP <- tapply(x[ok] == cat, ci, mean)
+      points(obsTh, obsP, pch = 21, cex = 1.2, lwd = 1.1, col = "white",
+             bg = .rr$pal[cat %% length(.rr$pal) + 1L])
+    }
+  }
   mtext(if (ordered) "thresholds ordered" else "THRESHOLDS DISORDERED",
         side = 3, line = 0.2, adj = 0, cex = 0.8,
         col = if (ordered) .rr$teal else .rr$red)
@@ -151,11 +165,18 @@ plot_ccc <- function(fit, item, grid = seq(-6, 6, 0.05)) {
 #' Conditional probability of success at each threshold,
 #' \code{P(X = k | X = k - 1 or k)}, a logistic ogive crossing 0.5 at the
 #' threshold location. Disordered thresholds are immediately visible as
-#' out-of-sequence ogives.
+#' out-of-sequence ogives. With \code{observed = TRUE} the observed
+#' conditional proportions per class interval are overlaid, the direct
+#' check on whether each threshold discriminates (and hence whether
+#' collapsing categories could ever be justified; Andrich and Marais 2019,
+#' ch. 22).
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param item Item name or column index.
 #' @param grid Logit grid over which to draw the curves.
+#' @param observed Overlay the observed conditional threshold proportions
+#'   per class interval.
+#' @param n_groups Class intervals for the observed points.
 #' @return Called for its plotting side effect; invisibly \code{NULL}.
 #' @examples
 #' set.seed(1)
@@ -165,7 +186,8 @@ plot_ccc <- function(fit, item, grid = seq(-6, 6, 0.05)) {
 #' colnames(X) <- sprintf("P%02d", 1:4)
 #' plot_threshold_prob(rasch(X), "P01")
 #' @export
-plot_threshold_prob <- function(fit, item, grid = seq(-6, 6, 0.05)) {
+plot_threshold_prob <- function(fit, item, grid = seq(-6, 6, 0.05),
+                                observed = FALSE, n_groups = fit$n_groups) {
   i <- .item_idx(fit, item); tau_i <- fit$tau_list[[i]]
   op <- .rr_canvas(range(grid), c(0, 1), "Person location (logits)",
                    "Threshold probability",
@@ -176,6 +198,23 @@ plot_threshold_prob <- function(fit, item, grid = seq(-6, 6, 0.05)) {
     colr <- .rr$pal[(k - 1L) %% length(.rr$pal) + 1L]
     lines(grid, plogis(.disc_of(fit, i) * (grid - tau_i[k])), lwd = 2.6, col = colr)
     points(tau_i[k], 0.5, pch = 21, bg = colr, col = "white", cex = 1.4)
+  }
+  if (observed) {
+    # observed conditional threshold proportions per class interval:
+    # among persons responding k - 1 or k, the proportion responding k
+    # (Andrich & Marais 2019, ch. 22 rescoring check)
+    th <- fit$person$theta; x <- fit$X[, i]; ok <- !is.na(th) & !is.na(x)
+    ci <- cut(rank(th[ok], ties.method = "first"), n_groups, labels = FALSE)
+    for (k in seq_along(tau_i)) {
+      colr <- .rr$pal[(k - 1L) %% length(.rr$pal) + 1L]
+      inpair <- ok & !is.na(x) & (x == k - 1L | x == k)
+      cip <- ci[inpair[ok]]
+      if (!sum(inpair)) next
+      obsTh <- tapply(th[inpair], cip, mean)
+      obsT <- tapply(x[inpair] == k, cip, mean)
+      points(obsTh, obsT, pch = 21, cex = 1.2, lwd = 1.1, col = "white",
+             bg = colr)
+    }
   }
   .rr_legend("topleft", sprintf("threshold %d (%.3f)", seq_along(tau_i), tau_i),
              lwd = 2.6, col = .rr$pal[seq_along(tau_i)])
@@ -505,5 +544,120 @@ plot_catfreq <- function(fit, item) {
   on.exit(par(op))
   rect(cats - 0.38, 0, cats + 0.38, cnt, col = .rr$blue, border = "white")
   text(cats, cnt, cnt, pos = 3, cex = 0.8, col = .rr$ink)
+  invisible(NULL)
+}
+
+# ---------------------------------------------------------------------------
+# Person characteristic curve: one person against the item difficulties.
+# ---------------------------------------------------------------------------
+#' Plot a person characteristic curve
+#'
+#' The person characteristic curve: the probability of success as a
+#' function of item location at the person's estimated measure, with the
+#' person's observed responses overlaid, grouped into item-difficulty
+#' intervals (proportion of maximum score per interval). Erratic responding
+#' (for example lucky guessing on hard items by a low-proficiency person)
+#' shows as observed points far from the curve, complementing the person
+#' fit residual.
+#'
+#' @param fit A fitted object from \code{\link{rasch}}.
+#' @param person Row number of the person, or an ID matching
+#'   \code{fit$person$id}.
+#' @param n_groups Number of item-difficulty intervals for the observed
+#'   points (capped by the number of observed items).
+#' @param grid Item-location grid over which to draw the curve.
+#' @return Called for its plotting side effect; invisibly \code{NULL}.
+#' @examples
+#' set.seed(1)
+#' d <- seq(-2, 2, length.out = 12)
+#' X <- matrix(rbinom(300 * 12, 1, plogis(outer(rnorm(300), d, "-"))), 300, 12)
+#' colnames(X) <- paste0("I", 1:12)
+#' plot_pcc(rasch(X), person = 1)
+#' @export
+plot_pcc <- function(fit, person, n_groups = 5, grid = seq(-5, 5, 0.05)) {
+  n <- if (is.numeric(person) && length(person) == 1L &&
+           person %in% seq_len(nrow(fit$X))) as.integer(person)
+       else match(person, fit$person$id)
+  if (is.na(n)) stop("person not found")
+  th <- fit$person$theta[n]
+  if (is.na(th)) stop("no estimate for this person")
+  x <- fit$X[n, ]; ok <- !is.na(x)
+  if (sum(ok) < 3) stop("fewer than 3 observed responses for this person")
+  loc <- fit$items$location; mm <- fit$m
+  op <- .rr_canvas(range(grid), c(0, 1), "Item location (logits)",
+                   "Probability of success",
+                   sprintf("Person characteristic curve \u2013 %s (location %.3f, fit residual %s)",
+                           fit$person$id[n], th,
+                           ifelse(is.na(fit$person$fit_resid[n]), "NA",
+                                  sprintf("%.2f", fit$person$fit_resid[n]))))
+  on.exit(par(op))
+  lines(grid, plogis(th - grid), lwd = 3, col = .rr$ink)
+  abline(v = th, lty = 3, col = .rr$soft)
+  g <- cut(rank(loc[ok], ties.method = "first"),
+           min(n_groups, max(2, floor(sum(ok) / 2))), labels = FALSE)
+  obsL <- tapply(loc[ok], g, mean)
+  obsP <- tapply((x[ok] / mm[ok]), g, mean)
+  points(obsL, obsP, pch = 21, bg = .rr$blue, col = "white", cex = 1.6, lwd = 1.2)
+  .rr_legend("topright", c("Model at person location",
+                           "Observed (item intervals)"),
+             lwd = c(3, NA), pch = c(NA, 21), pt.bg = c(NA, .rr$blue),
+             col = c(.rr$ink, "white"), pt.cex = 1.4)
+  invisible(NULL)
+}
+
+# ---------------------------------------------------------------------------
+# Residual statistics distributions of the fit residuals.
+# ---------------------------------------------------------------------------
+#' Plot the fit residual distribution
+#'
+#' A histogram of the
+#' item or person fit residuals -- the log-transformed statistic or its
+#' untransformed natural form -- against the standard normal density they
+#' should approximate under fit (Andrich and Marais 2019, ch. 15). The
+#' natural residual is visibly skewed
+#' (that is why the log transform is reported); both are available.
+#'
+#' @param fit A fitted object from \code{\link{rasch}}.
+#' @param what \code{"items"} or \code{"persons"}.
+#' @param statistic \code{"fit_resid"} (log-transformed, default) or
+#'   \code{"natural"}.
+#' @param bins Number of histogram bins.
+#' @return Called for its plotting side effect; invisibly \code{NULL}.
+#' @examples
+#' set.seed(1)
+#' d <- seq(-2, 2, length.out = 10)
+#' X <- matrix(rbinom(400 * 10, 1, plogis(outer(rnorm(400), d, "-"))), 400, 10)
+#' colnames(X) <- paste0("I", 1:10)
+#' plot_resid_dist(rasch(X), what = "persons")
+#' @export
+plot_resid_dist <- function(fit, what = c("items", "persons"),
+                            statistic = c("fit_resid", "natural"), bins = 25) {
+  what <- match.arg(what); statistic <- match.arg(statistic)
+  v <- if (what == "items") {
+    if (statistic == "fit_resid") fit$items$fit_resid else fit$items$natural_resid
+  } else {
+    if (statistic == "fit_resid") fit$person$fit_resid else fit$person$natural_resid
+  }
+  v <- v[!is.na(v)]
+  if (length(v) < 3) stop("fewer than 3 residuals to display")
+  lab <- if (statistic == "fit_resid") "fit residual (log-transformed)"
+         else "natural fit residual"
+  rng <- range(c(v, -3, 3)); rng <- rng + c(-0.5, 0.5) * diff(rng) * 0.05
+  brk <- seq(rng[1], rng[2], length.out = bins + 1)
+  h <- hist(v, breaks = brk, plot = FALSE)
+  ymax <- max(h$density, dnorm(0)) * 1.15
+  op <- .rr_canvas(rng, c(0, ymax), lab, "Density",
+                   sprintf("%s residual distribution (n = %d, mean %.2f, SD %.2f)",
+                           if (what == "items") "Item" else "Person",
+                           length(v), mean(v), sd(v)), grid_x = FALSE)
+  on.exit(par(op))
+  rect(h$breaks[-length(h$breaks)], 0, h$breaks[-1], h$density,
+       col = adjustcolor(.rr$blue, 0.45), border = "white")
+  xs <- seq(rng[1], rng[2], length.out = 200)
+  lines(xs, dnorm(xs), lwd = 2.6, col = .rr$red)
+  abline(v = c(-2.5, 2.5), lty = 3, col = .rr$soft)
+  .rr_legend("topright", c("Observed", "Standard normal"),
+             lwd = c(NA, 2.6), pch = c(22, NA), pt.bg = c(adjustcolor(.rr$blue, 0.45), NA),
+             col = c("white", .rr$red), pt.cex = 1.6)
   invisible(NULL)
 }

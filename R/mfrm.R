@@ -1,4 +1,4 @@
-# RaschR :: many-facet Rasch model
+# rmt :: many-facet Rasch model
 # ===========================================================================
 # The many-facet Rasch model (Linacre 1989) estimated by the same pairwise
 # conditional likelihood as the rest of the package. Each combination of an
@@ -16,14 +16,24 @@
 # ===========================================================================
 
 # Pooled fit over a set of columns of the residual matrix (used for facet
-# levels and for underlying items across their virtual columns).
-.group_col_fit <- function(Z, mo, cols, disc = NULL) {
+# levels and for underlying items across their virtual columns). The fit
+# residual is the log-of-mean-square statistic (Andrich & Marais 2019,
+# ch. 23) pooled over the group's
+# observed cells of non-extreme persons: Y^2 = sum z^2 against the summed
+# cell degrees of freedom f = f_cell x cells, symmetrised as in .fitres.
+# The published three-facet fit tables report a different margin statistic,
+# the mean of the virtual items' fit residuals, which rasch_mfrm() computes
+# alongside this pooled form (see its Details); EFRM frame fit keeps the
+# pooled form. Infit and outfit mean squares are kept alongside.
+.group_col_fit <- function(Z, mo, cols, disc = NULL, extreme = NULL,
+                           f_cell = NA_real_) {
   E2 <- .z2_expectation(mo, Z, disc)
   sub <- Z[, cols, drop = FALSE]
-  ok <- which(!is.na(sub))
+  keep <- if (is.null(extreme)) rep(TRUE, nrow(Z)) else !extreme
+  ok <- which(!is.na(sub) & keep)
   if (length(ok) < 3)
     return(list(infit_ms = NA_real_, outfit_ms = NA_real_,
-                fit_resid = NA_real_, n = length(ok)))
+                fit_resid = NA_real_, df_fit = NA_real_, n = length(ok)))
   z2 <- sub[ok]^2
   V <- mo$V[, cols, drop = FALSE][ok]
   C4 <- mo$M4[, cols, drop = FALSE][ok]
@@ -31,9 +41,20 @@
   n <- length(ok)
   outfit <- sum(z2) / sum(e2)
   infit <- sum(z2 * V) / sum(e2 * V)
-  qi <- sqrt(max(sum(C4 - V^2) / sum(V)^2, 1e-8))
-  list(infit_ms = infit, outfit_ms = outfit,
-       fit_resid = .wh(infit, qi), n = n)
+  fr <- df <- NA_real_
+  if (is.finite(f_cell) && f_cell > 0) {
+    y2 <- sum(z2); v <- sum(C4 / V^2 - 1); f <- f_cell * n
+    if (v > 1e-8 && y2 > 0) {
+      fr <- f * (log(y2) - log(f)) / sqrt(v)
+      df <- f
+    }
+  }
+  if (!is.finite(fr)) {                     # degenerate pooling: fall back
+    qi <- sqrt(max(sum(C4 - V^2) / sum(V)^2, 1e-8))
+    fr <- .wh(infit, qi)
+  }
+  list(infit_ms = infit, outfit_ms = outfit, fit_resid = fr, df_fit = df,
+       n = n)
 }
 
 #' Fit a many-facet Rasch model
@@ -56,7 +77,10 @@
 #'   collapsed per item with a note).
 #' @param facets Character vector naming one or more facet columns (for
 #'   example a rater column).
-#' @param n_groups Number of class intervals for the item-trait chi-square.
+#' @param n_groups Number of class intervals for the item-trait chi-square;
+#'   \code{NULL} (the default) applies the class-interval rule of Andrich and
+#'   Marais (2019, ch. 15) (at least 50
+#'   non-extreme persons per interval, at most 10 intervals, at least 2).
 #' @param adjust_N Optional reference sample size for the chi-square.
 #' @param na_codes Score values to read as missing (default \code{-1}); any
 #'   negative score is also treated as missing.
@@ -77,7 +101,18 @@
 #'   severity, standard error, observation count, pooled fit),
 #'   \code{item_effects} (underlying item locations and pooled fit),
 #'   \code{item_thresholds} (the structural \code{delta_ik} with standard
-#'   errors), and \code{facet_spec}.
+#'   errors), and \code{facet_spec}. Two fit residuals are reported per
+#'   facet level and per underlying item. \code{fit_resid} is the
+#'   facet-margin statistic of the published three-facet fit tables
+#'   (Andrich and Marais 2019, ch. 26 and app. C), the mean of the
+#'   constituent virtual items'
+#'   fit residuals; it weighs each virtual item equally, so an erratic level
+#'   shows the average of its per-item misfit. \code{fit_resid_pooled} is
+#'   the log-of-mean-square statistic summed over the margin's
+#'   observed cells of non-extreme persons, with its degrees of freedom in
+#'   \code{df_fit}; it weighs each response equally and is the more
+#'   powerful statistic when misfit is spread evenly over the level's
+#'   cells.
 #' @examples
 #' set.seed(1)
 #' simP <- function(th, tau) { x <- 0:length(tau); p <- exp(x * th - c(0, cumsum(tau))); p / sum(p) }
@@ -93,7 +128,7 @@
 #'                   facets = "rater")
 #' fit$facet_effects$rater
 #' @export
-rasch_mfrm <- function(data, person, item, score, facets, n_groups = 10,
+rasch_mfrm <- function(data, person, item, score, facets, n_groups = NULL,
                        adjust_N = NA, na_codes = -1, interaction = NULL,
                        maxit = 60, tol = 1e-8) {
   if (!is.null(interaction)) {
@@ -215,7 +250,14 @@ rasch_mfrm <- function(data, person, item, score, facets, n_groups = 10,
                                     k = thr_items$k, tau = delta,
                                     se = sqrt(pmax(diag(cov_d), 0)))
   item_fit <- lapply(items_u, function(it)
-    .group_col_fit(fit$residuals, fit$moments, which(vmap$item == it)))
+    .group_col_fit(fit$residuals, fit$moments, which(vmap$item == it),
+                    extreme = fit$person$extreme,
+                    f_cell = fit$summary_stats$df_factor))
+  # The facet-margin fit residual of the published three-facet tables
+  # (Andrich & Marais 2019, ch. 26 and app. C) is the MEAN of the
+  # constituent virtual items' fit residuals; the pooled log-residual over
+  # the margin's cells is kept alongside with its degrees of freedom.
+  vmean <- function(sel) mean(fit$items$fit_resid[sel], na.rm = TRUE)
   fit$item_effects <- data.frame(
     item = items_u,
     location = vapply(seq_along(items_u), function(i)
@@ -227,7 +269,9 @@ rasch_mfrm <- function(data, person, item, score, facets, n_groups = 10,
     n = vapply(item_fit, `[[`, 0, "n"),
     infit_ms = vapply(item_fit, `[[`, 0, "infit_ms"),
     outfit_ms = vapply(item_fit, `[[`, 0, "outfit_ms"),
-    fit_resid = vapply(item_fit, `[[`, 0, "fit_resid"))
+    fit_resid = vapply(items_u, function(it) vmean(vmap$item == it), 0),
+    fit_resid_pooled = vapply(item_fit, `[[`, 0, "fit_resid"),
+    df_fit = vapply(item_fit, `[[`, 0, "df_fit"))
 
   cursor <- Md - 1L
   fit$facet_effects <- list()
@@ -236,14 +280,18 @@ rasch_mfrm <- function(data, person, item, score, facets, n_groups = 10,
     rho <- drop(A_fac[[f]] %*% sol$beta[idx])
     cov_r <- A_fac[[f]] %*% covb[idx, idx, drop = FALSE] %*% t(A_fac[[f]])
     lev_fit <- lapply(flevs[[f]], function(lv)
-      .group_col_fit(fit$residuals, fit$moments, which(vmap[[f]] == lv)))
+      .group_col_fit(fit$residuals, fit$moments, which(vmap[[f]] == lv),
+                      extreme = fit$person$extreme,
+                      f_cell = fit$summary_stats$df_factor))
     fit$facet_effects[[f]] <- data.frame(
       level = flevs[[f]], severity = rho,
       se = sqrt(pmax(diag(cov_r), 0)),
       n = vapply(lev_fit, `[[`, 0, "n"),
       infit_ms = vapply(lev_fit, `[[`, 0, "infit_ms"),
       outfit_ms = vapply(lev_fit, `[[`, 0, "outfit_ms"),
-      fit_resid = vapply(lev_fit, `[[`, 0, "fit_resid"))
+      fit_resid = vapply(flevs[[f]], function(lv) vmean(vmap[[f]] == lv), 0),
+      fit_resid_pooled = vapply(lev_fit, `[[`, 0, "fit_resid"),
+      df_fit = vapply(lev_fit, `[[`, 0, "df_fit"))
   }
   if (n_gam > 0L) {
     idx <- cursor + seq_len(n_gam)
@@ -265,7 +313,7 @@ rasch_mfrm <- function(data, person, item, score, facets, n_groups = 10,
 
 #' @export
 print.rasch_mfrm <- function(x, ...) {
-  cat(sprintf("RaschR many-facet analysis: %d items x %s = %d virtual items, %d persons\n",
+  cat(sprintf("rmt many-facet analysis: %d items x %s = %d virtual items, %d persons\n",
               nrow(x$item_effects),
               paste(vapply(x$facet_spec, function(f)
                 sprintf("%d %s level(s)", nrow(x$facet_effects[[f]]), f), ""),

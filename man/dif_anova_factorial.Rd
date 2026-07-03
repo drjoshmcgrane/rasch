@@ -10,7 +10,8 @@ dif_anova_factorial(
   n_groups = NULL,
   p_adjust = "BH",
   alpha = 0.05,
-  effects = c("factorial", "main")
+  effects = c("factorial", "main"),
+  sizes = FALSE
 )
 }
 \arguments{
@@ -31,16 +32,27 @@ default \code{"BH"}.}
 with every other and with the class interval; \code{"main"} fits the
 factors additively (each factor's main effect and its interaction with
 the class interval, but no factor-by-factor terms).}
+
+\item{sizes}{Also compute DIF magnitudes in logits (\code{\link{dif_size}})
+for every significant, non-superseded group term: the item is resolved
+by the term's levels (interaction terms by their cells) and all
+pairwise location differences are returned with Holm familywise
+adjustment and the practical-significance flag. Each size involves a
+re-analysis, so this costs one refit per flagged item-term.}
 }
 \value{
 A list with \code{terms}, the complete per-item analysis of
-  variance table (term, df, sum of squares, mean square, F, raw and
-  adjusted p, significance, supersession, including the residual row),
+  variance table (term, df, sum of squares, mean square, F, partial
+  eta-squared, raw and adjusted p, significance, supersession, including
+  the residual row),
   and \code{tukey} (per item, term, and level comparison: difference,
   95 per cent interval, and Tukey-adjusted p), plus the \code{alpha} and
   adjustment used. Tukey comparisons are reported for significant,
   non-superseded group terms except two-level main effects, where the
-  F test is already the only comparison.
+  F test is already the only comparison. With \code{sizes = TRUE},
+  \code{sizes} holds the logit DIF magnitudes per item, term, and level
+  pair (two-level main effects included, since the single difference is
+  exactly the DIF size).
 }
 \description{
 Models all nominated person factors jointly: for each item the

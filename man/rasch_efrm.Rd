@@ -11,7 +11,7 @@ rasch_efrm(
   id = NULL,
   factors = NULL,
   items = NULL,
-  n_groups = 10,
+  n_groups = NULL,
   adjust_N = NA,
   na_codes = -1,
   maxit = 50,

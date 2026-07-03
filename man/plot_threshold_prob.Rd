@@ -4,7 +4,13 @@
 \alias{plot_threshold_prob}
 \title{Plot threshold probability curves}
 \usage{
-plot_threshold_prob(fit, item, grid = seq(-6, 6, 0.05))
+plot_threshold_prob(
+  fit,
+  item,
+  grid = seq(-6, 6, 0.05),
+  observed = FALSE,
+  n_groups = fit$n_groups
+)
 }
 \arguments{
 \item{fit}{A fitted object from \code{\link{rasch}}.}
@@ -12,6 +18,11 @@ plot_threshold_prob(fit, item, grid = seq(-6, 6, 0.05))
 \item{item}{Item name or column index.}
 
 \item{grid}{Logit grid over which to draw the curves.}
+
+\item{observed}{Overlay the observed conditional threshold proportions
+per class interval.}
+
+\item{n_groups}{Class intervals for the observed points.}
 }
 \value{
 Called for its plotting side effect; invisibly \code{NULL}.
@@ -20,7 +31,11 @@ Called for its plotting side effect; invisibly \code{NULL}.
 Conditional probability of success at each threshold,
 \code{P(X = k | X = k - 1 or k)}, a logistic ogive crossing 0.5 at the
 threshold location. Disordered thresholds are immediately visible as
-out-of-sequence ogives.
+out-of-sequence ogives. With \code{observed = TRUE} the observed
+conditional proportions per class interval are overlaid, the direct
+check on whether each threshold discriminates (and hence whether
+collapsing categories could ever be justified; Andrich and Marais 2019,
+ch. 22).
 }
 \examples{
 set.seed(1)

@@ -2,7 +2,7 @@
 % Please edit documentation in R/app.R
 \name{run_app}
 \alias{run_app}
-\title{Launch the RaschR graphical interface}
+\title{Launch the rmt graphical interface}
 \usage{
 run_app(...)
 }

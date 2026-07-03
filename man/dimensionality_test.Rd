@@ -23,8 +23,10 @@ each), otherwise the first residual contrast defines the split.}
 \value{
 A list with the proportion of significant tests, its exact
   confidence interval, the sample sizes (\code{n} used,
-  \code{n_excluded_extreme}), the item split and its source, and a
-  \code{multidimensional} verdict.
+  \code{n_excluded_extreme}), the item split and its source, a
+  \code{multidimensional} verdict, and \code{paired_t}, the paired t-test
+  of the two subset means (the group-level comparison, which requires
+  pairing because both estimates come from the same persons).
 }
 \description{
 Estimates each person separately on two item subsets and compares the two
