@@ -211,20 +211,30 @@ plotCard <- function(id, title, height = "560px") {
 
 # `info` adds a header tooltip defining the key statistic; `footer` takes a
 # small UI slot rendered under the table (dynamic interpretation notes)
-tableCard <- function(id, title, note = NULL, info = NULL, footer = NULL) {
+tableCard <- function(id, title, note = NULL, info = NULL, footer = NULL,
+                      controls = NULL) {
   card(
     full_screen = TRUE,
     card_header(div(class = "d-flex justify-content-between align-items-center",
       span(title,
            if (!is.null(info))
              tooltip(bs_icon("info-circle", class = "ms-1 text-secondary"), info)),
-      downloadButton(paste0(id, "_csv"), "CSV", class = "btn-outline-secondary btn-xs"))),
+      div(class = "d-flex align-items-center gap-3",
+          controls,
+          downloadButton(paste0(id, "_csv"), "CSV",
+                         class = "btn-outline-secondary btn-xs")))),
     card_body(if (!is.null(note)) p(class = "text-muted small mb-2", note),
               DTOutput(id),
               if (!is.null(footer)) div(class = "table-note mt-2", footer),
               padding = 12)
   )
 }
+
+
+# compact header switch revealing every column of a curated table
+cols_switch <- function(id)
+  div(class = "small text-secondary",
+      input_switch(id, "All columns", value = FALSE))
 
 # card header with an info-circle tooltip (for non-table cards)
 info_header <- function(title, info)
@@ -410,6 +420,7 @@ panel_items <- nav_panel("Items", icon = bs_icon("list-check"),
         downloadButton("dl_anchors", "Save anchors (CSV: item,k,tau)",
                        class = "btn-outline-secondary mb-3")),
     tableCard("items_tbl", "Item statistics",
+      controls = cols_switch("items_full"),
               "Click a row to inspect that item's chi-square detail and curves below. Location and SE from the pairwise conditional likelihood; fit residual ~ N(0,1) under fit; item-trait chi-square over class intervals; ANOVA F over class-interval cells; misfit flag uses BH-adjusted probabilities.",
               info = "Fit residual: log-of-mean-square statistic, approximately N(0,1) under fit; |values| > 2.5 are conventionally flagged (Andrich & Marais 2019).",
               footer = uiOutput("items_note")),
@@ -455,6 +466,7 @@ panel_items <- nav_panel("Items", icon = bs_icon("list-check"),
 panel_persons <- nav_panel("Persons", icon = bs_icon("people"),
     uiOutput("persons_vboxes"),
     tableCard("person_tbl", "Person estimates",
+        controls = cols_switch("persons_full"),
               "Warm WLE location and SE per person, with raw score, fit statistics, and your ID and factor columns. Click a row to draw that person's characteristic curve below."),
     layout_columns(col_widths = 12,
       plotCard("pcc", "Person characteristic curve (selected person)"),
@@ -515,6 +527,7 @@ panel_dif <- nav_panel("DIF", icon = bs_icon("sliders"),
           p(class = "text-muted small mt-2",
             "Replaces the selected item with one item per group level (each level keeps only its own responses) and re-analyses; the split locations quantify the DIF. Splitting works one factor at a time; choose a single factor above."))),
       tableCard("dif_tbl", "DIF analysis of variance",
+        controls = cols_switch("dif_full"),
                 info = "ANOVA of standardised residuals: a significant factor effect indicates uniform DIF, a significant factor-by-class-interval interaction indicates non-uniform DIF (Andrich & Marais 2019).",
                 footer = uiOutput("dif_note")),
       tableCard("dif_tukey_tbl", "Tukey HSD comparisons",
@@ -543,7 +556,8 @@ panel_facets <- nav_panel("Facets", icon = bs_icon("person-badge"),
         selectInput("facet_sel", "Facet", NONE),
         p(class = "text-muted small",
           "Severities from the joint calibration (positive = more severe). Pooled fit residuals beyond +/-2.5 flag inconsistent levels. Long-format analyses only.")),
-      tableCard("facet_tbl", "Facet severities and fit"),
+      tableCard("facet_tbl", "Facet severities and fit",
+        controls = cols_switch("facets_full")),
       plotCard("facet_plot", "Severity caterpillar plot"),
       tableCard("facet_int_tbl", "Item-by-facet interactions",
                 "Shown when the analysis was run in interactive facet mode; gamma is the extra severity of a level on a particular item.")
@@ -708,6 +722,7 @@ panel_btl <- nav_panel("BTL", icon = bs_icon("trophy"),
            card_body(uiOutput("btl_boxes"),
                      verbatimTextOutput("btl_summary"))),
       tableCard("btl_obj_tbl", "Object locations and fit",
+        controls = cols_switch("btl_full"),
                 "Conditional (person-free) estimation with sum-zero identification and sandwich standard errors; the fit residual is the log-of-mean-square statistic over each object's comparisons (Andrich & Marais 2019)."),
       plotCard("btl_plot", "Object caterpillar"),
       tableCard("btl_pairs_tbl", "Pairwise goodness of fit",
@@ -1338,6 +1353,24 @@ server <- function(input, output, session) {
   # APA-leaning DT wrapper: Bootstrap 5 skin, right-aligned numerics, paging
   # controls only when the table needs them. `fit_col` colours fit residuals
   # beyond |2.5| with the theme danger colour; `p_bold` bolds p-values < .05.
+  # curated display columns: fit objects carry every statistic, but the
+  # tables show a readable core; the per-table "detailed columns" switch
+  # reveals the rest (CSV downloads always contain everything)
+  CORE <- list(
+    items = c("item", "location", "se", "fit_resid", "infit_ms", "outfit_ms",
+              "chisq", "df", "p_adj", "misfit"),
+    person = c("id", "raw", "max_raw", "theta", "se", "extreme", "fit_resid"),
+    dif = c("factor", "item", "F_uniform", "p_uniform_adj", "eta2_uniform",
+            "F_nonuniform", "p_nonuniform_adj", "eta2_nonuniform",
+            "uniform_DIF", "nonuniform_DIF"),
+    facet = c("level", "severity", "se", "n", "fit_resid"),
+    btl_obj = c("object", "location", "se", "comparisons", "wins", "fit_resid"),
+    btl_judge = c("judge", "n", "fit_resid", "misfit"))
+  curate <- function(d, which, full = FALSE, extra = NULL) {
+    if (isTRUE(full)) return(d)
+    keep <- c(CORE[[which]], extra)
+    d[, intersect(keep, names(d)), drop = FALSE]
+  }
   num_dt <- function(d, digits = 3, fit_col = NULL, p_bold = NULL, ...) {
     num <- vapply(d, is.numeric, TRUE)
     opts <- list(pageLength = 15, scrollX = TRUE,
@@ -1608,7 +1641,8 @@ server <- function(input, output, session) {
   # any chi-square sample-size adjustment is applied inside the fit (the
   # adjust_N run control), so the table shows the fit's own statistics
   register_table("items_tbl", function() fit()$items, function() {
-    d <- fit()$items
+    d <- curate(fit()$items, "items", full = isTRUE(input$items_full),
+                extra = if (length(unique(fit()$m)) > 1) "max")
     d$misfit <- ifelse(d$misfit, "*", "")
     num_dt(d, selection = "single", fit_col = "fit_resid",
            p_bold = c("p_adj", "p_anova"))
@@ -1733,7 +1767,9 @@ server <- function(input, output, session) {
                 theme = if (mis > 0) "danger" else "success"))
   })
   register_table("person_tbl", function() fit()$person, function() {
-    d <- fit()$person
+    fac <- names(fit()$factors)
+    d <- curate(fit()$person, "person", full = isTRUE(input$persons_full),
+                extra = fac)
     dt <- datatable(d, rownames = FALSE, filter = "top", selection = "single",
                     style = "bootstrap5",
                     class = "table-sm compact hover order-column",
@@ -1793,6 +1829,7 @@ server <- function(input, output, session) {
       d <- dif_res()
       if (!is.null(input$dif_factor) && input$dif_factor %in% d$factor)
         d <- d[d$factor == input$dif_factor, ]
+      d <- curate(d, "dif", full = isTRUE(input$dif_full))
       d$uniform_DIF <- ifelse(d$uniform_DIF, "*", "")
       d$nonuniform_DIF <- ifelse(d$nonuniform_DIF, "*", "")
       num_dt(d) |> formatRound(c("p_uniform", "p_nonuniform",
@@ -1912,7 +1949,9 @@ server <- function(input, output, session) {
                                        paste(f$notes, collapse = "; ")) else "")
   })
   register_table("btl_obj_tbl", function() bfit()$objects,
-                 function() num_dt(bfit()$objects))
+                 function() num_dt(curate(bfit()$objects, "btl_obj",
+                                          full = isTRUE(input$btl_full)),
+                                   fit_col = "fit_resid"))
   register_table("btl_pairs_tbl", function() bfit()$pairs,
                  function() num_dt(bfit()$pairs))
   register_table("btl_judges_tbl", function() {
@@ -1922,7 +1961,8 @@ server <- function(input, output, session) {
     validate(need(!is.null(bfit()$judges), "No judge column was nominated."))
     d <- bfit()$judges
     d$misfit <- ifelse(!is.na(d$fit_resid) & abs(d$fit_resid) > 2.5, "*", "")
-    num_dt(d)
+    num_dt(curate(d, "btl_judge", full = isTRUE(input$btl_full)),
+           fit_col = "fit_resid")
   })
   register_plot("btl_plot", function() plot_btl(bfit()))
 
@@ -1935,7 +1975,7 @@ server <- function(input, output, session) {
     f$facet_effects[[input$facet_sel]]
   })
   register_table("facet_tbl", function() facet_dat(), function() {
-    d <- facet_dat()
+    d <- curate(facet_dat(), "facet", full = isTRUE(input$facets_full))
     datatable(d, rownames = FALSE, style = "bootstrap5",
               class = "table-sm compact hover order-column",
               options = list(pageLength = 15, scrollX = TRUE,

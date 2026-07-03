@@ -395,7 +395,11 @@ summary.rasch <- function(object, ...) {
               x$summary_stats$df_factor))
   cat(sprintf("Items flagged misfitting (BH-adjusted): %d of %d\n\n",
               sum(x$items$misfit, na.rm = TRUE), nrow(x$items)))
-  print(x$items, digits = 3)
+  core <- c("item", "max", "location", "se", "fit_resid", "infit_ms",
+            "outfit_ms", "chisq", "df", "p_adj", "misfit")
+  print(x$items[, intersect(core, names(x$items))], digits = 3)
+  cat("(further columns on fit$items: natural and standardised forms,\n",
+      " ANOVA fit, Bonferroni probabilities)\n", sep = "")
   dis <- vapply(x$thresholds_diag, function(d) !d$ordered, TRUE) &
     vapply(x$thresholds_diag, function(d) length(d$thresholds) > 1L, TRUE)
   if (any(dis)) cat("\nDisordered thresholds:", paste(names(dis)[dis], collapse = ", "), "\n")

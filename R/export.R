@@ -350,7 +350,11 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
     "<h2>Summary</h2>", summ,
     "<h2>Targeting</h2>",
     shot(function() plot_pimap(fit), "targeting"),
-    "<h2>Item statistics</h2>", .html_table(fit$items),
+    "<h2>Item statistics</h2>",
+    .html_table(fit$items[, intersect(c("item", "max", "location", "se",
+                                        "fit_resid", "infit_ms", "outfit_ms",
+                                        "chisq", "df", "p_adj", "misfit"),
+                                      names(fit$items))]),
     shot(function() plot_item_map(fit), "item_map"),
     "<h2>Thresholds</h2>",
     .html_table({ th <- fit$thresholds
@@ -379,9 +383,17 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
     if (!is.null(fit$factors)) {
       da <- tryCatch(dif_anova(fit), error = function(e) NULL)
       if (!is.null(da)) s("<h2>Differential item functioning</h2>",
-                          .html_table(da)) else ""
+        .html_table(da[, intersect(c("factor", "item", "F_uniform",
+                                     "p_uniform_adj", "eta2_uniform",
+                                     "F_nonuniform", "p_nonuniform_adj",
+                                     "eta2_nonuniform", "uniform_DIF",
+                                     "nonuniform_DIF"), names(da))])) else ""
     } else "",
-    "<h2>Person estimates</h2>", .html_table(fit$person),
+    "<h2>Person estimates</h2>",
+    .html_table(fit$person[, intersect(c("id", names(fit$factors), "raw",
+                                         "max_raw", "theta", "se", "extreme",
+                                         "fit_resid"),
+                                       names(fit$person))]),
     "</div></body></html>")
   writeLines(html, file, useBytes = TRUE)
   invisible(file)
