@@ -302,8 +302,7 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
                          infit_z = ifit$infit_z, outfit_z = ifit$outfit_z,
                          chisq = it$chisq, df = it$df, p = it$p,
                          p_adj = it$p_adj, p_bonf = it$p_bonf,
-                         F_anova = ia$F_anova, p_anova = ia$p,
-                         misfit = it$misfit)
+                         F_anova = ia$F_anova, p_anova = ia$p)
   rownames(items_df) <- NULL
 
   # --- score table (complete responders; raw score is only sufficient when
@@ -393,10 +392,10 @@ summary.rasch <- function(object, ...) {
               x$summary_stats$cor_item_fit_location,
               x$summary_stats$cor_person_fit_location,
               x$summary_stats$df_factor))
-  cat(sprintf("Items flagged misfitting (BH-adjusted): %d of %d\n\n",
-              sum(x$items$misfit, na.rm = TRUE), nrow(x$items)))
+  cat(sprintf("Items with adjusted chi-square p < 0.05: %d of %d\n\n",
+              sum(x$items$p_adj < 0.05, na.rm = TRUE), nrow(x$items)))
   core <- c("item", "max", "location", "se", "fit_resid", "infit_ms",
-            "outfit_ms", "chisq", "df", "p_adj", "misfit")
+            "outfit_ms", "chisq", "df", "p_adj")
   print(.fmt_df(x$items[, intersect(core, names(x$items))]), row.names = FALSE)
   cat("(further columns on fit$items: natural and standardised forms,\n",
       " ANOVA fit, Bonferroni probabilities)\n", sep = "")

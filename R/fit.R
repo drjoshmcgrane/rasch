@@ -241,8 +241,7 @@
   p <- pchisq(chi, df_i, lower.tail = FALSE)
   p_adj <- p.adjust(p, method = "BH")
   data.frame(item = colnames(X), chisq = chi, df = df_i, p = p,
-             p_adj = p_adj, p_bonf = p.adjust(p, method = "bonferroni"),
-             misfit = p_adj < 0.05)
+             p_adj = p_adj, p_bonf = p.adjust(p, method = "bonferroni"))
 }
 
 # Correlation that degrades to NA (rather than erroring) when fewer than 3

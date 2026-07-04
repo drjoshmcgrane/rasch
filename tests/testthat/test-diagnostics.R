@@ -97,7 +97,7 @@ test_that("reliability and fit summaries are coherent", {
   expect_gt(fit$alpha$alpha, 0.5); expect_lt(fit$alpha$alpha, 1)
   expect_gt(fit$total_chisq_p, 1e-6)   # well-fitting data should not collapse
   expect_lt(abs(fit$item_fit_summary$mean), 1)
-  expect_false(any(fit$items$misfit))
+  expect_false(any(fit$items$p_adj < 0.05, na.rm = TRUE))
   expect_true(fit$power_of_fit %in% c("reasonable", "good", "excellent"))
 })
 

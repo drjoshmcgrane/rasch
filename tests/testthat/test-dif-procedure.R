@@ -185,3 +185,29 @@ test_that("MFRM facet fit reports margin and pooled statistics with df", {
   expect_true(all(is.finite(mf$item_effects$df_fit)))
   expect_true(all(is.finite(mf$item_effects$fit_resid_pooled)))
 })
+
+test_that("the factorial summary pivots to uniform/non-uniform per group term", {
+  set.seed(1); n <- 600
+  g1 <- rep(c("m", "f"), n / 2); g2 <- sample(c("young", "old"), n, TRUE)
+  d <- seq(-1.5, 1.5, length.out = 6)
+  sh <- matrix(0, n, 6); sh[g1 == "f", 3] <- 0.8
+  X <- matrix(rbinom(n * 6, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 6)
+  colnames(X) <- paste0("I", 1:6)
+  fit <- rasch(data.frame(X, sex = g1, age = g2), factors = c("sex", "age"))
+  fa <- dif_anova_factorial(fit)
+  s <- fa$summary
+  # one row per item and group term (no ci terms, no residual row)
+  expect_setequal(unique(s$term), c("sex", "age", "sex:age"))
+  expect_equal(nrow(s), 6 * 3)
+  # the pivot agrees with the full table
+  u <- fa$terms[fa$terms$item == "I3" & fa$terms$term == "sex", ]
+  nu <- fa$terms[fa$terms$item == "I3" & fa$terms$term == "sex:ci", ]
+  r <- s[s$item == "I3" & s$term == "sex", ]
+  expect_equal(r$F_uniform, u$F_value)
+  expect_equal(r$p_uniform_adj, u$p_adj)
+  expect_equal(r$F_nonuniform, nu$F_value)
+  # the planted uniform DIF is flagged as uniform, not non-uniform
+  expect_true(r$uniform_DIF)
+  # no misfit flag on the items table any more
+  expect_false("misfit" %in% names(fit$items))
+})

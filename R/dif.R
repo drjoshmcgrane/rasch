@@ -163,10 +163,15 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
 #'   pairwise location differences are returned with Holm familywise
 #'   adjustment and the practical-significance flag. Each size involves a
 #'   re-analysis, so this costs one refit per flagged item-term.
-#' @return A list with \code{terms}, the complete per-item analysis of
+#' @return A list with \code{summary}, the compact reading of the analysis
+#'   (one row per item and group term with the uniform F, adjusted p, and
+#'   partial eta-squared -- the term itself -- and the non-uniform ones --
+#'   the term crossed with class interval -- plus \code{uniform_DIF},
+#'   \code{nonuniform_DIF} and \code{superseded} flags); \code{terms},
+#'   the complete per-item analysis of
 #'   variance table (term, df, sum of squares, mean square, F, partial
 #'   eta-squared, raw and adjusted p, significance, supersession, including
-#'   the residual row),
+#'   the residual row);
 #'   and \code{tukey} (per item, term, and level comparison: difference,
 #'   95 per cent interval, and Tukey-adjusted p), plus the \code{alpha} and
 #'   adjustment used. Tukey comparisons are reported for significant,
@@ -313,8 +318,34 @@ dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
       data.frame(item = character(), term = character())
   }
 
-  out <- list(terms = terms, tukey = tukey, alpha = alpha,
-              p_adjust = p_adjust)
+  # compact reading: one row per item and group term, its own effect being
+  # uniform DIF and its crossing with the class interval non-uniform DIF
+  gterms <- setdiff(unique(terms$term), "Residuals")
+  gterms <- gterms[!vapply(gterms, function(tt)
+    "ci" %in% .term_vars(tt), TRUE)]
+  srows <- list()
+  for (it in unique(terms$item)) for (tt in gterms) {
+    u <- terms[terms$item == it & terms$term == tt, , drop = FALSE]
+    nu <- terms[terms$item == it & terms$term == paste0(tt, ":ci"), ,
+                drop = FALSE]
+    if (!nrow(u)) next
+    srows[[length(srows) + 1L]] <- data.frame(
+      item = it, term = tt,
+      F_uniform = u$F_value, p_uniform = u$p,
+      p_uniform_adj = u$p_adj, eta2_uniform = u$eta2_partial,
+      uniform_DIF = isTRUE(u$significant),
+      F_nonuniform = if (nrow(nu)) nu$F_value else NA_real_,
+      p_nonuniform = if (nrow(nu)) nu$p else NA_real_,
+      p_nonuniform_adj = if (nrow(nu)) nu$p_adj else NA_real_,
+      eta2_nonuniform = if (nrow(nu)) nu$eta2_partial else NA_real_,
+      nonuniform_DIF = nrow(nu) > 0 && isTRUE(nu$significant),
+      superseded = isTRUE(u$superseded))
+  }
+  summary_tab <- do.call(rbind, srows)
+  rownames(summary_tab) <- NULL
+
+  out <- list(summary = summary_tab, terms = terms, tukey = tukey,
+              alpha = alpha, p_adjust = p_adjust)
   if (isTRUE(sizes)) out$sizes <- size_tab
   out
 }

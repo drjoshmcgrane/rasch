@@ -41,10 +41,15 @@ adjustment and the practical-significance flag. Each size involves a
 re-analysis, so this costs one refit per flagged item-term.}
 }
 \value{
-A list with \code{terms}, the complete per-item analysis of
+A list with \code{summary}, the compact reading of the analysis
+  (one row per item and group term with the uniform F, adjusted p, and
+  partial eta-squared -- the term itself -- and the non-uniform ones --
+  the term crossed with class interval -- plus \code{uniform_DIF},
+  \code{nonuniform_DIF} and \code{superseded} flags); \code{terms},
+  the complete per-item analysis of
   variance table (term, df, sum of squares, mean square, F, partial
   eta-squared, raw and adjusted p, significance, supersession, including
-  the residual row),
+  the residual row);
   and \code{tukey} (per item, term, and level comparison: difference,
   95 per cent interval, and Tukey-adjusted p), plus the \code{alpha} and
   adjustment used. Tukey comparisons are reported for significant,

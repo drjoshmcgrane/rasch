@@ -456,8 +456,8 @@ panel_items <- nav_panel("Items", icon = bs_icon("list-check"),
     layout_columns(col_widths = c(7, 5),
       tableCard("items_tbl", "Item statistics",
         controls = cols_switch("items_full"),
-                "Click a row to explore that item on the right. Fit residual ~ N(0,1) under fit; misfit flag uses BH-adjusted chi-square probabilities.",
-                info = "Fit residual: log-of-mean-square statistic, approximately N(0,1) under fit; |values| > 2.5 are conventionally flagged (Andrich & Marais 2019).",
+                "Click a row to explore that item on the right. Fit residual ~ N(0,1) under fit.",
+                info = "Cells are highlighted where a statistic indicates misfit: |fit residual| > 2.5, adjusted chi-square p < 0.05, mean squares outside 0.7-1.3 (Wright & Linacre 1994). No single flag column - read each statistic on its own terms.",
                 footer = uiOutput("items_note")),
       navset_card_underline(
         id = "items_nav",
@@ -517,9 +517,13 @@ panel_items <- nav_panel("Items", icon = bs_icon("list-check"),
                       downloadButton("chisq_cat_csv", "Categories CSV",
                                      class = "btn-outline-secondary btn-xs")),
                   rcode_details("chisq")))),
-    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
-      plotCard("thrmap", "Threshold map"),
-      plotCard("imap", "Item map: location by fit residual")),
+    accordion(id = "items_acc", open = "items_thrmap", class = "mt-3 mb-3",
+      accordion_panel("Threshold map", value = "items_thrmap",
+        plotCard("thrmap", "Threshold map")),
+      accordion_panel("Item fit map", value = "items_imap",
+        plotCard("imap", "Item map: location by fit residual")),
+      accordion_panel("Fit residual distribution", value = "items_rdist",
+        plotCard("rdist_i", "Fit residual distribution (items)"))),
     uiOutput("pc_comp_ui"),
     conditionalPanel("output.has_mc == true",
     layout_columns(col_widths = 12,
@@ -548,33 +552,19 @@ panel_persons <- nav_panel("Persons", icon = bs_icon("people"),
     tableCard("person_tbl", "Person estimates",
         controls = cols_switch("persons_full"),
               "Warm WLE location and SE per person, with raw score, fit statistics, and your ID and factor columns. Click a row to draw that person's kidmap below."),
-    layout_columns(col_widths = 12,
-      plotCard("kidmap", "Kidmap",
-        info = "The person diagnostic map (Wright, Mead & Ludlow 1980): thresholds the person achieved print to the right of the logit axis, thresholds not achieved to the left; the dashed line inside its confidence band is the person location. Achieved thresholds above the band and unachieved thresholds below it are unexpected responses.",
-        extra = tagList(
-          downloadButton("kidmap_all_pdf", "PDF (all persons)",
-                         class = "btn-outline-secondary btn-xs"),
-          downloadButton("kidmap_all_zip", "ZIP (all persons)",
-                         class = "btn-outline-secondary btn-xs"))),
-      card(
-        full_screen = TRUE,
-        card_header(div(class = "d-flex justify-content-between align-items-center",
-          span("Fit residual distribution"),
-          div(class = "btn-group",
-              downloadButton("rdist_png", "PNG", class = "btn-outline-secondary btn-xs"),
-              downloadButton("rdist_pdf", "PDF", class = "btn-outline-secondary btn-xs")))),
-        card_body(
-          div(class = "d-flex gap-4 flex-wrap",
-            radioButtons("rd_what", NULL,
-                         c("Items" = "items", "Persons" = "persons"),
-                         selected = "persons", inline = TRUE),
-            radioButtons("rd_stat", NULL,
-                         c("Fit residual (log-transformed)" = "fit_resid",
-                           "Natural" = "natural"), inline = TRUE)),
-          plotOutput("rdist", height = "520px"), rcode_details("rdist"),
-          padding = 8, fillable = FALSE))),
-    layout_columns(col_widths = 12,
-      plotCard("pfit", "Person fit"))
+    accordion(id = "persons_acc", open = "persons_kidmap", class = "mt-3",
+      accordion_panel("Kidmap", value = "persons_kidmap",
+        plotCard("kidmap", "Kidmap",
+          info = "The person diagnostic map (Wright, Mead & Ludlow 1980): thresholds the person achieved print to the right of the logit axis, thresholds not achieved to the left; the dashed line inside its confidence band is the person location. Achieved thresholds above the band and unachieved thresholds below it are unexpected responses.",
+          extra = tagList(
+            downloadButton("kidmap_all_pdf", "PDF (all persons)",
+                           class = "btn-outline-secondary btn-xs"),
+            downloadButton("kidmap_all_zip", "ZIP (all persons)",
+                           class = "btn-outline-secondary btn-xs")))),
+      accordion_panel("Person fit", value = "persons_pfit",
+        plotCard("pfit", "Person fit")),
+      accordion_panel("Fit residual distribution", value = "persons_rdist",
+        plotCard("rdist_p", "Fit residual distribution (persons)")))
   )
 
 # ------------------------------------------------------------ TARGETING --
@@ -595,10 +585,13 @@ panel_targeting <- nav_panel("Targeting", icon = bs_icon("bullseye"),
 
 # ----------------------------------------------------------------- TEST --
 panel_test <- nav_panel("Test", icon = bs_icon("graph-up"),
-    layout_columns(col_widths = 12,
-      plotCard("tcc", "Test characteristic curve"),
-      plotCard("tif", "Test information & SEM")),
-    plotCard("guttman", "Guttman scalogram", height = "640px")
+    accordion(id = "test_acc", open = "test_tcc",
+      accordion_panel("Test characteristic curve", value = "test_tcc",
+        plotCard("tcc", "Test characteristic curve")),
+      accordion_panel("Test information", value = "test_tif",
+        plotCard("tif", "Test information & SEM")),
+      accordion_panel("Guttman scalogram", value = "test_guttman",
+        plotCard("guttman", "Guttman scalogram", height = "640px")))
   )
 
 # ------------------------------------------------------------------ DIF --
@@ -625,47 +618,63 @@ panel_dif <- nav_panel("DIF", icon = bs_icon("sliders"),
                        class = "btn-outline-primary w-100"),
           p(class = "text-muted small mt-2",
             "Replaces the selected item with one item per group level (each level keeps only its own responses) and re-analyses; the split locations quantify the DIF. Splitting works one factor at a time; choose a single factor above."))),
-      tableCard("dif_tbl", "DIF analysis of variance",
-        controls = cols_switch("dif_full"),
-                info = "ANOVA of standardised residuals: a significant factor effect indicates uniform DIF, a significant factor-by-class-interval interaction indicates non-uniform DIF (Andrich & Marais 2019).",
-                footer = uiOutput("dif_note")),
-      conditionalPanel("output.dif_is_factorial == true",
-        tableCard("dif_tukey_tbl", "Tukey HSD comparisons",
-                  "Pairwise level comparisons for significant, non-superseded group terms (factorial mode).")),
-      card(card_header("DIF size in logits (practical significance)"),
-           card_body(
-             p(class = "text-muted",
-               "Resolves the selected item by the selected factor (in factorial mode: by every significant, non-superseded group term) and reports pairwise location differences in logits with Holm familywise adjustment. Differences of at least the criterion are flagged as practically significant."),
-             layout_columns(col_widths = c(3, 3, 3, 3),
-               numericInput("dif_size_flag", "Practical criterion (logits)",
-                            0.5, min = 0.1, step = 0.1),
-               numericInput("dif_size_minn", "Min responders per level", 20,
-                            min = 5, step = 5),
-               actionButton("dif_size_go", "Compute DIF size",
-                            class = "btn-primary mt-4"),
-               div(class = "mt-4", cols_switch("difsize_full"))),
-             DT::DTOutput("dif_size_tbl"),
-             downloadButton("dl_dif_size", "Download CSV", class = "btn-sm"),
-             rcode_details("dif_size_tbl"))),
-      card(info_header("Planned contrasts",
-             "Planned one-degree-of-freedom questions derived from the factor structure, tested with familywise control over the small planned family instead of all cell pairs (Maxwell & Delaney 2004). Estimates are DIF magnitudes in logits from resolved item locations. With a person ID and repeated rows, time-like factors are treated within-subjects via person-level residual scores."),
-           card_body(
-             p(class = "text-muted",
-               "Derives the family of questions from the factors themselves - a two-level factor contributes its difference, an ordered factor its linear and quadratic trends, a nominal factor its level comparisons, and factor pairs their product interaction - then tests the whole family at once."),
-             layout_columns(col_widths = c(4, 4, 4),
-               selectizeInput("pc_items", "Items", NULL, multiple = TRUE,
-                              options = list(placeholder = "(all items)")),
-               selectInput("pc_id", "Person ID (repeated measures)",
-                           c("None" = "")),
-               div(class = "mt-4",
-                   input_task_button("pc_run", "Derive and test contrasts",
-                                     type = "primary"))),
-             uiOutput("contr_family"),
-             div(class = "d-flex justify-content-end", cols_switch("contr_full")),
-             DT::DTOutput("contr_tbl"),
-             downloadButton("contr_tbl_csv", "Download CSV", class = "btn-sm"),
-             rcode_details("contr_tbl"))),
-      plotCard("dif_icc", "ICC by group (DIF plot)")
+      accordion(id = "dif_acc", open = "dif_anova",
+        accordion_panel("DIF analysis of variance", value = "dif_anova",
+          tableCard("dif_tbl", "DIF analysis of variance",
+            controls = tagList(
+              cols_switch("dif_full"),
+              div(class = "small text-secondary",
+                  input_switch("dif_show_full", "Full ANOVA table",
+                               value = FALSE))),
+                    info = "ANOVA of standardised residuals: a significant factor effect indicates uniform DIF, a significant factor-by-class-interval interaction indicates non-uniform DIF (Andrich & Marais 2019).",
+                    footer = uiOutput("dif_note")),
+          conditionalPanel("input.dif_show_full == true",
+            tableCard("dif_full_tbl", "Full ANOVA table",
+                      "The complete per-item ANOVA: every model term with its df, sums of squares, mean squares, F, and adjusted probability."))),
+        accordion_panel("DIF magnitude in logits", value = "dif_size_panel",
+          card(card_header("DIF size in logits (practical significance)"),
+               card_body(
+                 p(class = "text-muted",
+                   "Resolves the selected item by the selected factor (in factorial mode: by every significant, non-superseded group term) and reports pairwise location differences in logits with Holm familywise adjustment. Differences of at least the criterion are flagged as practically significant."),
+                 layout_columns(col_widths = c(3, 3, 3, 3),
+                   numericInput("dif_size_flag", "Practical criterion (logits)",
+                                0.5, min = 0.1, step = 0.1),
+                   numericInput("dif_size_minn", "Min responders per level", 20,
+                                min = 5, step = 5),
+                   actionButton("dif_size_go", "Compute DIF size",
+                                class = "btn-primary mt-4"),
+                   div(class = "mt-4", cols_switch("difsize_full"))),
+                 DT::DTOutput("dif_size_tbl"),
+                 downloadButton("dl_dif_size", "Download CSV", class = "btn-sm"),
+                 rcode_details("dif_size_tbl")))),
+        accordion_panel("Planned contrasts", value = "dif_contrasts",
+          card(info_header("Planned contrasts",
+                 "Planned one-degree-of-freedom questions derived from the factor structure, tested with familywise control over the small planned family instead of all cell pairs (Maxwell & Delaney 2004). Estimates are DIF magnitudes in logits from resolved item locations. With a person ID and repeated rows, time-like factors are treated within-subjects via person-level residual scores."),
+               card_body(
+                 p(class = "text-muted",
+                   "Derives the family of questions from the factors themselves - a two-level factor contributes its difference, an ordered factor its linear and quadratic trends, a nominal factor its level comparisons, and factor pairs their product interaction - then tests the whole family at once."),
+                 layout_columns(col_widths = c(4, 4, 4),
+                   selectizeInput("pc_items", "Items", NULL, multiple = TRUE,
+                                  options = list(placeholder = "(all items)")),
+                   selectInput("pc_id", "Person ID (repeated measures)",
+                               c("None" = "")),
+                   div(class = "mt-4",
+                       input_task_button("pc_run", "Derive and test contrasts",
+                                         type = "primary"))),
+                 uiOutput("contr_family"),
+                 div(class = "d-flex justify-content-end", cols_switch("contr_full")),
+                 DT::DTOutput("contr_tbl"),
+                 downloadButton("contr_tbl_csv", "Download CSV", class = "btn-sm"),
+                 rcode_details("contr_tbl")))),
+        accordion_panel("Pairwise comparisons (Tukey)", value = "dif_tukey",
+          conditionalPanel("output.dif_is_factorial == true",
+            tableCard("dif_tukey_tbl", "Tukey HSD comparisons",
+                      "Pairwise level comparisons for significant, non-superseded group terms (factorial mode).")),
+          conditionalPanel("output.dif_is_factorial != true",
+            p(class = "text-muted",
+              "Choose the factorial option in the sidebar to see Tukey HSD comparisons."))),
+        accordion_panel("Characteristic curves by group", value = "dif_icc_panel",
+          plotCard("dif_icc", "ICC by group (DIF plot)")))
     )
   )
 
@@ -732,53 +741,59 @@ panel_frames <- nav_panel("Frames", icon = bs_icon("grid-3x3"),
 
 # ------------------------------------------------------- DIMENSIONALITY --
 panel_dim <- nav_panel("Dimensionality", icon = bs_icon("diagram-3"),
-    layout_sidebar(
-      sidebar = sidebar(width = 300, open = "always",
-        h6("t-test item subsets"),
-        selectizeInput("dim_pos", "Subset A", NULL, multiple = TRUE,
-                       options = list(placeholder = "default: positive PC1 loadings")),
-        selectizeInput("dim_neg", "Subset B", NULL, multiple = TRUE,
-                       options = list(placeholder = "default: negative PC1 loadings")),
-        actionButton("dim_apply", "Run t-test with these subsets",
-                     class = "btn-outline-primary w-100"),
-        p(class = "text-muted small mt-2",
-          "Leave both empty (and press the button) to return to the first-contrast split. Persons extreme on either subset are excluded; the proportion of significant tests carries an exact binomial confidence interval.")),
-      layout_columns(col_widths = 12,
-        card(info_header("Unidimensionality t-test (Smith)",
-               "Each person is measured separately on the two item subsets and the estimates compared by t-test; unidimensionality is questioned when clearly more than 5% of tests are significant."),
-             card_body(verbatimTextOutput("dim_txt"), rcode_details("dim"))),
+    accordion(id = "dim_acc", open = "dim_ttest",
+      accordion_panel("Unidimensionality t-test", value = "dim_ttest",
+        layout_columns(col_widths = breakpoints(sm = 12, xl = c(4, 8)),
+          div(
+            h6("t-test item subsets"),
+            selectizeInput("dim_pos", "Subset A", NULL, multiple = TRUE,
+                           options = list(placeholder = "default: positive PC1 loadings")),
+            selectizeInput("dim_neg", "Subset B", NULL, multiple = TRUE,
+                           options = list(placeholder = "default: negative PC1 loadings")),
+            actionButton("dim_apply", "Run t-test with these subsets",
+                         class = "btn-outline-primary w-100"),
+            p(class = "text-muted small mt-2",
+              "Leave both empty (and press the button) to return to the first-contrast split. Persons extreme on either subset are excluded; the proportion of significant tests carries an exact binomial confidence interval.")),
+          card(info_header("Unidimensionality t-test (Smith)",
+                 "Each person is measured separately on the two item subsets and the estimates compared by t-test; unidimensionality is questioned when clearly more than 5% of tests are significant."),
+               card_body(verbatimTextOutput("dim_txt"), rcode_details("dim"))))),
+      accordion_panel("Scree", value = "dim_scree",
         plotCard("scree", "Scree of the residual components")),
-      layout_columns(col_widths = 12,
-        plotCard("pca_plot", "Residual first contrast"),
+      accordion_panel("First contrast", value = "dim_pca",
+        plotCard("pca_plot", "Residual first contrast")),
+      accordion_panel("Loadings", value = "dim_loadings",
         tableCard("loadings_tbl", "Component loadings (first 10)",
                   controls = cols_switch("load_full"))),
-      tableCard("eigen_tbl", "Residual eigenvalues (first 10)"),
-      card(
-        full_screen = TRUE,
-        card_header(div(class = "d-flex justify-content-between align-items-center",
-          span("Magnitude of multidimensionality (Andrich 2016)"),
-          downloadButton("dm_tbl_csv", "CSV", class = "btn-outline-secondary btn-xs"))),
-        card_body(
-          p(class = "text-muted small",
-            "Compares reliability with all items treated as independent (run1) against the subtest analysis in which each subset becomes one polytomous super-item. c is the unique-variance loading, rho the latent correlation between the subsets, and A the proportion of common variance. Uses the manual subsets above if set, otherwise the current PC1 split; every item must belong to a subset."),
-          actionButton("dm_run", "Estimate from current subsets",
-                       class = "btn-outline-primary"),
-          DTOutput("dm_tbl"), rcode_details("dm_tbl"), padding = 12))
-    )
+      accordion_panel("Eigenvalues", value = "dim_eigen",
+        tableCard("eigen_tbl", "Residual eigenvalues (first 10)")),
+      accordion_panel("Magnitude of multidimensionality", value = "dim_magnitude",
+        card(
+          full_screen = TRUE,
+          card_header(div(class = "d-flex justify-content-between align-items-center",
+            span("Magnitude of multidimensionality (Andrich 2016)"),
+            downloadButton("dm_tbl_csv", "CSV", class = "btn-outline-secondary btn-xs"))),
+          card_body(
+            p(class = "text-muted small",
+              "Compares reliability with all items treated as independent (run1) against the subtest analysis in which each subset becomes one polytomous super-item. c is the unique-variance loading, rho the latent correlation between the subsets, and A the proportion of common variance. Uses the manual subsets above if set, otherwise the current PC1 split; every item must belong to a subset."),
+            actionButton("dm_run", "Estimate from current subsets",
+                         class = "btn-outline-primary"),
+            DTOutput("dm_tbl"), rcode_details("dm_tbl"), padding = 12))))
   )
 
 # ------------------------------------------------------ LOCAL DEPENDENCE --
 panel_ld <- nav_panel("Response dependence", icon = bs_icon("link-45deg"),
-    layout_columns(col_widths = 12,
-      plotCard("rcor", "Residual correlations", height = "640px"),
-      div(
+    accordion(id = "ld_acc", open = "ld_q3",
+      accordion_panel("Q3 statistics", value = "ld_q3",
         numericInput("ld_flag",
                      "Flag threshold (Q3* above this value flags a pair)",
                      value = 0.2, min = 0.05, max = 0.9, step = 0.05,
                      width = "420px"),
         tableCard("rpairs_tbl", "Q3 statistics",
                   info = "Yen's Q3: the residual correlation of an item pair; Q3* is its excess over the average off-diagonal Q3, the conventional criterion for flagging response dependence (Yen 1984).",
-                  footer = uiOutput("rpairs_note")),
+                  footer = uiOutput("rpairs_note"))),
+      accordion_panel("Residual correlations (heatmap)", value = "ld_rcor",
+        plotCard("rcor", "Residual correlations", height = "640px")),
+      accordion_panel("Subtest (combine dependent items)", value = "ld_subtest",
         card(card_header("Subtest (combine dependent items)"),
           card_body(
             p(class = "text-muted small",
@@ -787,35 +802,36 @@ panel_ld <- nav_panel("Response dependence", icon = bs_icon("link-45deg"),
                            options = list(placeholder = "items to combine")),
             actionButton("make_subtest", "Combine and re-analyse",
                          class = "btn-outline-primary w-100"),
-            uiOutput("subtest_status"))))),
-    layout_columns(col_widths = 12,
-      card(
-        full_screen = TRUE,
-        card_header(div(class = "d-flex justify-content-between align-items-center",
-          span("Response dependence magnitude (Andrich & Kreiner)"),
-          downloadButton("dep_tbl_csv", "CSV", class = "btn-outline-secondary btn-xs"))),
-        card_body(
-          p(class = "text-muted small",
-            "Resolves the dependent item by the categories of the independent item and re-analyses; d is the size of the dependence in logits, half the split of the resolved thresholds. Both items must share the same maximum score."),
-          div(class = "d-flex gap-3 flex-wrap align-items-end",
-            selectInput("dep_item", "Dependent item", NONE, width = "190px"),
-            selectInput("ind_item", "Independent item", NONE, width = "190px"),
-            div(class = "mb-3",
-                actionButton("run_dep", "Estimate d", class = "btn-outline-primary"))),
-          verbatimTextOutput("dep_txt"),
-          DTOutput("dep_tbl"), rcode_details("dep_tbl"), padding = 12)),
-      card(
-        full_screen = TRUE,
-        card_header(div(class = "d-flex justify-content-between align-items-center",
-          span("Spread test (LUB)"),
-          downloadButton("spread_tbl_csv", "CSV", class = "btn-outline-secondary btn-xs"))),
-        card_body(
-          actionButton("run_spread", "Run spread test",
-                       class = "btn-outline-primary mb-2"),
-          DTOutput("spread_tbl"),
-          p(class = "text-muted small mt-2",
-            "Spread below the least upper bound indicates dependence among subtest members (Andrich 1985). Polytomous items only; typically applied after combining items into a subtest."),
-          rcode_details("spread_tbl"), padding = 12)))
+            uiOutput("subtest_status")))),
+      accordion_panel("Response dependence magnitude", value = "ld_dep",
+        card(
+          full_screen = TRUE,
+          card_header(div(class = "d-flex justify-content-between align-items-center",
+            span("Response dependence magnitude (Andrich & Kreiner)"),
+            downloadButton("dep_tbl_csv", "CSV", class = "btn-outline-secondary btn-xs"))),
+          card_body(
+            p(class = "text-muted small",
+              "Resolves the dependent item by the categories of the independent item and re-analyses; d is the size of the dependence in logits, half the split of the resolved thresholds. Both items must share the same maximum score."),
+            div(class = "d-flex gap-3 flex-wrap align-items-end",
+              selectInput("dep_item", "Dependent item", NONE, width = "190px"),
+              selectInput("ind_item", "Independent item", NONE, width = "190px"),
+              div(class = "mb-3",
+                  actionButton("run_dep", "Estimate d", class = "btn-outline-primary"))),
+            verbatimTextOutput("dep_txt"),
+            DTOutput("dep_tbl"), rcode_details("dep_tbl"), padding = 12))),
+      accordion_panel("Spread test (LUB)", value = "ld_spread",
+        card(
+          full_screen = TRUE,
+          card_header(div(class = "d-flex justify-content-between align-items-center",
+            span("Spread test (LUB)"),
+            downloadButton("spread_tbl_csv", "CSV", class = "btn-outline-secondary btn-xs"))),
+          card_body(
+            actionButton("run_spread", "Run spread test",
+                         class = "btn-outline-primary mb-2"),
+            DTOutput("spread_tbl"),
+            p(class = "text-muted small mt-2",
+              "Spread below the least upper bound indicates dependence among subtest members (Andrich 1985). Polytomous items only; typically applied after combining items into a subtest."),
+            rcode_details("spread_tbl"), padding = 12))))
   )
 
 # ------------------------------------------------------------- GUESSING --
@@ -1572,11 +1588,14 @@ server <- function(input, output, session) {
   # reveals the rest (CSV downloads always contain everything)
   CORE <- list(
     items = c("item", "location", "se", "fit_resid", "infit_ms", "outfit_ms",
-              "chisq", "df", "p_adj", "misfit"),
+              "chisq", "df", "p_adj"),
     person = c("id", "raw", "max_raw", "theta", "se", "extreme", "fit_resid"),
     dif = c("factor", "item", "F_uniform", "p_uniform_adj", "eta2_uniform",
             "F_nonuniform", "p_nonuniform_adj", "eta2_nonuniform",
             "uniform_DIF", "nonuniform_DIF"),
+    dif_fact = c("item", "term", "F_uniform", "p_uniform_adj", "eta2_uniform",
+                 "uniform_DIF", "F_nonuniform", "p_nonuniform_adj",
+                 "eta2_nonuniform", "nonuniform_DIF"),
     facet = c("level", "severity", "se", "n", "fit_resid"),
     btl_obj = c("object", "location", "se", "comparisons", "wins", "fit_resid"),
     btl_judge = c("judge", "n", "fit_resid", "misfit"),
@@ -1605,13 +1624,16 @@ server <- function(input, output, session) {
     se = "SE", theta = "Location", max_raw = "Max score", raw = "Raw score",
     n_items = "Items", chisq = "Chi-sq", df_fit = "Fit df", p = "p",
     p_adj = "Adj. p", p_bonf = "Bonf. p", p_anova = "ANOVA p",
-    F_anova = "ANOVA F", F_uniform = "F (uniform)",
-    F_nonuniform = "F (non-unif.)", p_uniform_adj = "Adj. p (uniform)",
-    p_nonuniform_adj = "Adj. p (non-unif.)",
-    eta2_uniform = "η² (uniform)",
-    eta2_nonuniform = "η² (non-unif.)",
+    F_anova = "ANOVA F", F_uniform = "Uniform F",
+    F_nonuniform = "Non-uniform F", p_uniform = "Uniform p",
+    p_nonuniform = "Non-uniform p", p_uniform_adj = "Uniform adj. p",
+    p_nonuniform_adj = "Non-uniform adj. p",
+    eta2_uniform = "Uniform η²",
+    eta2_nonuniform = "Non-uniform η²",
     eta2_partial = "Partial η²",
-    uniform_DIF = "Uniform", nonuniform_DIF = "Non-uniform",
+    uniform_DIF = "Uniform DIF", nonuniform_DIF = "Non-uniform DIF",
+    superseded = "Superseded", sum_sq = "Sum Sq", mean_sq = "Mean Sq",
+    F_value = "F",
     mean_location = "Mean location", point_biserial = "Point-biserial",
     se_location = "SE", z_sep = "Separation z",
     alpha_drop = "α if deleted", item_total = "Item-total r",
@@ -1755,8 +1777,8 @@ server <- function(input, output, session) {
                 f$person_fit_summary$skewness, f$person_fit_summary$kurtosis))
     cat(sprintf("Fit-location correlation: items %.3f, persons %.3f\n",
                 ss$cor_item_fit_location, ss$cor_person_fit_location))
-    cat(sprintf("Items flagged misfitting (BH-adjusted): %d of %d\n",
-                sum(f$items$misfit, na.rm = TRUE), nrow(f$items)))
+    cat(sprintf("Items with adjusted chi-square p < .05: %d of %d\n",
+                sum(f$items$p_adj < 0.05, na.rm = TRUE), nrow(f$items)))
     dis <- names(which(vapply(f$thresholds_diag, function(d)
       !d$ordered && length(d$thresholds) > 1, TRUE)))
     cat("Disordered thresholds:", if (length(dis)) paste(dis, collapse = ", ") else "none", "\n")
@@ -1912,13 +1934,13 @@ server <- function(input, output, session) {
   # ---------------------------------------------------------------- items --
   output$items_vboxes <- renderUI({
     f <- fit()
-    mis <- sum(f$items$misfit, na.rm = TRUE)
+    mis <- sum(f$items$p_adj < 0.05, na.rm = TRUE)
     dis <- sum(vapply(f$thresholds_diag, function(d)
       !d$ordered && length(d$thresholds) > 1, TRUE))
     layout_column_wrap(width = "200px", fill = FALSE, class = "mb-3",
       value_box("Items", nrow(f$items), showcase = bs_icon("list-check"),
                 showcase_layout = "left center", theme = "primary"),
-      value_box("Misfitting items", mis,
+      value_box("Adj. chi-square p < .05", mis,
                 showcase = bs_icon("exclamation-triangle"),
                 showcase_layout = "left center",
                 theme = if (mis > 0) "danger" else "success"),
@@ -1931,9 +1953,9 @@ server <- function(input, output, session) {
     f <- fit(); d <- f$items
     dis <- names(which(vapply(f$thresholds_diag, function(x)
       !x$ordered && length(x$thresholds) > 1, TRUE)))
-    sprintf("Note. %d of %d items beyond |fit residual| 2.5; %d flagged by adjusted chi-square; disordered thresholds: %s.",
+    sprintf("Note. %d of %d items beyond |fit residual| 2.5; %d with adjusted chi-square p < .05; disordered thresholds: %s.",
             sum(abs(d$fit_resid) > 2.5, na.rm = TRUE), nrow(d),
-            sum(d$misfit, na.rm = TRUE),
+            sum(d$p_adj < 0.05, na.rm = TRUE),
             if (length(dis)) paste(dis, collapse = ", ") else "none")
   })
   # any chi-square sample-size adjustment is applied inside the fit (the
@@ -1941,9 +1963,18 @@ server <- function(input, output, session) {
   register_table("items_tbl", function() fit()$items, function() {
     d <- curate(fit()$items, "items", full = isTRUE(input$items_full),
                 extra = if (length(unique(fit()$m)) > 1) "max")
-    d$misfit <- ifelse(d$misfit, "*", "")
-    num_dt(d, selection = "single", fit_col = "fit_resid",
-           p_bold = c("p_adj", "p_anova"))
+    dt <- num_dt(d, selection = "single", fit_col = "fit_resid",
+                 p_bold = c("p_adj", "p_anova"))
+    # per-statistic misfit highlighting (no single flag column): adjusted
+    # chi-square p < .05, and mean squares outside 0.7-1.3 (Wright &
+    # Linacre 1994); |fit residual| > 2.5 is handled by fit_col above
+    for (j in which(names(d) == "p_adj"))
+      dt <- formatStyle(dt, j, color = styleInterval(
+        0.05, c("var(--bs-danger)", "inherit")))
+    for (j in which(names(d) %in% c("infit_ms", "outfit_ms")))
+      dt <- formatStyle(dt, j, color = styleInterval(
+        c(0.7, 1.3), c("var(--bs-danger)", "inherit", "var(--bs-danger)")))
+    dt
   }, code = function() "fit$items")
 
   # per-class-interval breakdown of the selected item's chi-square
@@ -2167,12 +2198,8 @@ server <- function(input, output, session) {
         withProgress(message = "Drawing a kidmap for every person…",
                      value = 0.4, save_person_plots(fit(), file)))
   })
-  register_plot("rdist", function()
-    plot_resid_dist(fit(), what = input$rd_what %||% "persons",
-                    statistic = input$rd_stat %||% "fit_resid"),
-    code = function()
-      sprintf('plot_resid_dist(fit, what = "%s", statistic = "%s")',
-              input$rd_what %||% "persons", input$rd_stat %||% "fit_resid"))
+  register_plot("rdist_p", function() plot_resid_dist(fit(), "persons"),
+                code = function() 'plot_resid_dist(fit, "persons")')
   register_plot("pfit",  function() plot_person_fit(fit()),
                 code = function() "plot_person_fit(fit)")
 
@@ -2203,6 +2230,8 @@ server <- function(input, output, session) {
                 code = function() "plot_threshold_map(fit)")
   register_plot("imap",   function() plot_item_map(fit()),
                 code = function() "plot_item_map(fit)")
+  register_plot("rdist_i", function() plot_resid_dist(fit(), "items"),
+                code = function() 'plot_resid_dist(fit, "items")')
   register_plot("tcc",    function() plot_tcc(fit()),
                 code = function() "plot_tcc(fit)")
   register_plot("tif",    function() plot_tif(fit()),
@@ -2228,12 +2257,15 @@ server <- function(input, output, session) {
                         effects = input$dif_effects %||% "factorial")
   })
   register_table("dif_tbl", function() {
-    if (identical(input$dif_factor, FACTORIAL)) dif_fact()$terms else dif_res()
+    if (identical(input$dif_factor, FACTORIAL)) dif_fact()$summary else dif_res()
   }, function() {
     if (identical(input$dif_factor, FACTORIAL)) {
-      d <- dif_fact()$terms
-      d$significant <- ifelse(d$significant, "*", "")
-      d$superseded <- ifelse(d$superseded, "(superseded)", "")
+      d <- curate(dif_fact()$summary, "dif_fact",
+                  full = isTRUE(input$dif_full))
+      d$uniform_DIF <- ifelse(d$uniform_DIF, "*", "")
+      d$nonuniform_DIF <- ifelse(d$nonuniform_DIF, "*", "")
+      if ("superseded" %in% names(d))
+        d$superseded <- ifelse(d$superseded, "(superseded)", "")
       num_dt(d)
     } else {
       d <- dif_res()
@@ -2246,11 +2278,39 @@ server <- function(input, output, session) {
     }
   }, code = function() {
     if (identical(input$dif_factor, FACTORIAL))
-      sprintf('dif_anova_factorial(fit, effects = "%s", p_adjust = "%s", alpha = %s)$terms',
+      sprintf('dif_anova_factorial(fit, effects = "%s", p_adjust = "%s", alpha = %s)$summary',
               input$dif_effects %||% "factorial", input$dif_padj %||% "BH",
               dif_alpha())
     else
       sprintf('dif_anova(fit, p_adjust = "%s", alpha = %s)',
+              input$dif_padj %||% "BH", dif_alpha())
+  })
+  # full per-item ANOVA table, computed lazily when its disclosure is first
+  # switched on (the DT renders only once visible): factorial -> the joint
+  # model's terms; single-factor mode -> one factorial fit per nominated
+  # factor, stacked with a factor column
+  dif_full_dat <- reactive({
+    f <- fit()
+    if (identical(input$dif_factor, FACTORIAL)) return(dif_fact()$terms)
+    req(!is.null(f$factors), length(names(f$factors)) > 0)
+    do.call(rbind, lapply(names(f$factors), function(fc)
+      cbind(factor = fc,
+            dif_anova_factorial(f, factors = fc,
+                                p_adjust = input$dif_padj %||% "BH",
+                                alpha = dif_alpha())$terms)))
+  })
+  register_table("dif_full_tbl", function() dif_full_dat(), function() {
+    d <- dif_full_dat()
+    d$significant <- ifelse(d$significant, "*", "")
+    d$superseded <- ifelse(d$superseded, "(superseded)", "")
+    num_dt(d)
+  }, code = function() {
+    if (identical(input$dif_factor, FACTORIAL))
+      sprintf('dif_anova_factorial(fit, effects = "%s", p_adjust = "%s", alpha = %s)$terms',
+              input$dif_effects %||% "factorial", input$dif_padj %||% "BH",
+              dif_alpha())
+    else
+      sprintf('do.call(rbind, lapply(names(fit$factors), function(f)\n  cbind(factor = f,\n        dif_anova_factorial(fit, factors = f, p_adjust = "%s", alpha = %s)$terms)))',
               input$dif_padj %||% "BH", dif_alpha())
   })
   output$dif_note <- renderUI({
