@@ -268,14 +268,12 @@ panel_data <- nav_panel("Data", icon = bs_icon("database"),
           open = c("Data roles", "Model"),
           accordion_panel("Model", icon = bs_icon("diagram-2"),
             radioButtons("model_type", NULL,
-                         c("Dichotomous" = "dich",
-                           "Partial credit (PCM)" = "pcm",
-                           "Rating scale (RSM)" = "rsm",
+                         c("Rasch" = "rasch",
                            "Many-facet (MFRM)" = "mfrm",
                            "Extended frames (EFRM)" = "efrm",
                            "Paired comparisons (BTL)" = "btl"))),
           accordion_panel("Data roles", icon = bs_icon("table"),
-            conditionalPanel("['dich','pcm','rsm'].indexOf(input.model_type) > -1",
+            conditionalPanel("input.model_type == 'rasch'",
               selectInput("id_col", "ID variable", NONE),
               selectizeInput("factor_cols", "Person factors (DIF groups)", NULL,
                              multiple = TRUE,
@@ -320,6 +318,25 @@ panel_data <- nav_panel("Data", icon = bs_icon("database"),
                 "The Bradley-Terry-Luce model: the conditional (person-free) form of the dichotomous Rasch model, estimated by the same conventions. A judge column enables the judge fit table and clusters the standard errors by judge. Results appear on the BTL tab.")
             )),
           accordion_panel("Estimation options", icon = bs_icon("gear"),
+            conditionalPanel("input.model_type == 'rasch'",
+              radioButtons("thr_structure", "Threshold structure",
+                           c("Partial credit (item-specific)" = "pcm",
+                             "Rating scale (common across items)" = "rsm")),
+              p(class = "text-muted small",
+                "Dichotomous items are the one-threshold special case and need no setting. The rating parameterisation requires equal maximum scores; lr_test() compares the two."),
+              conditionalPanel("input.thr_structure == 'pcm'",
+                radioButtons("thr_mode", "Threshold estimation",
+                             c("Free thresholds" = "free",
+                               "Principal components (Andrich)" = "pc")),
+                conditionalPanel("input.thr_mode == 'pc'",
+                  selectInput("pc_rank", "Components",
+                              c("Location only" = "1",
+                                "+ spread (equal spread)" = "2",
+                                "+ skewness" = "3",
+                                "+ kurtosis (full PC)" = "4"),
+                              selected = "4"),
+                  p(class = "text-muted small",
+                    "Thresholds follow a polynomial trend across categories; useful with sparse categories. Anchors cannot be combined with this option.")))),
             checkboxInput("ng_auto", "Automatic class intervals (at least 50 per interval)", TRUE),
             conditionalPanel("!input.ng_auto",
               sliderInput("ng", "Class intervals", min = 2, max = 16, value = 8)),
@@ -335,8 +352,8 @@ panel_data <- nav_panel("Data", icon = bs_icon("database"),
                             "Full person bootstrap (slow, exact)" = "bootstrap")),
               numericInput("ef_reps", "Bootstrap replicates", value = 200,
                            min = 50, step = 50))),
-          accordion_panel("Scoring & anchors", icon = bs_icon("key"),
-            conditionalPanel("['dich','pcm','rsm'].indexOf(input.model_type) > -1",
+          conditionalPanel("input.model_type == 'rasch'",
+            accordion_panel("Scoring & anchors", icon = bs_icon("key"),
               fileInput("key_file", "Multiple-choice key (CSV: item,key — use \"A/C\" for double keys — or item,option,score for polytomous option scoring)",
                         accept = ".csv", placeholder = "optional"),
               fileInput("anchor_file", "Anchors for equating (CSV: item,k,tau)",
@@ -346,20 +363,7 @@ panel_data <- nav_panel("Data", icon = bs_icon("database"),
                              "Average item locations" = "average"),
                            inline = TRUE),
               p(class = "text-muted small mt-1",
-                "Anchors match by item name; rows for items not present are ignored. Individual anchoring fixes each listed threshold; average anchoring fixes each item's mean location (thresholds stay free). Save an anchor file from the Items page of a previous analysis.")),
-            conditionalPanel("['dich','pcm'].indexOf(input.model_type) > -1",
-              radioButtons("thr_mode", "Threshold estimation",
-                           c("Free thresholds" = "free",
-                             "Principal components (Andrich)" = "pc")),
-              conditionalPanel("input.thr_mode == 'pc'",
-                selectInput("pc_rank", "Components",
-                            c("Location only" = "1",
-                              "+ spread (equal spread)" = "2",
-                              "+ skewness" = "3",
-                              "+ kurtosis (full PC)" = "4"),
-                            selected = "4"),
-                p(class = "text-muted small",
-                  "Thresholds follow a polynomial trend across categories; useful with sparse categories. Anchors cannot be combined with this option."))))
+                "Anchors match by item name; rows for items not present are ignored. Individual anchoring fixes each listed threshold; average anchoring fixes each item's mean location (thresholds stay free). Save an anchor file from the Items page of a previous analysis.")))
         ),
         input_task_button("run", "Estimate", icon = bs_icon("play-fill"),
                           type = "primary", class = "w-100 btn-lg mt-2"),
@@ -391,15 +395,16 @@ panel_summary <- nav_panel("Summary", icon = bs_icon("clipboard-data"),
           span("Score-to-measure table"),
           downloadButton("score_tbl_csv", "CSV", class = "btn-outline-secondary btn-xs"))),
         card_body(
-          p(class = "text-muted small mb-2",
-            "Location and SE for every raw score (complete responders), with the frequency and cumulative percentage at each score."),
-          div(class = "d-flex gap-3 flex-wrap",
-            selectInput("st_method", "Estimator",
-                        c("WLE (Warm)" = "wle", "MLE" = "mle"), width = "170px"),
-            selectInput("st_extremes", "Extreme scores",
-                        c("Model" = "model",
-                          "Extrapolated (geometric)" = "extrapolated"),
-                        width = "200px")),
+          conditionalPanel("output.has_score_table == true",
+            p(class = "text-muted small mb-2",
+              "Location and SE for every raw score (complete responders), with the frequency and cumulative percentage at each score."),
+            div(class = "d-flex gap-3 flex-wrap",
+              selectInput("st_method", "Estimator",
+                          c("WLE (Warm)" = "wle", "MLE" = "mle"), width = "170px"),
+              selectInput("st_extremes", "Extreme scores",
+                          c("Model" = "model",
+                            "Extrapolated (geometric)" = "extrapolated"),
+                          width = "200px"))),
           DTOutput("score_tbl"), padding = 12)),
       tableCard("thr_tbl", "Thresholds with standard errors")
     ),
@@ -551,8 +556,9 @@ panel_dif <- nav_panel("DIF", icon = bs_icon("sliders"),
         controls = cols_switch("dif_full"),
                 info = "ANOVA of standardised residuals: a significant factor effect indicates uniform DIF, a significant factor-by-class-interval interaction indicates non-uniform DIF (Andrich & Marais 2019).",
                 footer = uiOutput("dif_note")),
-      tableCard("dif_tukey_tbl", "Tukey HSD comparisons",
-                "Pairwise level comparisons for significant, non-superseded group terms (factorial mode)."),
+      conditionalPanel("output.dif_is_factorial == true",
+        tableCard("dif_tukey_tbl", "Tukey HSD comparisons",
+                  "Pairwise level comparisons for significant, non-superseded group terms (factorial mode).")),
       card(card_header("DIF size in logits (practical significance)"),
            card_body(
              p(class = "text-muted",
@@ -581,8 +587,9 @@ panel_facets <- nav_panel("Facets", icon = bs_icon("person-badge"),
       tableCard("facet_tbl", "Facet severities and fit",
         controls = cols_switch("facets_full")),
       plotCard("facet_plot", "Severity caterpillar plot"),
-      tableCard("facet_int_tbl", "Item-by-facet interactions",
-                "Shown when the analysis was run in interactive facet mode; gamma is the extra severity of a level on a particular item.")
+      conditionalPanel("output.has_interaction == true",
+        tableCard("facet_int_tbl", "Item-by-facet interactions",
+                  "Shown when the analysis was run in interactive facet mode; gamma is the extra severity of a level on a particular item."))
     )
   )
 
@@ -775,6 +782,11 @@ panel_compare <- nav_panel("Compare", icon = bs_icon("columns-gap"),
 
 # --------------------------------------------------------------- EXPORT --
 panel_export <- nav_panel("Export", icon = bs_icon("download"),
+    conditionalPanel("output.is_btl == true",
+      card(card_body(class = "empty-state",
+        bs_icon("trophy", size = "2rem", class = "text-secondary mb-2"),
+        p("The HTML report and ZIP archive cover Rasch analyses. For a paired-comparison (BTL) analysis, download each table as CSV from the BTL page.")))),
+    conditionalPanel("output.is_btl != true",
     layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       card(card_header(span(bs_icon("file-earmark-text"),
                             " Analysis report (single HTML file)")),
@@ -801,7 +813,7 @@ panel_export <- nav_panel("Export", icon = bs_icon("download"),
           tags$li("Per-item ICC, category curves, threshold curves, and frequency charts"),
           tags$li("For many-facet analyses: facet severities with SEs and fit, structural item thresholds, and severity caterpillar plots"),
           tags$li("summary.txt with the full test-of-fit report"))))
-    )
+    ))
   )
 
 # ------------------------------------------------------------ ASSEMBLY --
@@ -849,8 +861,15 @@ server <- function(input, output, session) {
   # picking an example dataset also selects the matching model; uploading a
   # file clears the example selection
   observeEvent(input$demo_choice, {
-    if (!identical(input$demo_choice, "none"))
-      updateRadioButtons(session, "model_type", selected = input$demo_choice)
+    dc <- input$demo_choice
+    if (!identical(dc, "none")) {
+      updateRadioButtons(session, "model_type",
+                         selected = if (dc %in% c("dich", "pcm", "rsm"))
+                           "rasch" else dc)
+      if (dc %in% c("dich", "pcm", "rsm"))
+        updateRadioButtons(session, "thr_structure",
+                           selected = if (identical(dc, "rsm")) "rsm" else "pcm")
+    }
   }, ignoreInit = TRUE)
   observeEvent(input$file,
     updateSelectInput(session, "demo_choice", selected = "none"))
@@ -1211,10 +1230,12 @@ server <- function(input, output, session) {
               anc <- data.frame(item = names(mu), k = NA, tau = as.numeric(mu))
             }
           }
-          # principal-components (Andrich) threshold estimation; PCM only,
-          # and not combinable with anchors
-          pcc <- if (input$model_type %in% c("dich", "pcm") &&
-                     identical(input$thr_mode, "pc"))
+          # threshold structure: partial credit (item-specific) or rating
+          # (common); dichotomous items are the one-threshold special case
+          rsm_on <- identical(input$thr_structure %||% "pcm", "rsm")
+          # principal-components (Andrich) threshold estimation; partial
+          # credit route only, and not combinable with anchors
+          pcc <- if (!rsm_on && identical(input$thr_mode, "pc"))
             as.integer(input$pc_rank %||% "4") else NULL
           if (!is.null(pcc) && !is.null(anc)) {
             showNotification("Anchors are ignored under principal-components threshold estimation.",
@@ -1227,8 +1248,7 @@ server <- function(input, output, session) {
             if (!is.null(anc) && identical(input$anchor_type, "average"))
               "# average anchoring: the anchor file is collapsed to one mean location per item")
           code_call <- paste0("fit <- rasch(dat,\n  ", paste(c(
-            paste0("model = ",
-                   qstr(if (identical(input$model_type, "rsm")) "RSM" else "PCM")),
+            paste0("model = ", qstr(if (rsm_on) "RSM" else "PCM")),
             if (!is.null(idc)) paste0("id = ", qstr(idc)),
             if (!is.null(fac)) paste0("factors = ", qvec(fac)),
             if (!is.null(its)) paste0("items = ", qvec(its)),
@@ -1241,16 +1261,12 @@ server <- function(input, output, session) {
               'key = setNames(rep("A", 15), sprintf("I%02d", 1:15))',
             if (!is.null(pcc)) paste0("pc_components = ", pcc),
             code_est), collapse = ",\n  "), ")")
-          f0 <- rasch(df, model = if (identical(input$model_type, "rsm")) "RSM" else "PCM",
-                      id = idc, factors = fac, items = its,
-                      n_groups = ng, adjust_N = adjN, anchors = anc,
-                      key = mc_key, pc_components = pcc,
-                      maxit = max(5, input$maxit %||% 60),
-                      tol = max(1e-12, input$tol %||% 1e-8))
-          if (identical(input$model_type, "dich") && any(f0$m > 1L))
-            showNotification("Some items have more than two categories; they were fitted with partial credit thresholds.",
-                             type = "warning", duration = 10)
-          f0
+          rasch(df, model = if (rsm_on) "RSM" else "PCM",
+                id = idc, factors = fac, items = its,
+                n_groups = ng, adjust_N = adjN, anchors = anc,
+                key = mc_key, pc_components = pcc,
+                maxit = max(5, input$maxit %||% 60),
+                tol = max(1e-12, input$tol %||% 1e-8))
         }
       }, error = function(e) e)
     })
@@ -1316,9 +1332,29 @@ server <- function(input, output, session) {
            !inherits(f, "rasch_efrm") && max(f$m) == 1L)
     rasch_on <- !is.null(f)
     for (tgt in c("Summary", "Items", "Persons", "Test", "Dimensionality",
-                  "Local dependence", "DIF", "Equating"))
+                  "Local dependence", "Equating"))
       show(tgt, rasch_on)
+    # DIF needs at least one person factor in the fit
+    show("DIF", rasch_on && !is.null(f$factors) && length(names(f$factors)) > 0)
   })
+
+  # ------------------------------------------------ UI visibility flags --
+  # "nothing to show" areas hide instead of rendering empty; each flag pairs
+  # with a conditionalPanel in the UI (same pattern as has_mc)
+  output$dif_is_factorial <- reactive(identical(input$dif_factor, FACTORIAL))
+  outputOptions(output, "dif_is_factorial", suspendWhenHidden = FALSE)
+  output$has_interaction <- reactive({
+    f <- tryCatch(fit(), error = function(e) NULL)
+    inherits(f, "rasch_mfrm") && !is.null(f$interaction)
+  })
+  outputOptions(output, "has_interaction", suspendWhenHidden = FALSE)
+  output$has_score_table <- reactive({
+    f <- tryCatch(fit(), error = function(e) NULL)
+    !is.null(f) && !is.null(f$score_table)
+  })
+  outputOptions(output, "has_score_table", suspendWhenHidden = FALSE)
+  output$is_btl <- reactive(!is.null(btl_fit()))
+  outputOptions(output, "is_btl", suspendWhenHidden = FALSE)
 
   observeEvent(fit(), {
     its <- fit()$items$item
