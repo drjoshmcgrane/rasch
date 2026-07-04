@@ -1336,6 +1336,10 @@ server <- function(input, output, session) {
       show(tgt, rasch_on)
     # DIF needs at least one person factor in the fit
     show("DIF", rasch_on && !is.null(f$factors) && length(names(f$factors)) > 0)
+    # menu headers hide too when everything inside them is hidden
+    show("Structure", rasch_on)
+    show("Invariance", rasch_on)
+    show("More", rasch_on || !is.null(bf))
   })
 
   # ------------------------------------------------ UI visibility flags --
