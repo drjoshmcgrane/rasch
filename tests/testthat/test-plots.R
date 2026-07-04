@@ -28,3 +28,34 @@ test_that("targeting plots render for dichotomous and polytomous fits", {
   # class-interval and grid-range controls on the expected value curve
   expect_no_error(plot_icc(fp, "P03", n_groups = 8, grid = seq(-3, 3, 0.05)))
 })
+
+test_that("the kidmap and batch savers work, and Q3 pairs are complete", {
+  set.seed(11)
+  d <- seq(-2, 2, length.out = 10)
+  X <- matrix(rbinom(200 * 10, 1, plogis(outer(rnorm(200), d, "-"))), 200, 10)
+  colnames(X) <- sprintf("I%02d", 1:10)
+  f <- rasch(X)
+
+  pdf(NULL); on.exit(dev.off())
+  expect_no_error(plot_kidmap(f, person = 1))
+  expect_no_error(plot_kidmap(f, person = 2, level = 0.9, xlim = c(-3, 3)))
+  expect_error(plot_kidmap(f, person = "no-such-id"), "not found")
+
+  # Yen's Q3: every off-diagonal pair, star = excess over the average
+  rc <- residual_correlations(f)
+  expect_equal(nrow(rc$pairs), choose(10, 2))
+  expect_equal(rc$pairs$q3_star, rc$pairs$q3 - rc$average)
+  expect_true(all(rc$flagged$q3_star > 0.2))
+  expect_identical(names(rc$pairs),
+                   c("item_a", "item_b", "q3", "q3_star", "flagged"))
+
+  # batch savers: multi-page PDF and ZIP-of-PNGs by extension
+  pdf_path <- file.path(tempdir(), "icc_all.pdf")
+  zip_path <- file.path(tempdir(), "kidmaps.zip")
+  expect_equal(save_item_plots(f, "icc", pdf_path), pdf_path)
+  expect_true(file.exists(pdf_path))
+  save_person_plots(f, zip_path, persons = 1:4)
+  expect_equal(length(utils::unzip(zip_path, list = TRUE)$Name), 4L)
+  expect_error(save_item_plots(f, "icc", "bad.txt"), "pdf or")
+  unlink(c(pdf_path, zip_path))
+})

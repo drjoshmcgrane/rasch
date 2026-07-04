@@ -17,15 +17,19 @@
              "#db2777", "#65a30d", "#475569")
 )
 
-# Modern flat canvas: left-aligned title, light horizontal grid, open axes.
-.rr_canvas <- function(xlim, ylim, xlab, ylab, main, grid_y = TRUE,
+# Modern flat canvas: light horizontal grid, open axes. A title is drawn
+# only when `main` carries information (item, person, summary figures);
+# plot-type names are left to the surrounding context.
+.rr_canvas <- function(xlim, ylim, xlab, ylab, main = "", grid_y = TRUE,
                        grid_x = FALSE, yaxis = TRUE) {
-  op <- par(mar = c(4.2, 4.4, 3.2, 1.5), mgp = c(2.5, 0.7, 0), tcl = -0.25,
+  has_main <- !is.null(main) && nzchar(main)
+  op <- par(mar = c(4.2, 4.4, if (has_main) 3.2 else 1.6, 1.5),
+            mgp = c(2.5, 0.7, 0), tcl = -0.25,
             las = 1, col.axis = .rr$ink, col.lab = .rr$ink, col.main = .rr$ink,
             font.main = 2, cex.main = 1.15, cex.lab = 1.0)
   plot(NA, xlim = xlim, ylim = ylim, xlab = xlab, ylab = ylab,
        main = "", axes = FALSE)
-  title(main = main, adj = 0, line = 1.4)
+  if (has_main) title(main = main, adj = 0, line = 1.4)
   if (grid_y) abline(h = pretty(ylim), col = .rr$grid, lwd = 0.8)
   if (grid_x) abline(v = pretty(xlim), col = .rr$grid, lwd = 0.8)
   axis(1, col = .rr$grid, col.ticks = .rr$soft)
@@ -75,8 +79,8 @@ plot_icc <- function(fit, item, group = NULL, n_groups = fit$n_groups,
   th <- fit$person$theta; x <- fit$X[, i]; ok <- !is.na(th) & !is.na(x)
   op <- .rr_canvas(range(grid), c(0, mmax), "Person location (logits)",
                    "Expected score",
-                   paste0("Item characteristic curve \u2013 ", fit$items$item[i],
-                          sprintf("  (location %.3f)", fit$items$location[i])))
+                   sprintf("%s  (location %.3f)", fit$items$item[i],
+                           fit$items$location[i]))
   on.exit(par(op))
   lines(grid, Ecurve, lwd = 3, col = .rr$ink)
   ci <- cut(rank(th[ok], ties.method = "first"), n_groups, labels = FALSE)
@@ -132,7 +136,7 @@ plot_ccc <- function(fit, item, grid = seq(-6, 6, 0.05), observed = FALSE,
   ordered <- all(diff(tau_i) > 0) || mmax == 1L
   op <- .rr_canvas(range(grid), c(0, 1), "Person location (logits)",
                    "Category probability",
-                   paste0("Category probability curves \u2013 ", fit$items$item[i]))
+                   fit$items$item[i])
   on.exit(par(op))
   abline(v = tau_i, lty = 3, col = .rr$soft)
   for (cat in 0:mmax)
@@ -191,7 +195,7 @@ plot_threshold_prob <- function(fit, item, grid = seq(-6, 6, 0.05),
   i <- .item_idx(fit, item); tau_i <- fit$tau_list[[i]]
   op <- .rr_canvas(range(grid), c(0, 1), "Person location (logits)",
                    "Threshold probability",
-                   paste0("Threshold probability curves \u2013 ", fit$items$item[i]))
+                   fit$items$item[i])
   on.exit(par(op))
   abline(h = 0.5, lty = 2, col = .rr$soft)
   for (k in seq_along(tau_i)) {
@@ -254,7 +258,7 @@ plot_pimap <- function(fit, bins = 35, xlim = NULL) {
   pp <- hp$counts / sum(hp$counts); pi <- hi$counts / sum(hi$counts)
   ymax <- max(pp) * 1.15; ymin <- -max(pi) * 1.6
   op <- .rr_canvas(rng, c(ymin, ymax), "Location (logits)", "Proportion",
-                   "Person-item threshold distribution", grid_y = FALSE,
+                   "", grid_y = FALSE,
                    yaxis = FALSE)
   on.exit(par(op))
   at <- pretty(c(0, max(c(pp, pi))))
@@ -290,6 +294,7 @@ plot_pimap <- function(fit, bins = 35, xlim = NULL) {
 #'   label rows.
 #' @param xlim Optional logit range for the shared scale; persons and
 #'   thresholds outside it are omitted.
+#' @param cex_labels Character expansion for the threshold labels.
 #' @return Called for its plotting side effect; invisibly \code{NULL}.
 #' @references Wright, B. D., & Stone, M. H. (1979). \emph{Best Test
 #'   Design}. Chicago: MESA Press.
@@ -300,7 +305,7 @@ plot_pimap <- function(fit, bins = 35, xlim = NULL) {
 #' colnames(X) <- paste0("I", 1:6)
 #' plot_wright(rasch(X))
 #' @export
-plot_wright <- function(fit, bins = 35, xlim = NULL) {
+plot_wright <- function(fit, bins = 35, xlim = NULL, cex_labels = 0.8) {
   th <- fit$person$theta[!is.na(fit$person$theta)]
   thr <- fit$thresholds
   rng <- if (is.null(xlim)) range(c(th, thr$tau)) + c(-0.4, 0.4) else sort(xlim)
@@ -314,13 +319,12 @@ plot_wright <- function(fit, bins = 35, xlim = NULL) {
   pp <- hp$counts / max(1L, max(hp$counts))
   bin <- pmin(findInterval(tv, brk, rightmost.closed = TRUE), bins)
   split <- 0.42
-  op <- par(mar = c(1.2, 4.4, 3.2, 0.5), mgp = c(2.5, 0.7, 0), tcl = -0.25,
+  op <- par(mar = c(1.2, 4.4, 1.6, 0.5), mgp = c(2.5, 0.7, 0), tcl = -0.25,
             las = 1, col.axis = .rr$ink, col.lab = .rr$ink, col.main = .rr$ink,
             font.main = 2, cex.main = 1.15)
   on.exit(par(op))
   plot(NA, xlim = c(0, 1), ylim = rng, xlab = "", ylab = "Location (logits)",
        axes = FALSE, main = "")
-  title(main = "Wright map", adj = 0, line = 1.4)
   abline(h = pretty(rng), col = .rr$grid, lwd = 0.8)
   axis(2, col = .rr$grid, col.ticks = .rr$soft)
   segments(split, rng[1], split, rng[2], col = .rr$ink, lwd = 1)
@@ -328,7 +332,7 @@ plot_wright <- function(fit, bins = 35, xlim = NULL) {
   rect(split - pp * (split - 0.02), brk[-length(brk)], split, brk[-1],
        col = .rr$blue, border = "white", lwd = 0.6)
   segments(0.02, mean(th), split, mean(th), col = .rr$ink, lty = 2)
-  cexl <- 0.62
+  cexl <- cex_labels
   colw <- max(strwidth(lab, cex = cexl)) * 1.2
   x0 <- split + 0.015
   kmax <- max(1L, floor((1 - x0) / colw))
@@ -377,7 +381,6 @@ plot_threshold_map <- function(fit, order_by_location = TRUE) {
   on.exit(par(op))
   plot(NA, xlim = rng, ylim = c(0.5, L + 0.5), xlab = "Location (logits)",
        ylab = "", axes = FALSE, main = "")
-  title(main = "Threshold map", adj = 0, line = 1.4)
   abline(h = seq_len(L), col = .rr$grid, lwd = 0.8)
   abline(v = 0, lty = 2, col = .rr$soft)
   axis(1, col = .rr$grid, col.ticks = .rr$soft)
@@ -420,7 +423,7 @@ plot_tcc <- function(fit, grid = seq(-6, 6, 0.05)) {
       item_moments(th, fit$tau_list[[i]], disc = .disc_of(fit, i))$E, 0)), 0)
   Smax <- sum(fit$m)
   op <- .rr_canvas(range(grid), c(0, Smax), "Person location (logits)",
-                   "Expected total score", "Test characteristic curve")
+                   "Expected total score")
   on.exit(par(op))
   lines(grid, Etot, lwd = 3, col = .rr$blue)
   abline(h = c(0, Smax), lty = 3, col = .rr$soft)
@@ -445,8 +448,7 @@ plot_tcc <- function(fit, grid = seq(-6, 6, 0.05)) {
 plot_tif <- function(fit, grid = seq(-6, 6, 0.05)) {
   ti <- test_information(fit, grid)
   op <- .rr_canvas(range(grid), c(0, max(ti$info) * 1.1),
-                   "Person location (logits)", "Test information",
-                   "Test information and measurement error")
+                   "Person location (logits)", "Test information")
   on.exit(par(op))
   polygon(c(ti$theta, rev(ti$theta)), c(ti$info, rep(0, nrow(ti))),
           col = paste0(.rr$blue, "22"), border = NA)
@@ -487,7 +489,7 @@ plot_item_map <- function(fit, band = 2.5) {
   ylim <- range(c(d$fit_resid, -band, band), na.rm = TRUE) * 1.2
   op <- .rr_canvas(range(d$location) + c(-0.5, 0.5), ylim,
                    "Item location (logits)", "Fit residual",
-                   "Item map: location by fit residual", grid_x = TRUE)
+                   grid_x = TRUE)
   on.exit(par(op))
   rect(par("usr")[1], -band, par("usr")[2], band,
        col = paste0(.rr$teal, "11"), border = NA)
@@ -522,7 +524,7 @@ plot_person_fit <- function(fit, band = 2.5) {
   ylim <- range(c(p$fit_resid[ok], -band - 0.5, band + 0.5))
   op <- .rr_canvas(range(p$theta[ok]) + c(-0.3, 0.3), ylim,
                    "Person location (logits)", "Fit residual",
-                   "Person fit", grid_x = TRUE)
+                   grid_x = TRUE)
   on.exit(par(op))
   rect(par("usr")[1], -band, par("usr")[2], band,
        col = paste0(.rr$teal, "11"), border = NA)
@@ -557,7 +559,6 @@ plot_resid_cor <- function(fit) {
   on.exit(par(op))
   image(1:L, 1:L, R[, L:1, drop = FALSE], col = pal, zlim = c(-1, 1),
         axes = FALSE, xlab = "", ylab = "", main = "")
-  title(main = "Residual correlations", adj = 0, line = 1.4)
   axis(1, 1:L, colnames(R), las = 2, cex.axis = 0.65, col = NA, col.ticks = NA)
   axis(2, 1:L, rev(colnames(R)), cex.axis = 0.65, col = NA, col.ticks = NA)
   # compact colour key
@@ -588,7 +589,7 @@ plot_pca <- function(fit) {
   loc <- fit$items$location
   op <- .rr_canvas(range(loc) + c(-0.5, 0.5), range(ld) * 1.25,
                    "Item location (logits)", "PC1 loading",
-                   sprintf("Residual first contrast (eigenvalue %.3f, %.1f%%)",
+                   sprintf("eigenvalue %.3f  (%.1f%% of residual variance)",
                            pc$first_eigen, 100 * pc$prop[1]), grid_x = TRUE)
   on.exit(par(op))
   abline(h = 0, lty = 2, col = .rr$soft)
@@ -619,7 +620,7 @@ plot_catfreq <- function(fit, item) {
   cats <- seq_along(cnt) - 1L
   op <- .rr_canvas(c(-0.6, max(cats) + 0.6), c(0, max(cnt) * 1.12),
                    "Category", "Count",
-                   paste0("Category frequencies \u2013 ", fit$items$item[i]),
+                   fit$items$item[i],
                    grid_x = FALSE)
   on.exit(par(op))
   rect(cats - 0.38, 0, cats + 0.38, cnt, col = .rr$blue, border = "white")
@@ -666,7 +667,7 @@ plot_pcc <- function(fit, person, n_groups = 5, grid = seq(-5, 5, 0.05)) {
   loc <- fit$items$location; mm <- fit$m
   op <- .rr_canvas(range(grid), c(0, 1), "Item location (logits)",
                    "Probability of success",
-                   sprintf("Person characteristic curve \u2013 %s (location %.3f, fit residual %s)",
+                   sprintf("%s  (location %.3f, fit residual %s)",
                            fit$person$id[n], th,
                            ifelse(is.na(fit$person$fit_resid[n]), "NA",
                                   sprintf("%.2f", fit$person$fit_resid[n]))))
@@ -682,6 +683,112 @@ plot_pcc <- function(fit, person, n_groups = 5, grid = seq(-5, 5, 0.05)) {
                            "Observed (item intervals)"),
              lwd = c(3, NA), pch = c(NA, 21), pt.bg = c(NA, .rr$blue),
              col = c(.rr$ink, "white"), pt.cex = 1.4)
+  invisible(NULL)
+}
+
+# ---------------------------------------------------------------------------
+# Kidmap: the person diagnostic map (Wright, Mead & Ludlow 1980).
+# ---------------------------------------------------------------------------
+#' Plot a kidmap
+#'
+#' The person diagnostic map (Wright, Mead and Ludlow 1980): item thresholds
+#' the person achieved to the right of a vertical logit axis and thresholds
+#' not achieved to the left, with the person's location drawn as a dashed
+#' line inside its confidence band. Achieved thresholds above the band
+#' (unexpected successes) and unachieved thresholds below it (unexpected
+#' failures) are highlighted; a clean response pattern shows achieved
+#' thresholds below the band and unachieved ones above it.
+#'
+#' @param fit A fitted object from \code{\link{rasch}}.
+#' @param person Row number of the person, or an ID matching
+#'   \code{fit$person$id}.
+#' @param level Confidence level of the band around the person location used
+#'   to mark unexpected responses.
+#' @param bins Number of vertical bins used to stack the threshold labels.
+#' @param xlim Optional logit range; thresholds outside it are omitted.
+#' @param cex_labels Character expansion for the threshold labels.
+#' @return Called for its plotting side effect; invisibly \code{NULL}.
+#' @references Wright, B. D., Mead, R. J., & Ludlow, L. H. (1980).
+#'   \emph{KIDMAP: person-by-item interaction mapping} (Research Memorandum
+#'   No. 29). Chicago: University of Chicago, MESA Psychometric Laboratory.
+#' @examples
+#' set.seed(1)
+#' d <- seq(-2, 2, length.out = 12)
+#' X <- matrix(rbinom(300 * 12, 1, plogis(outer(rnorm(300), d, "-"))), 300, 12)
+#' colnames(X) <- paste0("I", 1:12)
+#' plot_kidmap(rasch(X), person = 1)
+#' @export
+plot_kidmap <- function(fit, person, level = 0.95, bins = 35, xlim = NULL,
+                        cex_labels = 0.8) {
+  n <- if (is.numeric(person) && length(person) == 1L &&
+           person %in% seq_len(nrow(fit$X))) as.integer(person)
+       else match(person, fit$person$id)
+  if (is.na(n)) stop("person not found")
+  th <- fit$person$theta[n]
+  if (is.na(th)) stop("no estimate for this person")
+  se <- fit$person$se[n]
+  z <- stats::qnorm(1 - (1 - level) / 2)
+  band <- if (is.na(se)) 0 else z * se
+  x <- fit$X[n, ]
+  thr <- fit$thresholds
+  obs <- !is.na(x[thr$item])
+  ii <- thr$item[obs]; kk <- thr$k[obs]; tv <- thr$tau[obs]
+  att <- x[ii] >= kk
+  lab <- if (all(fit$m == 1L)) fit$items$item[ii] else
+    paste0(fit$items$item[ii], ".", kk)
+  rng <- if (is.null(xlim))
+    range(c(th - band, th + band, tv)) + c(-0.5, 0.5) else sort(xlim)
+  keep <- tv >= rng[1] & tv <= rng[2]
+  tv <- tv[keep]; att <- att[keep]; lab <- lab[keep]
+  unexp <- (att & tv > th + band) | (!att & tv < th - band)
+  brk <- seq(rng[1], rng[2], length.out = bins + 1)
+  bin <- pmin(findInterval(tv, brk, rightmost.closed = TRUE), bins)
+  split <- 0.5
+  op <- par(mar = c(2.6, 4.4, 1.6, 0.5), mgp = c(2.5, 0.7, 0), tcl = -0.25,
+            las = 1, col.axis = .rr$ink, col.lab = .rr$ink, col.main = .rr$ink,
+            font.main = 2, cex.main = 1.15)
+  on.exit(par(op))
+  plot(NA, xlim = c(0, 1), ylim = rng, xlab = "", ylab = "Location (logits)",
+       axes = FALSE, main = "")
+  abline(h = pretty(rng), col = .rr$grid, lwd = 0.8)
+  axis(2, col = .rr$grid, col.ticks = .rr$soft)
+  if (band > 0)
+    rect(0, th - band, 1, th + band, col = adjustcolor(.rr$blue, 0.10),
+         border = NA)
+  segments(split, rng[1], split, rng[2], col = .rr$ink, lwd = 1)
+  segments(0, th, 1, th, col = .rr$blue, lty = 2, lwd = 1.4)
+  cexl <- cex_labels
+  colw <- max(strwidth(lab, cex = cexl)) * 1.2
+  for (side in c(TRUE, FALSE)) {           # TRUE = achieved (right)
+    sel <- att == side
+    for (b in unique(bin[sel])) {
+      pick <- sel & bin == b
+      ls <- lab[pick][order(tv[pick])]
+      cols <- ifelse(unexp[pick][order(tv[pick])], .rr$red, .rr$ink)
+      kmax <- max(1L, floor((split - 0.015) / colw))
+      if (length(ls) > kmax) {
+        cols <- c(cols[seq_len(kmax - 1L)], .rr$soft)
+        ls <- c(ls[seq_len(kmax - 1L)], paste0("+", length(ls) - kmax + 1L))
+      }
+      xs <- if (side) split + 0.015 + (seq_along(ls) - 1L) * colw
+            else split - 0.015 - (seq_along(ls) - 1L) * colw
+      text(xs, (brk[b] + brk[b + 1L]) / 2, ls, cex = cexl,
+           adj = if (side) 0 else 1, col = cols, font = 2)
+    }
+  }
+  fr <- fit$person$fit_resid[n]
+  text(0.01, rng[2], sprintf("%s: location %.2f (SE %s), fit residual %s",
+                             fit$person$id[n], th,
+                             ifelse(is.na(se), "NA", sprintf("%.2f", se)),
+                             ifelse(is.na(fr), "NA", sprintf("%.2f", fr))),
+       cex = 0.78, adj = c(0, 1), col = .rr$ink, font = 2)
+  mtext("not achieved", side = 1, line = 0.4, at = split / 2, cex = 0.8,
+        col = .rr$soft)
+  mtext("achieved", side = 1, line = 0.4, at = (1 + split) / 2, cex = 0.8,
+        col = .rr$soft)
+  if (any(unexp))
+    legend("bottomleft", "unexpected response", bty = "n",
+           text.col = .rr$red, cex = 0.85)
   invisible(NULL)
 }
 
@@ -727,9 +834,8 @@ plot_resid_dist <- function(fit, what = c("items", "persons"),
   h <- hist(v, breaks = brk, plot = FALSE)
   ymax <- max(h$density, dnorm(0)) * 1.15
   op <- .rr_canvas(rng, c(0, ymax), lab, "Density",
-                   sprintf("%s residual distribution (n = %d, mean %.2f, SD %.2f)",
-                           if (what == "items") "Item" else "Person",
-                           length(v), mean(v), sd(v)), grid_x = FALSE)
+                   sprintf("n = %d, mean %.2f, SD %.2f", length(v), mean(v),
+                           sd(v)), grid_x = FALSE)
   on.exit(par(op))
   rect(h$breaks[-length(h$breaks)], 0, h$breaks[-1], h$density,
        col = adjustcolor(.rr$blue, 0.45), border = "white")

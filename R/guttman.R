@@ -84,7 +84,6 @@ plot_guttman <- function(fit, max_persons = 80) {
   on.exit(par(op))
   image(seq_len(L), seq_len(rN), t(G[rN:1, , drop = FALSE]), col = pal,
         zlim = c(0, m), axes = FALSE, xlab = "", ylab = "", main = "")
-  title(main = "Guttman scalogram", adj = 0, line = 3.4)
   mtext(sprintf("persons by location (high at top), items easy to hard; coefficient of reproducibility %.3f",
                 g$CR), side = 3, line = 2.5, adj = 0, cex = 0.8, col = .rr$soft)
   axis(1, seq_len(L), colnames(G), las = 2, cex.axis = 0.62, col = NA, col.ticks = NA)

@@ -856,7 +856,6 @@ plot_frames <- function(fit, band = 2.5) {
   on.exit(par(op))
   plot(NA, xlim = range(c(lo, hi, 0)) + c(-0.1, 0.1), ylim = c(0.5, n + 0.5),
        xlab = "log unit (log rho)", ylab = "", axes = FALSE, main = "")
-  title(main = "Frame units", adj = 0, line = 1.4)
   abline(h = seq_len(n), col = .rr$grid, lwd = 0.8)
   abline(v = 0, lty = 2, col = .rr$soft)
   axis(1, col = .rr$grid, col.ticks = .rr$soft)
@@ -902,8 +901,7 @@ plot_icc_frames <- function(fit, item, n_groups = fit$n_groups,
   tau_i <- thr$delta[thr$item == item]
   mmax <- length(tau_i)
   op <- .rr_canvas(range(grid), c(0, mmax), "Person location (logits, common unit)",
-                   "Expected score",
-                   paste0("ICC across frames \u2013 ", item))
+                   "Expected score", item)
   on.exit(par(op))
   th_all <- fit$person$theta
   for (j in seq_along(rows)) {

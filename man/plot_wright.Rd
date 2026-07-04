@@ -4,7 +4,7 @@
 \alias{plot_wright}
 \title{Plot a Wright map}
 \usage{
-plot_wright(fit, bins = 35, xlim = NULL)
+plot_wright(fit, bins = 35, xlim = NULL, cex_labels = 0.8)
 }
 \arguments{
 \item{fit}{A fitted object from \code{\link{rasch}}.}
@@ -14,6 +14,8 @@ label rows.}
 
 \item{xlim}{Optional logit range for the shared scale; persons and
 thresholds outside it are omitted.}
+
+\item{cex_labels}{Character expansion for the threshold labels.}
 }
 \value{
 Called for its plotting side effect; invisibly \code{NULL}.

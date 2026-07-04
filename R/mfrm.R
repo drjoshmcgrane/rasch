@@ -380,7 +380,7 @@ plot_facets <- function(fit, facet = NULL, band = 2.5) {
   on.exit(par(op))
   plot(NA, xlim = range(c(lo, hi, 0)) + c(-0.2, 0.2), ylim = c(0.5, n + 0.5),
        xlab = "Severity (logits)", ylab = "", axes = FALSE, main = "")
-  title(main = paste0("Facet severities \u2013 ", facet), adj = 0, line = 1.4)
+  title(main = facet, adj = 0, line = 1.4)
   abline(h = seq_len(n), col = .rr$grid, lwd = 0.8)
   abline(v = 0, lty = 2, col = .rr$soft)
   axis(1, col = .rr$grid, col.ticks = .rr$soft)

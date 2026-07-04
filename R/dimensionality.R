@@ -5,20 +5,31 @@
 # first residual contrast.
 # ===========================================================================
 
-#' Residual correlations for local dependence
+#' Residual correlations for local dependence (Yen's Q3)
 #'
-#' Under unidimensionality and local independence the off-diagonal residual
-#' correlations sit near \code{-1/(L-1)}; large positive values flag local
-#' dependence between item pairs (a common convention inspects values more
-#' than 0.2 above the average off-diagonal correlation; Christensen,
-#' Makransky and Horton 2017).
+#' The pairwise correlations of the standardised response residuals are
+#' Yen's (1984) Q3 statistics. Under unidimensionality and local
+#' independence the off-diagonal values sit near \code{-1/(L-1)}; large
+#' positive values flag local dependence between item pairs. Following
+#' Christensen, Makransky and Horton (2017), each Q3 is also reported
+#' relative to the average off-diagonal value (\code{q3_star}), and a pair
+#' is flagged when that excess passes \code{flag}.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
-#' @param flag Excess-correlation threshold above the average for flagging a
-#'   dependent item pair.
-#' @return A list with the residual correlation \code{matrix}, the
-#'   \code{average} off-diagonal correlation, and a table of \code{flagged}
-#'   pairs.
+#' @param flag Excess above the average off-diagonal Q3 at which a pair is
+#'   flagged as dependent.
+#' @return A list with the Q3 \code{matrix}, the \code{average} off-diagonal
+#'   value, \code{pairs} (every item pair with \code{q3}, \code{q3_star} and
+#'   a \code{flagged} indicator, sorted by \code{q3}), and the subset of
+#'   \code{flagged} pairs.
+#' @references Yen, W. M. (1984). Effects of local item dependence on the
+#'   fit and equating performance of the three-parameter logistic model.
+#'   \emph{Applied Psychological Measurement}, 8(2), 125-145.
+#'
+#'   Christensen, K. B., Makransky, G., & Horton, M. (2017). Critical values
+#'   for Yen's Q3: identification of local dependence in the Rasch model
+#'   using residual correlations. \emph{Applied Psychological Measurement},
+#'   41(3), 178-194.
 #' @examples
 #' set.seed(1)
 #' d <- seq(-2, 2, length.out = 8)
@@ -30,13 +41,16 @@ residual_correlations <- function(fit, flag = 0.2) {
   Z <- fit$residuals
   R <- cor(Z, use = "pairwise.complete.obs")
   off <- R[upper.tri(R)]; avg <- mean(off, na.rm = TRUE)
-  idx <- which(upper.tri(R) & (R - avg) > flag, arr.ind = TRUE)
-  pairs <- if (nrow(idx))
-    data.frame(item_a = colnames(Z)[idx[, 1]], item_b = colnames(Z)[idx[, 2]],
-               resid_cor = R[idx], excess = R[idx] - avg) else
-    data.frame(item_a = character(), item_b = character(),
-               resid_cor = numeric(), excess = numeric())
-  list(matrix = R, average = avg, flagged = pairs[order(-pairs$resid_cor), ])
+  idx <- which(upper.tri(R), arr.ind = TRUE)
+  pairs <- data.frame(item_a = colnames(Z)[idx[, 1]],
+                      item_b = colnames(Z)[idx[, 2]],
+                      q3 = R[idx], q3_star = R[idx] - avg,
+                      flagged = (R[idx] - avg) > flag)
+  pairs <- pairs[!is.na(pairs$q3), ]
+  pairs <- pairs[order(-pairs$q3), ]
+  rownames(pairs) <- NULL
+  list(matrix = R, average = avg, pairs = pairs,
+       flagged = pairs[pairs$flagged, ])
 }
 
 #' Principal components of the residual correlations
@@ -120,7 +134,7 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 20) {
   }
   ylim <- c(0, max(c(obs, pa, 1)) * 1.12)
   op <- .rr_canvas(c(0.5, k + 0.5), ylim, "Component", "Eigenvalue",
-                   "Scree of the residual components", grid_x = FALSE)
+                   grid_x = FALSE)
   on.exit(par(op))
   abline(h = 1, lty = 3, col = .rr$soft)
   if (!is.null(pa)) lines(seq_len(k), pa, lwd = 2, lty = 5, col = .rr$red)

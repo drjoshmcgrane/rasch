@@ -190,8 +190,7 @@ plot_distractors <- function(fit, item, n_groups = fit$n_groups) {
   keyed_v <- sc == max(m)
   op <- .rr_canvas(range(mid) + c(-0.2, 0.2), c(0, 1),
                    "Person location (logits)", "Proportion choosing option",
-                   paste0("Option curves \u2013 ", item,
-                          "  (key: ", fit$mc$key[item], ")"))
+                   paste0(item, "  (key: ", fit$mc$key[item], ")"))
   on.exit(par(op))
   for (j in seq_along(opts)) {
     pr <- tapply(r[ok] == opts[j], ci, mean)

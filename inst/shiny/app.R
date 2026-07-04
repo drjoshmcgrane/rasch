@@ -218,15 +218,20 @@ rcode_details <- function(id)
 # (the cause of the squashed plots), and a percentage height is avoided
 # because it races the layout and renders a zero-height device.
 # data-bs-theme is pinned to light because base plots draw on white.
-plotCard <- function(id, title, height = "560px") {
+# `info` adds a header tooltip; `extra` takes further header buttons
+# (e.g. the batch all-persons downloads on the kidmap card).
+plotCard <- function(id, title, height = "560px", info = NULL, extra = NULL) {
   card(
     full_screen = TRUE,
     `data-bs-theme` = "light",
     card_header(div(class = "d-flex justify-content-between align-items-center",
-      span(title),
+      span(title,
+           if (!is.null(info))
+             tooltip(bs_icon("info-circle", class = "ms-1 text-secondary"), info)),
       div(class = "btn-group",
           downloadButton(paste0(id, "_png"), "PNG", class = "btn-outline-secondary btn-xs"),
-          downloadButton(paste0(id, "_pdf"), "PDF", class = "btn-outline-secondary btn-xs")))),
+          downloadButton(paste0(id, "_pdf"), "PDF", class = "btn-outline-secondary btn-xs"),
+          extra))),
     card_body(plotOutput(id, height = height), rcode_details(id),
               padding = 8, fillable = FALSE)
   )
@@ -455,15 +460,27 @@ panel_items <- nav_panel("Items", icon = bs_icon("list-check"),
                 info = "Fit residual: log-of-mean-square statistic, approximately N(0,1) under fit; |values| > 2.5 are conventionally flagged (Andrich & Marais 2019).",
                 footer = uiOutput("items_note")),
       navset_card_underline(
+        id = "items_nav",
         title = div(class = "d-flex align-items-center gap-2",
           uiOutput("sel_item_title", inline = TRUE),
-          popover(
-            bs_icon("gear", class = "text-secondary"),
-            sliderInput("ex_ng", "Class intervals", min = 2, max = 10,
-                        value = 8, step = 1),
-            sliderInput("ex_rng", "Scale range (logits)", min = -8, max = 8,
-                        value = c(-5, 5), step = 0.5),
-            title = "Display settings")),
+          # batch downloads follow the active tab's plot type; the Chi-square
+          # tab has no plot, so the buttons hide there
+          # no display utility class here: Bootstrap's !important would beat
+          # the inline display:none that conditionalPanel toggles
+          conditionalPanel("input.items_nav != 'Chi-square'",
+            div(class = "btn-group",
+                downloadButton("items_all_pdf", "PDF (all items)",
+                               class = "btn-outline-secondary btn-xs"),
+                downloadButton("items_all_zip", "ZIP (all items)",
+                               class = "btn-outline-secondary btn-xs")))),
+        # display settings: a compact visible row above the tab content
+        header = div(class = "d-flex align-items-center gap-4 flex-wrap",
+          div(style = "width: 200px;",
+              sliderInput("ex_ng", "Class intervals", min = 2, max = 10,
+                          value = 8, step = 1, width = "100%")),
+          div(style = "width: 260px;",
+              sliderInput("ex_rng", "Scale range (logits)", min = -8, max = 8,
+                          value = c(-5, 5), step = 0.5, width = "100%"))),
         full_screen = TRUE,
         nav_panel("ICC",
                   plotOutput("icc", height = "440px"),
@@ -530,9 +547,15 @@ panel_persons <- nav_panel("Persons", icon = bs_icon("people"),
     uiOutput("persons_vboxes"),
     tableCard("person_tbl", "Person estimates",
         controls = cols_switch("persons_full"),
-              "Warm WLE location and SE per person, with raw score, fit statistics, and your ID and factor columns. Click a row to draw that person's characteristic curve below."),
+              "Warm WLE location and SE per person, with raw score, fit statistics, and your ID and factor columns. Click a row to draw that person's kidmap below."),
     layout_columns(col_widths = 12,
-      plotCard("pcc", "Person characteristic curve (selected person)"),
+      plotCard("kidmap", "Kidmap",
+        info = "The person diagnostic map (Wright, Mead & Ludlow 1980): thresholds the person achieved print to the right of the logit axis, thresholds not achieved to the left; the dashed line inside its confidence band is the person location. Achieved thresholds above the band and unachieved thresholds below it are unexpected responses.",
+        extra = tagList(
+          downloadButton("kidmap_all_pdf", "PDF (all persons)",
+                         class = "btn-outline-secondary btn-xs"),
+          downloadButton("kidmap_all_zip", "ZIP (all persons)",
+                         class = "btn-outline-secondary btn-xs"))),
       card(
         full_screen = TRUE,
         card_header(div(class = "d-flex justify-content-between align-items-center",
@@ -727,16 +750,17 @@ panel_dim <- nav_panel("Dimensionality", icon = bs_icon("diagram-3"),
   )
 
 # ------------------------------------------------------ LOCAL DEPENDENCE --
-panel_ld <- nav_panel("Local dependence", icon = bs_icon("link-45deg"),
+panel_ld <- nav_panel("Response dependence", icon = bs_icon("link-45deg"),
     layout_columns(col_widths = 12,
       plotCard("rcor", "Residual correlations", height = "640px"),
       div(
         numericInput("ld_flag",
-                     "Flag threshold (excess over the average residual correlation)",
+                     "Flag threshold (Q3* above this value flags a pair)",
                      value = 0.2, min = 0.05, max = 0.9, step = 0.05,
                      width = "420px"),
-        tableCard("rpairs_tbl", "Flagged dependent pairs",
-                  "Pairs more than the flag threshold above the average off-diagonal residual correlation."),
+        tableCard("rpairs_tbl", "Q3 statistics",
+                  info = "Yen's Q3: the residual correlation of an item pair; Q3* is its excess over the average off-diagonal Q3, the conventional criterion for flagging response dependence (Yen 1984).",
+                  footer = uiOutput("rpairs_note")),
         card(card_header("Subtest (combine dependent items)"),
           card_body(
             p(class = "text-muted small",
@@ -887,8 +911,8 @@ ui <- page_navbar(
   panel_targeting,
   panel_test,
   nav_menu("Structure",
-    panel_dim,
     panel_ld,
+    panel_dim,
     panel_guess),
   nav_menu("Invariance",
     panel_dif,
@@ -1384,7 +1408,7 @@ server <- function(input, output, session) {
            !inherits(f, "rasch_efrm") && max(f$m) == 1L)
     rasch_on <- !is.null(f)
     for (tgt in c("Summary", "Items", "Persons", "Targeting", "Test",
-                  "Dimensionality", "Local dependence", "Equating"))
+                  "Response dependence", "Dimensionality", "Equating"))
       show(tgt, rasch_on)
     # DIF needs at least one person factor in the fit
     show("DIF", rasch_on && !is.null(f$factors) && length(names(f$factors)) > 0)
@@ -1573,7 +1597,9 @@ server <- function(input, output, session) {
     two_delta_ll = "2Δ log-lik", se_log_phi = "SE (log φ)",
     se_log_alpha = "SE (log α)", se_log_rho = "SE (log ρ)",
     mu = "Origin", comparisons = "Comparisons",
-    obs_p = "Observed", est_p = "Expected", obs_t = "Threshold prop.")
+    obs_p = "Observed", est_p = "Expected", obs_t = "Threshold prop.",
+    item_a = "Item A", item_b = "Item B", q3 = "Q3", q3_star = "Q3*",
+    flagged = "Flagged")
   # p-value columns render as "<0.001" / 3 dp on the client, so sorting
   # still uses the raw value; detection runs on the ORIGINAL column names
   P_COL_RE <- "^p$|^p_|_p$|^prob$|p_tukey|p_anova|p_adj|p_bonf|p_uniform|p_nonuniform"
@@ -1949,24 +1975,48 @@ server <- function(input, output, session) {
     if (!isTRUE(all.equal(ex_rng(), c(-5, 5))))
       sprintf(", grid = seq(%g, %g, 0.05)", ex_rng()[1], ex_rng()[2])),
     collapse = ""))
+  # second code-footer line pointing at the matching all-items batch export
+  ex_batch_line <- function(what)
+    sprintf('\n# all items: save_item_plots(fit, "%s", "%s_all_items.pdf")',
+            what, what)
   register_plot("icc",  function()
     plot_icc(fit(), sel_item(), n_groups = ex_ng(), grid = ex_grid()),
-    code = function() sprintf('plot_icc(fit, "%s"%s)',
-                              sel_item(), ex_code_args()))
+    code = function() paste0(sprintf('plot_icc(fit, "%s"%s)',
+                                     sel_item(), ex_code_args()),
+                             ex_batch_line("icc")))
   register_plot("ccc",  function()
     plot_ccc(fit(), sel_item(), observed = isTRUE(input$show_obs),
              n_groups = ex_ng(), grid = ex_grid()),
-    code = function() sprintf('plot_ccc(fit, "%s", observed = %s%s)',
-                              sel_item(), isTRUE(input$show_obs),
-                              ex_code_args()))
+    code = function() paste0(sprintf('plot_ccc(fit, "%s", observed = %s%s)',
+                                     sel_item(), isTRUE(input$show_obs),
+                                     ex_code_args()),
+                             ex_batch_line("ccc")))
   register_plot("tpc",  function()
     plot_threshold_prob(fit(), sel_item(), observed = isTRUE(input$show_obs),
                         n_groups = ex_ng(), grid = ex_grid()),
-    code = function() sprintf('plot_threshold_prob(fit, "%s", observed = %s%s)',
-                              sel_item(), isTRUE(input$show_obs),
-                              ex_code_args()))
+    code = function() paste0(
+      sprintf('plot_threshold_prob(fit, "%s", observed = %s%s)',
+              sel_item(), isTRUE(input$show_obs), ex_code_args()),
+      ex_batch_line("tpc")))
   register_plot("cfreq", function() plot_catfreq(fit(), sel_item()),
-                code = function() sprintf('plot_catfreq(fit, "%s")', sel_item()))
+                code = function() paste0(
+                  sprintf('plot_catfreq(fit, "%s")', sel_item()),
+                  ex_batch_line("cfreq")))
+  # all-items batch downloads for the active explorer tab, honouring the
+  # class-interval, range, and observed-points controls
+  ex_what <- reactive(switch(input$items_nav %||% "ICC",
+    ICC = "icc", Categories = "ccc", Thresholds = "tpc",
+    Frequencies = "cfreq", "icc"))
+  for (ext in c("pdf", "zip")) local({
+    ext_ <- ext
+    output[[paste0("items_all_", ext_)]] <- downloadHandler(
+      filename = function() paste0(ex_what(), "_all_items.", ext_),
+      content = function(file)
+        withProgress(message = "Drawing every item…", value = 0.4,
+          save_item_plots(fit(), ex_what(), file, n_groups = ex_ng(),
+                          grid = ex_grid(),
+                          observed = isTRUE(input$show_obs))))
+  })
   mc_dat <- reactive({
     f <- fit()
     validate(need(!is.null(f$mc),
@@ -2070,14 +2120,25 @@ server <- function(input, output, session) {
         c(-2.5, 2.5), c("var(--bs-danger)", "inherit", "var(--bs-danger)")))
     dt
   }, code = function() "fit$person")
-  register_plot("pcc", function() {
-    f <- fit()
+  # the person drawn on the kidmap: the selected table row, defaulting to 1
+  sel_person <- reactive({
     n <- input$person_tbl_rows_selected
-    n <- if (length(n)) n[1] else 1L
-    plot_pcc(f, n)
-  }, code = function() {
-    n <- input$person_tbl_rows_selected
-    sprintf('plot_pcc(fit, person = %d)', if (length(n)) n[1] else 1L)
+    if (length(n)) n[1] else 1L
+  })
+  register_plot("kidmap", function()
+    plot_kidmap(fit(), person = sel_person()),
+    code = function() paste0(
+      sprintf('plot_kidmap(fit, person = %d)', sel_person()),
+      '\n# all persons: save_person_plots(fit, "kidmaps.pdf")'))
+  # batch kidmaps: multi-page PDF or ZIP of PNGs, chosen by the extension
+  # (the download temp file carries the filename's extension)
+  for (ext in c("pdf", "zip")) local({
+    ext_ <- ext
+    output[[paste0("kidmap_all_", ext_)]] <- downloadHandler(
+      filename = function() paste0("kidmaps.", ext_),
+      content = function(file)
+        withProgress(message = "Drawing a kidmap for every person…",
+                     value = 0.4, save_person_plots(fit(), file)))
   })
   register_plot("rdist", function()
     plot_resid_dist(fit(), what = input$rd_what %||% "persons",
@@ -2576,21 +2637,27 @@ server <- function(input, output, session) {
   # -------------------------------------------------------- local dependence --
   register_plot("rcor", function() plot_resid_cor(fit()), w = 8, h = 8,
                 code = function() "plot_resid_cor(fit)")
-  ld_res <- reactive({
+  ld_flag <- reactive({
     fl <- input$ld_flag
-    if (is.null(fl) || is.na(fl) || fl <= 0) fl <- 0.2
-    residual_correlations(fit(), flag = fl)
+    if (is.null(fl) || is.na(fl) || fl <= 0) 0.2 else fl
   })
-  register_table("rpairs_tbl", function() ld_res()$flagged,
-                 function() {
-    fl <- ld_res()$flagged
-    if (!nrow(fl)) fl <- data.frame(note = "no item pairs exceed the flag threshold")
-    num_dt(fl)
-  }, code = function() {
-    fl <- input$ld_flag
-    if (is.null(fl) || is.na(fl) || fl <= 0) fl <- 0.2
-    sprintf("residual_correlations(fit, flag = %s)$flagged", fl)
+  ld_res <- reactive(residual_correlations(fit(), flag = ld_flag()))
+  # Yen's Q3 for every item pair, sorted by Q3; Q3* is the excess over the
+  # average off-diagonal Q3, and pairs above the flag threshold are starred
+  output$rpairs_tbl <- renderDT({
+    d <- ld_res()$pairs
+    d$flagged <- ifelse(d$flagged, "*", "")
+    num_dt(d)
   })
+  register_code("rpairs_tbl", function()
+    sprintf("residual_correlations(fit, flag = %s)$pairs", ld_flag()))
+  output$rpairs_tbl_csv <- downloadHandler(
+    filename = function() "q3_statistics.csv",
+    content = function(file)
+      write.csv(ld_res()$pairs, file, row.names = FALSE))
+  output$rpairs_note <- renderUI(
+    sprintf("Average off-diagonal Q3 %.3f; pairs with Q3* above %.1f are flagged (Yen 1984; Christensen, Makransky & Horton 2017).",
+            ld_res()$average, ld_flag()))
 
   # response dependence magnitude (Andrich & Kreiner resolved-item refit)
   dep_res <- reactiveVal(NULL)

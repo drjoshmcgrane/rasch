@@ -340,8 +340,7 @@ plot_btl <- function(fit, band = 2.5) {
   k <- nrow(d)
   xlim <- range(c(d$location - 1.96 * d$se, d$location + 1.96 * d$se))
   op <- .rr_canvas(xlim + c(-0.15, 0.15) * diff(xlim), c(0.5, k + 0.5),
-                   "Location (logits)", "",
-                   "Object locations (BTL)", grid_y = FALSE, grid_x = TRUE,
+                   "Location (logits)", "", grid_y = FALSE, grid_x = TRUE,
                    yaxis = FALSE)
   on.exit(par(op))
   mis <- !is.na(d$fit_resid) & abs(d$fit_resid) > band

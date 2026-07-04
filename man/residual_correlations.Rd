@@ -2,27 +2,30 @@
 % Please edit documentation in R/dimensionality.R
 \name{residual_correlations}
 \alias{residual_correlations}
-\title{Residual correlations for local dependence}
+\title{Residual correlations for local dependence (Yen's Q3)}
 \usage{
 residual_correlations(fit, flag = 0.2)
 }
 \arguments{
 \item{fit}{A fitted object from \code{\link{rasch}}.}
 
-\item{flag}{Excess-correlation threshold above the average for flagging a
-dependent item pair.}
+\item{flag}{Excess above the average off-diagonal Q3 at which a pair is
+flagged as dependent.}
 }
 \value{
-A list with the residual correlation \code{matrix}, the
-  \code{average} off-diagonal correlation, and a table of \code{flagged}
-  pairs.
+A list with the Q3 \code{matrix}, the \code{average} off-diagonal
+  value, \code{pairs} (every item pair with \code{q3}, \code{q3_star} and
+  a \code{flagged} indicator, sorted by \code{q3}), and the subset of
+  \code{flagged} pairs.
 }
 \description{
-Under unidimensionality and local independence the off-diagonal residual
-correlations sit near \code{-1/(L-1)}; large positive values flag local
-dependence between item pairs (a common convention inspects values more
-than 0.2 above the average off-diagonal correlation; Christensen,
-Makransky and Horton 2017).
+The pairwise correlations of the standardised response residuals are
+Yen's (1984) Q3 statistics. Under unidimensionality and local
+independence the off-diagonal values sit near \code{-1/(L-1)}; large
+positive values flag local dependence between item pairs. Following
+Christensen, Makransky and Horton (2017), each Q3 is also reported
+relative to the average off-diagonal value (\code{q3_star}), and a pair
+is flagged when that excess passes \code{flag}.
 }
 \examples{
 set.seed(1)
@@ -30,4 +33,14 @@ d <- seq(-2, 2, length.out = 8)
 X <- matrix(rbinom(500 * 8, 1, plogis(outer(rnorm(500), d, "-"))), 500, 8)
 colnames(X) <- paste0("I", 1:8)
 residual_correlations(rasch(X))$average
+}
+\references{
+Yen, W. M. (1984). Effects of local item dependence on the
+  fit and equating performance of the three-parameter logistic model.
+  \emph{Applied Psychological Measurement}, 8(2), 125-145.
+
+  Christensen, K. B., Makransky, G., & Horton, M. (2017). Critical values
+  for Yen's Q3: identification of local dependence in the Rasch model
+  using residual correlations. \emph{Applied Psychological Measurement},
+  41(3), 178-194.
 }

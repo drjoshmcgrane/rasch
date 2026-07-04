@@ -25,6 +25,108 @@
   files
 }
 
+# One plot per element, to a multi-page PDF or a ZIP of PNGs by extension.
+.rr_plot_batch <- function(thunks, names, stem, file, width, height, dpi) {
+  ext <- tolower(tools::file_ext(file))
+  if (!grepl("^(/|[A-Za-z]:)", file)) file <- file.path(getwd(), file)
+  if (ext == "pdf") {
+    pdf(file, width = width, height = height, onefile = TRUE)
+    on.exit(dev.off(), add = TRUE)
+    for (f in thunks) tryCatch(f(), error = function(e) invisible())
+  } else if (ext == "zip") {
+    dir <- tempfile("rmt_plots_"); dir.create(dir)
+    on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+    paths <- character(0)
+    for (j in seq_along(thunks)) {
+      p <- file.path(dir, paste0(stem, "_",
+                                 gsub("[^A-Za-z0-9_.-]", "_", names[j]), ".png"))
+      ok <- tryCatch({
+        png(p, width = width, height = height, units = "in", res = dpi)
+        thunks[[j]](); dev.off(); TRUE
+      }, error = function(e) { try(dev.off(), silent = TRUE); FALSE })
+      if (ok) paths <- c(paths, p)
+    }
+    wd <- getwd(); setwd(dir); on.exit(setwd(wd), add = TRUE)
+    utils::zip(file, files = basename(paths), flags = "-q9X")
+  } else stop("`file` must end in .pdf or .zip")
+  invisible(file)
+}
+
+#' Save a plot for every item
+#'
+#' Writes one plot per item -- the item characteristic curve, category
+#' probability curves, threshold probability curves, or category
+#' frequencies -- to a single multi-page PDF or a ZIP archive of PNGs,
+#' chosen by the extension of \code{file}.
+#'
+#' @param fit A fitted object from \code{\link{rasch}}.
+#' @param what Which plot: \code{"icc"}, \code{"ccc"}, \code{"tpc"}, or
+#'   \code{"cfreq"}.
+#' @param file Output path ending in \code{.pdf} (one page per item) or
+#'   \code{.zip} (one PNG per item).
+#' @param items Item names or indices; all items by default.
+#' @param n_groups Class intervals for observed overlays.
+#' @param grid Logit grid for the curves.
+#' @param observed Overlay observed proportions on the category and
+#'   threshold probability curves.
+#' @param width,height,dpi Device size in inches and PNG resolution.
+#' @return Invisibly, the output path.
+#' @examples
+#' set.seed(1)
+#' d <- seq(-2, 2, length.out = 6)
+#' X <- matrix(rbinom(400 * 6, 1, plogis(outer(rnorm(400), d, "-"))), 400, 6)
+#' colnames(X) <- paste0("I", 1:6)
+#' f <- rasch(X)
+#' save_item_plots(f, "icc", file.path(tempdir(), "icc_all.pdf"))
+#' @export
+save_item_plots <- function(fit, what = c("icc", "ccc", "tpc", "cfreq"),
+                            file, items = NULL, n_groups = fit$n_groups,
+                            grid = seq(-5, 5, 0.05), observed = TRUE,
+                            width = 8, height = 5.5, dpi = 150) {
+  what <- match.arg(what)
+  its <- if (is.null(items)) fit$items$item else items
+  draw <- function(it) switch(what,
+    icc   = plot_icc(fit, it, n_groups = n_groups, grid = grid),
+    ccc   = plot_ccc(fit, it, grid = grid, observed = observed,
+                     n_groups = n_groups),
+    tpc   = plot_threshold_prob(fit, it, grid = grid, observed = observed,
+                                n_groups = n_groups),
+    cfreq = plot_catfreq(fit, it))
+  thunks <- lapply(its, function(it) function() draw(it))
+  .rr_plot_batch(thunks, as.character(its), what, file, width, height, dpi)
+}
+
+#' Save a kidmap for every person
+#'
+#' Writes one kidmap (\code{\link{plot_kidmap}}) per person to a single
+#' multi-page PDF or a ZIP archive of PNGs, chosen by the extension of
+#' \code{file}. Persons without a location estimate are skipped.
+#'
+#' @param fit A fitted object from \code{\link{rasch}}.
+#' @param file Output path ending in \code{.pdf} (one page per person) or
+#'   \code{.zip} (one PNG per person).
+#' @param persons Row numbers or IDs; all estimated persons by default.
+#' @param level Confidence level of the band marking unexpected responses.
+#' @param width,height,dpi Device size in inches and PNG resolution.
+#' @return Invisibly, the output path.
+#' @examples
+#' set.seed(1)
+#' d <- seq(-2, 2, length.out = 6)
+#' X <- matrix(rbinom(60 * 6, 1, plogis(outer(rnorm(60), d, "-"))), 60, 6)
+#' colnames(X) <- paste0("I", 1:6)
+#' f <- rasch(X)
+#' save_person_plots(f, file.path(tempdir(), "kidmaps.pdf"), persons = 1:5)
+#' @export
+save_person_plots <- function(fit, file, persons = NULL, level = 0.95,
+                              width = 8, height = 6, dpi = 150) {
+  ps <- if (is.null(persons)) which(!is.na(fit$person$theta)) else persons
+  ids <- if (is.numeric(ps)) fit$person$id[ps] else ps
+  thunks <- lapply(ps, function(p)
+    function() plot_kidmap(fit, p, level = level))
+  .rr_plot_batch(thunks, as.character(ids), "kidmap", file,
+                 width, height, dpi)
+}
+
 #' Save every output of a Rasch analysis to a folder
 #'
 #' Writes all tables (item statistics, thresholds with standard errors, person
@@ -85,6 +187,7 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
   rc <- residual_correlations(fit)
   wtab(data.frame(item = rownames(rc$matrix), round(rc$matrix, 4),
                   check.names = FALSE), "residual_correlations")
+  wtab(rc$pairs, "q3_statistics")
   if (nrow(rc$flagged)) wtab(rc$flagged, "local_dependence_flagged")
   pc <- residual_pca(fit)
   wtab(pc$loadings_matrix, "pca_loadings")
