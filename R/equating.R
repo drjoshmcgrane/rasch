@@ -75,9 +75,9 @@ equate_tests <- function(fit, reference, shift = c("mean", "none")) {
                     t = t, p = p, p_adj = p_adj,
                     drift = p_adj < 0.05)
   rownames(tab) <- NULL
-  list(table = tab, shift = c0,
+  structure(class = "rmt_equate", list(table = tab, shift = c0,
        correlation = cor(a$location, b$location),
-       rmsd = sqrt(mean((d - c0)^2)), n = n)
+       rmsd = sqrt(mean((d - c0)^2)), n = n))
 }
 
 #' Plot a test-equating comparison
@@ -123,4 +123,16 @@ plot_equate <- function(fit, reference, shift = c("mean", "none")) {
     text(tab$location_2[tab$drift], tab$location_1[tab$drift],
          tab$item[tab$drift], pos = 3, offset = 0.5, cex = 0.75, col = .rr$red)
   invisible(eq)
+}
+
+
+#' @export
+print.rmt_equate <- function(x, ...) {
+  cat(sprintf("Common-item equating over %d item(s): shift %.3f, correlation %.3f, RMSD %.3f\n",
+              x$n, x$shift, x$correlation, x$rmsd))
+  core <- c("item", "location_1", "location_2", "adj_difference", "t",
+            "p_adj", "drift")
+  print(.fmt_df(x$table[, intersect(core, names(x$table))]), row.names = FALSE)
+  cat("(standard errors and unadjusted columns on $table)\n")
+  invisible(x)
 }

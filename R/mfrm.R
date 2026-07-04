@@ -325,9 +325,11 @@ print.rasch_mfrm <- function(x, ...) {
   cat(sprintf("PSI %.3f, power of fit: %s\n", x$psi$PSI, x$power_of_fit))
   for (f in x$facet_spec) {
     fe <- x$facet_effects[[f]]
+    core <- c("level", "severity", "se", "n", "fit_resid")
     cat(sprintf("\nFacet '%s' severities (logits):\n", f))
-    print(fe, digits = 3, row.names = FALSE)
+    print(.fmt_df(fe[, intersect(core, names(fe))]), row.names = FALSE)
   }
+  cat("(pooled fit residuals and their df on fit$facet_effects)\n")
   if (!is.null(x$interaction)) {
     big <- x$interaction_effects
     big <- big[abs(big$gamma) > 1.96 * big$se, , drop = FALSE]

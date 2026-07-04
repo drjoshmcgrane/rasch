@@ -812,17 +812,17 @@ print.rasch_efrm <- function(x, ...) {
   cat("\nPerson group units (phi):\n")
   print(x$phi_table, digits = 3, row.names = FALSE)
   cat("\nItem set units (alpha) and locations:\n")
-  print(merge(x$alpha_table, x$set_table[, c("set", "mu", "n_items")], by = "set"),
-        digits = 3, row.names = FALSE)
+  print(.fmt_df(merge(x$alpha_table, x$set_table[, c("set", "mu", "n_items")],
+                      by = "set", sort = FALSE)), row.names = FALSE)
   cat(sprintf("\nEqual-unit comparison: 2(ll_EFRM - ll_equal) = %.3f with %d extra unit parameter(s)\n",
               x$efrm_vs_rasch$two_delta_ll, x$efrm_vs_rasch$extra_parameters))
   cat("(composite likelihood: descriptive; informative for ",
       x$efrm_vs_rasch$informative_for, ")\n", sep = "")
   if (!is.null(x$efrm_vs_rasch$unit_tests)) {
     cat("Wald tests of the units (H0: unit = 1):\n")
-    print(x$efrm_vs_rasch$unit_tests, digits = 3, row.names = FALSE)
+    print(.fmt_df(x$efrm_vs_rasch$unit_tests), row.names = FALSE)
   }
-  if (length(x$notes)) cat("\nNotes:", paste(x$notes, collapse = "; "), "\n")
+  if (length(x$notes)) cat(sprintf("\nNotes: %s\n", paste(x$notes, collapse = "; ")))
   invisible(x)
 }
 

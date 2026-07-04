@@ -98,11 +98,12 @@ compare_fits <- function(..., reference = 1) {
 
 #' @export
 print.rasch_compare <- function(x, ...) {
-  cat("Model comparison (reference:", attr(x, "reference"), ")\n\n")
-  y <- as.data.frame(x)
-  num <- vapply(y, is.numeric, TRUE)
-  y[num] <- lapply(y[num], round, 3)
-  print(y, row.names = FALSE)
+  cat(sprintf("Model comparison (reference: %s)\n\n", attr(x, "reference")))
+  core <- c("label", "model", "persons", "items", "two_delta_ll",
+            "chisq_per_df", "item_fit_sd", "person_fit_sd", "PSI", "alpha")
+  y <- as.data.frame(x)[, intersect(core, names(x)), drop = FALSE]
+  print(.fmt_df(y), row.names = FALSE)
+  cat("(further columns on the object: loglik, parameters, same_data)\n")
   cat("\n", attr(x, "note"), "\n", sep = "")
   invisible(x)
 }
@@ -200,11 +201,11 @@ lr_test <- function(fit, maxit = 60, tol = 1e-8) {
 #' @export
 print.rmt_lr <- function(x, ...) {
   cat("Likelihood-ratio test: partial credit vs rating parameterisation\n")
-  cat(sprintf("  Raw composite ChiSq %.3f on %d df, p = %.4f (conventional display; anticonservative)\n",
-              x$chisq, x$df, x$p))
+  cat(sprintf("  Raw composite chi-square %.3f on %d df, p = %s (conventional display; anticonservative)\n",
+              x$chisq, x$df, .fmt_p(x$p)))
   if (is.finite(x$chisq_adj))
-    cat(sprintf("  Adjusted ChiSq %.3f on %d df, p = %.4f (Kent 1982 first-order calibration)\n",
-                x$chisq_adj, x$df, x$p_adj))
+    cat(sprintf("  Adjusted chi-square %.3f on %d df, p = %s (Kent 1982 first-order calibration)\n",
+                x$chisq_adj, x$df, .fmt_p(x$p_adj)))
   cat(sprintf("  log-likelihood (pairwise composite): PCM %.3f, RSM %.3f\n",
               x$loglik_pcm, x$loglik_rsm))
   invisible(x)

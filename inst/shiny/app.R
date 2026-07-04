@@ -142,6 +142,10 @@ FACTORIAL <- "(all factors: factorial)"
 fmt_p <- function(p)
   ifelse(is.na(p), "NA", ifelse(p < 0.001, "< 0.001", sprintf("%.3f", p)))
 
+# value-box guard: NULL, NA, NaN, and Inf must never reach a conditional or
+# a sprintf; such values display as an em dash on a neutral theme
+finite1 <- function(x) is.numeric(x) && length(x) == 1L && is.finite(x)
+
 # helpers for the "R code for this analysis" disclosure
 qstr <- function(x) paste0('"', x, '"')
 qvec <- function(x)
@@ -376,7 +380,7 @@ panel_summary <- nav_panel("Summary", icon = bs_icon("clipboard-data"),
     uiOutput("vboxes"),
     layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       card(info_header("Test of fit",
-             "The total item-trait chi-square tests the invariance of item ordering across the trait; a significant result means at least one item's difficulty is not invariant across class intervals (Andrich & Marais 2019)."),
+             "The total item-trait chi-square tests the invariance of item ordering across the trait; a significant result means at least one item's difficulty is not invariant across class intervals (Andrich & Marais 2019). The cell df factor scales each item's chi-square degrees of freedom by the proportion of class-interval cells with enough responders to contribute."),
            card_body(verbatimTextOutput("fit_summary"))),
       card(card_header("Targeting & reliability"), card_body(verbatimTextOutput("targeting")))
     ),
@@ -419,47 +423,64 @@ panel_items <- nav_panel("Items", icon = bs_icon("list-check"),
                       TRUE, width = "420px"),
         downloadButton("dl_anchors", "Save anchors (CSV: item,k,tau)",
                        class = "btn-outline-secondary mb-3")),
-    tableCard("items_tbl", "Item statistics",
-      controls = cols_switch("items_full"),
-              "Click a row to inspect that item's chi-square detail and curves below. Location and SE from the pairwise conditional likelihood; fit residual ~ N(0,1) under fit; item-trait chi-square over class intervals; ANOVA F over class-interval cells; misfit flag uses BH-adjusted probabilities.",
-              info = "Fit residual: log-of-mean-square statistic, approximately N(0,1) under fit; |values| > 2.5 are conventionally flagged (Andrich & Marais 2019).",
-              footer = uiOutput("items_note")),
+    layout_columns(col_widths = c(7, 5),
+      tableCard("items_tbl", "Item statistics",
+        controls = cols_switch("items_full"),
+                "Click a row to explore that item on the right. Fit residual ~ N(0,1) under fit; misfit flag uses BH-adjusted chi-square probabilities.",
+                info = "Fit residual: log-of-mean-square statistic, approximately N(0,1) under fit; |values| > 2.5 are conventionally flagged (Andrich & Marais 2019).",
+                footer = uiOutput("items_note")),
+      navset_card_underline(
+        title = uiOutput("sel_item_title", inline = TRUE),
+        full_screen = TRUE,
+        nav_panel("Curve",
+                  plotOutput("icc", height = "440px"),
+                  div(class = "text-end",
+                      downloadButton("icc_png", "PNG", class = "btn-outline-secondary btn-xs"),
+                      downloadButton("icc_pdf", "PDF", class = "btn-outline-secondary btn-xs"))),
+        nav_panel("Categories",
+                  plotOutput("ccc", height = "440px"),
+                  div(class = "text-end",
+                      downloadButton("ccc_png", "PNG", class = "btn-outline-secondary btn-xs"),
+                      downloadButton("ccc_pdf", "PDF", class = "btn-outline-secondary btn-xs"))),
+        nav_panel("Thresholds",
+                  plotOutput("tpc", height = "440px"),
+                  div(class = "text-end",
+                      downloadButton("tpc_png", "PNG", class = "btn-outline-secondary btn-xs"),
+                      downloadButton("tpc_pdf", "PDF", class = "btn-outline-secondary btn-xs"))),
+        nav_panel("Frequencies",
+                  plotOutput("cfreq", height = "440px"),
+                  div(class = "text-end",
+                      downloadButton("cfreq_png", "PNG", class = "btn-outline-secondary btn-xs"),
+                      downloadButton("cfreq_pdf", "PDF", class = "btn-outline-secondary btn-xs"))),
+        nav_panel("Chi-square",
+                  uiOutput("chisq_caption"),
+                  DTOutput("chisq_int_tbl"),
+                  h6("Response categories by class interval", class = "mt-3"),
+                  DTOutput("chisq_cat_tbl"),
+                  div(class = "text-end mt-2",
+                      downloadButton("chisq_int_csv", "Intervals CSV",
+                                     class = "btn-outline-secondary btn-xs"),
+                      downloadButton("chisq_cat_csv", "Categories CSV",
+                                     class = "btn-outline-secondary btn-xs"))))),
     uiOutput("pc_comp_ui"),
-    card(full_screen = TRUE,
-      card_header(div(class = "d-flex justify-content-between align-items-center",
-        span("Chi-square detail (selected item)"),
-        div(class = "btn-group",
-            downloadButton("chisq_int_csv", "Intervals CSV",
-                           class = "btn-outline-secondary btn-xs"),
-            downloadButton("chisq_cat_csv", "Categories CSV",
-                           class = "btn-outline-secondary btn-xs")))),
-      card_body(
-        uiOutput("chisq_caption"),
-        DTOutput("chisq_int_tbl"),
-        h6("Response categories by class interval", class = "mt-3"),
-        DTOutput("chisq_cat_tbl"), padding = 12)),
-    layout_columns(col_widths = 12,
-      plotCard("icc", "Item characteristic curve"),
-      plotCard("ccc", "Category probability curves")),
-    layout_columns(col_widths = 12,
-      plotCard("tpc", "Threshold probability curves"),
-      plotCard("cfreq", "Category frequencies")),
+    conditionalPanel("output.has_mc == true",
     layout_columns(col_widths = 12,
       tableCard("distractor_tbl", "Distractor analysis",
-                "Multiple-choice analyses only (provide a key). Locations use the rest measure; a distractor whose takers are abler than the keyed option's flags a possible miskey."),
+                "Locations use the rest measure; a distractor whose takers are abler than the keyed option's flags a possible miskey."),
       plotCard("distractor_plot", "Option curves"),
       card(card_header("Polytomous option scoring (Andrich & Styles 2011)"),
            card_body(
              p(class = "text-muted",
                "Propose partial credit for informative distractors from the rest-measure evidence. Review substantively, download, edit if needed, and upload as the key (item,option,score) to refit."),
-             layout_columns(col_widths = c(3, 3, 6),
+             layout_columns(col_widths = c(3, 3, 3, 3),
                numericInput("rescore_min_n", "Min takers", 20, min = 5, step = 5),
                numericInput("rescore_z", "Separation z", 1.96, min = 0.5, step = 0.1),
                actionButton("rescore_go", "Propose option scores",
-                            class = "btn-primary mt-4")),
+                            class = "btn-primary mt-4"),
+               div(class = "mt-4", cols_switch("rescore_full"))),
              DT::DTOutput("rescore_tbl"),
              downloadButton("dl_rescore", "Download proposed key CSV",
-                            class = "btn-sm"))))
+                            class = "btn-sm")))))
   )
 
 # -------------------------------------------------------------- PERSONS --
@@ -536,13 +557,14 @@ panel_dif <- nav_panel("DIF", icon = bs_icon("sliders"),
            card_body(
              p(class = "text-muted",
                "Resolves the selected item by the selected factor (in factorial mode: by every significant, non-superseded group term) and reports pairwise location differences in logits with Holm familywise adjustment. Differences of at least the criterion are flagged as practically significant."),
-             layout_columns(col_widths = c(4, 4, 4),
+             layout_columns(col_widths = c(3, 3, 3, 3),
                numericInput("dif_size_flag", "Practical criterion (logits)",
                             0.5, min = 0.1, step = 0.1),
                numericInput("dif_size_minn", "Min responders per level", 20,
                             min = 5, step = 5),
                actionButton("dif_size_go", "Compute DIF size",
-                            class = "btn-primary mt-4")),
+                            class = "btn-primary mt-4"),
+               div(class = "mt-4", cols_switch("difsize_full"))),
              DT::DTOutput("dif_size_tbl"),
              downloadButton("dl_dif_size", "Download CSV", class = "btn-sm"))),
       plotCard("dif_icc", "ICC by group (DIF plot)")
@@ -583,7 +605,8 @@ panel_equating <- nav_panel("Equating", icon = bs_icon("arrow-left-right"),
                        class = "btn-outline-secondary w-100"),
         p(class = "text-muted small mt-2",
           "Common items (matched by name) are tested against the shifted identity line; flagged items show drift and weaken the equating link. Save a calibration now to equate a future analysis against it.")),
-      tableCard("eq_tbl", "Common-item comparison"),
+      tableCard("eq_tbl", "Common-item comparison",
+                controls = cols_switch("eq_full")),
       plotCard("eq_plot", "Equating plot")
     )
   )
@@ -596,7 +619,8 @@ panel_frames <- nav_panel("Frames", icon = bs_icon("grid-3x3"),
         p(class = "text-muted small",
           "Units rho = alpha (set) x phi (group) on a common arbitrary scale. Within a frame all curves are parallel; across frames they fan with the unit. Extended frame of reference analyses only.")),
       layout_columns(col_widths = breakpoints(sm = 12, xl = c(7, 5)),
-        tableCard("frame_tbl", "Frames: units, origins, pooled fit"),
+        tableCard("frame_tbl", "Frames: units, origins, pooled fit",
+                  controls = cols_switch("frames_full")),
         div(tableCard("phi_tbl", "Person group units (phi)"),
             tableCard("alpha_tbl", "Item set units (alpha) and locations"))),
       layout_columns(col_widths = 12,
@@ -627,7 +651,8 @@ panel_dim <- nav_panel("Dimensionality", icon = bs_icon("diagram-3"),
         plotCard("scree", "Scree of the residual components")),
       layout_columns(col_widths = 12,
         plotCard("pca_plot", "Residual first contrast"),
-        tableCard("loadings_tbl", "Component loadings (first 10)")),
+        tableCard("loadings_tbl", "Component loadings (first 10)",
+                  controls = cols_switch("load_full"))),
       tableCard("eigen_tbl", "Residual eigenvalues (first 10)"),
       card(
         full_screen = TRUE,
@@ -743,7 +768,8 @@ panel_compare <- nav_panel("Compare", icon = bs_icon("columns-gap"),
         p(class = "text-muted small mt-3",
           "Run an analysis, keep it, change the model or settings, run again, and keep that too. For fits of the same data the pairwise conditional log-likelihoods are compared directly (descriptive, composite likelihood; most meaningful for nested structures such as RSM inside PCM). Across different data preparations, compare the calibration-free columns: chi-square per df, fit residual SDs (ideal 1), PSI, and alpha.")),
       tableCard("cmp_tbl", "Model comparison",
-                "Reference for two_delta_ll is the fit chosen in the sidebar.")
+                "Reference for the log-likelihood comparison is the fit chosen in the sidebar.",
+                controls = cols_switch("cmp_full"))
     )
   )
 
@@ -783,6 +809,7 @@ panel_export <- nav_panel("Export", icon = bs_icon("download"),
 # structure, invariance, and utility menus; status chips and the dark-mode
 # toggle sit at the right of the navbar.
 ui <- page_navbar(
+  id = "nav",
   title = span("rmt"),
   theme = theme,
   # normal scrolling pages: never compress content to fit the viewport
@@ -1249,11 +1276,11 @@ server <- function(input, output, session) {
     # suspend while a BTL analysis is current
     if (inherits(fit, "rmt_btl")) {
       btl_fit(fit)
-      try(nav_select("BTL", session = session), silent = TRUE)
+      try(nav_select("nav", "BTL", session = session), silent = TRUE)
       return(NULL)
     }
     btl_fit(NULL)
-    try(nav_select("Summary", session = session), silent = TRUE)
+    try(nav_select("nav", "Summary", session = session), silent = TRUE)
     fit
   })
   btl_fit <- reactiveVal(NULL)
@@ -1261,6 +1288,36 @@ server <- function(input, output, session) {
     f <- override_fit()
     if (is.null(f)) f <- analysis()
     req(f); f
+  })
+
+  output$has_mc <- reactive({
+    f <- tryCatch(fit(), error = function(e) NULL)
+    !is.null(f) && !is.null(f$mc)
+  })
+  outputOptions(output, "has_mc", suspendWhenHidden = FALSE)
+
+  output$sel_item_title <- renderUI(span(class = "fw-semibold",
+    tryCatch(sel_item(), error = function(e) "Selected item")))
+
+  # only offer the pages that apply to the current analysis: Facets needs a
+  # many-facet fit, Frames an extended-frames fit, BTL a paired-comparison
+  # analysis, and Guessing a dichotomous one. Everything else stays.
+  observe({
+    f <- tryCatch(fit(), error = function(e) NULL)
+    bf <- btl_fit()
+    show <- function(target, on) {
+      fun <- if (isTRUE(on)) nav_show else nav_hide
+      try(fun("nav", target, session = session), silent = TRUE)
+    }
+    show("Facets", inherits(f, "rasch_mfrm"))
+    show("Frames", inherits(f, "rasch_efrm"))
+    show("BTL", !is.null(bf))
+    show("Guessing", !is.null(f) && !inherits(f, "rasch_mfrm") &&
+           !inherits(f, "rasch_efrm") && max(f$m) == 1L)
+    rasch_on <- !is.null(f)
+    for (tgt in c("Summary", "Items", "Persons", "Test", "Dimensionality",
+                  "Local dependence", "DIF", "Equating"))
+      show(tgt, rasch_on)
   })
 
   observeEvent(fit(), {
@@ -1365,27 +1422,82 @@ server <- function(input, output, session) {
             "uniform_DIF", "nonuniform_DIF"),
     facet = c("level", "severity", "se", "n", "fit_resid"),
     btl_obj = c("object", "location", "se", "comparisons", "wins", "fit_resid"),
-    btl_judge = c("judge", "n", "fit_resid", "misfit"))
+    btl_judge = c("judge", "n", "fit_resid", "misfit"),
+    equate = c("item", "location_1", "location_2", "adj_difference", "t",
+               "p_adj", "drift"),
+    dif_size = c("item", "term", "level_a", "level_b", "difference", "lower",
+                 "upper", "p_adj", "significant", "practical"),
+    frames = c("set", "group", "rho", "se_log_rho", "origin", "fit_resid",
+               "n_responses"),
+    compare = c("label", "model", "persons", "items", "two_delta_ll",
+                "chisq_per_df", "item_fit_sd", "person_fit_sd", "PSI", "alpha"),
+    rescore = c("item", "option", "keyed", "n", "prop", "mean_location",
+                "z_sep", "proposed"))
   curate <- function(d, which, full = FALSE, extra = NULL) {
     if (isTRUE(full)) return(d)
     keep <- c(CORE[[which]], extra)
     d[, intersect(keep, names(d)), drop = FALSE]
   }
+  # display headers for the tables; downloads always keep the raw names
+  DISPLAY_NAMES <- c(
+    fit_resid = "Fit resid", fit_resid_pooled = "Pooled fit resid",
+    natural_resid = "Natural resid", infit_ms = "Infit MS",
+    outfit_ms = "Outfit MS", infit_z = "Infit z", outfit_z = "Outfit z",
+    se = "SE", theta = "Location", max_raw = "Max score", raw = "Raw score",
+    n_items = "Items", chisq = "Chi-sq", df_fit = "Fit df", p = "p",
+    p_adj = "Adj. p", p_bonf = "Bonf. p", p_anova = "ANOVA p",
+    F_anova = "ANOVA F", F_uniform = "F (uniform)",
+    F_nonuniform = "F (non-unif.)", p_uniform_adj = "Adj. p (uniform)",
+    p_nonuniform_adj = "Adj. p (non-unif.)",
+    eta2_uniform = "η² (uniform)",
+    eta2_nonuniform = "η² (non-unif.)",
+    eta2_partial = "Partial η²",
+    uniform_DIF = "Uniform", nonuniform_DIF = "Non-uniform",
+    mean_location = "Mean location", point_biserial = "Point-biserial",
+    se_location = "SE", z_sep = "Separation z",
+    alpha_drop = "α if deleted", item_total = "Item-total r",
+    item_rest = "Item-rest r", di = "Discrimination", cum_pct = "Cum. %",
+    exp_prop = "Expected", obs_prop = "Observed", obs_mean = "Observed mean",
+    exp_value = "Expected value", theta_mean = "Mean location",
+    theta_max = "Max location", chisq_per_df = "Chi-sq/df",
+    two_delta_ll = "2Δ log-lik", se_log_phi = "SE (log φ)",
+    se_log_alpha = "SE (log α)", se_log_rho = "SE (log ρ)",
+    mu = "Origin", comparisons = "Comparisons",
+    obs_p = "Observed", est_p = "Expected", obs_t = "Threshold prop.")
+  # p-value columns render as "<0.001" / 3 dp on the client, so sorting
+  # still uses the raw value; detection runs on the ORIGINAL column names
+  P_COL_RE <- "^p$|^p_|_p$|^prob$|p_tukey|p_anova|p_adj|p_bonf|p_uniform|p_nonuniform"
+  P_RENDER <- DT::JS("function(data,type,row){ if(type==='display'){ if(data===null||data==='') return ''; var x=Number(data); return x<0.001 ? '&lt;0.001' : x.toFixed(3);} return data; }")
   num_dt <- function(d, digits = 3, fit_col = NULL, p_bold = NULL, ...) {
+    orig <- names(d)
     num <- vapply(d, is.numeric, TRUE)
+    # integer-valued columns (counts, whole-number df) show no decimals;
+    # fractional df columns fail the test and keep the 3-dp rounding
+    intcol <- vapply(d, function(v)
+      is.numeric(v) && all(is.na(v) | v == round(v)), TRUE)
+    pcol <- num & grepl(P_COL_RE, orig)
     opts <- list(pageLength = 15, scrollX = TRUE,
                  dom = if (nrow(d) > 12) "tip" else "t")
+    cdefs <- list()
     if (any(num))
-      opts$columnDefs <- list(list(className = "dt-right",
-                                   targets = which(num) - 1L))
+      cdefs[[length(cdefs) + 1L]] <- list(className = "dt-right",
+                                          targets = which(num) - 1L)
+    for (j in which(pcol))
+      cdefs[[length(cdefs) + 1L]] <- list(targets = j - 1L, render = P_RENDER)
+    if (length(cdefs)) opts$columnDefs <- cdefs
+    # display-only renaming; formatting targets are column positions, so
+    # they stay tied to the original names computed above
+    hit <- orig %in% names(DISPLAY_NAMES)
+    names(d)[hit] <- DISPLAY_NAMES[orig[hit]]
     dt <- datatable(d, rownames = FALSE, style = "bootstrap5",
                     class = "table-sm compact hover order-column", ...,
-                    options = opts) |>
-      formatRound(names(d)[num], digits)
-    for (fc in intersect(fit_col, names(d)))
+                    options = opts)
+    rnd <- which(num & !intcol & !pcol)
+    if (length(rnd)) dt <- formatRound(dt, rnd, digits)
+    for (fc in which(orig %in% fit_col))
       dt <- formatStyle(dt, fc, color = styleInterval(
-        c(-2.5, 2.5), c("#dc2626", "inherit", "#dc2626")))
-    for (pc in intersect(p_bold, names(d)))
+        c(-2.5, 2.5), c("var(--bs-danger)", "inherit", "var(--bs-danger)")))
+    for (pc in which(orig %in% p_bold))
       dt <- formatStyle(dt, pc,
                         fontWeight = styleInterval(0.05, c("bold", "normal")))
     dt
@@ -1399,22 +1511,27 @@ server <- function(input, output, session) {
     chip <- function(txt, kind = "secondary")
       span(class = paste0("badge text-bg-", kind), txt)
     b <- btl_fit()
-    if (!is.null(b))
+    if (!is.null(b)) {
+      osi <- b$osi$PSI
       return(div(class = "nav-status d-flex align-items-center gap-1 px-2",
         chip("BTL", "primary"),
         chip(paste(nrow(b$objects), "objects")),
         chip(sprintf("%.0f comparisons", b$n_comparisons)),
-        chip(sprintf("OSI %.2f", b$osi$PSI),
-             if (b$osi$PSI >= 0.7) "success" else "danger")))
+        chip(if (finite1(osi)) sprintf("OSI %.2f", osi) else "OSI —",
+             if (!finite1(osi)) "secondary"
+             else if (osi >= 0.7) "success" else "danger")))
+    }
     f <- override_fit()
     if (is.null(f)) f <- tryCatch(analysis(), error = function(e) NULL)
     if (is.null(f)) return(NULL)
+    psi <- f$psi$PSI
     div(class = "nav-status d-flex align-items-center gap-1 px-2",
       chip(f$model, "primary"),
       chip(paste(nrow(f$X), "persons")),
       chip(paste(ncol(f$X), "items")),
-      chip(sprintf("PSI %.2f", f$psi$PSI),
-           if (f$psi$PSI >= 0.7) "success" else "danger"))
+      chip(if (finite1(psi)) sprintf("PSI %.2f", psi) else "PSI —",
+           if (!finite1(psi)) "secondary"
+           else if (psi >= 0.7) "success" else "danger"))
   })
 
   # -------------------------------------------------------------- summary --
@@ -1428,23 +1545,32 @@ server <- function(input, output, session) {
       value_box(span("PSI",
                      tooltip(bs_icon("info-circle", class = "ms-1"),
                              "Person Separation Index: the proportion of variance in person estimates not attributable to measurement error; 0.7 is a conventional minimum for distinguishing groups of persons (Andrich & Marais 2019).")),
-                sprintf("%.3f", f$psi$PSI),
+                if (finite1(f$psi$PSI)) sprintf("%.3f", f$psi$PSI) else "—",
                 showcase = bs_icon("speedometer2"),
                 showcase_layout = "left center",
-                theme = if (f$psi$PSI >= 0.7) "success" else "warning",
-                p(class = "small mb-0", sprintf("%.3f no extremes", f$psi_noext$PSI))),
-      value_box("Alpha", sprintf("%.3f", f$alpha$alpha),
+                theme = if (!finite1(f$psi$PSI)) "secondary"
+                        else if (f$psi$PSI >= 0.7) "success" else "warning",
+                p(class = "small mb-0",
+                  if (finite1(f$psi_noext$PSI))
+                    sprintf("%.3f no extremes", f$psi_noext$PSI)
+                  else "— no extremes")),
+      value_box("Alpha",
+                if (finite1(f$alpha$alpha)) sprintf("%.3f", f$alpha$alpha)
+                else "—",
                 showcase = bs_icon("calculator"),
                 showcase_layout = "left center",
-                theme = if (f$alpha$alpha >= 0.7) "success" else "warning",
+                theme = if (!finite1(f$alpha$alpha)) "secondary"
+                        else if (f$alpha$alpha >= 0.7) "success" else "warning",
                 p(class = "small mb-0",
                   if (isFALSE(f$alpha$applicable))
                     sprintf("complete cases only (n = %d)", f$alpha$n)
                   else sprintf("n = %d complete", f$alpha$n))),
-      value_box("Item-trait p", fmt_p(f$total_chisq_p),
+      value_box("Item-trait p",
+                if (finite1(f$total_chisq_p)) fmt_p(f$total_chisq_p) else "—",
                 showcase = bs_icon("clipboard-check"),
                 showcase_layout = "left center",
-                theme = if (f$total_chisq_p < 0.05) "danger" else "success"),
+                theme = if (!finite1(f$total_chisq_p)) "secondary"
+                        else if (f$total_chisq_p < 0.05) "danger" else "success"),
       value_box("Power of fit", f$power_of_fit,
                 showcase = bs_icon("lightning-charge"),
                 showcase_layout = "left center", theme = "secondary")
@@ -1458,15 +1584,14 @@ server <- function(input, output, session) {
                 f$est$iterations))
     cat(sprintf("Total item-trait chi-square: %.3f on %d df, p = %s  (%d class intervals)\n",
                 f$total_chisq, f$total_df, fmt_p(f$total_chisq_p), f$n_groups))
-    cat(sprintf("Item fit residual:   mean %6.2f  SD %5.2f  skew %5.2f  kurt %5.2f\n",
+    cat(sprintf("Item fit residual:   mean %6.2f  SD %5.2f  skew %5.2f  kurt %5.2f  (ideal 0, 1)\n",
                 f$item_fit_summary$mean, f$item_fit_summary$sd,
                 f$item_fit_summary$skewness, f$item_fit_summary$kurtosis))
     cat(sprintf("Person fit residual: mean %6.2f  SD %5.2f  skew %5.2f  kurt %5.2f  (ideal 0, 1)\n",
                 f$person_fit_summary$mean, f$person_fit_summary$sd,
                 f$person_fit_summary$skewness, f$person_fit_summary$kurtosis))
-    cat(sprintf("Fit-location correlation: items %.3f, persons %.3f; cell df factor %.3f\n",
-                ss$cor_item_fit_location, ss$cor_person_fit_location,
-                ss$df_factor))
+    cat(sprintf("Fit-location correlation: items %.3f, persons %.3f\n",
+                ss$cor_item_fit_location, ss$cor_person_fit_location))
     cat(sprintf("Items flagged misfitting (BH-adjusted): %d of %d\n",
                 sum(f$items$misfit, na.rm = TRUE), nrow(f$items)))
     dis <- names(which(vapply(f$thresholds_diag, function(d)
@@ -1521,7 +1646,10 @@ server <- function(input, output, session) {
     f <- fit()
     if (!is.null(f$score_table)) {
       d <- score_dat()
-      d$extrapolated <- ifelse(d$extrapolated, "*", "")
+      if ("extrapolated" %in% names(d)) {
+        if (!isTRUE(any(d$extrapolated))) d$extrapolated <- NULL
+        else d$extrapolated <- ifelse(d$extrapolated, "*", "")
+      }
       datatable(d, rownames = FALSE, style = "bootstrap5",
                 class = "table-sm compact hover order-column",
                 options = list(pageLength = 15, scrollX = TRUE,
@@ -1592,10 +1720,10 @@ server <- function(input, output, session) {
   output$lr_txt <- renderPrint({
     r <- lr_res()
     validate(need(!is.null(r), "Press the button to run the test."))
-    cat(sprintf("Raw composite ChiSq %.3f on %d df, p = %s (conventional display; anticonservative)\n",
+    cat(sprintf("Raw composite chi-square %.3f on %d df, p = %s (conventional display; anticonservative)\n",
                 r$chisq, r$df, fmt_p(r$p)))
     if (is.finite(r$chisq_adj))
-      cat(sprintf("Adjusted ChiSq %.3f, p = %s (Kent 1982 calibration)\n",
+      cat(sprintf("Adjusted chi-square %.3f, p = %s (Kent 1982 calibration)\n",
                   r$chisq_adj, fmt_p(r$p_adj)))
     else cat("Adjusted (Kent 1982) statistic unavailable for this fit.\n")
     cat(sprintf("log-likelihood (pairwise composite): PCM %.3f, rating %.3f\n",
@@ -1653,12 +1781,14 @@ server <- function(input, output, session) {
   output$chisq_caption <- renderUI({
     cd <- chisq_res()
     p(class = "small mb-2", HTML(sprintf(
-      "<b>%s</b> (location %.3f): total ChiSq <b>%.3f</b> on %d df, p = %s; whole-sample mean = %.3f. Intervals with fewer than 2 responders carry no chi-square contribution.",
+      "<b>%s</b> (location %.3f): total chi-square <b>%.3f</b> on %d df, p = %s; whole-sample mean = %.3f. Intervals with fewer than 2 responders carry no chi-square contribution.",
       cd$item, cd$location, cd$chisq, cd$df, fmt_p(cd$p), cd$ave)))
   })
   output$chisq_int_tbl <- renderDT({
     d <- chisq_res()$intervals
-    d$used <- ifelse(d$used, "", "(excluded)")
+    d$Excluded <- ifelse(d$used, "", "*")
+    d$used <- NULL
+    d$theta_max <- NULL   # in the CSV download, not the default display
     num_dt(d)
   })
   output$chisq_cat_tbl <- renderDT(num_dt(chisq_res()$categories))
@@ -1739,8 +1869,8 @@ server <- function(input, output, session) {
   output$rescore_tbl <- DT::renderDT({
     res <- rescore_res()
     validate(need(!is.null(res), "Run the proposal to see the evidence table."))
-    d <- res$evidence
-    d$keyed <- ifelse(d$keyed, "*", "")
+    d <- curate(res$evidence, "rescore", full = isTRUE(input$rescore_full))
+    if ("keyed" %in% names(d)) d$keyed <- ifelse(d$keyed, "*", "")
     num_dt(d)
   })
   output$dl_rescore <- downloadHandler(
@@ -1778,7 +1908,7 @@ server <- function(input, output, session) {
                            !names(d) %in% c("raw", "max_raw", "n_items", "class_interval")], 3)
     if ("fit_resid" %in% names(d))
       dt <- formatStyle(dt, "fit_resid", color = styleInterval(
-        c(-2.5, 2.5), c("#dc2626", "inherit", "#dc2626")))
+        c(-2.5, 2.5), c("var(--bs-danger)", "inherit", "var(--bs-danger)")))
     dt
   })
   register_plot("pcc", function() {
@@ -1824,7 +1954,7 @@ server <- function(input, output, session) {
       d <- dif_fact()$terms
       d$significant <- ifelse(d$significant, "*", "")
       d$superseded <- ifelse(d$superseded, "(superseded)", "")
-      num_dt(d) |> formatRound(c("p", "p_adj"), 3)
+      num_dt(d)
     } else {
       d <- dif_res()
       if (!is.null(input$dif_factor) && input$dif_factor %in% d$factor)
@@ -1832,8 +1962,7 @@ server <- function(input, output, session) {
       d <- curate(d, "dif", full = isTRUE(input$dif_full))
       d$uniform_DIF <- ifelse(d$uniform_DIF, "*", "")
       d$nonuniform_DIF <- ifelse(d$nonuniform_DIF, "*", "")
-      num_dt(d) |> formatRound(c("p_uniform", "p_nonuniform",
-                                "p_uniform_adj", "p_nonuniform_adj"), 3)
+      num_dt(d)
     }
   })
   output$dif_note <- renderUI({
@@ -1862,7 +1991,7 @@ server <- function(input, output, session) {
                        rownames = FALSE, style = "bootstrap5",
                        class = "table-sm compact",
                        options = list(dom = "t")))
-    num_dt(tk) |> formatRound("p_tukey", 3)
+    num_dt(tk)
   })
   register_plot("dif_icc", function() {
     f <- fit()
@@ -1906,8 +2035,11 @@ server <- function(input, output, session) {
   output$dif_size_tbl <- DT::renderDT({
     d <- dif_size_res()
     validate(need(!is.null(d), "Compute DIF sizes to see the logit-scale comparisons."))
-    d$significant <- ifelse(d$significant, "*", "")
-    d$practical <- ifelse(d$practical, "PRACTICAL", "")
+    d <- curate(d, "dif_size", full = isTRUE(input$difsize_full))
+    if ("significant" %in% names(d))
+      d$significant <- ifelse(d$significant, "*", "")
+    if ("practical" %in% names(d))
+      d$practical <- ifelse(d$practical, "PRACTICAL", "")
     num_dt(d)
   })
   output$dl_dif_size <- downloadHandler(
@@ -1931,10 +2063,14 @@ server <- function(input, output, session) {
       value_box("Comparisons", sprintf("%.0f", f$n_comparisons), theme = "primary"),
       if (!is.null(f$judges))
         value_box("Judges", nrow(f$judges), theme = "primary"),
-      value_box("Object separation", sprintf("%.3f", f$osi$PSI),
-                theme = "success"),
-      value_box("Pairwise fit p", fmt_p(f$total_p),
-                theme = if (f$total_p < 0.05) "danger" else "success"))
+      value_box("Object separation",
+                if (finite1(f$osi$PSI)) sprintf("%.3f", f$osi$PSI) else "—",
+                theme = if (!finite1(f$osi$PSI)) "secondary"
+                        else if (f$osi$PSI >= 0.7) "success" else "danger"),
+      value_box("Pairwise fit p",
+                if (finite1(f$total_p)) fmt_p(f$total_p) else "—",
+                theme = if (!finite1(f$total_p)) "secondary"
+                        else if (f$total_p < 0.05) "danger" else "success"))
   })
   output$btl_summary <- renderText({
     f <- bfit()
@@ -1953,7 +2089,11 @@ server <- function(input, output, session) {
                                           full = isTRUE(input$btl_full)),
                                    fit_col = "fit_resid"))
   register_table("btl_pairs_tbl", function() bfit()$pairs,
-                 function() num_dt(bfit()$pairs))
+                 function() {
+    d <- bfit()$pairs
+    d$chisq <- NULL   # residual^2; redundant on screen, kept in the CSV
+    num_dt(d)
+  })
   register_table("btl_judges_tbl", function() {
     validate(need(!is.null(bfit()$judges), "No judge column was nominated."))
     bfit()$judges
@@ -2027,10 +2167,9 @@ server <- function(input, output, session) {
   })
   eq_res <- reactive(equate_tests(fit(), eq_reference(), shift = input$eq_shift))
   register_table("eq_tbl", function() eq_res()$table, function() {
-    eq <- eq_res()
-    d <- eq$table
-    d$drift <- ifelse(d$drift, "*", "")
-    num_dt(d) |> formatRound(c("p", "p_adj"), 3)
+    d <- curate(eq_res()$table, "equate", full = isTRUE(input$eq_full))
+    if ("drift" %in% names(d)) d$drift <- ifelse(d$drift, "*", "")
+    num_dt(d)
   })
   register_plot("eq_plot", function()
     plot_equate(fit(), eq_reference(), shift = input$eq_shift))
@@ -2059,15 +2198,22 @@ server <- function(input, output, session) {
     f
   })
   register_table("frame_tbl", function() efrm_fit()$frames,
-                 function() num_dt(efrm_fit()$frames))
+                 function() num_dt(curate(efrm_fit()$frames, "frames",
+                                          full = isTRUE(input$frames_full))))
   register_table("phi_tbl", function() efrm_fit()$phi_table,
                  function() num_dt(efrm_fit()$phi_table))
-  register_table("alpha_tbl", function()
-    merge(efrm_fit()$alpha_table, efrm_fit()$set_table[, c("set", "mu", "n_items")],
-          by = "set"),
-    function() num_dt(merge(efrm_fit()$alpha_table,
-                            efrm_fit()$set_table[, c("set", "mu", "n_items")],
-                            by = "set")))
+  # keep the fit's original set order: merge() sorts by the key, so it is
+  # re-matched to fit$set_table$set
+  efrm_alpha_tbl <- reactive({
+    f <- efrm_fit()
+    d <- merge(f$alpha_table, f$set_table[, c("set", "mu", "n_items")],
+               by = "set", sort = FALSE)
+    d <- d[stats::na.omit(match(f$set_table$set, d$set)), , drop = FALSE]
+    rownames(d) <- NULL
+    d
+  })
+  register_table("alpha_tbl", function() efrm_alpha_tbl(),
+                 function() num_dt(efrm_alpha_tbl()))
   register_plot("frame_plot", function() plot_frames(efrm_fit()))
   register_plot("frame_icc", function() {
     f <- efrm_fit()
@@ -2177,9 +2323,22 @@ server <- function(input, output, session) {
     })
   register_plot("scree", function() plot_scree(fit()))
   register_table("loadings_tbl", function() residual_pca(fit())$loadings_matrix,
-                 function() num_dt(residual_pca(fit())$loadings_matrix))
+                 function() {
+    d <- residual_pca(fit())$loadings_matrix
+    if (!isTRUE(input$load_full))
+      d <- d[, intersect(c("item", "PC1", "PC2", "PC3"), names(d)),
+             drop = FALSE]
+    num_dt(d)
+  })
   register_table("eigen_tbl", function() residual_pca(fit())$eigen_table,
-                 function() num_dt(residual_pca(fit())$eigen_table))
+                 function() {
+    d <- residual_pca(fit())$eigen_table
+    d$proportion <- 100 * d$proportion
+    d$cumulative <- 100 * d$cumulative
+    names(d)[match(c("proportion", "cumulative"), names(d))] <-
+      c("Proportion %", "Cumulative %")
+    num_dt(d) |> formatRound(c("Proportion %", "Cumulative %"), 1)
+  })
   register_plot("pca_plot", function() plot_pca(fit()))
 
   # -------------------------------------------------------- local dependence --
@@ -2345,8 +2504,9 @@ server <- function(input, output, session) {
   })
   register_table("cmp_tbl", function() cmp_res(), function() {
     d <- cmp_res()
-    d$same_data <- ifelse(d$same_data, "yes", "no")
-    num_dt(d)
+    if ("same_data" %in% names(d))
+      d$same_data <- ifelse(d$same_data, "yes", "no")
+    num_dt(curate(d, "compare", full = isTRUE(input$cmp_full)))
   })
 
   # ----------------------------------------------------------------- export --

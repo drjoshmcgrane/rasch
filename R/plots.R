@@ -75,7 +75,7 @@ plot_icc <- function(fit, item, group = NULL, n_groups = fit$n_groups,
   th <- fit$person$theta; x <- fit$X[, i]; ok <- !is.na(th) & !is.na(x)
   op <- .rr_canvas(range(grid), c(0, mmax), "Person location (logits)",
                    "Expected score",
-                   paste0("ICC \u2013 ", fit$items$item[i],
+                   paste0("Item characteristic curve \u2013 ", fit$items$item[i],
                           sprintf("  (location %.3f)", fit$items$location[i])))
   on.exit(par(op))
   lines(grid, Ecurve, lwd = 3, col = .rr$ink)
@@ -151,7 +151,7 @@ plot_ccc <- function(fit, item, grid = seq(-6, 6, 0.05), observed = FALSE,
   mtext(if (ordered) "thresholds ordered" else "THRESHOLDS DISORDERED",
         side = 3, line = 0.2, adj = 0, cex = 0.8,
         col = if (ordered) .rr$teal else .rr$red)
-  .rr_legend("right", paste0("cat ", 0:mmax), lwd = 2.6,
+  .rr_legend("right", paste0("Category ", 0:mmax), lwd = 2.6,
              col = .rr$pal[(0:mmax) %% length(.rr$pal) + 1L])
   invisible(NULL)
 }
@@ -260,9 +260,9 @@ plot_pimap <- function(fit, bins = 35) {
   rect(brk[-length(brk)], 0, brk[-1], pp, col = .rr$blue, border = "white", lwd = 0.6)
   rect(brk[-length(brk)], -pi, brk[-1], 0, col = .rr$amber, border = "white", lwd = 0.6)
   segments(mean(th), 0, mean(th), ymax * 0.95, col = .rr$ink, lty = 2)
-  text(mean(th), ymax * 0.98, sprintf("persons: %.3f (%.3f)", mean(th), sd(th)),
+  text(mean(th), ymax * 0.98, sprintf("persons: mean %.2f, SD %.2f", mean(th), sd(th)),
        col = .rr$ink, cex = 0.8, adj = -0.02)
-  text(mean(tau), ymin * 0.98, sprintf("thresholds: %.3f (%.3f)", mean(tau), sd(tau)),
+  text(mean(tau), ymin * 0.98, sprintf("thresholds: mean %.2f, SD %.2f", mean(tau), sd(tau)),
        col = .rr$ink, cex = 0.8, adj = -0.02)
   .rr_legend("topleft", c("Persons", "Item thresholds"),
              fill = c(.rr$blue, .rr$amber), border = NA)
@@ -375,8 +375,9 @@ plot_tif <- function(fit, grid = seq(-6, 6, 0.05)) {
   sem <- ti$sem; sem[!is.finite(sem)] <- NA
   scl <- max(ti$info) * 1.05 / max(sem[ti$theta > -4 & ti$theta < 4], na.rm = TRUE)
   lines(ti$theta, sem * scl, lwd = 2.2, col = .rr$red, lty = 5)
-  axis(4, at = pretty(c(0, max(ti$info))),
-       labels = signif(pretty(c(0, max(ti$info))) / scl, 2),
+  sem_ticks <- pretty(c(0, max(sem[ti$theta > -4 & ti$theta < 4], na.rm = TRUE)))
+  sem_ticks <- sem_ticks[sem_ticks * scl <= max(ti$info) * 1.1]
+  axis(4, at = sem_ticks * scl, labels = sem_ticks,
        col = .rr$grid, col.ticks = .rr$soft, col.axis = .rr$red, cex.axis = 0.8)
   mtext("SEM", side = 4, line = -1.2, col = .rr$red, cex = 0.85)
   .rr_legend("topleft", c("Information", "SEM"), lwd = c(3, 2.2),

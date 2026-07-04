@@ -301,17 +301,18 @@ print.rmt_btl <- function(x, ...) {
   cat(sprintf("Conditional ML: %s in %d iterations; sandwich SEs%s\n",
               if (x$converged) "converged" else "NOT converged", x$iterations,
               if (x$clustered) " clustered by judge" else ""))
-  cat(sprintf("Object separation index %.3f; pairwise chi-square %.2f on %d df, p = %.3f\n",
-              x$osi$PSI, x$total_chisq, x$total_df, x$total_p))
-  d <- x$objects
-  num <- vapply(d, is.numeric, TRUE)
-  d[num] <- lapply(d[num], round, 3)
-  print(d, row.names = FALSE)
+  cat(sprintf("Object separation index %.3f; pairwise chi-square %.2f on %d df, p = %s\n",
+              x$osi$PSI, x$total_chisq, x$total_df, .fmt_p(x$total_p)))
+  print(.fmt_df(x$objects[, intersect(c("object", "location", "se",
+                                        "comparisons", "wins", "fit_resid"),
+                                      names(x$objects))]), row.names = FALSE)
   if (!is.null(x$judges)) {
     mis <- x$judges[!is.na(x$judges$fit_resid) & abs(x$judges$fit_resid) > 2.5, ]
-    cat(sprintf("Judges beyond |fit residual| 2.5: %d\n", nrow(mis)))
+    cat(sprintf("Judges beyond |fit residual| 2.5: %d%s\n", nrow(mis),
+                if (nrow(mis)) paste0(" (", paste(mis$judge, collapse = ", "), ")")
+                else ""))
   }
-  if (length(x$notes)) cat("Notes:", paste(x$notes, collapse = "; "), "\n")
+  if (length(x$notes)) cat(sprintf("Notes: %s\n", paste(x$notes, collapse = "; ")))
   invisible(x)
 }
 

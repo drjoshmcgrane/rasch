@@ -258,11 +258,17 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
     d <- d[seq_len(max_rows), , drop = FALSE]
   }
   esc <- function(x) gsub("<", "&lt;", gsub("&", "&amp;", as.character(x)))
+  # drop all-FALSE logical flag columns and constant 'max' columns
+  drop <- vapply(seq_along(d), function(j)
+    (is.logical(d[[j]]) && !any(d[[j]], na.rm = TRUE)) ||
+    (names(d)[j] == "max" && length(unique(d[[j]])) == 1L), TRUE)
+  d <- d[, !drop, drop = FALSE]
+  if (!ncol(d)) return("")
+  fd <- .fmt_df(d, digits)
   num <- vapply(d, is.numeric, TRUE)
   cells <- vapply(seq_len(ncol(d)), function(j) {
-    v <- d[[j]]
-    if (num[j]) formatC(round(v, digits), format = "g", digits = digits + 2)
-    else esc(v)
+    v <- fd[[j]]
+    if (num[j]) gsub("<", "&lt;", v) else esc(v)
   }, character(nrow(d)))
   if (is.null(dim(cells))) cells <- matrix(cells, nrow = 1)
   head_html <- paste0("<th>", esc(names(d)), "</th>", collapse = "")
@@ -318,8 +324,8 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
     sprintf("<p>Pairwise conditional estimation %s in %d iterations. ",
             if (isTRUE(fit$est$converged)) "converged" else "did <b>not</b> converge",
             fit$est$iterations),
-    sprintf("Total item-trait chi-square %.2f on %d df (p = %.3f). ",
-            fit$total_chisq, fit$total_df, fit$total_chisq_p),
+    sprintf("Total item-trait chi-square %.2f on %d df (p = %s). ",
+            fit$total_chisq, fit$total_df, .fmt_p(fit$total_chisq_p)),
     sprintf("Item fit residual mean %.2f, SD %.2f; person fit residual mean %.2f, SD %.2f. ",
             fit$item_fit_summary$mean, fit$item_fit_summary$sd,
             fit$person_fit_summary$mean, fit$person_fit_summary$sd),
@@ -360,6 +366,11 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
     .html_table({ th <- fit$thresholds
                   th$item <- fit$items$item[th$item]
                   th[, c("item", "k", "tau", "se")] }),
+    { dis <- names(which(vapply(fit$thresholds_diag, function(dd)
+        !dd$ordered && length(dd$thresholds) > 1L, TRUE)))
+      if (length(dis)) sprintf("<p class='flag'>Disordered thresholds: %s.</p>",
+                               paste(dis, collapse = ", "))
+      else "<p class='note'>All polytomous items have ordered thresholds.</p>" },
     shot(function() plot_threshold_map(fit), "threshold_map"),
     "<h2>Test characteristic and information</h2>",
     shot(function() plot_tcc(fit), "tcc"),
@@ -389,6 +400,17 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
                                      "eta2_nonuniform", "uniform_DIF",
                                      "nonuniform_DIF"), names(da))])) else ""
     } else "",
+    if (!is.null(fit$mc)) s("<h2>Distractor analysis</h2>",
+      "<p class='note'>Locations use the rest measure; a distractor whose takers are abler than the keyed option's flags a possible miskey.</p>",
+      .html_table(tryCatch(distractor_analysis(fit), error = function(e) NULL))) else "",
+    if (inherits(fit, "rasch_mfrm")) s("<h2>Facet severities</h2>",
+      paste(vapply(fit$facet_spec, function(f) s("<h3>", f, "</h3>",
+        .html_table(fit$facet_effects[[f]][, intersect(c("level", "severity",
+          "se", "n", "fit_resid"), names(fit$facet_effects[[f]]))])), ""),
+        collapse = "")) else "",
+    if (inherits(fit, "rasch_efrm")) s("<h2>Frames and units</h2>",
+      .html_table(fit$frames[, intersect(c("set", "group", "rho", "se_log_rho",
+        "origin", "fit_resid", "n_responses"), names(fit$frames))])) else "",
     "<h2>Person estimates</h2>",
     .html_table(fit$person[, intersect(c("id", names(fit$factors), "raw",
                                          "max_raw", "theta", "se", "extreme",

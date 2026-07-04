@@ -51,8 +51,8 @@ guttman_table <- function(fit) {
     errors <- errors + sum(abs(obs[ok] - pred))
     total  <- total + sum(cap)
   }
-  list(matrix = G, person_order = porder, item_order = iorder,
-       CR = 1 - errors / total, errors = errors, responses = total)
+  structure(class = "rmt_guttman", list(matrix = G, person_order = porder, item_order = iorder,
+       CR = 1 - errors / total, errors = errors, responses = total))
 }
 
 #' Plot the Guttman scalogram
@@ -96,4 +96,15 @@ plot_guttman <- function(fit, max_persons = 80) {
          legend = 0:m, fill = pal, border = NA, bty = "n", cex = 0.75,
          title = "score")
   invisible(NULL)
+}
+
+
+#' @export
+print.rmt_guttman <- function(x, ...) {
+  cat(sprintf("Guttman scalogram: %d persons x %d items (difficulty-ordered)\n",
+              nrow(x$matrix), ncol(x$matrix)))
+  cat(sprintf("Coefficient of reproducibility %.3f (%d error(s) in %d responses)\n",
+              x$CR, x$errors, x$responses))
+  cat("(the ordered response matrix is on $matrix; plot with plot_guttman())\n")
+  invisible(x)
 }

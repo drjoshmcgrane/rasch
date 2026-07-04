@@ -113,8 +113,8 @@ dependence_magnitude <- function(fit, dependent, independent) {
 print.rmt_dependence <- function(x, ...) {
   cat(sprintf("Response dependence of %s on %s (Andrich & Kreiner resolution)\n",
               x$dependent, x$independent))
-  cat(sprintf("  d = %.3f logits (se %.3f), z = %.2f, p = %.4f\n",
-              x$d, x$se, x$z, x$p))
+  cat(sprintf("  d = %.3f logits (se %.3f), z = %.2f, p = %s\n",
+              x$d, x$se, x$z, .fmt_p(x$p)))
   if (nrow(x$thresholds) > 1) {
     cat("  per threshold:\n")
     print(round(x$thresholds, 3), row.names = FALSE)
@@ -169,5 +169,15 @@ spread_test <- function(fit, maxit = 60, tol = 1e-8) {
   out$z <- (out$spread - out$lub) / out$se
   out$dependent <- !is.na(out$lub) & !is.na(out$spread) & out$spread < out$lub
   rownames(out) <- NULL
+  class(out) <- c("rmt_spread", "data.frame")
   out
+}
+
+#' @export
+print.rmt_spread <- function(x, ...) {
+  cat("Spread-parameter screen (Andrich 1985): spread below the binomial bound indicates dependence\n")
+  d <- as.data.frame(x)
+  names(d)[names(d) == "lub"] <- "bound"
+  print(.fmt_df(d), row.names = FALSE)
+  invisible(x)
 }

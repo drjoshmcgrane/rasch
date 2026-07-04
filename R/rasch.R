@@ -371,9 +371,9 @@ print.rasch <- function(x, ...) {
               if (isFALSE(x$alpha$applicable))
                 sprintf(" [complete cases only, n = %d]", x$alpha$n) else "",
               x$power_of_fit))
-  cat(sprintf("Total item-trait chi-square %.3f on %d df, p = %.3f\n",
-              x$total_chisq, x$total_df, x$total_chisq_p))
-  if (length(x$notes)) cat("Notes:", paste(x$notes, collapse = "; "), "\n")
+  cat(sprintf("Total item-trait chi-square %.3f on %d df, p = %s\n",
+              x$total_chisq, x$total_df, .fmt_p(x$total_chisq_p)))
+  if (length(x$notes)) cat(sprintf("Notes: %s\n", paste(x$notes, collapse = "; ")))
   invisible(x)
 }
 
@@ -397,11 +397,11 @@ summary.rasch <- function(object, ...) {
               sum(x$items$misfit, na.rm = TRUE), nrow(x$items)))
   core <- c("item", "max", "location", "se", "fit_resid", "infit_ms",
             "outfit_ms", "chisq", "df", "p_adj", "misfit")
-  print(x$items[, intersect(core, names(x$items))], digits = 3)
+  print(.fmt_df(x$items[, intersect(core, names(x$items))]), row.names = FALSE)
   cat("(further columns on fit$items: natural and standardised forms,\n",
       " ANOVA fit, Bonferroni probabilities)\n", sep = "")
   dis <- vapply(x$thresholds_diag, function(d) !d$ordered, TRUE) &
     vapply(x$thresholds_diag, function(d) length(d$thresholds) > 1L, TRUE)
-  if (any(dis)) cat("\nDisordered thresholds:", paste(names(dis)[dis], collapse = ", "), "\n")
+  if (any(dis)) cat(sprintf("\nDisordered thresholds: %s\n", paste(names(dis)[dis], collapse = ", ")))
   invisible(x)
 }
