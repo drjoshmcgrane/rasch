@@ -232,6 +232,8 @@ plot_threshold_prob <- function(fit, item, grid = seq(-6, 6, 0.05),
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param bins Number of histogram bins.
+#' @param xlim Optional logit range for the shared scale; persons and
+#'   thresholds outside it are omitted.
 #' @return Called for its plotting side effect; invisibly \code{NULL}.
 #' @examples
 #' set.seed(1)
@@ -240,10 +242,12 @@ plot_threshold_prob <- function(fit, item, grid = seq(-6, 6, 0.05),
 #' colnames(X) <- paste0("I", 1:6)
 #' plot_pimap(rasch(X))
 #' @export
-plot_pimap <- function(fit, bins = 35) {
+plot_pimap <- function(fit, bins = 35, xlim = NULL) {
   th <- fit$person$theta[!is.na(fit$person$theta)]
   tau <- fit$thresholds$tau
-  rng <- range(c(th, tau)); rng <- rng + c(-0.4, 0.4)
+  rng <- if (is.null(xlim)) range(c(th, tau)) + c(-0.4, 0.4) else sort(xlim)
+  th <- th[th >= rng[1] & th <= rng[2]]
+  tau <- tau[tau >= rng[1] & tau <= rng[2]]
   brk <- seq(rng[1], rng[2], length.out = bins + 1)
   hp <- hist(th, breaks = brk, plot = FALSE)
   hi <- hist(tau, breaks = brk, plot = FALSE)
@@ -266,6 +270,81 @@ plot_pimap <- function(fit, bins = 35) {
        col = .rr$ink, cex = 0.8, adj = -0.02)
   .rr_legend("topleft", c("Persons", "Item thresholds"),
              fill = c(.rr$blue, .rr$amber), border = NA)
+  invisible(NULL)
+}
+
+# ---------------------------------------------------------------------------
+# Wright map: the conventional vertical person-item map (Wright & Stone
+# 1979), person distribution left of a common logit axis, item threshold
+# labels stacked to its right.
+# ---------------------------------------------------------------------------
+#' Plot a Wright map
+#'
+#' The conventional vertical person-item map (Wright and Stone 1979): the
+#' person distribution to the left of a shared logit axis and the item
+#' thresholds, labelled by item (and threshold number for polytomous items),
+#' stacked to its right.
+#'
+#' @param fit A fitted object from \code{\link{rasch}}.
+#' @param bins Number of bins for the person distribution and the threshold
+#'   label rows.
+#' @param xlim Optional logit range for the shared scale; persons and
+#'   thresholds outside it are omitted.
+#' @return Called for its plotting side effect; invisibly \code{NULL}.
+#' @references Wright, B. D., & Stone, M. H. (1979). \emph{Best Test
+#'   Design}. Chicago: MESA Press.
+#' @examples
+#' set.seed(1)
+#' d <- seq(-2, 2, length.out = 6)
+#' X <- matrix(rbinom(400 * 6, 1, plogis(outer(rnorm(400), d, "-"))), 400, 6)
+#' colnames(X) <- paste0("I", 1:6)
+#' plot_wright(rasch(X))
+#' @export
+plot_wright <- function(fit, bins = 35, xlim = NULL) {
+  th <- fit$person$theta[!is.na(fit$person$theta)]
+  thr <- fit$thresholds
+  rng <- if (is.null(xlim)) range(c(th, thr$tau)) + c(-0.4, 0.4) else sort(xlim)
+  th <- th[th >= rng[1] & th <= rng[2]]
+  keep <- thr$tau >= rng[1] & thr$tau <= rng[2]
+  tv <- thr$tau[keep]
+  lab <- if (all(fit$m == 1L)) fit$items$item[thr$item[keep]] else
+    paste0(fit$items$item[thr$item[keep]], ".", thr$k[keep])
+  brk <- seq(rng[1], rng[2], length.out = bins + 1)
+  hp <- hist(th, breaks = brk, plot = FALSE)
+  pp <- hp$counts / max(1L, max(hp$counts))
+  bin <- pmin(findInterval(tv, brk, rightmost.closed = TRUE), bins)
+  split <- 0.42
+  op <- par(mar = c(1.2, 4.4, 3.2, 0.5), mgp = c(2.5, 0.7, 0), tcl = -0.25,
+            las = 1, col.axis = .rr$ink, col.lab = .rr$ink, col.main = .rr$ink,
+            font.main = 2, cex.main = 1.15)
+  on.exit(par(op))
+  plot(NA, xlim = c(0, 1), ylim = rng, xlab = "", ylab = "Location (logits)",
+       axes = FALSE, main = "")
+  title(main = "Wright map", adj = 0, line = 1.4)
+  abline(h = pretty(rng), col = .rr$grid, lwd = 0.8)
+  axis(2, col = .rr$grid, col.ticks = .rr$soft)
+  segments(split, rng[1], split, rng[2], col = .rr$ink, lwd = 1)
+  segments(split, mean(tv), 0.99, mean(tv), col = .rr$amber, lty = 2)
+  rect(split - pp * (split - 0.02), brk[-length(brk)], split, brk[-1],
+       col = .rr$blue, border = "white", lwd = 0.6)
+  segments(0.02, mean(th), split, mean(th), col = .rr$ink, lty = 2)
+  cexl <- 0.62
+  colw <- max(strwidth(lab, cex = cexl)) * 1.2
+  x0 <- split + 0.015
+  kmax <- max(1L, floor((1 - x0) / colw))
+  for (b in unique(bin)) {
+    ls <- lab[bin == b][order(tv[bin == b])]
+    if (length(ls) > kmax)
+      ls <- c(ls[seq_len(kmax - 1L)], paste0("+", length(ls) - kmax + 1L))
+    text(x0 + (seq_along(ls) - 1L) * colw, (brk[b] + brk[b + 1L]) / 2, ls,
+         cex = cexl, adj = 0, col = .rr$ink)
+  }
+  text(0.02, rng[2], sprintf("persons: mean %.2f, SD %.2f",
+                             mean(th), stats::sd(th)),
+       cex = 0.78, adj = c(0, 1), col = .rr$blue, font = 2)
+  text(0.99, rng[2], sprintf("thresholds: mean %.2f, SD %.2f",
+                             mean(tv), stats::sd(tv)),
+       cex = 0.78, adj = c(1, 1), col = .rr$amber, font = 2)
   invisible(NULL)
 }
 

@@ -455,9 +455,17 @@ panel_items <- nav_panel("Items", icon = bs_icon("list-check"),
                 info = "Fit residual: log-of-mean-square statistic, approximately N(0,1) under fit; |values| > 2.5 are conventionally flagged (Andrich & Marais 2019).",
                 footer = uiOutput("items_note")),
       navset_card_underline(
-        title = uiOutput("sel_item_title", inline = TRUE),
+        title = div(class = "d-flex align-items-center gap-2",
+          uiOutput("sel_item_title", inline = TRUE),
+          popover(
+            bs_icon("gear", class = "text-secondary"),
+            sliderInput("ex_ng", "Class intervals", min = 2, max = 10,
+                        value = 8, step = 1),
+            sliderInput("ex_rng", "Scale range (logits)", min = -8, max = 8,
+                        value = c(-5, 5), step = 0.5),
+            title = "Display settings")),
         full_screen = TRUE,
-        nav_panel("Curve",
+        nav_panel("ICC",
                   plotOutput("icc", height = "440px"),
                   div(class = "text-end",
                       downloadButton("icc_png", "PNG", class = "btn-outline-secondary btn-xs"),
@@ -492,6 +500,9 @@ panel_items <- nav_panel("Items", icon = bs_icon("list-check"),
                       downloadButton("chisq_cat_csv", "Categories CSV",
                                      class = "btn-outline-secondary btn-xs")),
                   rcode_details("chisq")))),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+      plotCard("thrmap", "Threshold map"),
+      plotCard("imap", "Item map: location by fit residual")),
     uiOutput("pc_comp_ui"),
     conditionalPanel("output.has_mc == true",
     layout_columns(col_widths = 12,
@@ -540,15 +551,27 @@ panel_persons <- nav_panel("Persons", icon = bs_icon("people"),
           plotOutput("rdist", height = "520px"), rcode_details("rdist"),
           padding = 8, fillable = FALSE))),
     layout_columns(col_widths = 12,
-      plotCard("pfit", "Person fit"),
-      plotCard("pim_p", "Person-item threshold distribution"))
+      plotCard("pfit", "Person fit"))
+  )
+
+# ------------------------------------------------------------ TARGETING --
+panel_targeting <- nav_panel("Targeting", icon = bs_icon("bullseye"),
+    layout_sidebar(
+      sidebar = sidebar(width = 280, open = "always",
+        sliderInput("tg_bins", "Histogram bins", min = 10, max = 60,
+                    value = 35, step = 1),
+        sliderInput("tg_rng", "Scale range (logits)", min = -10, max = 10,
+                    value = c(-5, 5), step = 0.5),
+        p(class = "text-muted small",
+          "Targeting compares the person distribution with the item threshold distribution on the common logit scale. A well-targeted test places its thresholds where the persons are, so measurement error stays small across the range of the sample; gaps or offsets between the two distributions show where precision is lost.")),
+      layout_columns(col_widths = 12,
+        plotCard("pim_p", "Person-item threshold distribution"),
+        plotCard("wright", "Wright map", height = "640px"))
+    )
   )
 
 # ----------------------------------------------------------------- TEST --
 panel_test <- nav_panel("Test", icon = bs_icon("graph-up"),
-    layout_columns(col_widths = 12,
-      plotCard("thrmap", "Threshold map"),
-      plotCard("imap", "Item map: location by fit residual")),
     layout_columns(col_widths = 12,
       plotCard("tcc", "Test characteristic curve"),
       plotCard("tif", "Test information & SEM")),
@@ -861,6 +884,7 @@ ui <- page_navbar(
   panel_summary,
   panel_items,
   panel_persons,
+  panel_targeting,
   panel_test,
   nav_menu("Structure",
     panel_dim,
@@ -1359,8 +1383,8 @@ server <- function(input, output, session) {
     show("Guessing", !is.null(f) && !inherits(f, "rasch_mfrm") &&
            !inherits(f, "rasch_efrm") && max(f$m) == 1L)
     rasch_on <- !is.null(f)
-    for (tgt in c("Summary", "Items", "Persons", "Test", "Dimensionality",
-                  "Local dependence", "Equating"))
+    for (tgt in c("Summary", "Items", "Persons", "Targeting", "Test",
+                  "Dimensionality", "Local dependence", "Equating"))
       show(tgt, rasch_on)
     # DIF needs at least one person factor in the fit
     show("DIF", rasch_on && !is.null(f$factors) && length(names(f$factors)) > 0)
@@ -1408,6 +1432,13 @@ server <- function(input, output, session) {
     updateSelectInput(session, "ind_item", choices = its, selected = its[1])
     updateSelectizeInput(session, "guess_anchors", choices = its,
                          selected = character(0))
+    # explorer class intervals start at the fit's own rule
+    updateSliderInput(session, "ex_ng", value = fit()$n_groups)
+    # targeting range: the padded person + threshold data range
+    r <- range(c(fit()$person$theta, fit()$thresholds$tau), na.rm = TRUE)
+    updateSliderInput(session, "tg_rng",
+                      value = c(floor((r[1] - 0.4) * 2) / 2,
+                                ceiling((r[2] + 0.4) * 2) / 2))
     # results computed on request belong to the fit they came from
     lr_res(NULL); dep_res(NULL); spread_res(NULL); dm_res(NULL); guess_res(NULL)
   })
@@ -1901,16 +1932,39 @@ server <- function(input, output, session) {
     num_dt(fit()$est$components)
   }, code = function() "fit$est$components")
 
-  register_plot("icc",  function() plot_icc(fit(), sel_item()),
-                code = function() sprintf('plot_icc(fit, "%s")', sel_item()))
+  # explorer display settings (gear popover): class intervals and scale
+  # range, resolved with fallbacks; the code footers add n_groups / grid
+  # only when they differ from the defaults, keeping default snippets minimal
+  ex_ng <- reactive({
+    ng <- input$ex_ng
+    if (is.null(ng) || is.na(ng)) fit()$n_groups else as.integer(ng)
+  })
+  ex_rng <- reactive({
+    r <- input$ex_rng
+    if (is.null(r) || length(r) != 2L || anyNA(r)) c(-5, 5) else as.numeric(r)
+  })
+  ex_grid <- reactive(seq(ex_rng()[1], ex_rng()[2], 0.05))
+  ex_code_args <- reactive(paste0(c(
+    if (ex_ng() != fit()$n_groups) sprintf(", n_groups = %d", ex_ng()),
+    if (!isTRUE(all.equal(ex_rng(), c(-5, 5))))
+      sprintf(", grid = seq(%g, %g, 0.05)", ex_rng()[1], ex_rng()[2])),
+    collapse = ""))
+  register_plot("icc",  function()
+    plot_icc(fit(), sel_item(), n_groups = ex_ng(), grid = ex_grid()),
+    code = function() sprintf('plot_icc(fit, "%s"%s)',
+                              sel_item(), ex_code_args()))
   register_plot("ccc",  function()
-    plot_ccc(fit(), sel_item(), observed = isTRUE(input$show_obs)),
-    code = function() sprintf('plot_ccc(fit, "%s", observed = %s)',
-                              sel_item(), isTRUE(input$show_obs)))
+    plot_ccc(fit(), sel_item(), observed = isTRUE(input$show_obs),
+             n_groups = ex_ng(), grid = ex_grid()),
+    code = function() sprintf('plot_ccc(fit, "%s", observed = %s%s)',
+                              sel_item(), isTRUE(input$show_obs),
+                              ex_code_args()))
   register_plot("tpc",  function()
-    plot_threshold_prob(fit(), sel_item(), observed = isTRUE(input$show_obs)),
-    code = function() sprintf('plot_threshold_prob(fit, "%s", observed = %s)',
-                              sel_item(), isTRUE(input$show_obs)))
+    plot_threshold_prob(fit(), sel_item(), observed = isTRUE(input$show_obs),
+                        n_groups = ex_ng(), grid = ex_grid()),
+    code = function() sprintf('plot_threshold_prob(fit, "%s", observed = %s%s)',
+                              sel_item(), isTRUE(input$show_obs),
+                              ex_code_args()))
   register_plot("cfreq", function() plot_catfreq(fit(), sel_item()),
                 code = function() sprintf('plot_catfreq(fit, "%s")', sel_item()))
   mc_dat <- reactive({
@@ -2033,10 +2087,30 @@ server <- function(input, output, session) {
               input$rd_what %||% "persons", input$rd_stat %||% "fit_resid"))
   register_plot("pfit",  function() plot_person_fit(fit()),
                 code = function() "plot_person_fit(fit)")
-  register_plot("pim_p", function() plot_pimap(fit()),
-                code = function() "plot_pimap(fit)")
 
-  # ------------------------------------------------------------ test plots --
+  # ------------------------------------------------------- targeting plots --
+  # sidebar-controlled bins and scale range shared by both targeting plots
+  tg_bins <- reactive({
+    b <- input$tg_bins
+    if (is.null(b) || is.na(b)) 35L else as.integer(b)
+  })
+  tg_rng <- reactive({
+    r <- input$tg_rng
+    if (is.null(r) || length(r) != 2L || anyNA(r)) NULL else as.numeric(r)
+  })
+  tg_code <- function(fun) function() {
+    r <- tg_rng() %||% c(-5, 5)
+    sprintf("%s(fit, bins = %d, xlim = c(%g, %g))", fun, tg_bins(), r[1], r[2])
+  }
+  register_plot("pim_p", function()
+    plot_pimap(fit(), bins = tg_bins(), xlim = tg_rng()),
+    code = tg_code("plot_pimap"))
+  register_plot("wright", function()
+    plot_wright(fit(), bins = tg_bins(), xlim = tg_rng()), h = 7.5,
+    code = tg_code("plot_wright"))
+
+  # ---------------------------------------------- test & item map plots --
+  # thrmap and imap render on the Items page; tcc/tif/guttman on Test
   register_plot("thrmap", function() plot_threshold_map(fit()), h = 7,
                 code = function() "plot_threshold_map(fit)")
   register_plot("imap",   function() plot_item_map(fit()),

@@ -4,12 +4,15 @@
 \alias{plot_pimap}
 \title{Plot the person-item threshold distribution}
 \usage{
-plot_pimap(fit, bins = 35)
+plot_pimap(fit, bins = 35, xlim = NULL)
 }
 \arguments{
 \item{fit}{A fitted object from \code{\link{rasch}}.}
 
 \item{bins}{Number of histogram bins.}
+
+\item{xlim}{Optional logit range for the shared scale; persons and
+thresholds outside it are omitted.}
 }
 \value{
 Called for its plotting side effect; invisibly \code{NULL}.

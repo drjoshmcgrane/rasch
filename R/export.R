@@ -153,6 +153,7 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
   sp <- function(f, stem) files <<- c(files,
     .rr_save_plot(f, stem, pdir, formats, width, height, dpi))
   sp(function() plot_pimap(fit), "person_item_distribution")
+  sp(function() plot_wright(fit), "wright_map")
   sp(function() plot_threshold_map(fit), "threshold_map")
   sp(function() plot_tcc(fit), "test_characteristic_curve")
   sp(function() plot_tif(fit), "test_information")
@@ -356,6 +357,7 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
     "<h2>Summary</h2>", summ,
     "<h2>Targeting</h2>",
     shot(function() plot_pimap(fit), "targeting"),
+    shot(function() plot_wright(fit), "wright_map"),
     "<h2>Item statistics</h2>",
     .html_table(fit$items[, intersect(c("item", "max", "location", "se",
                                         "fit_resid", "infit_ms", "outfit_ms",
