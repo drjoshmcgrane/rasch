@@ -21,9 +21,9 @@
 # only when `main` carries information (item, person, summary figures);
 # plot-type names are left to the surrounding context.
 .rr_canvas <- function(xlim, ylim, xlab, ylab, main = "", grid_y = TRUE,
-                       grid_x = FALSE, yaxis = TRUE) {
+                       grid_x = FALSE, yaxis = TRUE, right = 1.5) {
   has_main <- !is.null(main) && nzchar(main)
-  op <- par(mar = c(4.2, 4.4, if (has_main) 3.2 else 1.6, 1.5),
+  op <- par(mar = c(4.2, 4.4, if (has_main) 3.2 else 1.6, right),
             mgp = c(2.5, 0.7, 0), tcl = -0.25,
             las = 1, col.axis = .rr$ink, col.lab = .rr$ink, col.main = .rr$ink,
             font.main = 2, cex.main = 1.15, cex.lab = 1.0)
@@ -448,7 +448,8 @@ plot_tcc <- function(fit, grid = seq(-6, 6, 0.05)) {
 plot_tif <- function(fit, grid = seq(-6, 6, 0.05)) {
   ti <- test_information(fit, grid)
   op <- .rr_canvas(range(grid), c(0, max(ti$info) * 1.1),
-                   "Person location (logits)", "Test information")
+                   "Person location (logits)", "Test information",
+                   right = 3.6)
   on.exit(par(op))
   polygon(c(ti$theta, rev(ti$theta)), c(ti$info, rep(0, nrow(ti))),
           col = paste0(.rr$blue, "22"), border = NA)
@@ -460,7 +461,7 @@ plot_tif <- function(fit, grid = seq(-6, 6, 0.05)) {
   sem_ticks <- sem_ticks[sem_ticks * scl <= max(ti$info) * 1.1]
   axis(4, at = sem_ticks * scl, labels = sem_ticks,
        col = .rr$grid, col.ticks = .rr$soft, col.axis = .rr$red, cex.axis = 0.8)
-  mtext("SEM", side = 4, line = -1.2, col = .rr$red, cex = 0.85)
+  mtext("SEM", side = 4, line = 2.3, col = .rr$red, cex = 0.85)
   .rr_legend("topleft", c("Information", "SEM"), lwd = c(3, 2.2),
              lty = c(1, 5), col = c(.rr$blue, .rr$red))
   invisible(NULL)
@@ -553,6 +554,7 @@ plot_person_fit <- function(fit, band = 2.5) {
 #' @export
 plot_resid_cor <- function(fit) {
   R <- residual_correlations(fit)$matrix; L <- ncol(R)
+  diag(R) <- NA   # self-correlations carry no dependence information
   pal <- colorRampPalette(c("#1d4ed8", "#f8fafc", "#dc2626"))(64)
   op <- par(mar = c(6, 6, 3.2, 3), las = 1, col.axis = .rr$ink,
             col.main = .rr$ink, font.main = 2, cex.main = 1.15)
