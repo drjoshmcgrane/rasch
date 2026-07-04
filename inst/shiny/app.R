@@ -193,7 +193,25 @@ css <- HTML("
     text-align: center; padding: 2rem 1rem; color: var(--bs-secondary-color);
   }
   .nav-status .badge { font-weight: 500; }
+  .rcode { margin-top: .5rem; }
+  .rcode summary { cursor: pointer; font-size: .78rem; color: var(--bs-secondary-color); }
+  .rcode pre { font-size: .78rem; background: var(--bs-tertiary-bg); border: 1px solid var(--bs-border-color); border-radius: 6px; padding: .5rem .75rem; margin: .35rem 0 0; white-space: pre-wrap; }
+  .rcode-copy { float: right; margin-top: .35rem; }
 ")
+
+# collapsed per-output "R code" footer (jamovi-style syntax mode): shows the
+# exact rmt call reproducing the output, updating with the current selections;
+# the server registers a matching `<id>_code` renderText for every output
+rcode_details <- function(id)
+  tags$details(class = "rcode",
+    tags$summary(bs_icon("code-slash"), " R code"),
+    tags$button(class = "btn btn-outline-secondary btn-xs rcode-copy",
+                type = "button",
+                onclick = sprintf(
+                  "navigator.clipboard.writeText(document.getElementById('%s_code').innerText)",
+                  id),
+                "Copy"),
+    verbatimTextOutput(paste0(id, "_code"), placeholder = FALSE))
 
 # Card with a plot and PNG/PDF download buttons in the header. The body is
 # non-fillable so flex sizing can never compress the fixed-height plot
@@ -209,7 +227,8 @@ plotCard <- function(id, title, height = "560px") {
       div(class = "btn-group",
           downloadButton(paste0(id, "_png"), "PNG", class = "btn-outline-secondary btn-xs"),
           downloadButton(paste0(id, "_pdf"), "PDF", class = "btn-outline-secondary btn-xs")))),
-    card_body(plotOutput(id, height = height), padding = 8, fillable = FALSE)
+    card_body(plotOutput(id, height = height), rcode_details(id),
+              padding = 8, fillable = FALSE)
   )
 }
 
@@ -230,6 +249,7 @@ tableCard <- function(id, title, note = NULL, info = NULL, footer = NULL,
     card_body(if (!is.null(note)) p(class = "text-muted small mb-2", note),
               DTOutput(id),
               if (!is.null(footer)) div(class = "table-note mt-2", footer),
+              rcode_details(id),
               padding = 12)
   )
 }
@@ -405,7 +425,7 @@ panel_summary <- nav_panel("Summary", icon = bs_icon("clipboard-data"),
                           c("Model" = "model",
                             "Extrapolated (geometric)" = "extrapolated"),
                           width = "200px"))),
-          DTOutput("score_tbl"), padding = 12)),
+          DTOutput("score_tbl"), rcode_details("score_tbl"), padding = 12)),
       tableCard("thr_tbl", "Thresholds with standard errors")
     ),
     layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
@@ -441,22 +461,26 @@ panel_items <- nav_panel("Items", icon = bs_icon("list-check"),
                   plotOutput("icc", height = "440px"),
                   div(class = "text-end",
                       downloadButton("icc_png", "PNG", class = "btn-outline-secondary btn-xs"),
-                      downloadButton("icc_pdf", "PDF", class = "btn-outline-secondary btn-xs"))),
+                      downloadButton("icc_pdf", "PDF", class = "btn-outline-secondary btn-xs")),
+                  rcode_details("icc")),
         nav_panel("Categories",
                   plotOutput("ccc", height = "440px"),
                   div(class = "text-end",
                       downloadButton("ccc_png", "PNG", class = "btn-outline-secondary btn-xs"),
-                      downloadButton("ccc_pdf", "PDF", class = "btn-outline-secondary btn-xs"))),
+                      downloadButton("ccc_pdf", "PDF", class = "btn-outline-secondary btn-xs")),
+                  rcode_details("ccc")),
         nav_panel("Thresholds",
                   plotOutput("tpc", height = "440px"),
                   div(class = "text-end",
                       downloadButton("tpc_png", "PNG", class = "btn-outline-secondary btn-xs"),
-                      downloadButton("tpc_pdf", "PDF", class = "btn-outline-secondary btn-xs"))),
+                      downloadButton("tpc_pdf", "PDF", class = "btn-outline-secondary btn-xs")),
+                  rcode_details("tpc")),
         nav_panel("Frequencies",
                   plotOutput("cfreq", height = "440px"),
                   div(class = "text-end",
                       downloadButton("cfreq_png", "PNG", class = "btn-outline-secondary btn-xs"),
-                      downloadButton("cfreq_pdf", "PDF", class = "btn-outline-secondary btn-xs"))),
+                      downloadButton("cfreq_pdf", "PDF", class = "btn-outline-secondary btn-xs")),
+                  rcode_details("cfreq")),
         nav_panel("Chi-square",
                   uiOutput("chisq_caption"),
                   DTOutput("chisq_int_tbl"),
@@ -466,7 +490,8 @@ panel_items <- nav_panel("Items", icon = bs_icon("list-check"),
                       downloadButton("chisq_int_csv", "Intervals CSV",
                                      class = "btn-outline-secondary btn-xs"),
                       downloadButton("chisq_cat_csv", "Categories CSV",
-                                     class = "btn-outline-secondary btn-xs"))))),
+                                     class = "btn-outline-secondary btn-xs")),
+                  rcode_details("chisq")))),
     uiOutput("pc_comp_ui"),
     conditionalPanel("output.has_mc == true",
     layout_columns(col_widths = 12,
@@ -485,7 +510,8 @@ panel_items <- nav_panel("Items", icon = bs_icon("list-check"),
                div(class = "mt-4", cols_switch("rescore_full"))),
              DT::DTOutput("rescore_tbl"),
              downloadButton("dl_rescore", "Download proposed key CSV",
-                            class = "btn-sm")))))
+                            class = "btn-sm"),
+             rcode_details("rescore_tbl")))))
   )
 
 # -------------------------------------------------------------- PERSONS --
@@ -511,7 +537,8 @@ panel_persons <- nav_panel("Persons", icon = bs_icon("people"),
             radioButtons("rd_stat", NULL,
                          c("Fit residual (log-transformed)" = "fit_resid",
                            "Natural" = "natural"), inline = TRUE)),
-          plotOutput("rdist", height = "520px"), padding = 8, fillable = FALSE))),
+          plotOutput("rdist", height = "520px"), rcode_details("rdist"),
+          padding = 8, fillable = FALSE))),
     layout_columns(col_widths = 12,
       plotCard("pfit", "Person fit"),
       plotCard("pim_p", "Person-item threshold distribution"))
@@ -572,7 +599,8 @@ panel_dif <- nav_panel("DIF", icon = bs_icon("sliders"),
                             class = "btn-primary mt-4"),
                div(class = "mt-4", cols_switch("difsize_full"))),
              DT::DTOutput("dif_size_tbl"),
-             downloadButton("dl_dif_size", "Download CSV", class = "btn-sm"))),
+             downloadButton("dl_dif_size", "Download CSV", class = "btn-sm"),
+             rcode_details("dif_size_tbl"))),
       plotCard("dif_icc", "ICC by group (DIF plot)")
     )
   )
@@ -654,7 +682,7 @@ panel_dim <- nav_panel("Dimensionality", icon = bs_icon("diagram-3"),
       layout_columns(col_widths = 12,
         card(info_header("Unidimensionality t-test (Smith)",
                "Each person is measured separately on the two item subsets and the estimates compared by t-test; unidimensionality is questioned when clearly more than 5% of tests are significant."),
-             card_body(verbatimTextOutput("dim_txt"))),
+             card_body(verbatimTextOutput("dim_txt"), rcode_details("dim"))),
         plotCard("scree", "Scree of the residual components")),
       layout_columns(col_widths = 12,
         plotCard("pca_plot", "Residual first contrast"),
@@ -671,7 +699,7 @@ panel_dim <- nav_panel("Dimensionality", icon = bs_icon("diagram-3"),
             "Compares reliability with all items treated as independent (run1) against the subtest analysis in which each subset becomes one polytomous super-item. c is the unique-variance loading, rho the latent correlation between the subsets, and A the proportion of common variance. Uses the manual subsets above if set, otherwise the current PC1 split; every item must belong to a subset."),
           actionButton("dm_run", "Estimate from current subsets",
                        class = "btn-outline-primary"),
-          DTOutput("dm_tbl"), padding = 12))
+          DTOutput("dm_tbl"), rcode_details("dm_tbl"), padding = 12))
     )
   )
 
@@ -710,7 +738,7 @@ panel_ld <- nav_panel("Local dependence", icon = bs_icon("link-45deg"),
             div(class = "mb-3",
                 actionButton("run_dep", "Estimate d", class = "btn-outline-primary"))),
           verbatimTextOutput("dep_txt"),
-          DTOutput("dep_tbl"), padding = 12)),
+          DTOutput("dep_tbl"), rcode_details("dep_tbl"), padding = 12)),
       card(
         full_screen = TRUE,
         card_header(div(class = "d-flex justify-content-between align-items-center",
@@ -722,7 +750,7 @@ panel_ld <- nav_panel("Local dependence", icon = bs_icon("link-45deg"),
           DTOutput("spread_tbl"),
           p(class = "text-muted small mt-2",
             "Spread below the least upper bound indicates dependence among subtest members (Andrich 1985). Polytomous items only; typically applied after combining items into a subtest."),
-          padding = 12)))
+          rcode_details("spread_tbl"), padding = 12)))
   )
 
 # ------------------------------------------------------------- GUESSING --
@@ -1124,7 +1152,7 @@ server <- function(input, output, session) {
         if (identical(input$model_type, "btl")) {
           if (any(c(input$bt_a, input$bt_b, input$bt_win) == NONE))
             stop("nominate the object A, object B, and winner columns")
-          code_call <- paste0("fit <- btl(dat,\n  ", paste(c(
+          code_call <- paste0("bt <- btl(dat,\n  ", paste(c(
             paste0("object_a = ", qstr(input$bt_a)),
             paste0("object_b = ", qstr(input$bt_b)),
             paste0("winner = ", qstr(input$bt_win)),
@@ -1427,8 +1455,18 @@ server <- function(input, output, session) {
   })
 
   # ------------------------------------------------------- plot plumbing --
-  register_plot <- function(id, fun, w = 9, h = 6) {
+  # per-output "R code" disclosure: `code` is a function returning the exact
+  # rmt call reproducing the output (it may read reactives, so the snippet
+  # follows the current selections). Rendering is never suspended: the text
+  # must be ready when the collapsed <details> footer is opened.
+  register_code <- function(id, code) {
+    cid <- paste0(id, "_code")
+    output[[cid]] <- renderText(code())
+    outputOptions(output, cid, suspendWhenHidden = FALSE)
+  }
+  register_plot <- function(id, fun, w = 9, h = 6, code = NULL) {
     output[[id]] <- renderPlot(fun(), res = 96)
+    if (!is.null(code)) register_code(id, code)
     for (fmt in c("png", "pdf")) local({
       fmt_ <- fmt
       output[[paste0(id, "_", fmt_)]] <- downloadHandler(
@@ -1441,8 +1479,9 @@ server <- function(input, output, session) {
         })
     })
   }
-  register_table <- function(id, fun, dt_fun) {
+  register_table <- function(id, fun, dt_fun, code = NULL) {
     output[[id]] <- renderDT(dt_fun())
+    if (!is.null(code)) register_code(id, code)
     output[[paste0(id, "_csv")]] <- downloadHandler(
       filename = function() paste0("rmt_", id, ".csv"),
       content = function(file) write.csv(fun(), file, row.names = FALSE))
@@ -1705,6 +1744,11 @@ server <- function(input, output, session) {
                 options = list(pageLength = 15, scrollX = TRUE, dom = "tip")) |>
         formatRound(c("theta", "expected_score", "sem"), 3)
     }
+  }, code = function() {
+    f <- fit()
+    if (is.null(f$score_table)) return("fit$score_curves")
+    sprintf('score_table(fit, method = "%s", extremes = "%s")',
+            input$st_method %||% "wle", input$st_extremes %||% "model")
   })
 
   # traditional (CTT) statistics
@@ -1745,8 +1789,10 @@ server <- function(input, output, session) {
           "Refits the same data with the rating (common threshold structure) parameterisation and compares the pairwise conditional log-likelihoods. A non-significant outcome supports adopting the simpler rating model; use the adjusted statistic for inference."),
         actionButton("run_lr", "Run likelihood-ratio test",
                      class = "btn-outline-primary"),
-        verbatimTextOutput("lr_txt")))
+        verbatimTextOutput("lr_txt"),
+        rcode_details("lr")))
   })
+  register_code("lr", function() "lr_test(fit)")
   observeEvent(input$run_lr, {
     f <- fit()
     r <- withProgress(message = "Refitting with the rating parameterisation…",
@@ -1777,7 +1823,7 @@ server <- function(input, output, session) {
     f <- fit(); d <- f$thresholds
     num_dt(data.frame(item = f$items$item[d$item], threshold = d$k,
                       tau = d$tau, se = d$se))
-  })
+  }, code = function() "fit$thresholds")
 
   # ---------------------------------------------------------------- items --
   output$items_vboxes <- renderUI({
@@ -1814,7 +1860,7 @@ server <- function(input, output, session) {
     d$misfit <- ifelse(d$misfit, "*", "")
     num_dt(d, selection = "single", fit_col = "fit_resid",
            p_bold = c("p_adj", "p_anova"))
-  })
+  }, code = function() "fit$items")
 
   # per-class-interval breakdown of the selected item's chi-square
   chisq_res <- reactive(chisq_detail(fit(), sel_item()))
@@ -1840,6 +1886,8 @@ server <- function(input, output, session) {
     filename = function() paste0("rmt_chisq_categories_", sel_item(), ".csv"),
     content = function(file)
       write.csv(chisq_res()$categories, file, row.names = FALSE))
+  register_code("chisq", function()
+    sprintf('chisq_detail(fit, "%s")', sel_item()))
 
   # principal-components estimates (only for pc_components fits)
   output$pc_comp_ui <- renderUI({
@@ -1851,14 +1899,20 @@ server <- function(input, output, session) {
     validate(need(!is.null(fit()$est$components),
                   "Run with principal-components threshold estimation to see the components."))
     num_dt(fit()$est$components)
-  })
+  }, code = function() "fit$est$components")
 
-  register_plot("icc",  function() plot_icc(fit(), sel_item()))
+  register_plot("icc",  function() plot_icc(fit(), sel_item()),
+                code = function() sprintf('plot_icc(fit, "%s")', sel_item()))
   register_plot("ccc",  function()
-    plot_ccc(fit(), sel_item(), observed = isTRUE(input$show_obs)))
+    plot_ccc(fit(), sel_item(), observed = isTRUE(input$show_obs)),
+    code = function() sprintf('plot_ccc(fit, "%s", observed = %s)',
+                              sel_item(), isTRUE(input$show_obs)))
   register_plot("tpc",  function()
-    plot_threshold_prob(fit(), sel_item(), observed = isTRUE(input$show_obs)))
-  register_plot("cfreq", function() plot_catfreq(fit(), sel_item()))
+    plot_threshold_prob(fit(), sel_item(), observed = isTRUE(input$show_obs)),
+    code = function() sprintf('plot_threshold_prob(fit, "%s", observed = %s)',
+                              sel_item(), isTRUE(input$show_obs)))
+  register_plot("cfreq", function() plot_catfreq(fit(), sel_item()),
+                code = function() sprintf('plot_catfreq(fit, "%s")', sel_item()))
   mc_dat <- reactive({
     f <- fit()
     validate(need(!is.null(f$mc),
@@ -1870,15 +1924,22 @@ server <- function(input, output, session) {
     d$keyed <- ifelse(d$keyed, "*", "")
     d$flag <- ifelse(d$flag, "MISKEY?", "")
     num_dt(d)
+  }, code = function() "distractor_analysis(fit)")
+  # the plotted item: the selected one if it is multiple-choice, else the
+  # first MC item (the code disclosure mirrors this resolution)
+  distractor_item <- reactive({
+    f <- fit()
+    req(!is.null(f$mc))
+    if (sel_item() %in% colnames(f$mc$raw)) sel_item() else
+      colnames(f$mc$raw)[1]
   })
   register_plot("distractor_plot", function() {
     f <- fit()
     validate(need(!is.null(f$mc),
                   "Provide a multiple-choice key (CSV: item,key) to see option curves."))
-    it <- if (sel_item() %in% colnames(f$mc$raw)) sel_item() else
-      colnames(f$mc$raw)[1]
-    plot_distractors(f, it)
-  })
+    plot_distractors(f, distractor_item())
+  }, code = function()
+    sprintf('plot_distractors(fit, "%s")', distractor_item()))
 
   # polytomous option-scoring proposal (Andrich & Styles 2011)
   rescore_res <- reactiveVal(NULL)
@@ -1913,6 +1974,10 @@ server <- function(input, output, session) {
     if ("keyed" %in% names(d)) d$keyed <- ifelse(d$keyed, "*", "")
     num_dt(d)
   })
+  register_code("rescore_tbl", function()
+    sprintf('distractor_rescore(fit, min_n = %s, z = %s)$option_scores',
+            max(2, input$rescore_min_n %||% 20),
+            max(0.1, input$rescore_z %||% 1.96)))
   output$dl_rescore <- downloadHandler(
     filename = function() "option_scores.csv",
     content = function(file) {
@@ -1950,25 +2015,38 @@ server <- function(input, output, session) {
       dt <- formatStyle(dt, "fit_resid", color = styleInterval(
         c(-2.5, 2.5), c("var(--bs-danger)", "inherit", "var(--bs-danger)")))
     dt
-  })
+  }, code = function() "fit$person")
   register_plot("pcc", function() {
     f <- fit()
     n <- input$person_tbl_rows_selected
     n <- if (length(n)) n[1] else 1L
     plot_pcc(f, n)
+  }, code = function() {
+    n <- input$person_tbl_rows_selected
+    sprintf('plot_pcc(fit, person = %d)', if (length(n)) n[1] else 1L)
   })
   register_plot("rdist", function()
     plot_resid_dist(fit(), what = input$rd_what %||% "persons",
-                    statistic = input$rd_stat %||% "fit_resid"))
-  register_plot("pfit",  function() plot_person_fit(fit()))
-  register_plot("pim_p", function() plot_pimap(fit()))
+                    statistic = input$rd_stat %||% "fit_resid"),
+    code = function()
+      sprintf('plot_resid_dist(fit, what = "%s", statistic = "%s")',
+              input$rd_what %||% "persons", input$rd_stat %||% "fit_resid"))
+  register_plot("pfit",  function() plot_person_fit(fit()),
+                code = function() "plot_person_fit(fit)")
+  register_plot("pim_p", function() plot_pimap(fit()),
+                code = function() "plot_pimap(fit)")
 
   # ------------------------------------------------------------ test plots --
-  register_plot("thrmap", function() plot_threshold_map(fit()), h = 7)
-  register_plot("imap",   function() plot_item_map(fit()))
-  register_plot("tcc",    function() plot_tcc(fit()))
-  register_plot("tif",    function() plot_tif(fit()))
-  register_plot("guttman", function() plot_guttman(fit()), h = 7)
+  register_plot("thrmap", function() plot_threshold_map(fit()), h = 7,
+                code = function() "plot_threshold_map(fit)")
+  register_plot("imap",   function() plot_item_map(fit()),
+                code = function() "plot_item_map(fit)")
+  register_plot("tcc",    function() plot_tcc(fit()),
+                code = function() "plot_tcc(fit)")
+  register_plot("tif",    function() plot_tif(fit()),
+                code = function() "plot_tif(fit)")
+  register_plot("guttman", function() plot_guttman(fit()), h = 7,
+                code = function() "plot_guttman(fit)")
 
   # ------------------------------------------------------------------ DIF --
   # (the FACTORIAL constant is defined at the top of the file: observers
@@ -2004,6 +2082,14 @@ server <- function(input, output, session) {
       d$nonuniform_DIF <- ifelse(d$nonuniform_DIF, "*", "")
       num_dt(d)
     }
+  }, code = function() {
+    if (identical(input$dif_factor, FACTORIAL))
+      sprintf('dif_anova_factorial(fit, effects = "%s", p_adjust = "%s", alpha = %s)$terms',
+              input$dif_effects %||% "factorial", input$dif_padj %||% "BH",
+              dif_alpha())
+    else
+      sprintf('dif_anova(fit, p_adjust = "%s", alpha = %s)',
+              input$dif_padj %||% "BH", dif_alpha())
   })
   output$dif_note <- renderUI({
     if (identical(input$dif_factor, FACTORIAL)) {
@@ -2032,13 +2118,15 @@ server <- function(input, output, session) {
                        class = "table-sm compact",
                        options = list(dom = "t")))
     num_dt(tk)
-  })
+  }, code = function() "dif_anova_factorial(fit)$tukey")
   register_plot("dif_icc", function() {
     f <- fit()
     req(input$dif_item %in% f$items$item,
         !is.null(f$factors), input$dif_factor %in% names(f$factors))
     plot_icc(f, input$dif_item, group = input$dif_factor)
-  })
+  }, code = function()
+    sprintf('plot_icc(fit, "%s", group = "%s")',
+            input$dif_item %||% "", input$dif_factor %||% ""))
 
   # DIF magnitude in logits: single factor -> the selected item and factor;
   # factorial -> sizes for every significant, non-superseded group term
@@ -2081,6 +2169,12 @@ server <- function(input, output, session) {
     if ("practical" %in% names(d))
       d$practical <- ifelse(d$practical, "PRACTICAL", "")
     num_dt(d)
+  })
+  register_code("dif_size_tbl", function() {
+    if (identical(input$dif_factor, FACTORIAL))
+      "dif_anova_factorial(fit, sizes = TRUE)$sizes"
+    else sprintf('dif_size(fit, "%s", by = "%s")',
+                 input$dif_item %||% "", input$dif_factor %||% "")
   })
   output$dl_dif_size <- downloadHandler(
     filename = function() "dif_sizes.csv",
@@ -2127,13 +2221,14 @@ server <- function(input, output, session) {
   register_table("btl_obj_tbl", function() bfit()$objects,
                  function() num_dt(curate(bfit()$objects, "btl_obj",
                                           full = isTRUE(input$btl_full)),
-                                   fit_col = "fit_resid"))
+                                   fit_col = "fit_resid"),
+                 code = function() "# bt from the Data page\nbt$objects")
   register_table("btl_pairs_tbl", function() bfit()$pairs,
                  function() {
     d <- bfit()$pairs
     d$chisq <- NULL   # residual^2; redundant on screen, kept in the CSV
     num_dt(d)
-  })
+  }, code = function() "bt$pairs")
   register_table("btl_judges_tbl", function() {
     validate(need(!is.null(bfit()$judges), "No judge column was nominated."))
     bfit()$judges
@@ -2143,8 +2238,9 @@ server <- function(input, output, session) {
     d$misfit <- ifelse(!is.na(d$fit_resid) & abs(d$fit_resid) > 2.5, "*", "")
     num_dt(curate(d, "btl_judge", full = isTRUE(input$btl_full)),
            fit_col = "fit_resid")
-  })
-  register_plot("btl_plot", function() plot_btl(bfit()))
+  }, code = function() "bt$judges")
+  register_plot("btl_plot", function() plot_btl(bfit()),
+                code = function() "# bt from the Data page\nplot_btl(bt)")
 
   # ---------------------------------------------------------------- facets --
   facet_dat <- reactive({
@@ -2161,14 +2257,16 @@ server <- function(input, output, session) {
               options = list(pageLength = 15, scrollX = TRUE,
                              dom = if (nrow(d) > 12) "tip" else "t")) |>
       formatRound(setdiff(names(d)[vapply(d, is.numeric, TRUE)], "n"), 3)
-  })
+  }, code = function()
+    sprintf('fit$facet_effects[["%s"]]', input$facet_sel %||% ""))
   register_plot("facet_plot", function() {
     f <- fit()
     validate(need(inherits(f, "rasch_mfrm"),
                   "Run a long-format (many-facet) analysis to see facet results."))
     req(input$facet_sel %in% f$facet_spec)
     plot_facets(f, input$facet_sel)
-  })
+  }, code = function()
+    sprintf('plot_facets(fit, "%s")', input$facet_sel %||% ""))
   facet_int <- reactive({
     f <- fit()
     validate(need(inherits(f, "rasch_mfrm") && !is.null(f$interaction),
@@ -2179,7 +2277,7 @@ server <- function(input, output, session) {
     d <- facet_int()
     d$significant <- ifelse(abs(d$gamma) > 1.96 * d$se, "*", "")
     num_dt(d)
-  })
+  }, code = function() "fit$interaction_effects")
 
   # ----------------------------------------------------------------- equating --
   eq_ref <- reactive({
@@ -2210,9 +2308,14 @@ server <- function(input, output, session) {
     d <- curate(eq_res()$table, "equate", full = isTRUE(input$eq_full))
     if ("drift" %in% names(d)) d$drift <- ifelse(d$drift, "*", "")
     num_dt(d)
-  })
+  }, code = function()
+    sprintf('eq <- equate_tests(fit, reference, shift = "%s")\neq$table  # reference: data.frame(item, location, se) or another fit',
+            input$eq_shift %||% "mean"))
   register_plot("eq_plot", function()
-    plot_equate(fit(), eq_reference(), shift = input$eq_shift))
+    plot_equate(fit(), eq_reference(), shift = input$eq_shift),
+    code = function()
+      sprintf('plot_equate(fit, reference, shift = "%s")',
+              input$eq_shift %||% "mean"))
   output$dl_anchors <- downloadHandler(
     filename = function() format(Sys.time(), "rmt_anchors_%Y%m%d_%H%M.csv"),
     content = function(file) {
@@ -2239,9 +2342,11 @@ server <- function(input, output, session) {
   })
   register_table("frame_tbl", function() efrm_fit()$frames,
                  function() num_dt(curate(efrm_fit()$frames, "frames",
-                                          full = isTRUE(input$frames_full))))
+                                          full = isTRUE(input$frames_full))),
+                 code = function() "fit$frames")
   register_table("phi_tbl", function() efrm_fit()$phi_table,
-                 function() num_dt(efrm_fit()$phi_table))
+                 function() num_dt(efrm_fit()$phi_table),
+                 code = function() "fit$phi_table")
   # keep the fit's original set order: merge() sorts by the key, so it is
   # re-matched to fit$set_table$set
   efrm_alpha_tbl <- reactive({
@@ -2253,13 +2358,16 @@ server <- function(input, output, session) {
     d
   })
   register_table("alpha_tbl", function() efrm_alpha_tbl(),
-                 function() num_dt(efrm_alpha_tbl()))
-  register_plot("frame_plot", function() plot_frames(efrm_fit()))
+                 function() num_dt(efrm_alpha_tbl()),
+                 code = function() "fit$alpha_table")
+  register_plot("frame_plot", function() plot_frames(efrm_fit()),
+                code = function() "plot_frames(fit)")
   register_plot("frame_icc", function() {
     f <- efrm_fit()
     req(input$frame_item %in% f$virtual_map$item)
     plot_icc_frames(f, input$frame_item)
-  })
+  }, code = function()
+    sprintf('plot_icc_frames(fit, "%s")', input$frame_item %||% ""))
   output$efrm_cmp <- renderPrint({
     f <- efrm_fit(); cmp <- f$efrm_vs_rasch
     cat(sprintf("Pairwise conditional log-likelihood: frames model %.3f, equal units %.3f\n",
@@ -2316,6 +2424,12 @@ server <- function(input, output, session) {
     cat("\nSubset A items:\n ", paste(dt$items_positive, collapse = ", "), "\n")
     cat("Subset B items:\n ", paste(dt$items_negative, collapse = ", "), "\n")
   })
+  register_code("dim", function() {
+    s <- dim_subsets()
+    if (is.null(s)) return("dimensionality_test(fit)")
+    sprintf("dimensionality_test(fit, items_positive = %s,\n  items_negative = %s)",
+            qvec(s$pos), qvec(s$neg))
+  })
 
   # magnitude of multidimensionality (Andrich 2016): needs every item in a
   # subset; the PC1 split satisfies this by construction, manual subsets may not
@@ -2361,7 +2475,10 @@ server <- function(input, output, session) {
       r <- dm_res(); req(!is.null(r))
       write.csv(r$table, file, row.names = FALSE)
     })
-  register_plot("scree", function() plot_scree(fit()))
+  register_code("dm_tbl", function()
+    "dimensionality_magnitude(fit, list(subset_a, subset_b))$table")
+  register_plot("scree", function() plot_scree(fit()),
+                code = function() "plot_scree(fit)")
   register_table("loadings_tbl", function() residual_pca(fit())$loadings_matrix,
                  function() {
     d <- residual_pca(fit())$loadings_matrix
@@ -2369,7 +2486,7 @@ server <- function(input, output, session) {
       d <- d[, intersect(c("item", "PC1", "PC2", "PC3"), names(d)),
              drop = FALSE]
     num_dt(d)
-  })
+  }, code = function() "residual_pca(fit)$loadings_matrix")
   register_table("eigen_tbl", function() residual_pca(fit())$eigen_table,
                  function() {
     d <- residual_pca(fit())$eigen_table
@@ -2378,11 +2495,13 @@ server <- function(input, output, session) {
     names(d)[match(c("proportion", "cumulative"), names(d))] <-
       c("Proportion %", "Cumulative %")
     num_dt(d) |> formatRound(c("Proportion %", "Cumulative %"), 1)
-  })
-  register_plot("pca_plot", function() plot_pca(fit()))
+  }, code = function() "residual_pca(fit)$eigen_table")
+  register_plot("pca_plot", function() plot_pca(fit()),
+                code = function() "plot_pca(fit)")
 
   # -------------------------------------------------------- local dependence --
-  register_plot("rcor", function() plot_resid_cor(fit()), w = 8, h = 8)
+  register_plot("rcor", function() plot_resid_cor(fit()), w = 8, h = 8,
+                code = function() "plot_resid_cor(fit)")
   ld_res <- reactive({
     fl <- input$ld_flag
     if (is.null(fl) || is.na(fl) || fl <= 0) fl <- 0.2
@@ -2393,6 +2512,10 @@ server <- function(input, output, session) {
     fl <- ld_res()$flagged
     if (!nrow(fl)) fl <- data.frame(note = "no item pairs exceed the flag threshold")
     num_dt(fl)
+  }, code = function() {
+    fl <- input$ld_flag
+    if (is.null(fl) || is.na(fl) || fl <= 0) fl <- 0.2
+    sprintf("residual_correlations(fit, flag = %s)$flagged", fl)
   })
 
   # response dependence magnitude (Andrich & Kreiner resolved-item refit)
@@ -2422,6 +2545,9 @@ server <- function(input, output, session) {
     validate(need(!is.null(r), ""))
     num_dt(r$thresholds)
   })
+  register_code("dep_tbl", function()
+    sprintf('dependence_magnitude(fit, dependent = "%s", independent = "%s")',
+            input$dep_item %||% "", input$ind_item %||% ""))
   output$dep_tbl_csv <- downloadHandler(
     filename = function() "rmt_dependence_thresholds.csv",
     content = function(file) {
@@ -2447,6 +2573,7 @@ server <- function(input, output, session) {
     d$dependent <- ifelse(d$dependent, "*", "")
     num_dt(d)
   })
+  register_code("spread_tbl", function() "spread_test(fit)")
   output$spread_tbl_csv <- downloadHandler(
     filename = function() "rmt_spread_test.csv",
     content = function(file) {
@@ -2500,6 +2627,10 @@ server <- function(input, output, session) {
     r <- guess_res()
     validate(need(!is.null(r), "Run the tailored analysis to see the comparison."))
     num_dt(r$table)
+  }, code = function() {
+    ch <- input$guess_chance
+    if (is.null(ch) || is.na(ch) || ch <= 0 || ch >= 1) ch <- 0.25
+    sprintf("ta <- tailored_analysis(fit, chance = %s)\nta$table", ch)
   })
   register_plot("guess_plot", function() {
     validate(need(max(fit()$m) == 1L,
@@ -2507,7 +2638,8 @@ server <- function(input, output, session) {
     r <- guess_res()
     validate(need(!is.null(r), "Run the tailored analysis to see the equating plot."))
     plot_equate(r$tailored, r$origin_equated, shift = "none")
-  })
+  }, code = function()
+    'plot_equate(ta$tailored, ta$origin_equated, shift = "none")')
 
   # ---------------------------------------------------------------- compare --
   kept_fits <- reactiveVal(list())
@@ -2547,7 +2679,8 @@ server <- function(input, output, session) {
     if ("same_data" %in% names(d))
       d$same_data <- ifelse(d$same_data, "yes", "no")
     num_dt(curate(d, "compare", full = isTRUE(input$cmp_full)))
-  })
+  }, code = function()
+    "compare_fits(fit_a = f1, fit_b = f2, reference = 1)  # keep fits, then compare")
 
   # ----------------------------------------------------------------- export --
   # single-file HTML report; one content function feeds both the Export-tab
