@@ -647,6 +647,24 @@ panel_dif <- nav_panel("DIF", icon = bs_icon("sliders"),
              DT::DTOutput("dif_size_tbl"),
              downloadButton("dl_dif_size", "Download CSV", class = "btn-sm"),
              rcode_details("dif_size_tbl"))),
+      card(info_header("Planned contrasts",
+             "Planned one-degree-of-freedom questions derived from the factor structure, tested with familywise control over the small planned family instead of all cell pairs (Maxwell & Delaney 2004). Estimates are DIF magnitudes in logits from resolved item locations. With a person ID and repeated rows, time-like factors are treated within-subjects via person-level residual scores."),
+           card_body(
+             p(class = "text-muted",
+               "Derives the family of questions from the factors themselves - a two-level factor contributes its difference, an ordered factor its linear and quadratic trends, a nominal factor its level comparisons, and factor pairs their product interaction - then tests the whole family at once."),
+             layout_columns(col_widths = c(4, 4, 4),
+               selectizeInput("pc_items", "Items", NULL, multiple = TRUE,
+                              options = list(placeholder = "(all items)")),
+               selectInput("pc_id", "Person ID (repeated measures)",
+                           c("None" = "")),
+               div(class = "mt-4",
+                   input_task_button("pc_run", "Derive and test contrasts",
+                                     type = "primary"))),
+             uiOutput("contr_family"),
+             div(class = "d-flex justify-content-end", cols_switch("contr_full")),
+             DT::DTOutput("contr_tbl"),
+             downloadButton("contr_tbl_csv", "Download CSV", class = "btn-sm"),
+             rcode_details("contr_tbl"))),
       plotCard("dif_icc", "ICC by group (DIF plot)")
     )
   )
@@ -1444,6 +1462,10 @@ server <- function(input, output, session) {
     dif_choices <- if (length(fac)) c(fac, FACTORIAL) else NONE
     updateSelectInput(session, "dif_factor", choices = dif_choices,
                       selected = dif_choices[1])
+    updateSelectizeInput(session, "pc_items", choices = its,
+                         selected = character(0))
+    updateSelectInput(session, "pc_id", choices = c("None" = "", fac),
+                      selected = "")
     fs <- if (inherits(fit(), "rasch_mfrm")) fit()$facet_spec else NONE
     updateSelectInput(session, "facet_sel", choices = fs, selected = fs[1])
     fi <- if (inherits(fit(), "rasch_efrm"))
@@ -1465,6 +1487,7 @@ server <- function(input, output, session) {
                                 ceiling((r[2] + 0.4) * 2) / 2))
     # results computed on request belong to the fit they came from
     lr_res(NULL); dep_res(NULL); spread_res(NULL); dm_res(NULL); guess_res(NULL)
+    contr_res(NULL)
   })
 
   observeEvent(input$make_subtest, {
@@ -1561,6 +1584,8 @@ server <- function(input, output, session) {
                "p_adj", "drift"),
     dif_size = c("item", "term", "level_a", "level_b", "difference", "lower",
                  "upper", "p_adj", "significant", "practical"),
+    contrast = c("item", "contrast", "estimate", "se", "statistic", "p_adj",
+                 "significant", "practical"),
     frames = c("set", "group", "rho", "se_log_rho", "origin", "fit_resid",
                "n_responses"),
     compare = c("label", "model", "persons", "items", "two_delta_ll",
@@ -1599,7 +1624,9 @@ server <- function(input, output, session) {
     mu = "Origin", comparisons = "Comparisons",
     obs_p = "Observed", est_p = "Expected", obs_t = "Threshold prop.",
     item_a = "Item A", item_b = "Item B", q3 = "Q3", q3_star = "Q3*",
-    flagged = "Flagged")
+    flagged = "Flagged", estimate = "Estimate (logits)",
+    statistic = "Statistic", significant = "Significant",
+    practical = "Practical")
   # p-value columns render as "<0.001" / 3 dp on the client, so sorting
   # still uses the raw value; detection runs on the ORIGINAL column names
   P_COL_RE <- "^p$|^p_|_p$|^prob$|p_tukey|p_anova|p_adj|p_bonf|p_uniform|p_nonuniform"
@@ -2317,6 +2344,80 @@ server <- function(input, output, session) {
       d <- dif_size_res()
       if (is.null(d)) stop("compute DIF sizes first")
       write.csv(d, file, row.names = FALSE)
+    })
+
+  # planned DIF contrasts: the family is derived from the factor structure
+  # and every question tested at once; the nominated ID column (if any) is
+  # reserved for pairing person rows and excluded from the contrast factors
+  contr_res <- reactiveVal(NULL)
+  observeEvent(input$pc_run, {
+    f <- fit()
+    idn <- input$pc_id %||% ""
+    res <- tryCatch({
+      if (is.null(f$factors) || !length(names(f$factors)))
+        stop("nominate at least one person factor on the Data page")
+      fac <- if (nzchar(idn)) setdiff(names(f$factors), idn)
+             else names(f$factors)
+      if (!length(fac))
+        stop("no factors left to contrast once the ID column is reserved")
+      its <- if (length(input$pc_items)) input$pc_items else NULL
+      withProgress(message = "Resolving items…",
+                   detail = "one refit per item", value = 0.15,
+        dif_contrasts(f, factors = fac, items = its,
+                      id = if (nzchar(idn)) f$factors[[idn]] else NULL))
+    }, error = function(e) e)
+    if (inherits(res, "error")) {
+      showNotification(paste("Planned contrasts:", conditionMessage(res)),
+                       type = "warning", duration = 8)
+      contr_res(NULL)
+    } else contr_res(res)
+  })
+  # the derived family in words, shown once a run has completed
+  output$contr_family <- renderUI({
+    r <- contr_res()
+    if (is.null(r)) return(NULL)
+    tagList(
+      h6("The planned family"),
+      div(class = "small font-monospace mb-2",
+          lapply(seq_len(nrow(r$family)), function(i)
+            div(paste0(r$family$contrast[i],
+                       if (r$family$within[i]) "  [within subjects]" else "")))),
+      if (isTRUE(r$paired))
+        p(class = "text-muted small mb-2",
+          "Stacked design: tests use person-level residual scores."),
+      if (length(r$notes))
+        p(class = "text-muted small mb-2", paste(r$notes, collapse = "; ")))
+  })
+  register_table("contr_tbl", function() {
+    r <- contr_res(); req(!is.null(r)); r$table
+  }, function() {
+    r <- contr_res()
+    validate(need(!is.null(r),
+                  "Press the button to derive the planned family from the factor structure and test it."))
+    d <- curate(r$table, "contrast", full = isTRUE(input$contr_full))
+    if ("significant" %in% names(d))
+      d$significant <- ifelse(d$significant, "*", "")
+    if ("practical" %in% names(d))
+      d$practical <- ifelse(d$practical, "PRACTICAL", "")
+    if ("within" %in% names(d)) d$within <- ifelse(d$within, "*", "")
+    num_dt(d)
+  }, code = function() {
+    its <- input$pc_items
+    sprintf('dif_contrasts(fit%s%s)',
+            if (length(its))
+              paste0(', items = c("', paste(its, collapse = '", "'), '")')
+            else "",
+            if (nzchar(input$pc_id %||% ""))
+              paste0(', id = "', input$pc_id, '"') else "")
+  })
+  # the conventional register_table CSV name is overridden: the download is
+  # the full contrast table under the function's own name
+  output$contr_tbl_csv <- downloadHandler(
+    filename = function() "dif_contrasts.csv",
+    content = function(file) {
+      r <- contr_res()
+      if (is.null(r)) stop("derive and test the contrasts first")
+      write.csv(r$table, file, row.names = FALSE)
     })
 
   # ------------------------------------------------------------------- BTL --

@@ -451,3 +451,419 @@ print.rmt_dif_size <- function(x, ...) {
   if (length(x$notes)) cat("notes:", paste(x$notes, collapse = "; "), "\n")
   invisible(x)
 }
+
+# ---------------------------------------------------------------------------
+# Planned contrasts: the confirmatory alternative to exhaustive post-hoc
+# pairwise comparison. The family of questions is derived from the structure
+# of the nominated factors (or supplied), estimated on the logit scale from
+# resolved item locations, and -- when persons repeat across rows of a
+# stacked design -- tested from person-level contrast scores so that
+# within-subject dependence is respected.
+# ---------------------------------------------------------------------------
+
+# Resolve one item over grouping cells: locations and sandwich covariance.
+.dif_resolve <- function(fit, item, grp, min_n) {
+  i <- .item_idx(fit, item)
+  item <- fit$items$item[i]
+  notes <- character(0)
+  n_lev <- table(grp[!is.na(fit$X[, i]) & !is.na(grp)])
+  thin <- names(n_lev)[n_lev < min_n]
+  if (length(thin)) {
+    notes <- c(notes, sprintf(
+      "%s: level(s) dropped with fewer than %d responders: %s",
+      item, min_n, paste(thin, collapse = ", ")))
+    grp <- factor(ifelse(as.character(grp) %in% thin, NA, as.character(grp)))
+  }
+  grp <- droplevels(grp)
+  if (nlevels(grp) < 2) return(NULL)
+  refit <- split_items(fit, item, by = grp)
+  levs <- levels(grp)
+  idx <- match(paste0(item, " (", levs, ")"), refit$items$item)
+  if (anyNA(idx)) return(NULL)
+  thr <- refit$thresholds; cv <- refit$est$cov_tau
+  block <- lapply(idx, function(k) thr$id[thr$item == k])
+  loc <- refit$items$location[idx]
+  vloc <- matrix(NA_real_, length(levs), length(levs))
+  for (a in seq_along(levs)) for (b in seq_along(levs))
+    vloc[a, b] <- mean(cv[block[[a]], block[[b]], drop = FALSE])
+  list(levs = levs, loc = loc, vloc = vloc, notes = notes)
+}
+
+# A factor is treated as ordered when declared ordered or when its levels
+# parse as numbers (ages, waves, doses).
+.dif_is_ordered <- function(f)
+  is.ordered(f) || !any(is.na(suppressWarnings(as.numeric(levels(f)))))
+
+# The leading contrast of a factor: the difference for two levels, the
+# linear trend for an ordered factor, none for a nominal many-level factor.
+.dif_leading <- function(f) {
+  K <- nlevels(f)
+  if (K == 2L) {
+    w <- c(-1, 1); names(w) <- levels(f)
+    list(weights = w,
+         label = sprintf("%s - %s", levels(f)[2], levels(f)[1]))
+  } else if (.dif_is_ordered(f)) {
+    sc <- suppressWarnings(as.numeric(levels(f)))
+    cp <- if (!any(is.na(sc))) stats::contr.poly(K, scores = sc)
+          else stats::contr.poly(K)
+    w <- cp[, 1]; names(w) <- levels(f)
+    list(weights = w, label = "linear")
+  } else NULL
+}
+
+# The planned questions a single factor admits.
+.dif_factor_contrasts <- function(f, fname) {
+  K <- nlevels(f); out <- list()
+  if (K == 2L) {
+    lead <- .dif_leading(f)
+    out[[sprintf("%s: %s", fname, lead$label)]] <- lead$weights
+  } else if (.dif_is_ordered(f)) {
+    sc <- suppressWarnings(as.numeric(levels(f)))
+    cp <- if (!any(is.na(sc))) stats::contr.poly(K, scores = sc)
+          else stats::contr.poly(K)
+    w1 <- cp[, 1]; names(w1) <- levels(f)
+    out[[sprintf("%s: linear", fname)]] <- w1
+    w2 <- cp[, 2]; names(w2) <- levels(f)
+    out[[sprintf("%s: quadratic", fname)]] <- w2
+  } else if (K <= 4L) {
+    pr <- utils::combn(levels(f), 2)
+    for (j in seq_len(ncol(pr))) {
+      w <- stats::setNames(numeric(K), levels(f))
+      w[pr[2, j]] <- 1; w[pr[1, j]] <- -1
+      out[[sprintf("%s: %s - %s", fname, pr[2, j], pr[1, j])]] <- w
+    }
+  } else {
+    for (l in levels(f)) {
+      w <- stats::setNames(rep(-1 / (K - 1), K), levels(f)); w[l] <- 1
+      out[[sprintf("%s: %s - others", fname, l)]] <- w
+    }
+  }
+  out
+}
+
+# Scale cell weights so the positive and negative parts each sum to one:
+# every contrast then reads as a difference between two weighted averages,
+# in logits, comparable across contrasts and against the practical flag.
+.dif_norm <- function(w) {
+  w[is.na(w)] <- 0
+  s <- sum(abs(w))
+  if (s < 1e-10) return(NULL)
+  w * 2 / s
+}
+
+# Spread factor-level weights over the design cells (unweighted marginal
+# means: each level's weight is shared equally by the cells carrying it).
+.dif_cell_weights <- function(cellmap, fw, fname) {
+  lev <- as.character(cellmap[[fname]])
+  keep <- lev %in% names(fw)
+  w <- stats::setNames(numeric(nrow(cellmap)), cellmap$cell)
+  w[keep] <- fw[lev[keep]] / as.numeric(table(lev[keep])[lev[keep]])
+  w
+}
+
+# Derive the planned family from the factor structure.
+.dif_contrast_family <- function(factors, cellmap, within_names) {
+  fam <- list(); meta <- list()
+  for (fname in names(factors)) {
+    fc <- .dif_factor_contrasts(factors[[fname]], fname)
+    for (nm in names(fc)) {
+      w <- .dif_norm(.dif_cell_weights(cellmap, fc[[nm]], fname))
+      if (is.null(w)) next
+      fam[[nm]] <- w
+      meta[[nm]] <- list(factors = fname, fweights = fc[nm],
+                         within = fname %in% within_names)
+    }
+  }
+  fns <- names(factors)
+  if (length(fns) >= 2) for (a in seq_len(length(fns) - 1))
+    for (b in seq(a + 1, length(fns))) {
+      la <- .dif_leading(factors[[fns[a]]])
+      lb <- .dif_leading(factors[[fns[b]]])
+      if (is.null(la) || is.null(lb)) next
+      wa <- la$weights[as.character(cellmap[[fns[a]]])]
+      wb <- lb$weights[as.character(cellmap[[fns[b]]])]
+      key <- paste(cellmap[[fns[a]]], cellmap[[fns[b]]])
+      w <- .dif_norm(stats::setNames(
+        wa * wb / as.numeric(table(key)[key]), cellmap$cell))
+      if (is.null(w)) next
+      nm <- sprintf("%s(%s) x %s(%s)", fns[a], la$label, fns[b], lb$label)
+      fam[[nm]] <- w
+      meta[[nm]] <- list(factors = c(fns[a], fns[b]),
+                         fweights = list(la$weights, lb$weights),
+                         within = any(c(fns[a], fns[b]) %in% within_names))
+    }
+  list(family = fam, meta = meta)
+}
+
+# Welch test of a linear combination of independent group means.
+.welch_contrast <- function(vals, g, w) {
+  ok <- !is.na(vals) & !is.na(g)
+  vals <- vals[ok]; g <- droplevels(factor(g[ok]))
+  w <- w[levels(g)]
+  if (any(is.na(w)) || sum(abs(w)) < 1e-10) return(NULL)
+  m <- tapply(vals, g, mean); v <- tapply(vals, g, stats::var)
+  n <- tapply(vals, g, length)
+  if (any(n < 2)) return(NULL)
+  vv <- sum(w^2 * v / n)
+  if (!is.finite(vv) || vv <= 0) return(NULL)
+  df <- vv^2 / sum((w^2 * v / n)^2 / (n - 1))
+  t <- sum(w * m) / sqrt(vv)
+  list(stat = t, df = df, p = 2 * stats::pt(-abs(t), df))
+}
+
+#' Planned DIF contrasts derived from the factor structure
+#'
+#' The confirmatory alternative to exhaustive post-hoc comparison: instead
+#' of every pair of design cells, a small family of one-degree-of-freedom
+#' questions is tested, so familywise control costs little power (Maxwell
+#' and Delaney 2004, ch. 5). By default the family is derived from the
+#' structure of the factors themselves -- a two-level factor contributes its
+#' difference; an ordered factor (declared ordered, or with numeric levels
+#' such as ages or waves) contributes its linear and quadratic trends; a
+#' nominal factor contributes all pairs when it has up to four levels and
+#' each-level-against-the-rest otherwise; and every pair of factors with a
+#' leading contrast (a difference or a linear trend) contributes the product
+#' interaction. Print the returned object to see the family in words before
+#' reading the results; a family endorsed in advance of the results is what
+#' makes the contrasts planned.
+#'
+#' Each contrast is estimated in logits from resolved item locations (the
+#' item split into one copy per design cell and the model refitted, as in
+#' \code{\link{dif_size}}), with cell weights scaled so every estimate is a
+#' difference between two weighted averages -- directly comparable to the
+#' practical-significance criterion. Because resolution is used, magnitudes
+#' are read from a calibration in which compensating artificial DIF has been
+#' removed (Andrich and Hagquist 2015).
+#'
+#' When \code{id} shows that persons repeat across rows (a stacked
+#' repeated-measures design), between-row independence fails and the usual
+#' tests would be invalid. Significance is then computed from person-level
+#' scores of the standardised residuals: a within-subject contrast (for
+#' example a trend over time) becomes one contrast score per person, tested
+#' against zero; a between-subjects contrast is tested on person-mean
+#' residuals; and a between-by-within interaction tests the person contrast
+#' scores across the between groups. Logit estimates are still reported from
+#' the resolved locations; their standard errors treat rows as independent
+#' and are conservative for within-subject differences.
+#'
+#' @param fit A fitted object from \code{\link{rasch}}.
+#' @param factors A data frame of person factors, a character vector naming
+#'   factors nominated in the fit, or a single grouping vector. Defaults to
+#'   every factor stored in the fit.
+#' @param items Item names or indices to test; all items by default.
+#' @param within Names of factors that vary within person (for example
+#'   time). Detected automatically when \code{id} is supplied and a factor
+#'   varies within an id.
+#' @param id Person identifier with one entry per row, or the name of a
+#'   nominated factor holding it; required for stacked designs where the
+#'   same person occupies several rows.
+#' @param contrasts \code{"auto"} (derive the family from the factor
+#'   structure) or a named list of numeric cell-weight vectors, each named
+#'   by the design-cell labels (factor levels joined by \code{":"}).
+#'   Weights are rescaled so the positive and negative parts each sum to
+#'   one.
+#' @param p_adjust Familywise adjustment over the whole family (items by
+#'   contrasts); default \code{"holm"}.
+#' @param alpha Significance level for the adjusted probabilities.
+#' @param flag_logits Absolute estimate flagged as practically significant.
+#' @param min_n Cells with fewer responders to an item are dropped from that
+#'   item's resolution, with a note.
+#' @return A list of class \code{"rmt_dif_contrasts"}: \code{table} (one row
+#'   per item and contrast: estimate in logits, SE, statistic, df where a t
+#'   test was used, raw and adjusted p, 95 per cent interval,
+#'   \code{significant}, \code{practical}, \code{within}), \code{family}
+#'   (the derived questions with their cell weights), the settings, and any
+#'   \code{notes}.
+#' @references Maxwell, S. E., & Delaney, H. D. (2004). \emph{Designing
+#'   Experiments and Analyzing Data} (2nd ed.). Mahwah, NJ: Erlbaum.
+#'
+#'   Andrich, D., & Hagquist, C. (2015). Real and artificial differential
+#'   item functioning in polytomous items. \emph{Educational and
+#'   Psychological Measurement}, 75(2), 185-207.
+#'
+#'   Hagquist, C., & Andrich, D. (2017). Recent advances in analysis of
+#'   differential item functioning in health research using the Rasch
+#'   model. \emph{Health and Quality of Life Outcomes}, 15, 181.
+#' @examples
+#' set.seed(1); n <- 600
+#' d <- seq(-2, 2, length.out = 8); g <- rep(c("a", "b"), each = n / 2)
+#' sh <- matrix(0, n, 8); sh[g == "b", 3] <- 0.8
+#' X <- matrix(rbinom(n * 8, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 8)
+#' colnames(X) <- paste0("I", 1:8)
+#' fit <- rasch(data.frame(X, grp = g), factors = "grp")
+#' dif_contrasts(fit, items = c("I3", "I5"))
+#' @export
+dif_contrasts <- function(fit, factors = NULL, items = NULL, within = NULL,
+                          id = NULL, contrasts = "auto", p_adjust = "holm",
+                          alpha = 0.05, flag_logits = 0.5, min_n = 20) {
+  factors <- .dif_factors(fit, factors)
+  factors <- as.data.frame(lapply(factors, function(v) {
+    f <- droplevels(if (is.ordered(v)) v else factor(v))
+    f
+  }), check.names = FALSE, stringsAsFactors = FALSE)
+  grp <- interaction(factors, sep = ":", drop = TRUE)
+  cellmap <- unique(data.frame(cell = as.character(grp), factors,
+                               check.names = FALSE))
+  cellmap <- cellmap[match(levels(grp), cellmap$cell), , drop = FALSE]
+
+  if (is.character(id) && length(id) == 1L && !is.null(fit$factors) &&
+      id %in% names(fit$factors)) id <- fit$factors[[id]]
+  if (is.null(within) && !is.null(id) && anyDuplicated(id)) {
+    within <- names(factors)[vapply(names(factors), function(fn)
+      any(tapply(as.character(factors[[fn]]), id,
+                 function(v) length(unique(v)) > 1L)), TRUE)]
+  }
+  if (is.null(within)) within <- character(0)
+  within <- intersect(within, names(factors))
+  if (length(within) && is.null(id))
+    stop("`within` requires `id` to pair a person's rows")
+  paired <- !is.null(id) && anyDuplicated(id) > 0
+
+  if (identical(contrasts, "auto")) {
+    fam <- .dif_contrast_family(factors, cellmap, within)
+  } else {
+    if (!is.list(contrasts) || is.null(names(contrasts)))
+      stop("`contrasts` must be \"auto\" or a named list of cell weights")
+    fam <- list(family = list(), meta = list())
+    for (nm in names(contrasts)) {
+      w <- contrasts[[nm]]
+      if (is.null(names(w)) || !all(names(w) %in% cellmap$cell))
+        stop("weights of contrast '", nm, "' must be named by design cells: ",
+             paste(cellmap$cell, collapse = ", "))
+      full <- stats::setNames(numeric(nrow(cellmap)), cellmap$cell)
+      full[names(w)] <- w
+      w <- .dif_norm(full)
+      if (is.null(w)) stop("contrast '", nm, "' has no weight")
+      fam$family[[nm]] <- w
+      fam$meta[[nm]] <- list(factors = names(factors), fweights = NULL,
+                             within = FALSE)
+    }
+  }
+  if (!length(fam$family)) stop("no contrasts could be formed")
+
+  its <- if (is.null(items)) fit$items$item else
+    fit$items$item[vapply(items, function(x) .item_idx(fit, x), 1L)]
+  Z <- fit$residuals
+  notes <- character(0)
+  rows <- list()
+
+  for (item in its) {
+    i <- .item_idx(fit, item)
+    rs <- .dif_resolve(fit, item, grp, min_n)
+    if (!is.null(rs)) notes <- c(notes, rs$notes)
+    for (nm in names(fam$family)) {
+      w_full <- fam$family[[nm]]
+      mt <- fam$meta[[nm]]
+      est <- se <- stat <- df <- p <- NA_real_
+      if (!is.null(rs)) {
+        w <- w_full[rs$levs]
+        w[is.na(w)] <- 0
+        if (sum(w > 0) > 0 && sum(w < 0) > 0 &&
+            abs(sum(abs(w)) - 2) < 0.5) {   # cells mostly intact
+          w <- .dif_norm(w)
+          est <- sum(w * rs$loc)
+          se <- sqrt(max(drop(t(w) %*% rs$vloc %*% w), 1e-12))
+        }
+      }
+      if (!paired) {
+        if (is.finite(est)) {
+          stat <- est / se
+          p <- 2 * stats::pnorm(-abs(stat))
+        }
+      } else if (isTRUE(mt$within) && length(mt$factors) == 1L) {
+        # within-subject contrast: one score per (complete) person
+        fw <- .dif_norm(fam$meta[[nm]]$fweights[[1]])
+        lev <- as.character(factors[[mt$factors]])
+        zi <- Z[, i]
+        ps <- split(seq_along(zi), id)
+        psi <- vapply(ps, function(rws) {
+          l <- lev[rws]
+          if (anyDuplicated(l) || !all(names(fw) %in% l)) return(NA_real_)
+          sum(fw * zi[rws][match(names(fw), l)])
+        }, 0)
+        psi <- psi[!is.na(psi)]
+        if (length(psi) >= 10) {
+          # sign aligned with the logit estimate: a harder level has the
+          # higher resolved location but the lower residuals
+          stat <- -mean(psi) / (stats::sd(psi) / sqrt(length(psi)))
+          df <- length(psi) - 1
+          p <- 2 * stats::pt(-abs(stat), df)
+        }
+      } else if (isTRUE(mt$within) && length(mt$factors) == 2L) {
+        # between-by-within interaction: within contrast scores per person,
+        # tested across the between groups
+        wf <- intersect(mt$factors, within)[1]
+        bf <- setdiff(mt$factors, wf)[1]
+        fws <- fam$meta[[nm]]$fweights
+        fw <- .dif_norm(fws[[match(wf, mt$factors)]])
+        bw <- fws[[match(bf, mt$factors)]]
+        lev <- as.character(factors[[wf]])
+        blev <- as.character(factors[[bf]])
+        zi <- Z[, i]
+        ps <- split(seq_along(zi), id)
+        psi <- vapply(ps, function(rws) {
+          l <- lev[rws]
+          if (anyDuplicated(l) || !all(names(fw) %in% l)) return(NA_real_)
+          sum(fw * zi[rws][match(names(fw), l)])
+        }, 0)
+        pb <- vapply(ps, function(rws) blev[rws][1], "")
+        ok <- !is.na(psi)
+        wc <- .welch_contrast(psi[ok], pb[ok], bw / 2)
+        if (!is.null(wc)) { stat <- -wc$stat; df <- wc$df; p <- wc$p }
+      } else {
+        # between-subjects question in a stacked design: test on person
+        # means of the residuals so each person counts once
+        zi <- Z[, i]
+        pm <- tapply(zi, id, mean, na.rm = TRUE)
+        pcell <- tapply(as.character(grp), id, function(v) v[1])
+        wc <- .welch_contrast(pm, factor(pcell, levels = cellmap$cell),
+                              w_full / 2)
+        if (!is.null(wc)) { stat <- -wc$stat; df <- wc$df; p <- wc$p }
+      }
+      rows[[length(rows) + 1L]] <- data.frame(
+        item = item, contrast = nm, within = isTRUE(mt$within),
+        estimate = est, se = se, statistic = stat, df = df, p = p)
+    }
+  }
+  tab <- do.call(rbind, rows)
+  tab$p_adj <- stats::p.adjust(tab$p, method = p_adjust)
+  tab$lower <- tab$estimate - stats::qnorm(0.975) * tab$se
+  tab$upper <- tab$estimate + stats::qnorm(0.975) * tab$se
+  tab$significant <- !is.na(tab$p_adj) & tab$p_adj < alpha
+  tab$practical <- !is.na(tab$estimate) & abs(tab$estimate) >= flag_logits
+  rownames(tab) <- NULL
+
+  fam_df <- data.frame(
+    contrast = names(fam$family),
+    within = vapply(fam$meta, function(m) isTRUE(m$within), TRUE),
+    cells = vapply(fam$family, function(w)
+      paste(sprintf("%s %+0.2f", names(w)[w != 0], w[w != 0]),
+            collapse = ", "), ""))
+  rownames(fam_df) <- NULL
+
+  out <- list(table = tab, family = fam_df, within = within,
+              paired = paired, alpha = alpha, p_adjust = p_adjust,
+              flag_logits = flag_logits, notes = unique(notes))
+  class(out) <- "rmt_dif_contrasts"
+  out
+}
+
+#' @export
+print.rmt_dif_contrasts <- function(x, ...) {
+  cat("Planned DIF contrasts (", nrow(x$family), " questions x ",
+      length(unique(x$table$item)), " items; ", x$p_adjust,
+      " over the family)\n", sep = "")
+  for (r in seq_len(nrow(x$family)))
+    cat(sprintf("  %s%s\n", x$family$contrast[r],
+                if (x$family$within[r]) "  [within subjects]" else ""))
+  if (x$paired)
+    cat("Stacked design: tests use person-level residual scores;",
+        "logit SEs are conservative for within contrasts.\n")
+  cat("\n")
+  tab <- x$table
+  show <- tab[, c("item", "contrast", "estimate", "se", "statistic", "p_adj",
+                  "significant", "practical")]
+  print(.fmt_df(show), row.names = FALSE)
+  if (length(x$notes)) cat("\n", paste(x$notes, collapse = "\n"), "\n", sep = "")
+  invisible(x)
+}
