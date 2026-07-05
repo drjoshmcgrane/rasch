@@ -17,8 +17,9 @@ plot_icc(
 
 \item{item}{Item name or column index.}
 
-\item{group}{Optional person grouping vector, or the name of a factor
-nominated in the fit, for a DIF overlay.}
+\item{group}{Optional person grouping vector, or one or more names of
+factors nominated in the fit, for a DIF overlay; several names give
+the factor-combination cells (the factorial display).}
 
 \item{n_groups}{Number of class intervals for the observed means.}
 

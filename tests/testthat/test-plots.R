@@ -59,3 +59,18 @@ test_that("the kidmap and batch savers work, and Q3 pairs are complete", {
   expect_error(save_item_plots(f, "icc", "bad.txt"), "pdf or")
   unlink(c(pdf_path, zip_path))
 })
+
+test_that("the DIF overlay accepts one or several nominated factor names", {
+  set.seed(2); n <- 300
+  g <- rep(c("ref", "foc"), n / 2); s <- sample(c("m", "f"), n, TRUE)
+  d <- seq(-1, 1, length.out = 5)
+  X <- matrix(rbinom(n * 5, 1, plogis(outer(rnorm(n), d, "-"))), n, 5)
+  colnames(X) <- paste0("I", 1:5)
+  f <- rasch(data.frame(X, group = g, sex = s), factors = c("group", "sex"))
+  pdf(NULL); on.exit(dev.off())
+  expect_no_error(plot_icc(f, "I2", group = "sex"))
+  # several names draw the factor-combination cells (the factorial display)
+  expect_no_error(plot_icc(f, "I2", group = c("group", "sex")))
+  # a raw person vector still works
+  expect_no_error(plot_icc(f, "I2", group = s))
+})

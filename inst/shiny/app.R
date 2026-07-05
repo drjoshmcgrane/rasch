@@ -2589,14 +2589,22 @@ server <- function(input, output, session) {
                        options = list(dom = "t")))
     num_dt(tk)
   }, code = function() "dif_anova_factorial(fit)$tukey")
+  # in factorial mode the graphical display uses the factor-combination
+  # cells; plot_icc accepts several factor names for exactly this
+  dif_icc_group <- function(f) {
+    if (identical(input$dif_factor, FACTORIAL)) names(f$factors)
+    else { req(input$dif_factor %in% names(f$factors)); input$dif_factor }
+  }
   register_plot("dif_icc", function() {
     f <- fit()
-    req(input$dif_item %in% f$items$item,
-        !is.null(f$factors), input$dif_factor %in% names(f$factors))
-    plot_icc(f, input$dif_item, group = input$dif_factor)
-  }, code = function()
-    sprintf('plot_icc(fit, "%s", group = "%s")',
-            input$dif_item %||% "", input$dif_factor %||% ""))
+    req(input$dif_item %in% f$items$item, !is.null(f$factors))
+    plot_icc(f, input$dif_item, group = dif_icc_group(f))
+  }, code = function() {
+    g <- if (identical(input$dif_factor, FACTORIAL))
+      paste0('c("', paste(names(fit()$factors), collapse = '", "'), '")')
+    else sprintf('"%s"', input$dif_factor %||% "")
+    sprintf('plot_icc(fit, "%s", group = %s)', input$dif_item %||% "", g)
+  })
 
   # DIF magnitude in logits: single factor -> the selected item and factor;
   # factorial -> sizes for every significant, non-superseded group term
