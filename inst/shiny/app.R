@@ -150,6 +150,40 @@ fmt_p <- function(p)
 # a sprintf; such values display as an em dash on a neutral theme
 finite1 <- function(x) is.numeric(x) && length(x) == 1L && is.finite(x)
 
+# measurement-themed value-box glyphs: inline SVG stroked with currentColor,
+# so each glyph inherits its box's text colour in light and dark themes
+.glyph_body <- list(
+  # bell curve: the person distribution
+  distribution = '<path d="M2 20 C7 20 8.5 5.5 12 5.5 S17 20 22 20"/>',
+  # logit scale with alternating major/minor ticks
+  ruler = '<path d="M2 15 H22"/><path d="M5 15 V9"/><path d="M9.5 15 V11.5"/><path d="M14 15 V9"/><path d="M18.5 15 V11.5"/>',
+  # two distinct person distributions: separation / reliability
+  separation = '<path d="M1 20 C4.5 20 5 10 7.5 10 S10.5 20 14 20"/><path d="M10 20 C13.5 20 14 5.5 16.5 5.5 S19.5 20 23 20"/>',
+  alpha = '<text x="12" y="17.5" text-anchor="middle" font-size="17" font-style="italic" font-family="Georgia, serif" fill="currentColor" stroke="none">&#945;</text>',
+  chisq = '<text x="11" y="17" text-anchor="middle" font-size="14" font-style="italic" font-family="Georgia, serif" fill="currentColor" stroke="none">&#967;&#178;</text>',
+  # magnifier over a curve: power of the test of fit
+  power = '<circle cx="10" cy="10" r="6.2"/><path d="M14.6 14.6 L20.5 20.5"/><path d="M6.8 11.5 Q10 6 13.2 11.5"/>',
+  # data matrix rows / columns
+  grid = '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9.3 H21 M3 14.6 H21"/>',
+  columns = '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 4 V20 M15 4 V20"/>',
+  # 2x2 grid with a crossed-out cell: missing responses
+  missing = '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 12 H21 M12 4 V20"/><path d="M14.5 14.5 L18.5 18.5 M18.5 14.5 L14.5 18.5" stroke-width="1.3"/>',
+  # location span between two ends of the scale
+  range = '<path d="M4 6 V18 M20 6 V18 M4 12 H20"/>',
+  # a point off the trend: misfit
+  outlier = '<path d="M3 17 C9 15.5 15 14.5 21 12.5"/><circle cx="16.5" cy="5.5" r="1.7" fill="currentColor" stroke="none"/>',
+  # crossing solid/dashed step lines: reversed thresholds
+  disorder = '<path d="M4 7 H10 L16 17 H20"/><path d="M4 17 H10 L16 7 H20" stroke-dasharray="2.6 2.2"/>',
+  # two objects with a double-headed arrow: a paired comparison
+  pair = '<circle cx="5.2" cy="12" r="2.7"/><circle cx="18.8" cy="12" r="2.7"/><path d="M9.3 12 H14.7 M11.2 10 L9.2 12 L11.2 14 M12.8 10 L14.8 12 L12.8 14"/>',
+  # judge's balance
+  balance = '<path d="M12 5 V19 M6 5 H18"/><path d="M6 5 L3.5 11 H8.5 Z"/><path d="M18 5 L15.5 11 H20.5 Z"/><path d="M9 19 H15"/>',
+  # object locations as a podium
+  podium = '<rect x="3.5" y="11" width="5" height="9" rx="1"/><rect x="9.5" y="6" width="5" height="14" rx="1"/><rect x="15.5" y="14" width="5" height="6" rx="1"/>')
+glyph <- function(name)
+  HTML(sprintf('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:100%%;height:100%%">%s</svg>',
+               .glyph_body[[name]]))
+
 # helpers for the "R code for this analysis" disclosure
 qstr <- function(x) paste0('"', x, '"')
 qvec <- function(x)
@@ -1340,12 +1374,12 @@ server <- function(input, output, session) {
     miss <- 100 * mean(is.na(vals) | trimws(vals) == "", na.rm = FALSE)
     layout_column_wrap(width = "160px", fill = FALSE, class = "mb-3",
       value_box("Rows", format(nrow(df), big.mark = ","),
-                showcase = bs_icon("list-ol"),
+                showcase = glyph("grid"),
                 showcase_layout = "left center", theme = "primary"),
-      value_box("Columns", ncol(df), showcase = bs_icon("layout-three-columns"),
+      value_box("Columns", ncol(df), showcase = glyph("columns"),
                 showcase_layout = "left center", theme = "primary"),
       value_box("Missing", sprintf("%.1f%%", miss),
-                showcase = bs_icon("droplet-half"),
+                showcase = glyph("missing"),
                 showcase_layout = "left center",
                 theme = if (miss > 20) "warning" else "secondary"))
   })
@@ -1948,15 +1982,15 @@ server <- function(input, output, session) {
   output$vboxes <- renderUI({
     f <- fit()
     layout_column_wrap(width = "185px", fill = FALSE, class = "mb-3",
-      value_box("Persons", nrow(f$X), showcase = bs_icon("people"),
+      value_box("Persons", nrow(f$X), showcase = glyph("distribution"),
                 showcase_layout = "left center", theme = "primary"),
-      value_box("Items", ncol(f$X), showcase = bs_icon("list-check"),
+      value_box("Items", ncol(f$X), showcase = glyph("ruler"),
                 showcase_layout = "left center", theme = "primary"),
       value_box(span("PSI",
                      tooltip(bs_icon("info-circle", class = "ms-1"),
                              "Person Separation Index: the proportion of variance in person estimates not attributable to measurement error; 0.7 is a conventional minimum for distinguishing groups of persons (Andrich & Marais 2019).")),
                 if (finite1(f$psi$PSI)) sprintf("%.3f", f$psi$PSI) else "—",
-                showcase = bs_icon("speedometer2"),
+                showcase = glyph("separation"),
                 showcase_layout = "left center",
                 theme = if (!finite1(f$psi$PSI)) "secondary"
                         else if (f$psi$PSI >= 0.7) "success" else "warning",
@@ -1967,7 +2001,7 @@ server <- function(input, output, session) {
       value_box("Alpha",
                 if (finite1(f$alpha$alpha)) sprintf("%.3f", f$alpha$alpha)
                 else "—",
-                showcase = bs_icon("calculator"),
+                showcase = glyph("alpha"),
                 showcase_layout = "left center",
                 theme = if (!finite1(f$alpha$alpha)) "secondary"
                         else if (f$alpha$alpha >= 0.7) "success" else "warning",
@@ -1977,7 +2011,7 @@ server <- function(input, output, session) {
                   else sprintf("n = %d complete", f$alpha$n))),
       value_box("Item-trait p",
                 if (finite1(f$total_chisq_p)) fmt_p(f$total_chisq_p) else "—",
-                showcase = bs_icon("clipboard-check"),
+                showcase = glyph("chisq"),
                 showcase_layout = "left center",
                 # neutral even when significant: red is reserved for
                 # in-table cell highlighting
@@ -1985,7 +2019,7 @@ server <- function(input, output, session) {
                             f$total_chisq_p >= 0.05) "success"
                         else "secondary"),
       value_box("Power of fit", f$power_of_fit,
-                showcase = bs_icon("lightning-charge"),
+                showcase = glyph("power"),
                 showcase_layout = "left center", theme = "secondary")
     )
   })
@@ -2164,14 +2198,14 @@ server <- function(input, output, session) {
     dis <- sum(vapply(f$thresholds_diag, function(d)
       !d$ordered && length(d$thresholds) > 1, TRUE))
     layout_column_wrap(width = "200px", fill = FALSE, class = "mb-3",
-      value_box("Items", nrow(f$items), showcase = bs_icon("list-check"),
+      value_box("Items", nrow(f$items), showcase = glyph("ruler"),
                 showcase_layout = "left center", theme = "primary"),
       value_box("Adj. chi-square p < .05", mis,
-                showcase = bs_icon("exclamation-triangle"),
+                showcase = glyph("chisq"),
                 showcase_layout = "left center",
                 theme = if (mis > 0) "secondary" else "success"),
       value_box("Disordered thresholds", dis,
-                showcase = bs_icon("arrow-down-up"),
+                showcase = glyph("disorder"),
                 showcase_layout = "left center",
                 theme = if (dis > 0) "warning" else "success"))
   })
@@ -2379,13 +2413,13 @@ server <- function(input, output, session) {
     f <- fit(); d <- f$person
     mis <- sum(abs(d$fit_resid) > 2.5, na.rm = TRUE)
     layout_column_wrap(width = "200px", fill = FALSE, class = "mb-3",
-      value_box("Persons", nrow(d), showcase = bs_icon("people"),
+      value_box("Persons", nrow(d), showcase = glyph("distribution"),
                 showcase_layout = "left center", theme = "primary"),
       value_box("Extreme scores", sum(d$extreme, na.rm = TRUE),
-                showcase = bs_icon("arrows-expand"),
+                showcase = glyph("range"),
                 showcase_layout = "left center", theme = "secondary"),
       value_box("Misfitting persons", mis,
-                showcase = bs_icon("exclamation-triangle"),
+                showcase = glyph("outlier"),
                 showcase_layout = "left center",
                 theme = if (mis > 0) "secondary" else "success"))
   })
@@ -2745,24 +2779,24 @@ server <- function(input, output, session) {
   output$btl_boxes <- renderUI({
     f <- bfit()
     layout_column_wrap(width = "185px", fill = FALSE, class = "mb-3",
-      value_box("Objects", nrow(f$objects), showcase = bs_icon("trophy"),
+      value_box("Objects", nrow(f$objects), showcase = glyph("podium"),
                 showcase_layout = "left center", theme = "primary"),
       value_box("Comparisons", sprintf("%.0f", f$n_comparisons),
-                showcase = bs_icon("arrow-left-right"),
+                showcase = glyph("pair"),
                 showcase_layout = "left center", theme = "primary"),
       if (!is.null(f$judges))
         value_box("Judges", nrow(f$judges),
-                  showcase = bs_icon("person-badge"),
+                  showcase = glyph("balance"),
                   showcase_layout = "left center", theme = "primary"),
       value_box("Object separation",
                 if (finite1(f$osi$PSI)) sprintf("%.3f", f$osi$PSI) else "—",
-                showcase = bs_icon("speedometer2"),
+                showcase = glyph("separation"),
                 showcase_layout = "left center",
                 theme = if (!finite1(f$osi$PSI)) "secondary"
                         else if (f$osi$PSI >= 0.7) "success" else "warning"),
       value_box("Pairwise fit p",
                 if (finite1(f$total_p)) fmt_p(f$total_p) else "—",
-                showcase = bs_icon("clipboard-check"),
+                showcase = glyph("chisq"),
                 showcase_layout = "left center",
                 theme = if (finite1(f$total_p) && f$total_p >= 0.05)
                   "success" else "secondary"))
