@@ -115,3 +115,109 @@ test_that("plot_btl draws and print method runs", {
   expect_no_error(plot_btl(ft))
   expect_output(print(ft), "Bradley-Terry-Luce")
 })
+
+test_that("graded comparisons recover locations and symmetric thresholds", {
+  set.seed(3)
+  beta <- c(A = -1.2, B = -0.5, C = 0, D = 0.6, E = 1.1)
+  beta <- beta - mean(beta)
+  tau <- c(-1.4, 0, 1.4)
+  pr <- t(combn(names(beta), 2))
+  d <- data.frame(a = rep(pr[, 1], each = 60), b = rep(pr[, 2], each = 60),
+                  judge = sample(sprintf("J%02d", 1:15), 600, TRUE))
+  d$grade <- vapply(seq_len(nrow(d)), function(r) {
+    p <- item_moments(beta[d$a[r]] - beta[d$b[r]], tau)$P
+    sample(0:3, 1, prob = p)
+  }, 0L)
+  f <- btl(d, "a", "b", response = "grade", judge = "judge")
+  expect_true(f$converged)
+  expect_lt(abs(sum(f$objects$location)), 1e-8)
+  expect_gt(cor(f$objects$location, beta[f$objects$object]), 0.99)
+  # thresholds symmetric with mirrored SEs, middle fixed at zero
+  expect_equal(f$thresholds$tau[1], -f$thresholds$tau[3])
+  expect_equal(f$thresholds$tau[2], 0)
+  expect_equal(f$thresholds$se[1], f$thresholds$se[3])
+  expect_lt(abs(f$thresholds$tau[1] - (-1.4)), 3 * f$thresholds$se[1])
+  expect_true(f$clustered)
+  expect_true(all(c("obs_mean", "exp_mean") %in% names(f$pairs)))
+
+  # presentation-order invariance: swap objects and reverse the grades
+  d2 <- data.frame(a = d$b, b = d$a, grade = 3 - d$grade, judge = d$judge)
+  f2 <- btl(d2, "a", "b", response = "grade", judge = "judge")
+  expect_equal(f2$objects$location, f$objects$location, tolerance = 1e-6)
+  expect_equal(f2$thresholds$tau, f$thresholds$tau, tolerance = 1e-6)
+
+  # two categories reproduce the dichotomous path exactly
+  set.seed(4)
+  d$win01 <- rbinom(nrow(d), 1, plogis(beta[d$a] - beta[d$b]))
+  d$winner <- ifelse(d$win01 == 1, d$a, d$b)
+  fd <- btl(d, "a", "b", winner = "winner", judge = "judge")
+  fg <- btl(d, "a", "b", response = "win01", judge = "judge")
+  expect_equal(fg$objects$location, fd$objects$location, tolerance = 1e-6)
+  expect_equal(fg$objects$se, fd$objects$se, tolerance = 1e-6)
+
+  # the fitted point maximises the likelihood along feasible directions
+  ll_of <- function(bv, tv) sum(vapply(seq_len(nrow(d)), function(r) {
+    p <- item_moments(bv[d$a[r]] - bv[d$b[r]], tv)$P
+    log(p[d$grade[r] + 1])
+  }, 0))
+  bhat <- setNames(f$objects$location, f$objects$object)
+  that <- f$thresholds$tau
+  ll0 <- ll_of(bhat, that)
+  set.seed(9)
+  worse <- 0L
+  for (rep in 1:6) {
+    db <- rnorm(5); db <- db - mean(db)
+    dt1 <- rnorm(1)
+    if (ll_of(bhat + 0.004 * db, that + 0.004 * c(dt1, 0, -dt1)) <=
+        ll0 + 1e-9) worse <- worse + 1L
+  }
+  expect_equal(worse, 6L)
+})
+
+test_that("three graded categories give the Davidson ties structure", {
+  set.seed(6)
+  beta <- c(P = -0.8, Q = 0, R = 0.8)
+  pr <- t(combn(names(beta), 2))
+  d <- data.frame(a = rep(pr[, 1], each = 80), b = rep(pr[, 2], each = 80))
+  d$grade <- vapply(seq_len(nrow(d)), function(r) {
+    p <- item_moments(beta[d$a[r]] - beta[d$b[r]], c(-0.7, 0.7))$P
+    sample(0:2, 1, prob = p)
+  }, 0L)
+  f <- btl(d, "a", "b", response = "grade")
+  expect_equal(nrow(f$thresholds), 2L)
+  expect_equal(f$thresholds$tau[1], -f$thresholds$tau[2])
+  expect_equal(f$m, 2L)
+  # ordered-factor input maps by level order and keeps the labels
+  d$lab <- factor(c("worse", "tie", "better")[d$grade + 1],
+                  levels = c("worse", "tie", "better"))
+  fl <- btl(d, "a", "b", response = "lab")
+  expect_equal(fl$objects$location, f$objects$location, tolerance = 1e-8)
+  expect_identical(fl$categories, c("worse", "tie", "better"))
+  # unused category errors informatively
+  d$bad <- ifelse(d$grade == 2, 3L, 0L)
+  expect_error(btl(d, "a", "b", response = "bad"), "never used")
+  # category curves plot renders
+  pdf(NULL); on.exit(dev.off())
+  expect_no_error(plot_btl_categories(f))
+})
+
+test_that("the object characteristic curve renders and the fit keeps its comparisons", {
+  set.seed(7)
+  beta <- c(A = -1, B = -0.3, C = 0.4, D = 0.9)
+  pr <- t(combn(names(beta), 2))
+  d <- data.frame(a = rep(pr[, 1], each = 40), b = rep(pr[, 2], each = 40))
+  d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b]), d$a, d$b)
+  f <- btl(d, "a", "b", winner = "win")
+  expect_true(is.data.frame(f$comparisons))
+  expect_identical(names(f$comparisons),
+                   c("object_a", "object_b", "response", "weight"))
+  d$grade <- vapply(seq_len(nrow(d)), function(r) {
+    p <- item_moments(beta[d$a[r]] - beta[d$b[r]], c(-1, 0, 1))$P
+    sample(0:3, 1, prob = p)
+  }, 0L)
+  fg <- btl(d, "a", "b", response = "grade")
+  pdf(NULL); on.exit(dev.off())
+  expect_no_error(plot_btl_icc(f, "C"))
+  expect_no_error(plot_btl_icc(fg, "C"))
+  expect_error(plot_btl_icc(f, "Z"), "no such object")
+})

@@ -67,7 +67,10 @@ if (requireNamespace("rmt", quietly = TRUE)) {
   setNames(rep("A", 15), sprintf("I%02d", 1:15))
 
 # paired-comparison demo: 8 essays compared pairwise by 10 judges, with
-# judge J09 answering at random (discoverable in the judge fit table)
+# judge J09 answering at random (discoverable in the judge fit table).
+# Besides the winner column it carries a graded `preference` column (four
+# ordered categories) simulated from the same object locations, so the
+# graded-response role can be pointed at it.
 .demo_btl <- function(seed = 47, reps = 22) {
   set.seed(seed)
   beta <- setNames(seq(-1.4, 1.4, length.out = 8), sprintf("E%02d", 1:8))
@@ -78,6 +81,15 @@ if (requireNamespace("rmt", quietly = TRUE)) {
   p <- plogis(beta[d$object_a] - beta[d$object_b])
   p[d$judge == "J09"] <- 0.5
   d$winner <- ifelse(runif(nrow(d)) < p, d$object_a, d$object_b)
+  # graded preference for object_a: adjacent-categories probabilities on the
+  # same locations with symmetric thresholds (J09 stays random)
+  lev <- c("much worse", "a little worse", "a little better", "much better")
+  P <- vapply(seq_len(nrow(d)), function(r)
+    item_moments(beta[d$object_a[r]] - beta[d$object_b[r]],
+                 c(-1.1, 0, 1.1))$P, numeric(4))
+  P[, d$judge == "J09"] <- 0.25
+  d$preference <- factor(lev[apply(P, 2, function(pp) sample(4, 1, prob = pp))],
+                         levels = lev, ordered = TRUE)
   d[sample(nrow(d)), ]
 }
 
@@ -411,10 +423,16 @@ panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
               h6("One comparison per row"),
               selectInput("bt_a", "Object A column", NONE_CH),
               selectInput("bt_b", "Object B column", NONE_CH),
-              selectInput("bt_win", "Winner column", NONE_CH),
+              conditionalPanel("!input.bt_response",
+                selectInput("bt_win", "Winner column", NONE_CH)),
+              selectizeInput("bt_response", "Graded response (optional)", NULL,
+                             options = list(placeholder = "none — use winner")),
+              p(class = "text-muted small",
+                "A graded preference for the first object (e.g. much worse … much better), as an ordered factor or scores 0..m; overrides the winner column. Ties belong in a middle category."),
               selectInput("bt_judge", "Judge column (optional)", NONE_CH),
-              radioButtons("bt_ties", "Ties",
-                           c("Drop" = "drop", "Half a win each" = "half")),
+              conditionalPanel("!input.bt_response",
+                radioButtons("bt_ties", "Ties",
+                             c("Drop" = "drop", "Half a win each" = "half"))),
               p(class = "text-muted small",
                 "The Bradley-Terry-Luce model: the conditional (person-free) form of the dichotomous Rasch model, estimated by the same conventions. A judge column enables the judge fit table and clusters the standard errors by judge. Results appear on the BTL tab.")
             )),
@@ -1056,8 +1074,22 @@ panel_btl <- nav_panel("BTL", value = "p_btl", icon = bs_icon("trophy"),
         controls = cols_switch("btl_full"),
                 "Conditional (person-free) estimation with sum-zero identification and sandwich standard errors; the fit residual is the log-of-mean-square statistic over each object's comparisons (Andrich & Marais 2019)."),
       plotCard("btl_plot", "Object caterpillar"),
+      plotCard("btl_occ", "Object characteristic curve",
+        info = "The paired-comparison counterpart of the item characteristic curve: the model expected response for the object against opponent location (the win probability, or the expected graded response), with the observed mean response per opponent overlaid at that opponent's location. Points straying from the curve flag inconsistent quality, exactly as a misfitting item does.",
+        controls = div(class = "d-flex align-items-center gap-1 me-1",
+          span(class = "small text-secondary", "Object"),
+          div(class = "rmt-inline-select",
+              selectizeInput("btl_occ_obj", NULL, NULL, width = "120px"))),
+        extra = downloadButton("btl_occ_all_pdf", "PDF (all objects)",
+                               class = "btn-outline-secondary btn-xs")),
+      # graded (ordinal) fits only: hidden entirely for dichotomous fits
+      conditionalPanel("output.btl_graded == true",
+        tableCard("btl_thr_tbl", "Symmetric thresholds",
+                  "Adjacent-categories thresholds of the graded structure, constrained symmetric (tau_k = -tau_(m+1-k)) so the model is invariant to presentation order."),
+        plotCard("btl_cats", "Category probability curves",
+          info = "The probability of each graded response category as a function of the location difference between the two objects; the paired-comparison counterpart of a polytomous item's category curves.")),
       tableCard("btl_pairs_tbl", "Pairwise goodness of fit",
-                "Observed against expected win proportions for every pair; the total chi-square tests the BTL structure."),
+                "Observed against expected win proportions (mean graded responses for a graded fit) for every pair; the total chi-square tests the BTL structure."),
       tableCard("btl_judges_tbl", "Judge fit",
                 "Available when a judge column is nominated; an erratic judge carries a large positive fit residual, exactly as an erratic person does."))
   )
@@ -1270,6 +1302,9 @@ server <- function(input, output, session) {
                       selected = if (!is.na(g_b)) g_b else NONE)
     updateSelectInput(session, "bt_win", choices = c(NONE_CH, nm),
                       selected = if (!is.na(g_w)) g_w else NONE)
+    # empty choice = the "none — use winner" placeholder (clearable)
+    updateSelectizeInput(session, "bt_response", choices = c("", nm),
+                         selected = "")
     updateSelectInput(session, "bt_judge", choices = c(NONE_CH, nm),
                       selected = if (!is.na(g_j)) g_j else NONE)
     updateSelectInput(session, "bt_count", choices = c(NONE_CH, nm),
@@ -1453,27 +1488,42 @@ server <- function(input, output, session) {
     withProgress(message = "Estimating (pairwise conditional ML)…", value = 0.3, {
       fit <- tryCatch({
         if (identical(input$model_type, "btl")) {
-          if (any(c(input$bt_a, input$bt_b, input$bt_win) == NONE))
-            stop("nominate the object A, object B, and winner columns")
+          # a graded response column overrides the winner column (and the
+          # ties rule: graded ties belong in a middle category)
+          bt_graded <- !is.null(input$bt_response) && nzchar(input$bt_response)
+          if (any(c(input$bt_a, input$bt_b) == NONE) ||
+              (!bt_graded && identical(input$bt_win, NONE)))
+            stop("nominate the object A, object B, and winner (or graded response) columns")
           code_call <- paste0("bt <- btl(dat,\n  ", paste(c(
             paste0("object_a = ", qstr(input$bt_a)),
             paste0("object_b = ", qstr(input$bt_b)),
-            paste0("winner = ", qstr(input$bt_win)),
+            if (bt_graded) paste0("response = ", qstr(input$bt_response))
+            else paste0("winner = ", qstr(input$bt_win)),
             if (!is.null(input$bt_judge) && input$bt_judge != NONE)
               paste0("judge = ", qstr(input$bt_judge)),
             if (!is.null(input$bt_count) && input$bt_count != NONE)
               paste0("count = ", qstr(input$bt_count)),
-            paste0("ties = ", qstr(input$bt_ties %||% "drop")),
+            if (!bt_graded) paste0("ties = ", qstr(input$bt_ties %||% "drop")),
             code_est), collapse = ",\n  "), ")")
-          btl(df, object_a = input$bt_a, object_b = input$bt_b,
-              winner = input$bt_win,
-              judge = if (!is.null(input$bt_judge) && input$bt_judge != NONE)
-                input$bt_judge else NULL,
-              count = if (!is.null(input$bt_count) && input$bt_count != NONE)
-                input$bt_count else NULL,
-              ties = input$bt_ties %||% "drop",
-              maxit = max(5, input$maxit %||% 60),
-              tol = max(1e-12, input$tol %||% 1e-8))
+          if (bt_graded)
+            btl(df, object_a = input$bt_a, object_b = input$bt_b,
+                response = input$bt_response,
+                judge = if (!is.null(input$bt_judge) && input$bt_judge != NONE)
+                  input$bt_judge else NULL,
+                count = if (!is.null(input$bt_count) && input$bt_count != NONE)
+                  input$bt_count else NULL,
+                maxit = max(5, input$maxit %||% 60),
+                tol = max(1e-12, input$tol %||% 1e-8))
+          else
+            btl(df, object_a = input$bt_a, object_b = input$bt_b,
+                winner = input$bt_win,
+                judge = if (!is.null(input$bt_judge) && input$bt_judge != NONE)
+                  input$bt_judge else NULL,
+                count = if (!is.null(input$bt_count) && input$bt_count != NONE)
+                  input$bt_count else NULL,
+                ties = input$bt_ties %||% "drop",
+                maxit = max(5, input$maxit %||% 60),
+                tol = max(1e-12, input$tol %||% 1e-8))
         } else if (identical(input$model_type, "efrm")) {
           sm <- ef_setmap()
           code_call <- paste0("fit <- rasch_efrm(dat,\n  ", paste(c(
@@ -1847,7 +1897,8 @@ server <- function(input, output, session) {
                  "uniform_DIF", "F_nonuniform", "p_nonuniform_adj",
                  "eta2_nonuniform", "nonuniform_DIF"),
     facet = c("level", "severity", "se", "n", "fit_resid"),
-    btl_obj = c("object", "location", "se", "comparisons", "wins", "fit_resid"),
+    btl_obj = c("object", "location", "se", "comparisons", "wins", "score",
+                "fit_resid"),
     btl_judge = c("judge", "n", "fit_resid", "misfit"),
     equate = c("item", "location_1", "location_2", "adj_difference", "t",
                "p_adj", "drift"),
@@ -1889,6 +1940,7 @@ server <- function(input, output, session) {
     alpha_drop = "α if deleted", item_total = "Item-total r",
     item_rest = "Item-rest r", di = "Discrimination", cum_pct = "Cum. %",
     exp_prop = "Expected", obs_prop = "Observed", obs_mean = "Observed mean",
+    exp_mean = "Expected mean",
     exp_value = "Expected value", theta_mean = "Mean location",
     theta_max = "Max location", chisq_per_df = "Chi-sq/df",
     two_delta_ll = "2Δ log-lik", se_log_phi = "SE (log φ)",
@@ -2842,6 +2894,44 @@ server <- function(input, output, session) {
   }, code = function() "bt$judges")
   register_plot("btl_plot", function() plot_btl(bfit()),
                 code = function() "# bt from the Data page\nplot_btl(bt)")
+  # object characteristic curve: model expected response against opponent
+  # location with per-opponent observed means (dichotomous and graded fits)
+  observeEvent(btl_fit(), {
+    b <- btl_fit()
+    if (!is.null(b))
+      updateSelectizeInput(session, "btl_occ_obj",
+                           choices = b$objects$object,
+                           selected = b$objects$object[1])
+  })
+  register_plot("btl_occ", function() {
+    req(input$btl_occ_obj %in% bfit()$objects$object)
+    plot_btl_icc(bfit(), input$btl_occ_obj)
+  }, w = 8, h = 5.5, code = function()
+    paste0(sprintf('plot_btl_icc(bt, "%s")', input$btl_occ_obj %||% ""),
+           "\n# all objects: one page each in the PDF download"))
+  output$btl_occ_all_pdf <- downloadHandler(
+    filename = function() "occ_all_objects.pdf",
+    content = function(file) {
+      b <- bfit()
+      pdf(file, width = 8, height = 5.5, onefile = TRUE)
+      on.exit(dev.off(), add = TRUE)
+      for (o in b$objects$object)
+        tryCatch(plot_btl_icc(b, o), error = function(e) NULL)
+    })
+  # graded (ordinal) fits carry thresholds and category curves; the flag
+  # hides both cards entirely for dichotomous fits
+  output$btl_graded <- reactive({
+    b <- btl_fit()
+    !is.null(b) && !is.null(b$m) && b$m >= 2
+  })
+  outputOptions(output, "btl_graded", suspendWhenHidden = FALSE)
+  register_table("btl_thr_tbl", function() bfit()$thresholds, function() {
+    validate(need(!is.null(bfit()$thresholds),
+                  "Dichotomous fit: no threshold structure to show."))
+    num_dt(bfit()$thresholds)
+  }, code = function() "bt$thresholds")
+  register_plot("btl_cats", function() plot_btl_categories(bfit()),
+                code = function() "plot_btl_categories(bt)")
 
   # ---------------------------------------------------------------- facets --
   facet_dat <- reactive({

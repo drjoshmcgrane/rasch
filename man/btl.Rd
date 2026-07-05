@@ -8,7 +8,8 @@ btl(
   data,
   object_a,
   object_b,
-  winner,
+  winner = NULL,
+  response = NULL,
   judge = NULL,
   count = NULL,
   ties = c("drop", "half", "error"),
@@ -24,7 +25,16 @@ compared.}
 
 \item{winner}{Name of the column holding the winner of each row: its
 value must equal the row's \code{object_a} or \code{object_b} entry
-(anything else is a tie).}
+(anything else is a tie). Ignored when \code{response} is given.}
+
+\item{response}{Optional name of a column holding a graded preference
+for \code{object_a} over \code{object_b} -- an ordered factor (worst
+to best for \code{object_a}) or integer scores \code{0..m}. Fits the
+adjacent-categories ordinal extension of BTL (Tutz 1986; Agresti
+1992): a partial-credit structure on the difference of locations with
+thresholds constrained symmetric, \code{tau_k = -tau_(m+1-k)}, so the
+model is invariant to presentation order. Two categories reproduce
+BTL exactly; three give the Davidson (1970) ties model.}
 
 \item{judge}{Optional name of a judge column; enables the judge fit
 table and clusters the sandwich standard errors by judge.}
@@ -32,21 +42,27 @@ table and clusters the sandwich standard errors by judge.}
 \item{count}{Optional name of a column of replication counts (a row
 standing for several identical comparisons).}
 
-\item{ties}{How to treat ties: \code{"drop"} (default, removed with a
-note), \code{"half"} (half a win each way, a common pragmatic device
--- flagged in the notes because the halves are not independent
-Bernoulli trials), or \code{"error"}.}
+\item{ties}{How to treat ties in the dichotomous analysis:
+\code{"drop"} (default, removed with a note), \code{"half"} (half a
+win each way, a common pragmatic device -- flagged in the notes
+because the halves are not independent Bernoulli trials), or
+\code{"error"}. With graded responses, code ties as a middle
+category instead.}
 
 \item{maxit, tol}{Newton-Raphson iteration cap and convergence tolerance.}
 }
 \value{
 A list of class \code{"rmt_btl"}: \code{objects} (location, se,
-  comparisons, wins, outfit mean square, fit residual and its df),
-  \code{pairs} (per pair: n, observed and expected win proportions,
+  comparisons, wins -- or the graded \code{score} -- outfit mean
+  square, fit residual and its df),
+  \code{pairs} (per pair: n, observed and expected win proportions --
+  or mean graded responses --
   standardised residual, chi-square component), \code{judges} (when
   given: per judge n, outfit, fit residual, df), \code{total_chisq},
   \code{total_df}, \code{total_p}, the object separation index
   \code{osi}, \code{loglik}, convergence details, and \code{notes}.
+  Graded fits add \code{thresholds} (the symmetric threshold estimates
+  with standard errors), \code{m}, and \code{categories}.
 }
 \description{
 Estimates object locations from paired-comparison data by conditional
@@ -91,4 +107,12 @@ Bradley, R. A. and Terry, M. E. (1952). Rank analysis of
   Behavior. Wiley. Andrich, D. (1978). Relationships between the
   Thurstone and Rasch approaches to item scaling. Applied Psychological
   Measurement, 2, 451-462.
+
+  Tutz, G. (1986). Bradley-Terry-Luce models with an ordered response.
+  Journal of Mathematical Psychology, 30(3), 306-316. Agresti, A.
+  (1992). Analysis of ordinal paired comparison data. Journal of the
+  Royal Statistical Society C, 41(2), 287-297. Davidson, R. R. (1970).
+  On extending the Bradley-Terry model to accommodate ties in paired
+  comparison experiments. Journal of the American Statistical
+  Association, 65(329), 317-328.
 }
