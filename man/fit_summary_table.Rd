@@ -7,7 +7,10 @@
 fit_summary_table(fit)
 }
 \arguments{
-\item{fit}{A fitted object from \code{\link{rasch}}.}
+\item{fit}{A fitted object from \code{\link{rasch}}, or a
+paired-comparison fit from \code{\link{btl}} (which reports its own
+headline set: convergence, pairwise chi-square, object separation,
+thresholds structure, and dependence effects when estimated).}
 }
 \value{
 A data frame with columns \code{statistic} and \code{value}.

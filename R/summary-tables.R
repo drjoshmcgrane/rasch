@@ -12,7 +12,10 @@
 #' fit-location correlations, chi-square flag count, and disordered
 #' thresholds -- as a two-column table suitable for saving and reporting.
 #'
-#' @param fit A fitted object from \code{\link{rasch}}.
+#' @param fit A fitted object from \code{\link{rasch}}, or a
+#'   paired-comparison fit from \code{\link{btl}} (which reports its own
+#'   headline set: convergence, pairwise chi-square, object separation,
+#'   thresholds structure, and dependence effects when estimated).
 #' @return A data frame with columns \code{statistic} and \code{value}.
 #' @examples
 #' set.seed(1)
@@ -22,6 +25,7 @@
 #' fit_summary_table(rasch(X))
 #' @export
 fit_summary_table <- function(fit) {
+  if (inherits(fit, "rmt_btl")) return(.btl_summary_table(fit))
   ss <- fit$summary_stats
   dis <- names(which(vapply(fit$thresholds_diag, function(d)
     !d$ordered && length(d$thresholds) > 1, TRUE)))
@@ -102,6 +106,47 @@ targeting_table <- function(fit) {
       num(fit$isi$PSI),
       num(fit$alpha$alpha),
       if (is.null(fit$alpha$n)) "NA" else as.character(fit$alpha$n)))
+  rownames(out) <- NULL
+  out
+}
+
+# The paired-comparison headline set, same two-column shape.
+.btl_summary_table <- function(fit) {
+  num <- function(x, d = 3) ifelse(is.finite(x),
+                                   formatC(x, digits = d, format = "f"), "NA")
+  rows <- list(
+    c("Model", if (!is.null(fit$m) && fit$m > 1L)
+      sprintf("Graded paired comparisons (%d categories)", fit$m + 1L)
+      else "Paired comparisons (BTL)"),
+    c("Estimation", "conditional ML (person-free)"),
+    c("Converged", ifelse(isTRUE(fit$converged), "yes", "NO")),
+    c("Iterations", as.character(fit$iterations)),
+    c("Objects", as.character(nrow(fit$objects))),
+    c("Comparisons", formatC(fit$n_comparisons, format = "d")),
+    c("Judges", if (!is.null(fit$judges)) as.character(nrow(fit$judges))
+      else "not identified"),
+    c("Standard errors", if (isTRUE(fit$clustered))
+      "sandwich, clustered by judge" else "sandwich"),
+    c("Pairwise chi-square", num(fit$total_chisq, 2)),
+    c("Degrees of freedom", as.character(fit$total_df)),
+    c("Pairwise fit probability", .fmt_p(fit$total_p)),
+    c("Object separation index", num(fit$osi$PSI)),
+    c("Separation", num(fit$osi$separation)),
+    c("Log-likelihood", num(fit$loglik, 2)))
+  if (!is.null(fit$thr_structure) && !is.null(fit$m) && fit$m > 1L)
+    rows[[length(rows) + 1L]] <- c("Threshold structure",
+                                   if (fit$thr_structure == "pc")
+                                     "principal components (spread)"
+                                   else "free symmetric")
+  if (!is.null(fit$dependence))
+    for (r in seq_len(nrow(fit$dependence)))
+      rows[[length(rows) + 1L]] <- c(
+        sprintf("Within-judge %s (logits)",
+                gsub("_", "-", fit$dependence$effect[r])),
+        sprintf("%s (SE %s, p = %s)", num(fit$dependence$estimate[r]),
+                num(fit$dependence$se[r]), .fmt_p(fit$dependence$p[r])))
+  out <- data.frame(statistic = vapply(rows, `[`, "", 1),
+                    value = vapply(rows, `[`, "", 2))
   rownames(out) <- NULL
   out
 }

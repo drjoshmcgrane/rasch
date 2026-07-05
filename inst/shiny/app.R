@@ -463,7 +463,7 @@ panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
                 radioButtons("bt_ties", "Ties",
                              c("Drop" = "drop", "Half a win each" = "half"))),
               p(class = "text-muted small",
-                "The Bradley-Terry-Luce model: the conditional (person-free) form of the dichotomous Rasch model, estimated by the same conventions. A judge column enables the judge fit table and clusters the standard errors by judge. Results appear on the BTL tab.")
+                "The Bradley-Terry-Luce model: the conditional (person-free) form of the dichotomous Rasch model, estimated by the same conventions. A judge column enables the judge fit table and clusters the standard errors by judge. Results appear on the Summary, Items, and Persons pages.")
             )),
           accordion_panel("Estimation options", icon = bs_icon("gear"),
             conditionalPanel("input.model_type == 'rasch'",
@@ -556,6 +556,8 @@ panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
       rcode_details("lr")))
 
 panel_summary <- nav_panel("Summary", value = "p_summary", icon = bs_icon("clipboard-data"),
+    # Rasch fits (hidden while a paired-comparison fit is active)
+    conditionalPanel("output.is_btl != true",
     uiOutput("vboxes"),
     # DT cards sit inside plain divs: the grid row would otherwise stretch
     # them to equal height and crop the taller table mid-row
@@ -566,11 +568,21 @@ panel_summary <- nav_panel("Summary", value = "p_summary", icon = bs_icon("clipb
       div(tableCard("targeting_tbl", "Targeting & reliability"))
     ),
     # server-rendered: the likelihood-ratio card only when it applies
-    uiOutput("summary_bottom")
+    uiOutput("summary_bottom")),
+    # paired-comparison (BTL) fits: the headline value boxes and the
+    # test-of-fit summary table
+    conditionalPanel("output.is_btl == true",
+      uiOutput("btl_boxes"),
+      layout_columns(col_widths = breakpoints(sm = 12, xl = 6),
+        div(tableCard("btl_fitsum_tbl", "Test of fit",
+          info = "The pairwise chi-square tests the observed against the expected win proportions over every pair of objects; the object separation index is the paired-comparison counterpart of the PSI. Within-judge dependence effects (exposure and carry-over) appear when a judgment-order column was nominated.",
+          footer = uiOutput("btl_fitsum_notes")))))
   )
 
 # ---------------------------------------------------------------- ITEMS --
 panel_items <- nav_panel("Items", value = "p_items", icon = bs_icon("list-check"),
+    # Rasch fits (hidden while a paired-comparison fit is active)
+    conditionalPanel("output.is_btl != true",
     uiOutput("items_vboxes"),
     div(class = "mb-2 d-flex align-items-center gap-3 flex-wrap",
         div(class = "rmt-inline-check",
@@ -692,11 +704,44 @@ panel_items <- nav_panel("Items", value = "p_items", icon = bs_icon("list-check"
                  "Run to see the rest-measure evidence and the proposed key.")),
              conditionalPanel("output.has_rescore == true",
                DT::DTOutput("rescore_tbl"),
-               rcode_details("rescore_tbl"))))))
+               rcode_details("rescore_tbl"))))))),
+    # paired-comparison (BTL) fits: the object side of the analysis
+    conditionalPanel("output.is_btl == true",
+      tableCard("btl_obj_tbl", "Object locations and fit",
+        controls = cols_switch("btl_full"),
+                "Conditional (person-free) estimation with sum-zero identification and sandwich standard errors; the fit residual is the log-of-mean-square statistic over each object's comparisons (Andrich & Marais 2019)."),
+      plotCard("btl_occ", "Object characteristic curve",
+        info = "The paired-comparison counterpart of the item characteristic curve: the model expected response for the object against opponent location (the win probability, or the expected graded response), with the observed mean response per opponent overlaid at that opponent's location. Points straying from the curve flag inconsistent quality, exactly as a misfitting item does.",
+        controls = div(class = "d-flex align-items-center gap-1 me-1",
+          span(class = "small text-secondary", "Object"),
+          div(class = "rmt-inline-select",
+              selectizeInput("btl_occ_obj", NULL, NULL, width = "120px"))),
+        extra = downloadButton("btl_occ_all_pdf", "PDF (all objects)",
+                               class = "btn-outline-secondary btn-xs")),
+      accordion(id = "btl_items_acc", open = "btl_caterpillar",
+                class = "mt-3 mb-3",
+        accordion_panel("Object caterpillar", value = "btl_caterpillar",
+          plotCard("btl_plot")),
+        # graded (ordinal) fits only: hidden entirely for dichotomous fits
+        conditionalPanel("output.btl_graded == true",
+          accordion_panel("Symmetric thresholds", value = "btl_thresholds",
+            tableCard("btl_thr_tbl",
+                      note = "Adjacent-categories thresholds of the graded structure, constrained symmetric (tau_k = -tau_(m+1-k)) so the model is invariant to presentation order.")),
+          accordion_panel("Threshold components", value = "btl_components",
+            tableCard("btl_comp_tbl",
+                      note = "Spread is the linear component; the skewness component is structurally zero under presentation-order symmetry. Under the PC structure kurtosis is constrained to zero.")),
+          accordion_panel("Category probability curves", value = "btl_catcurves",
+            plotCard("btl_cats",
+              info = "The probability of each graded response category as a function of the location difference between the two objects; the paired-comparison counterpart of a polytomous item's category curves."))),
+        accordion_panel("Pairwise fit", value = "btl_pairs",
+          tableCard("btl_pairs_tbl",
+                    note = "Observed against expected win proportions (mean graded responses for a graded fit) for every pair; the total chi-square tests the BTL structure."))))
   )
 
 # -------------------------------------------------------------- PERSONS --
 panel_persons <- nav_panel("Persons", value = "p_persons", icon = bs_icon("people"),
+    # Rasch fits (hidden while a paired-comparison fit is active)
+    conditionalPanel("output.is_btl != true",
     uiOutput("persons_vboxes"),
     tableCard("person_tbl", "Person estimates",
         controls = cols_switch("persons_full"),
@@ -719,7 +764,12 @@ panel_persons <- nav_panel("Persons", value = "p_persons", icon = bs_icon("peopl
       accordion_panel("Person fit", value = "persons_pfit",
         plotCard("pfit")),
       accordion_panel("Fit residual distribution", value = "persons_rdist",
-        plotCard("rdist_p")))
+        plotCard("rdist_p")))),
+    # paired-comparison (BTL) fits: the judge fit table (the page itself is
+    # offered only when a judge column was nominated)
+    conditionalPanel("output.is_btl == true && output.has_judges == true",
+      tableCard("btl_judges_tbl", "Judges",
+                "Available when a judge column is nominated; an erratic judge carries a large positive fit residual, exactly as an erratic person does."))
   )
 
 # ------------------------------------------------------------ TARGETING --
@@ -1135,38 +1185,6 @@ panel_guess <- nav_panel("Guessing", value = "p_guess", icon = bs_icon("question
     )
   )
 
-# ------------------------------------------------------------------ BTL --
-panel_btl <- nav_panel("BTL", value = "p_btl", icon = bs_icon("trophy"),
-    layout_columns(col_widths = 12,
-      card(card_header("Paired comparisons (Bradley-Terry-Luce)"),
-           card_body(uiOutput("btl_boxes"),
-                     verbatimTextOutput("btl_summary"))),
-      tableCard("btl_obj_tbl", "Object locations and fit",
-        controls = cols_switch("btl_full"),
-                "Conditional (person-free) estimation with sum-zero identification and sandwich standard errors; the fit residual is the log-of-mean-square statistic over each object's comparisons (Andrich & Marais 2019)."),
-      plotCard("btl_plot", "Object caterpillar"),
-      plotCard("btl_occ", "Object characteristic curve",
-        info = "The paired-comparison counterpart of the item characteristic curve: the model expected response for the object against opponent location (the win probability, or the expected graded response), with the observed mean response per opponent overlaid at that opponent's location. Points straying from the curve flag inconsistent quality, exactly as a misfitting item does.",
-        controls = div(class = "d-flex align-items-center gap-1 me-1",
-          span(class = "small text-secondary", "Object"),
-          div(class = "rmt-inline-select",
-              selectizeInput("btl_occ_obj", NULL, NULL, width = "120px"))),
-        extra = downloadButton("btl_occ_all_pdf", "PDF (all objects)",
-                               class = "btn-outline-secondary btn-xs")),
-      # graded (ordinal) fits only: hidden entirely for dichotomous fits
-      conditionalPanel("output.btl_graded == true",
-        tableCard("btl_thr_tbl", "Symmetric thresholds",
-                  "Adjacent-categories thresholds of the graded structure, constrained symmetric (tau_k = -tau_(m+1-k)) so the model is invariant to presentation order."),
-        tableCard("btl_comp_tbl", "Threshold components",
-                  "Spread is the linear component; the skewness component is structurally zero under presentation-order symmetry. Under the PC structure kurtosis is constrained to zero."),
-        plotCard("btl_cats", "Category probability curves",
-          info = "The probability of each graded response category as a function of the location difference between the two objects; the paired-comparison counterpart of a polytomous item's category curves.")),
-      tableCard("btl_pairs_tbl", "Pairwise goodness of fit",
-                "Observed against expected win proportions (mean graded responses for a graded fit) for every pair; the total chi-square tests the BTL structure."),
-      tableCard("btl_judges_tbl", "Judge fit",
-                "Available when a judge column is nominated; an erratic judge carries a large positive fit residual, exactly as an erratic person does."))
-  )
-
 # -------------------------------------------------------------- COMPARE --
 panel_compare <- nav_panel("Compare", value = "p_compare", icon = bs_icon("columns-gap"),
     layout_sidebar(
@@ -1205,7 +1223,7 @@ panel_export <- nav_panel("Export", value = "p_export", icon = bs_icon("download
       card(card_body(class = "empty-state",
         bs_icon("trophy", size = "2rem",
                 class = "text-secondary d-block mx-auto mb-2"),
-        p("The HTML report and ZIP archive cover Rasch analyses. For a paired-comparison (BTL) analysis, download each table as CSV from the BTL page.")))),
+        p("The HTML report and ZIP archive cover Rasch analyses. For a paired-comparison (BTL) analysis, download each table as CSV from its card on the Summary, Items, and Persons pages.")))),
     conditionalPanel("output.is_btl != true",
     layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       card(card_header(span(bs_icon("file-earmark-text"),
@@ -1279,7 +1297,6 @@ ui <- page_navbar(
     panel_facets,
     panel_frames),
   nav_menu("More", value = "menu_more",
-    panel_btl,
     panel_compare,
     panel_export),
   nav_spacer(),
@@ -1779,11 +1796,12 @@ server <- function(input, output, session) {
       showNotification("Estimation did not converge; consider raising the maximum iterations or loosening the convergence criterion.",
                        type = "warning", duration = NULL)
     override_fit(NULL); override_desc(NULL)
-    # paired-comparison results live on their own tab; the Rasch tabs
-    # suspend while a BTL analysis is current
+    # paired-comparison results render on the Summary / Items / Persons
+    # pages (each page's Rasch variant hides while a BTL fit is current,
+    # and vice versa); the Rasch outputs suspend meanwhile
     if (inherits(fit, "rmt_btl")) {
       btl_fit(fit)
-      try(nav_select("nav", "p_btl", session = session), silent = TRUE)
+      try(nav_select("nav", "p_summary", session = session), silent = TRUE)
       return(NULL)
     }
     btl_fit(NULL)
@@ -1807,8 +1825,10 @@ server <- function(input, output, session) {
     tryCatch(sel_item(), error = function(e) "Selected item")))
 
   # only offer the pages that apply to the current analysis: Facets needs a
-  # many-facet fit, Frames an extended-frames fit, BTL a paired-comparison
-  # analysis, and Guessing a dichotomous one. Everything else stays.
+  # many-facet fit, Frames an extended-frames fit, and Guessing a
+  # dichotomous one. Summary and Items serve Rasch and paired-comparison
+  # (BTL) fits alike (each page shows the matching variant); Persons needs
+  # person estimates (Rasch) or a judge column (BTL). Everything else stays.
   # Every nav_panel and nav_menu carries an explicit value, and visibility is
   # driven by those values through the rmt-nav-vis handler (shiny::hideTab,
   # which backs bslib::nav_hide, cannot reach entries inside a nav_menu).
@@ -1820,27 +1840,29 @@ server <- function(input, output, session) {
                                 list(value = value, show = isTRUE(on)))
     show("p_facets", inherits(f, "rasch_mfrm"))
     show("p_frames", inherits(f, "rasch_efrm"))
-    show("p_btl", !is.null(bf))
     show("p_guess", !is.null(f) && !inherits(f, "rasch_mfrm") &&
            !inherits(f, "rasch_efrm") && max(f$m) == 1L)
     rasch_on <- !is.null(f)
+    btl_on <- !is.null(bf)
     # judge-factor DIF applies to a paired-comparison fit once judge
     # factors are nominated in the Data roles
-    btl_dif_on <- !is.null(bf) && length(input$bt_jfactors) > 0
-    for (tgt in c("p_summary", "p_items", "p_persons", "p_targeting",
-                  "p_test", "p_dim", "p_equating"))
+    btl_dif_on <- btl_on && length(input$bt_jfactors) > 0
+    show("p_summary", rasch_on || btl_on)
+    show("p_items", rasch_on || btl_on)
+    show("p_persons", rasch_on || (btl_on && !is.null(bf$judges)))
+    for (tgt in c("p_targeting", "p_test", "p_dim", "p_equating"))
       show(tgt, rasch_on)
     # Local dependence: the Rasch Q3 suite, or the within-judge dependence
     # analysis of a paired-comparison fit
-    show("p_ld", rasch_on || !is.null(bf))
+    show("p_ld", rasch_on || btl_on)
     # DIF needs at least one person factor in the fit (Rasch), or a
     # paired-comparison fit with judge factors nominated
     show("p_dif", (rasch_on && !is.null(f$factors) &&
                      length(names(f$factors)) > 0) || btl_dif_on)
     # menu headers hide too when everything inside them is hidden
-    show("menu_structure", rasch_on || !is.null(bf))
+    show("menu_structure", rasch_on || btl_on)
     show("menu_invariance", rasch_on || btl_dif_on)
-    show("menu_more", rasch_on || !is.null(bf))
+    show("menu_more", rasch_on || btl_on)
   })
 
   # ------------------------------------------------ UI visibility flags --
@@ -1855,6 +1877,13 @@ server <- function(input, output, session) {
   outputOptions(output, "has_interaction", suspendWhenHidden = FALSE)
   output$is_btl <- reactive(!is.null(btl_fit()))
   outputOptions(output, "is_btl", suspendWhenHidden = FALSE)
+  # a paired-comparison fit with a judge column: the Persons page shows the
+  # judge fit table (and is offered in the navbar) only then
+  output$has_judges <- reactive({
+    b <- btl_fit()
+    !is.null(b) && !is.null(b$judges)
+  })
+  outputOptions(output, "has_judges", suspendWhenHidden = FALSE)
   # empty-state flags for the run-on-demand cards: before a run the card
   # shows only its controls and one muted line (no table, plot, or download)
   output$has_dep <- reactive(!is.null(dep_res()))
@@ -2913,17 +2942,23 @@ server <- function(input, output, session) {
                 theme = if (finite1(f$total_p) && f$total_p >= 0.05)
                   "success" else "secondary"))
   })
-  output$btl_summary <- renderText({
+  # test-of-fit summary (Summary page): the paired-comparison headline set
+  # from fit_summary_table()'s rmt_btl method
+  register_table("btl_fitsum_tbl", function() fit_summary_table(bfit()),
+                 function() {
+    d <- fit_summary_table(bfit())
+    names(d) <- c("Statistic", "Value")
+    num_dt(d, paging = FALSE)
+  }, code = function() "fit_summary_table(bt)")
+  output$btl_fitsum_tbl_csv <- downloadHandler(
+    filename = function() "fit_summary.csv",
+    content = function(file)
+      write.csv(fit_summary_table(bfit()), file, row.names = FALSE))
+  # routine handling notes (the old text panel printed bt$notes)
+  output$btl_fitsum_notes <- renderUI({
     f <- bfit()
-    paste0(sprintf("Conditional ML: %s in %d iterations; sandwich SEs%s.\n",
-                   if (f$converged) "converged" else "NOT converged",
-                   f$iterations,
-                   if (f$clustered) " clustered by judge" else ""),
-           sprintf("Pairwise chi-square %.2f on %d df, p = %s.\n",
-                   f$total_chisq, f$total_df, fmt_p(f$total_p)),
-           sprintf("Log-likelihood %.3f.", f$loglik),
-           if (length(f$notes)) paste0("\nNotes: ",
-                                       paste(f$notes, collapse = "; ")) else "")
+    if (!length(f$notes)) return(NULL)
+    sprintf("Note. %s.", paste(f$notes, collapse = "; "))
   })
   register_table("btl_obj_tbl", function() bfit()$objects,
                  function() num_dt(curate(bfit()$objects, "btl_obj",

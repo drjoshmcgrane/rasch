@@ -356,3 +356,31 @@ test_that("btl_dif finds a planted judge-group effect on the right object only",
   pdf(NULL); on.exit(dev.off())
   expect_no_error(plot_btl_icc(f, "S06", group = grp))
 })
+
+test_that("fit_summary_table dispatches for paired-comparison fits", {
+  set.seed(1)
+  beta <- c(A = -1, B = -0.3, C = 0.4, D = 0.9)
+  pr <- t(combn(names(beta), 2))
+  d <- data.frame(a = rep(pr[, 1], each = 30), b = rep(pr[, 2], each = 30),
+                  judge = sample(sprintf("J%d", 1:8), 180, TRUE))
+  d$t <- ave(seq_len(nrow(d)), d$judge, FUN = seq_along)
+  d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b]), d$a, d$b)
+  bt <- btl(d, "a", "b", winner = "win", judge = "judge", order = "t")
+  ft <- fit_summary_table(bt)
+  expect_identical(names(ft), c("statistic", "value"))
+  expect_equal(ft$value[ft$statistic == "Objects"], "4")
+  expect_equal(ft$value[ft$statistic == "Standard errors"],
+               "sandwich, clustered by judge")
+  expect_true(any(grepl("Within-judge exposure", ft$statistic)))
+  expect_true(any(grepl("Within-judge carry-over", ft$statistic)))
+  # graded fit reports its category count and threshold structure
+  d$grade <- vapply(seq_len(nrow(d)), function(r) {
+    p <- item_moments(beta[d$a[r]] - beta[d$b[r]], c(-1, 0, 1))$P
+    sample(0:3, 1, prob = p)
+  }, 0L)
+  fg <- fit_summary_table(btl(d, "a", "b", response = "grade"))
+  expect_true(any(grepl("Graded paired comparisons \\(4 categories\\)",
+                        fg$value)))
+  expect_equal(fg$value[fg$statistic == "Threshold structure"],
+               "free symmetric")
+})
