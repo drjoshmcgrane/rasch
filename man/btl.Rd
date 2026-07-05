@@ -10,9 +10,11 @@ btl(
   object_b,
   winner = NULL,
   response = NULL,
+  margin = NULL,
   judge = NULL,
   count = NULL,
   ties = c("drop", "half", "error"),
+  thresholds = c("free", "pc"),
   maxit = 60,
   tol = 1e-08
 )
@@ -36,6 +38,13 @@ thresholds constrained symmetric, \code{tau_k = -tau_(m+1-k)}, so the
 model is invariant to presentation order. Two categories reproduce
 BTL exactly; three give the Davidson (1970) ties model.}
 
+\item{margin}{Optional name of a column holding the extent of the win
+("a little", "much", ...), as an ordered factor or increasing values;
+combined with \code{winner} it assembles the graded response without
+any orientation bookkeeping ("B by much" means the same thing
+whichever column B sits in). Winner values matching neither object
+are ties and form the middle category.}
+
 \item{judge}{Optional name of a judge column; enables the judge fit
 table and clusters the sandwich standard errors by judge.}
 
@@ -48,6 +57,13 @@ win each way, a common pragmatic device -- flagged in the notes
 because the halves are not independent Bernoulli trials), or
 \code{"error"}. With graded responses, code ties as a middle
 category instead.}
+
+\item{thresholds}{\code{"free"} (default) estimates every symmetric
+threshold parameter; \code{"pc"} pools them to the spread (linear)
+principal component -- the symmetric case of the principal-component
+threshold structure, whose even skewness component is structurally
+zero here -- so thinly used categories borrow strength from every
+response. Both modes report the component decomposition.}
 
 \item{maxit, tol}{Newton-Raphson iteration cap and convergence tolerance.}
 }

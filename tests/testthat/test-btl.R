@@ -221,3 +221,70 @@ test_that("the object characteristic curve renders and the fit keeps its compari
   expect_no_error(plot_btl_icc(fg, "C"))
   expect_error(plot_btl_icc(f, "Z"), "no such object")
 })
+
+test_that("winner + margin entry and PC thresholds behave as designed", {
+  set.seed(3)
+  beta <- c(A = -1.2, B = -0.5, C = 0, D = 0.6, E = 1.1)
+  beta <- beta - mean(beta)
+  pr <- t(combn(names(beta), 2))
+  d <- data.frame(a = rep(pr[, 1], each = 60), b = rep(pr[, 2], each = 60))
+  d$grade <- vapply(seq_len(nrow(d)), function(r) {
+    p <- item_moments(beta[d$a[r]] - beta[d$b[r]], c(-1.4, 0, 1.4))$P
+    sample(0:3, 1, prob = p)
+  }, 0L)
+  # winner + margin is exactly the single-column coding, orientation-free
+  d$winner <- ifelse(d$grade >= 2, d$a, d$b)
+  d$margin <- factor(c("much", "a little", "a little", "much")[d$grade + 1],
+                     levels = c("a little", "much"))
+  f1 <- btl(d, "a", "b", response = "grade")
+  f2 <- btl(d, "a", "b", winner = "winner", margin = "margin")
+  expect_equal(f2$objects$location, f1$objects$location, tolerance = 1e-10)
+  expect_equal(f2$thresholds$tau, f1$thresholds$tau, tolerance = 1e-10)
+  expect_identical(f2$categories,
+                   c("worse by much", "worse by a little",
+                     "better by a little", "better by much"))
+  # margin without winner is an error
+  expect_error(btl(d, "a", "b", margin = "margin"), "winner")
+  # ties in the winner column form the middle category (5 categories)
+  set.seed(11)
+  d$winner2 <- ifelse(runif(nrow(d)) < 0.15, "tie", d$winner)
+  f3 <- btl(d, "a", "b", winner = "winner2", margin = "margin")
+  expect_equal(f3$m, 4L)
+  expect_identical(f3$categories[3], "tie")
+  # components: spread + kurtosis for four thresholds, skewness nowhere
+  expect_setequal(f3$components$component, c("spread", "kurtosis"))
+  # PC thresholds are exactly linear in the threshold index, and their
+  # spread agrees with the free-mode spread component
+  f4 <- btl(d, "a", "b", winner = "winner2", margin = "margin",
+            thresholds = "pc")
+  tv <- f4$thresholds$tau
+  k <- seq_along(tv) - (length(tv) + 1) / 2
+  expect_lt(max(abs(tv - sum(tv * k) / sum(k^2) * k)), 1e-10)
+  expect_lt(abs(f4$components$estimate[1] - f3$components$estimate[1]), 0.25)
+  expect_equal(f4$thr_structure, "pc")
+})
+
+test_that("the identifiability guards distinguish interior from extreme sparseness", {
+  set.seed(5)
+  beta <- c(A = -0.8, B = 0, C = 0.8)
+  pr <- t(combn(names(beta), 2))
+  d <- data.frame(a = rep(pr[, 1], each = 100), b = rep(pr[, 2], each = 100))
+  d$grade <- vapply(seq_len(nrow(d)), function(r) {
+    p <- item_moments(beta[d$a[r]] - beta[d$b[r]], c(-1.5, -0.5, 0.5, 1.5))$P
+    sample(0:4, 1, prob = p)
+  }, 0L)
+  # interior categories emptied: free errors toward pc; pc fits with a note
+  d$g2 <- ifelse(d$grade %in% c(1L, 3L), 2L, d$grade)
+  expect_error(btl(d, "a", "b", response = "g2"), "thresholds = 'pc'")
+  f <- btl(d, "a", "b", response = "g2", thresholds = "pc")
+  expect_true(f$converged)
+  expect_true(any(grepl("pooled", f$notes)))
+  # empty extremes have no finite estimate under either structure: seven
+  # declared levels with only the middle five used leaves categories 0 and
+  # 6 empty in both orientations
+  d$g <- factor(paste0("L", d$grade + 1),
+                levels = paste0("L", 0:6))
+  expect_error(btl(d, "a", "b", response = "g"), "extreme category")
+  expect_error(btl(d, "a", "b", response = "g", thresholds = "pc"),
+               "extreme category")
+})

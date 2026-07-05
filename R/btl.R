@@ -62,6 +62,18 @@
 #' @param winner Name of the column holding the winner of each row: its
 #'   value must equal the row's \code{object_a} or \code{object_b} entry
 #'   (anything else is a tie). Ignored when \code{response} is given.
+#' @param margin Optional name of a column holding the extent of the win
+#'   ("a little", "much", ...), as an ordered factor or increasing values;
+#'   combined with \code{winner} it assembles the graded response without
+#'   any orientation bookkeeping ("B by much" means the same thing
+#'   whichever column B sits in). Winner values matching neither object
+#'   are ties and form the middle category.
+#' @param thresholds \code{"free"} (default) estimates every symmetric
+#'   threshold parameter; \code{"pc"} pools them to the spread (linear)
+#'   principal component -- the symmetric case of the principal-component
+#'   threshold structure, whose even skewness component is structurally
+#'   zero here -- so thinly used categories borrow strength from every
+#'   response. Both modes report the component decomposition.
 #' @param response Optional name of a column holding a graded preference
 #'   for \code{object_a} over \code{object_b} -- an ordered factor (worst
 #'   to best for \code{object_a}) or integer scores \code{0..m}. Fits the
@@ -117,13 +129,17 @@
 #' btl(d, object_a = "a", object_b = "b", winner = "win")
 #' @export
 btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
-                judge = NULL, count = NULL,
-                ties = c("drop", "half", "error"), maxit = 60, tol = 1e-8) {
+                margin = NULL, judge = NULL, count = NULL,
+                ties = c("drop", "half", "error"),
+                thresholds = c("free", "pc"), maxit = 60, tol = 1e-8) {
   ties <- match.arg(ties)
+  thresholds <- match.arg(thresholds)
   data <- as.data.frame(data)
   if (is.null(winner) && is.null(response))
     stop("give either `winner` (dichotomous) or `response` (graded)")
-  for (col in c(object_a, object_b, winner, response, judge, count))
+  if (!is.null(margin) && is.null(winner))
+    stop("`margin` requires `winner`")
+  for (col in c(object_a, object_b, winner, response, margin, judge, count))
     if (!col %in% names(data)) stop("column not found: ", col)
   a <- trimws(as.character(data[[object_a]]))
   b <- trimws(as.character(data[[object_b]]))
@@ -150,7 +166,46 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
       if (!is.null(jd)) jd <- jd[keep]
     }
     if (!length(a)) stop("no usable comparisons")
-    return(.btl_graded(a, b, x, jd, w, cats, maxit, tol, notes))
+    return(.btl_graded(a, b, x, jd, w, cats, maxit, tol, notes,
+                       thr = thresholds))
+  }
+
+  if (!is.null(margin)) {
+    # winner + margin entry: orientation-free by construction. The graded
+    # response is assembled from "who won" and "by how much"; a winner value
+    # matching neither object is a tie and becomes the middle category.
+    mg <- data[[margin]]
+    lv <- if (is.factor(mg)) levels(droplevels(mg)) else
+      as.character(sort(unique(mg[!is.na(mg)])))
+    q <- length(lv)
+    if (q < 1L) stop("`margin` has no usable levels")
+    mgi <- match(as.character(mg), lv)
+    wn <- trimws(as.character(data[[winner]]))
+    is_a <- !is.na(wn) & wn == a
+    is_b <- !is.na(wn) & wn == b
+    tie <- !is.na(wn) & !is_a & !is_b
+    ties_present <- any(tie)
+    keep <- !is.na(a) & !is.na(b) & !is.na(wn) & a != b & !is.na(w) & w > 0 &
+      (tie | !is.na(mgi))
+    if (any(!keep)) {
+      notes <- c(notes, sprintf(
+        "%d row(s) dropped (missing winner or margin, zero-count, or self-comparison)",
+        sum(!keep)))
+      a <- a[keep]; b <- b[keep]; w <- w[keep]
+      mgi <- mgi[keep]; is_a <- is_a[keep]; is_b <- is_b[keep]
+      tie <- tie[keep]
+      if (!is.null(jd)) jd <- jd[keep]
+    }
+    if (!length(a)) stop("no usable comparisons")
+    base <- q - 1L + as.integer(ties_present)
+    x <- ifelse(is_a, base + mgi, ifelse(is_b, q - mgi, q))
+    cats <- c(paste0("worse by ", rev(lv)), if (ties_present) "tie",
+              paste0("better by ", lv))
+    if (ties_present)
+      notes <- c(notes, sprintf("%d tie(s) placed in the middle category",
+                                sum(tie)))
+    return(.btl_graded(a, b, as.integer(x), jd, w, cats, maxit, tol, notes,
+                       thr = thresholds))
   }
 
   wn <- trimws(as.character(data[[winner]]))
@@ -429,17 +484,30 @@ plot_btl <- function(fit, band = 2.5) {
 # (1970) ties model. Estimation, identification, sandwich errors, and fit
 # follow the package conventions established in btl().
 # ---------------------------------------------------------------------------
-.btl_graded <- function(a, b, x, jd, w, cats, maxit, tol, notes) {
+.btl_graded <- function(a, b, x, jd, w, cats, maxit, tol, notes,
+                        thr = "free") {
   m <- length(cats) - 1L
   if (m < 1L) stop("graded responses need at least two categories")
-  # every category must appear in the symmetrised responses, else its
-  # threshold has no finite estimate
+  # identifiability: empty EXTREME categories leave no finite spread (the
+  # data are evidence of infinite spread, as a zero raw score is of an
+  # infinite person location); empty interior categories are unidentified
+  # under free thresholds but pooled over by the principal-component
+  # structure
   xs <- c(x, m - x)
   emp <- which(tabulate(xs + 1L, m + 1L) == 0) - 1L
-  if (length(emp))
-    stop("category never used (in either orientation): ",
+  if (any(emp %in% c(0L, m)))
+    stop("extreme category never used (in either orientation): ",
+         paste(cats[intersect(emp, c(0L, m)) + 1L], collapse = ", "),
+         "; no finite threshold estimate exists - collapse categories")
+  if (length(emp) && thr == "free")
+    stop("interior category never used (in either orientation): ",
          paste(cats[emp + 1L], collapse = ", "),
-         "; collapse categories or recode")
+         "; use thresholds = 'pc' (pooled principal-component structure)",
+         " or collapse categories")
+  if (length(emp))
+    notes <- c(notes, sprintf(
+      "interior category unused (%s); thresholds pooled by the principal-component structure",
+      paste(cats[emp + 1L], collapse = ", ")))
 
   # objects whose every response sits at the boundary have no finite
   # estimate, as extreme persons are set aside in a Rasch calibration
@@ -473,10 +541,20 @@ plot_btl <- function(fit, band = 2.5) {
          paste(vapply(parts, paste, "", collapse = ","), collapse = " | "))
   }
 
-  # symmetric-threshold map: tau = Cmat %*% tfree, tau_k = -tau_{m+1-k}
-  q <- m %/% 2L
-  Cmat <- matrix(0, m, q)
-  for (k in seq_len(q)) { Cmat[k, k] <- 1; Cmat[m + 1L - k, k] <- -1 }
+  # symmetric-threshold map: tau = Cmat %*% tfree, tau_k = -tau_{m+1-k}.
+  # Under thr = "pc" the free symmetric parameters are further pooled to
+  # the spread (linear) component alone - Andrich's principal-component
+  # structure with the even (skewness) components structurally zero under
+  # symmetry - so sparse categories borrow strength from every response.
+  if (thr == "pc" && m >= 2L) {
+    v1 <- seq_len(m) - (m + 1) / 2
+    Cmat <- cbind(v1 / sqrt(sum(v1^2)))
+    q <- 1L
+  } else {
+    q <- m %/% 2L
+    Cmat <- matrix(0, m, q)
+    for (k in seq_len(q)) { Cmat[k, k] <- 1; Cmat[m + 1L - k, k] <- -1 }
+  }
   Bmat <- rbind(diag(K - 1L), rep(-1, K - 1L))
   np <- (K - 1L) + q
   sc <- 0:m
@@ -601,11 +679,31 @@ plot_btl <- function(fit, band = 2.5) {
   covth <- Hi %*% crossprod(Gm) %*% Hi
   cov_beta <- Bmat %*% covth[1:(K - 1L), 1:(K - 1L), drop = FALSE] %*% t(Bmat)
   se <- sqrt(pmax(diag(cov_beta), 0))
-  thresholds <- NULL
+  thresholds <- NULL; components <- NULL
   if (q) {
     cov_tau <- Cmat %*% covth[K:np, K:np, drop = FALSE] %*% t(Cmat)
     thresholds <- data.frame(threshold = seq_len(m), tau = tau,
                              se = sqrt(pmax(diag(cov_tau), 0)))
+    # principal-component decomposition of the threshold structure: the
+    # odd components (spread; kurtosis from five thresholds up) carry the
+    # symmetric structure, the even skewness component is structurally
+    # zero under presentation-order symmetry
+    v1 <- seq_len(m) - (m + 1) / 2
+    v1 <- v1 / sqrt(sum(v1^2))
+    comp_rows <- list(data.frame(
+      component = "spread", estimate = sum(v1 * tau),
+      se = sqrt(pmax(drop(t(v1) %*% cov_tau %*% v1), 0))))
+    if (m >= 4L) {
+      v3 <- (seq_len(m) - (m + 1) / 2)^3
+      v3 <- v3 - sum(v3 * v1) * v1
+      v3 <- v3 / sqrt(sum(v3^2))
+      comp_rows[[2]] <- data.frame(
+        component = "kurtosis", estimate = sum(v3 * tau),
+        se = if (thr == "pc") 0 else
+          sqrt(pmax(drop(t(v3) %*% cov_tau %*% v3), 0)))
+    }
+    components <- do.call(rbind, comp_rows)
+    rownames(components) <- NULL
   } else if (m > 1L) {
     thresholds <- data.frame(threshold = seq_len(m), tau = tau, se = 0)
   }
@@ -670,7 +768,8 @@ plot_btl <- function(fit, band = 2.5) {
   total_df <- max(sum(used) - (K - 1L) - q, 1L)
   osi <- .psi(objects$location, objects$se)
 
-  out <- list(objects = objects, thresholds = thresholds, pairs = pairs,
+  out <- list(objects = objects, thresholds = thresholds,
+              components = components, thr_structure = thr, pairs = pairs,
               judges = judges, m = m, categories = cats,
               total_chisq = total_chisq, total_df = total_df,
               total_p = pchisq(total_chisq, total_df, lower.tail = FALSE),

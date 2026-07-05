@@ -70,7 +70,9 @@ if (requireNamespace("rmt", quietly = TRUE)) {
 # judge J09 answering at random (discoverable in the judge fit table).
 # Besides the winner column it carries a graded `preference` column (four
 # ordered categories) simulated from the same object locations, so the
-# graded-response role can be pointed at it.
+# graded-response role can be pointed at it, and a `margin` column ("a
+# little" < "much") derived from the preference for the winner + margin
+# entry path.
 .demo_btl <- function(seed = 47, reps = 22) {
   set.seed(seed)
   beta <- setNames(seq(-1.4, 1.4, length.out = 8), sprintf("E%02d", 1:8))
@@ -90,6 +92,11 @@ if (requireNamespace("rmt", quietly = TRUE)) {
   P[, d$judge == "J09"] <- 0.25
   d$preference <- factor(lev[apply(P, 2, function(pp) sample(4, 1, prob = pp))],
                          levels = lev, ordered = TRUE)
+  # margin of win as an ordered factor, derived from the graded preference
+  # (the extreme categories are "much" wins), for the winner + margin path
+  d$margin <- factor(ifelse(d$preference %in% c("much worse", "much better"),
+                            "much", "a little"),
+                     levels = c("a little", "much"), ordered = TRUE)
   d[sample(nrow(d)), ]
 }
 
@@ -424,13 +431,17 @@ panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
               selectInput("bt_a", "Object A column", NONE_CH),
               selectInput("bt_b", "Object B column", NONE_CH),
               conditionalPanel("!input.bt_response",
-                selectInput("bt_win", "Winner column", NONE_CH)),
+                selectInput("bt_win", "Winner column", NONE_CH),
+                selectizeInput("bt_margin", "Margin of win (optional)", NULL,
+                               options = list(placeholder = "none — dichotomous")),
+                p(class = "text-muted small",
+                  "The extent of the win (e.g. a little / much) as an ordered factor or increasing values; with the winner column it forms graded categories with no orientation bookkeeping. Winner values matching neither object count as ties (middle category).")),
               selectizeInput("bt_response", "Graded response (optional)", NULL,
                              options = list(placeholder = "none — use winner")),
               p(class = "text-muted small",
                 "A graded preference for the first object (e.g. much worse … much better), as an ordered factor or scores 0..m; overrides the winner column. Ties belong in a middle category."),
               selectInput("bt_judge", "Judge column (optional)", NONE_CH),
-              conditionalPanel("!input.bt_response",
+              conditionalPanel("!input.bt_response && !input.bt_margin",
                 radioButtons("bt_ties", "Ties",
                              c("Drop" = "drop", "Half a win each" = "half"))),
               p(class = "text-muted small",
@@ -456,6 +467,13 @@ panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
                               selected = "4"),
                   p(class = "text-muted small",
                     "Thresholds follow a polynomial trend across categories; useful with sparse categories. Anchors cannot be combined with this option.")))),
+            conditionalPanel(
+              "input.model_type == 'btl' && (input.bt_response || input.bt_margin)",
+              radioButtons("bt_thr", "Threshold structure",
+                           c("Free symmetric" = "free",
+                             "Principal components (spread)" = "pc")),
+              p(class = "text-muted small",
+                "PC pools the symmetric thresholds to the spread component so thinly used categories borrow strength; free estimates each threshold pair.")),
             checkboxInput("ng_auto", "Automatic class intervals (at least 50 per interval)", TRUE),
             conditionalPanel("!input.ng_auto",
               sliderInput("ng", "Class intervals", min = 2, max = 16, value = 8)),
@@ -1086,6 +1104,8 @@ panel_btl <- nav_panel("BTL", value = "p_btl", icon = bs_icon("trophy"),
       conditionalPanel("output.btl_graded == true",
         tableCard("btl_thr_tbl", "Symmetric thresholds",
                   "Adjacent-categories thresholds of the graded structure, constrained symmetric (tau_k = -tau_(m+1-k)) so the model is invariant to presentation order."),
+        tableCard("btl_comp_tbl", "Threshold components",
+                  "Spread is the linear component; the skewness component is structurally zero under presentation-order symmetry. Under the PC structure kurtosis is constrained to zero."),
         plotCard("btl_cats", "Category probability curves",
           info = "The probability of each graded response category as a function of the location difference between the two objects; the paired-comparison counterpart of a polytomous item's category curves.")),
       tableCard("btl_pairs_tbl", "Pairwise goodness of fit",
@@ -1302,8 +1322,10 @@ server <- function(input, output, session) {
                       selected = if (!is.na(g_b)) g_b else NONE)
     updateSelectInput(session, "bt_win", choices = c(NONE_CH, nm),
                       selected = if (!is.na(g_w)) g_w else NONE)
-    # empty choice = the "none — use winner" placeholder (clearable)
+    # empty choice = the "none — …" placeholder (clearable)
     updateSelectizeInput(session, "bt_response", choices = c("", nm),
+                         selected = "")
+    updateSelectizeInput(session, "bt_margin", choices = c("", nm),
                          selected = "")
     updateSelectInput(session, "bt_judge", choices = c(NONE_CH, nm),
                       selected = if (!is.na(g_j)) g_j else NONE)
@@ -1489,8 +1511,13 @@ server <- function(input, output, session) {
       fit <- tryCatch({
         if (identical(input$model_type, "btl")) {
           # a graded response column overrides the winner column (and the
-          # ties rule: graded ties belong in a middle category)
+          # ties rule: graded ties belong in a middle category); otherwise a
+          # margin column combines with the winner into the graded response
+          # (winner values matching neither object = ties = middle category)
           bt_graded <- !is.null(input$bt_response) && nzchar(input$bt_response)
+          bt_marg <- !bt_graded && !is.null(input$bt_margin) &&
+            nzchar(input$bt_margin)
+          bt_thr <- input$bt_thr %||% "free"
           if (any(c(input$bt_a, input$bt_b) == NONE) ||
               (!bt_graded && identical(input$bt_win, NONE)))
             stop("nominate the object A, object B, and winner (or graded response) columns")
@@ -1499,11 +1526,15 @@ server <- function(input, output, session) {
             paste0("object_b = ", qstr(input$bt_b)),
             if (bt_graded) paste0("response = ", qstr(input$bt_response))
             else paste0("winner = ", qstr(input$bt_win)),
+            if (bt_marg) paste0("margin = ", qstr(input$bt_margin)),
             if (!is.null(input$bt_judge) && input$bt_judge != NONE)
               paste0("judge = ", qstr(input$bt_judge)),
             if (!is.null(input$bt_count) && input$bt_count != NONE)
               paste0("count = ", qstr(input$bt_count)),
-            if (!bt_graded) paste0("ties = ", qstr(input$bt_ties %||% "drop")),
+            if (!bt_graded && !bt_marg)
+              paste0("ties = ", qstr(input$bt_ties %||% "drop")),
+            if ((bt_graded || bt_marg) && identical(bt_thr, "pc"))
+              'thresholds = "pc"',
             code_est), collapse = ",\n  "), ")")
           if (bt_graded)
             btl(df, object_a = input$bt_a, object_b = input$bt_b,
@@ -1512,6 +1543,17 @@ server <- function(input, output, session) {
                   input$bt_judge else NULL,
                 count = if (!is.null(input$bt_count) && input$bt_count != NONE)
                   input$bt_count else NULL,
+                thresholds = bt_thr,
+                maxit = max(5, input$maxit %||% 60),
+                tol = max(1e-12, input$tol %||% 1e-8))
+          else if (bt_marg)
+            btl(df, object_a = input$bt_a, object_b = input$bt_b,
+                winner = input$bt_win, margin = input$bt_margin,
+                judge = if (!is.null(input$bt_judge) && input$bt_judge != NONE)
+                  input$bt_judge else NULL,
+                count = if (!is.null(input$bt_count) && input$bt_count != NONE)
+                  input$bt_count else NULL,
+                thresholds = bt_thr,
                 maxit = max(5, input$maxit %||% 60),
                 tol = max(1e-12, input$tol %||% 1e-8))
           else
@@ -2930,6 +2972,11 @@ server <- function(input, output, session) {
                   "Dichotomous fit: no threshold structure to show."))
     num_dt(bfit()$thresholds)
   }, code = function() "bt$thresholds")
+  register_table("btl_comp_tbl", function() bfit()$components, function() {
+    validate(need(!is.null(bfit()$components),
+                  "Dichotomous fit: no threshold components to show."))
+    num_dt(bfit()$components)
+  }, code = function() "bt$components")
   register_plot("btl_cats", function() plot_btl_categories(bfit()),
                 code = function() "plot_btl_categories(bt)")
 
