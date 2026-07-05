@@ -33,42 +33,68 @@
 #' ctt_table(rasch(X))
 #' @export
 ctt_table <- function(fit) {
-  X <- fit$X[stats::complete.cases(fit$X), , drop = FALSE]
-  if (nrow(X) < 3) stop("fewer than 3 complete cases: no traditional statistics")
-  L <- ncol(X); n <- nrow(X)
-  tot <- rowSums(X)
-  thirds <- cut(rank(tot, ties.method = "first"), 3, labels = FALSE)
+  X <- fit$X
+  L <- ncol(X)
+  n_i <- colSums(!is.na(X))
+  if (all(n_i < 3)) stop("fewer than 3 responses per item: no traditional statistics")
+  # available-case statistics: each person's total is their proportion of
+  # the maximum over the items they answered, so persons with different
+  # answered sets remain comparable; with complete data every statistic
+  # reduces exactly to its textbook complete-case form
+  Mmat <- matrix(rep(fit$m, each = nrow(X)), nrow(X), L)
+  Mmat[is.na(X)] <- NA
+  tot_p <- rowSums(X, na.rm = TRUE) / rowSums(Mmat, na.rm = TRUE)
+  thirds <- cut(rank(tot_p, ties.method = "first"), 3, labels = FALSE)
   alpha <- fit$alpha$alpha
-  tab <- data.frame(item = colnames(X), n = n,
-                    facility = colMeans(X) / fit$m,
+  # pairwise covariance carries the alpha-if-deleted computation under
+  # missing data (equal to the variance form when data are complete)
+  C <- suppressWarnings(stats::cov(X, use = "pairwise.complete.obs"))
+  tab <- data.frame(item = colnames(X), n = n_i,
+                    facility = colMeans(X, na.rm = TRUE) / fit$m,
                     item_total = NA_real_, item_rest = NA_real_,
                     di = NA_real_, alpha_drop = NA_real_)
   for (i in seq_len(L)) {
-    x <- X[, i]
-    if (sd(x) > 0) {
-      tab$item_total[i] <- cor(x, tot)
-      tab$item_rest[i] <- cor(x, tot - x)
-      tab$di[i] <- mean(x[thirds == 3]) / fit$m[i] -
-                   mean(x[thirds == 1]) / fit$m[i]
+    x <- X[, i]; ok <- !is.na(x)
+    if (sum(ok) >= 3 && stats::sd(x[ok]) > 0) {
+      rest_p <- (rowSums(X, na.rm = TRUE) - ifelse(ok, x, 0)) /
+        pmax(rowSums(Mmat, na.rm = TRUE) - ifelse(ok, fit$m[i], 0), 1)
+      tab$item_total[i] <- .safe_cor(x[ok], tot_p[ok])
+      tab$item_rest[i] <- .safe_cor(x[ok], rest_p[ok])
+      hi <- ok & thirds == 3; lo <- ok & thirds == 1
+      if (sum(hi) >= 2 && sum(lo) >= 2)
+        tab$di[i] <- mean(x[hi]) / fit$m[i] - mean(x[lo]) / fit$m[i]
     }
-    Xr <- X[, -i, drop = FALSE]
-    vr <- var(rowSums(Xr))
-    if (L > 2 && vr > 0)
-      tab$alpha_drop[i] <- (L - 1) / (L - 2) * (1 - sum(apply(Xr, 2, var)) / vr)
+    if (L > 2) {
+      Cr <- C[-i, -i, drop = FALSE]
+      sr <- sum(Cr, na.rm = TRUE)
+      if (is.finite(sr) && sr > 0)
+        tab$alpha_drop[i] <- (L - 1) / (L - 2) *
+          (1 - sum(diag(Cr), na.rm = TRUE) / sr)
+    }
   }
   rownames(tab) <- NULL
-  out <- list(table = tab, alpha = alpha, n = n, mean = mean(tot),
-              sd = sd(tot),
-              sem = if (is.finite(alpha)) sd(tot) * sqrt(1 - alpha) else NA_real_)
+  cc <- stats::complete.cases(X)
+  tot_cc <- rowSums(X[cc, , drop = FALSE])
+  out <- list(table = tab, alpha = alpha, n = sum(cc),
+              n_range = range(n_i),
+              mean = if (sum(cc) >= 3) mean(tot_cc) else NA_real_,
+              sd = if (sum(cc) >= 3) stats::sd(tot_cc) else NA_real_,
+              sem = if (is.finite(alpha) && sum(cc) >= 3)
+                stats::sd(tot_cc) * sqrt(1 - alpha) else NA_real_)
   class(out) <- "rmt_ctt"
   out
 }
 
 #' @export
 print.rmt_ctt <- function(x, ...) {
-  cat(sprintf("Traditional statistics (complete cases, n = %d)\n", x$n))
-  cat(sprintf("Raw score mean %.2f, SD %.2f; alpha %.3f; SEM %.2f (one value for all persons)\n",
-              x$mean, x$sd, x$alpha, x$sem))
+  cat(sprintf("Traditional statistics (available cases; item n %d-%d; %d complete)\n",
+              x$n_range[1], x$n_range[2], x$n))
+  if (is.finite(x$mean))
+    cat(sprintf("Raw score mean %.2f, SD %.2f (complete responders); alpha %.3f; SEM %.2f\n",
+                x$mean, x$sd, x$alpha, x$sem))
+  else
+    cat(sprintf("Too few complete responders for total-score summaries; alpha %.3f\n",
+                x$alpha))
   y <- x$table
   num <- vapply(y, is.numeric, TRUE)
   y[num] <- lapply(y[num], round, 3)

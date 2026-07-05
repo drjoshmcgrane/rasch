@@ -137,7 +137,8 @@ person_wle <- function(tau_list, disc = 1) {
 #'   values (\code{NA} for MLE); \code{"extrapolated"} applies the geometric
 #'   extrapolation.
 #' @return A data frame with \code{score}, \code{theta}, \code{se},
-#'   \code{freq}, \code{cum_pct}, and \code{extrapolated}; \code{NULL} for
+#'   \code{freq}, \code{cum_pct} (omitted when no complete responders
+#'   exist), and \code{extrapolated}; \code{NULL} for
 #'   fits without a common raw-score metric (EFRM).
 #' @examples
 #' set.seed(1)
@@ -179,8 +180,10 @@ score_table <- function(fit, method = c("wle", "mle"),
   raw <- rowSums(fit$X)
   freq <- as.integer(table(factor(raw[stats::complete.cases(fit$X)],
                                   levels = 0:M)))
-  tab$freq <- freq
-  tab$cum_pct <- if (sum(freq) > 0) 100 * cumsum(freq) / sum(freq) else NA_real_
+  if (sum(freq) > 0) {
+    tab$freq <- freq
+    tab$cum_pct <- 100 * cumsum(freq) / sum(freq)
+  }
   tab
 }
 

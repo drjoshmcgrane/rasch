@@ -374,7 +374,7 @@ info_header <- function(title, info)
 
 # ---------------------------------------------------------------------------
 # Panels are built as objects and assembled into the workflow-ordered navbar
-# (with Dependence / Invariance / More menus) at the end of the UI section.
+# (with Independence / Invariance / More menus) at the end of the UI section.
 # ----------------------------------------------------------------- DATA --
 panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
     layout_sidebar(
@@ -443,7 +443,7 @@ panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
                 selectizeInput("bt_margin", "Margin of win (optional)", NULL,
                                options = list(placeholder = "none — dichotomous")),
                 p(class = "text-muted small",
-                  "The extent of the win (e.g. a little / much) as an ordered factor or increasing values; with the winner column it forms graded categories with no orientation bookkeeping. Winner values matching neither object count as ties (middle category).")),
+                  "The extent of the win (e.g. a little / much) as an ordered factor or increasing values; with the winner column it forms graded categories with no orientation bookkeeping. A winner value of \"tie\" or \"draw\" marks a tie (middle category); any other value matching neither object is treated as missing and the row dropped.")),
               selectizeInput("bt_response", "Graded response (optional)", NULL,
                              options = list(placeholder = "none — use winner")),
               p(class = "text-muted small",
@@ -995,10 +995,10 @@ panel_frames <- nav_panel("Frames", value = "p_frames", icon = bs_icon("grid-3x3
     )
   )
 
-# ---------------------------------------------------- DEPENDENCE: TRAIT --
+# -------------------------------------------------- INDEPENDENCE: TRAIT --
 panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
     p(class = "text-muted small",
-      "Trait dependence (dimensionality): more than one trait driving the responses (Marais & Andrich 2008)."),
+      "Trait dependence (dimensionality) threatens local independence: more than one trait driving the responses (Marais & Andrich 2008)."),
     accordion(id = "dim_acc", open = "dim_ttest",
       accordion_panel(
         title = span("Unidimensionality t-test",
@@ -1044,13 +1044,13 @@ panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
             padding = 12, fillable = FALSE))))
   )
 
-# ---------------------------------------------------- DEPENDENCE: LOCAL --
+# -------------------------------------------------- INDEPENDENCE: LOCAL --
 panel_ld <- nav_panel("Local", value = "p_ld", icon = bs_icon("link-45deg"),
     # paired-comparison (BTL) fits: within-judge dependence estimated from
     # the judgment order; the Rasch Q3 suite hides while a BTL fit is active
     conditionalPanel("output.is_btl == true",
       p(class = "text-muted small",
-        "Local (response) dependence (Marais & Andrich 2008): a judge's own history pulling their later judgments, over and above the object locations."),
+        "Local (response) dependence threatens local independence (Marais & Andrich 2008): a judge's own history pulling their later judgments, over and above the object locations."),
       card(
         full_screen = TRUE,
         card_header_bar("Within-judge dependence",
@@ -1068,7 +1068,7 @@ panel_ld <- nav_panel("Local", value = "p_ld", icon = bs_icon("link-45deg"),
           padding = 12, fillable = FALSE))),
     conditionalPanel("output.is_btl != true",
     p(class = "text-muted small",
-      "Local (response) dependence (Marais & Andrich 2008): responses depending on one another directly, over and above the trait."),
+      "Local (response) dependence threatens local independence (Marais & Andrich 2008): responses depending on one another directly, over and above the trait."),
     accordion(id = "ld_acc", open = "ld_q3",
       accordion_panel("Q3 statistics", value = "ld_q3",
         numericInput("ld_flag",
@@ -1259,8 +1259,9 @@ panel_export <- nav_panel("Export", value = "p_export", icon = bs_icon("download
 
 # ------------------------------------------------------------ ASSEMBLY --
 # Workflow order: data -> summary -> items -> persons -> test, then the
-# dependence, invariance, and utility menus; status chips and the dark-mode
-# toggle sit at the right of the navbar.
+# independence, invariance, and utility menus (the two requirements of
+# measurement); status chips and the dark-mode toggle sit at the right of
+# the navbar.
 ui <- page_navbar(
   id = "nav",
   title = span("rmt"),
@@ -1289,7 +1290,7 @@ ui <- page_navbar(
   panel_persons,
   panel_targeting,
   panel_test,
-  nav_menu("Dependence", value = "menu_structure",
+  nav_menu("Independence", value = "menu_structure",
     panel_ld,
     panel_dim),
   nav_menu("Invariance", value = "menu_invariance",
@@ -2261,10 +2262,14 @@ server <- function(input, output, session) {
     cat(sprintf("\nPSI: %.3f (separation %.3f)\n", f$psi$PSI, f$psi$separation))
     cat(sprintf("PSI without extremes: %.3f (n = %d)\n", f$psi_noext$PSI, f$psi_noext$n))
     cat(sprintf("Item separation index: %.3f\n", f$isi$PSI))
-    cat(sprintf("Cronbach alpha: %.3f%s\n", f$alpha$alpha,
-                if (isFALSE(f$alpha$applicable))
-                  sprintf(" - complete cases only (n = %d)", f$alpha$n)
-                else sprintf(" (n = %d complete cases)", f$alpha$n)))
+    if (finite1(f$alpha$alpha))
+      cat(sprintf("Cronbach alpha: %.3f%s\n", f$alpha$alpha,
+                  if (isFALSE(f$alpha$applicable))
+                    sprintf(" - complete cases only (n = %d)", f$alpha$n)
+                  else sprintf(" (n = %d complete cases)", f$alpha$n)))
+    else
+      cat(sprintf("Cronbach alpha: not available (%d complete cases)\n",
+                  f$alpha$n))
   })
 
   # score table with the chosen estimator and extreme-score treatment; the
@@ -2323,6 +2328,15 @@ server <- function(input, output, session) {
     if (inherits(ct, "error"))
       return(p(class = "text-muted",
                paste("Traditional statistics unavailable:", conditionMessage(ct))))
+    # total-score summaries need complete responders; with structural
+    # missingness (linked forms) there may be none, so the header falls back
+    # to the available-case framing instead of printing NA values
+    if (!finite1(ct$mean))
+      return(p(class = "small mb-2", HTML(sprintf(
+        "Per-item statistics use available cases (item n %d&ndash;%d). Too few complete responders (n = %d) for the total-score mean, SD, SEM%s.",
+        ct$n_range[1], ct$n_range[2], ct$n,
+        if (finite1(ct$alpha)) sprintf("; alpha <b>%.3f</b>", ct$alpha)
+        else ", and alpha"))))
     p(class = "small mb-2", HTML(sprintf(
       "Raw score mean <b>%.2f</b>, SD <b>%.2f</b>; alpha <b>%.3f</b>; SEM <b>%.2f</b> (one value for all persons) &mdash; complete cases n = %d.",
       ct$mean, ct$sd, ct$alpha, ct$sem, ct$n)))
@@ -3087,7 +3101,7 @@ server <- function(input, output, session) {
   register_plot("btl_cats", function() plot_btl_categories(bfit()),
                 code = function() "plot_btl_categories(bt)")
 
-  # within-judge dependence (Dependence > Local): exposure and carry-over
+  # within-judge dependence (Independence > Local): exposure and carry-over
   # effects estimated when a judgment-order column was nominated
   output$has_btl_dep <- reactive({
     b <- btl_fit()

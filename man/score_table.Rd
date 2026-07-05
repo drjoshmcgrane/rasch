@@ -21,7 +21,8 @@ extrapolation.}
 }
 \value{
 A data frame with \code{score}, \code{theta}, \code{se},
-  \code{freq}, \code{cum_pct}, and \code{extrapolated}; \code{NULL} for
+  \code{freq}, \code{cum_pct} (omitted when no complete responders
+  exist), and \code{extrapolated}; \code{NULL} for
   fits without a common raw-score metric (EFRM).
 }
 \description{

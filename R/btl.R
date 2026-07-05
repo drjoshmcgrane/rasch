@@ -86,8 +86,10 @@
 #' @param object_a,object_b Names of the columns holding the two objects
 #'   compared.
 #' @param winner Name of the column holding the winner of each row: its
-#'   value must equal the row's \code{object_a} or \code{object_b} entry
-#'   (anything else is a tie). Ignored when \code{response} is given.
+#'   value must equal the row's \code{object_a} or \code{object_b} entry;
+#'   \code{"tie"} or \code{"draw"} marks a tie; anything else (including
+#'   blanks) is treated as missing and dropped with a note. Ignored when
+#'   \code{response} is given.
 #' @param margin Optional name of a column holding the extent of the win
 #'   ("a little", "much", ...), as an ordered factor or increasing values;
 #'   combined with \code{winner} it assembles the graded response without
@@ -226,10 +228,15 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
     wn <- trimws(as.character(data[[winner]]))
     is_a <- !is.na(wn) & wn == a
     is_b <- !is.na(wn) & wn == b
-    tie <- !is.na(wn) & !is_a & !is_b
+    tie <- !is.na(wn) & !is_a & !is_b & tolower(wn) %in% c("tie", "draw")
+    miss_wn <- !is.na(wn) & !is_a & !is_b & !tie
+    if (any(miss_wn))
+      notes <- c(notes, sprintf(
+        "%d row(s) with winner matching neither object treated as missing",
+        sum(miss_wn)))
     ties_present <- any(tie)
     keep <- !is.na(a) & !is.na(b) & !is.na(wn) & a != b & !is.na(w) & w > 0 &
-      (tie | !is.na(mgi))
+      (tie | !is.na(mgi)) & !miss_wn
     if (!is.null(ord)) keep <- keep & !is.na(ord)
     if (any(!keep)) {
       notes <- c(notes, sprintf(
@@ -270,8 +277,21 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
     stop("exposure analysis is incompatible with ties = 'half';",
          " drop ties or code them as a graded middle category")
 
-  # outcome: 1 = a wins, 0 = b wins, NA = tie
+  # outcome: 1 = a wins, 0 = b wins; an explicit "tie"/"draw" entry is a
+  # tie; anything else matching neither object is missing, not a tie
   y <- ifelse(wn == a, 1, ifelse(wn == b, 0, NA))
+  is_tie <- is.na(y) & tolower(wn) %in% c("tie", "draw")
+  miss <- is.na(y) & !is_tie
+  if (any(miss)) {
+    notes <- c(notes, sprintf(
+      "%d row(s) with winner matching neither object treated as missing",
+      sum(miss)))
+    sel <- !miss
+    a <- a[sel]; b <- b[sel]; y <- y[sel]; w <- w[sel]; wn <- wn[sel]
+    if (!is.null(jd)) jd <- jd[sel]
+    if (!is.null(ord)) ord <- ord[sel]
+    if (!length(a)) stop("no usable comparisons")
+  }
   if (anyNA(y)) {
     n_tie <- sum(is.na(y))
     if (ties == "error") stop(n_tie, " tie(s) present; set ties = 'drop' or 'half'")

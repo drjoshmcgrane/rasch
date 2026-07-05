@@ -87,13 +87,17 @@ residual_pca <- function(fit, n_components = 10) {
   lm <- ev$vectors[, seq_len(k), drop = FALSE] %*%
     diag(sqrt(pmax(ev$values[seq_len(k)], 0)), k)
   colnames(lm) <- paste0("PC", seq_len(k))
-  list(eigenvalues = ev$values, prop = ev$values / sum(ev$values),
+  # a pairwise-complete correlation matrix need not be positive
+  # semi-definite; proportions are taken over the positive eigenvalue mass
+  # so the cumulative share cannot exceed one
+  tot <- sum(pmax(ev$values, 0))
+  list(eigenvalues = ev$values, prop = pmax(ev$values, 0) / tot,
        loadings = ld[order(-ld$pc1_loading), ],
        loadings_matrix = data.frame(item = colnames(fit$residuals), lm),
        eigen_table = data.frame(component = seq_len(k),
                                 eigenvalue = ev$values[seq_len(k)],
-                                proportion = ev$values[seq_len(k)] / sum(ev$values),
-                                cumulative = cumsum(ev$values[seq_len(k)]) / sum(ev$values)),
+                                proportion = pmax(ev$values[seq_len(k)], 0) / tot,
+                                cumulative = cumsum(pmax(ev$values[seq_len(k)], 0)) / tot),
        first_eigen = ev$values[1])
 }
 

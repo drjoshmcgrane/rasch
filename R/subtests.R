@@ -48,7 +48,17 @@ combine_items <- function(fit, groups, model = "PCM") {
   if (any(short)) stop("each subtest needs at least two items")
 
   keep <- setdiff(colnames(X), used)
+  # a super-item requires all its members: summing whatever happens to be
+  # present would let the maximum vary by person, so partial responses stay
+  # missing -- under linked designs this can empty a subtest entirely
   newcols <- lapply(groups, function(g) rowSums(X[, g, drop = FALSE]))
+  empty <- vapply(newcols, function(v) sum(!is.na(v)) < 10, TRUE)
+  if (any(empty))
+    stop("subtest(s) with fewer than 10 persons answering every member ",
+         "item (missing data): ",
+         paste(vapply(groups[empty], paste, "", collapse = "+"),
+               collapse = ", "),
+         "; choose items answered by the same persons")
   Xn <- cbind(X[, keep, drop = FALSE], do.call(cbind, newcols))
   colnames(Xn) <- c(keep, vapply(groups, paste, "", collapse = "+"))
 

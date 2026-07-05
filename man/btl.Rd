@@ -27,8 +27,10 @@ btl(
 compared.}
 
 \item{winner}{Name of the column holding the winner of each row: its
-value must equal the row's \code{object_a} or \code{object_b} entry
-(anything else is a tie). Ignored when \code{response} is given.}
+value must equal the row's \code{object_a} or \code{object_b} entry;
+\code{"tie"} or \code{"draw"} marks a tie; anything else (including
+blanks) is treated as missing and dropped with a note. Ignored when
+\code{response} is given.}
 
 \item{response}{Optional name of a column holding a graded preference
 for \code{object_a} over \code{object_b} -- an ordered factor (worst
