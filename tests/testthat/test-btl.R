@@ -210,7 +210,7 @@ test_that("the object characteristic curve renders and the fit keeps its compari
   f <- btl(d, "a", "b", winner = "win")
   expect_true(is.data.frame(f$comparisons))
   expect_identical(names(f$comparisons),
-                   c("object_a", "object_b", "response", "weight"))
+                   c("object_a", "object_b", "response", "weight", "judge"))
   d$grade <- vapply(seq_len(nrow(d)), function(r) {
     p <- item_moments(beta[d$a[r]] - beta[d$b[r]], c(-1, 0, 1))$P
     sample(0:3, 1, prob = p)
@@ -287,4 +287,72 @@ test_that("the identifiability guards distinguish interior from extreme sparsene
   expect_error(btl(d, "a", "b", response = "g"), "extreme category")
   expect_error(btl(d, "a", "b", response = "g", thresholds = "pc"),
                "extreme category")
+})
+
+test_that("exposure and carry-over are recovered and null when absent", {
+  set.seed(21)
+  K <- 20; objs <- sprintf("S%02d", 1:K)
+  beta <- setNames(rnorm(K, 0, 0.9), objs); beta <- beta - mean(beta)
+  jids <- sprintf("J%02d", 1:30)
+  sim <- function(phi, psi) {
+    rows <- list()
+    for (j in jids) {
+      pool <- sample(objs, 12)
+      hc <- setNames(numeric(K), objs); hs <- hc
+      for (t in 1:14) {
+        p2 <- sample(pool, 2); a <- p2[1]; b <- p2[2]
+        Fa <- as.numeric(hc[a] > 0); Fb <- as.numeric(hc[b] > 0)
+        Wa <- if (hc[a] > 0) hs[a] / hc[a] else 0
+        Wb <- if (hc[b] > 0) hs[b] / hc[b] else 0
+        y <- rbinom(1, 1, plogis(beta[a] - beta[b] + phi * (Fa - Fb) +
+                                   psi * (Wa - Wb)))
+        rows[[length(rows) + 1L]] <- data.frame(
+          a = a, b = b, judge = j, t = t, winner = if (y == 1) a else b)
+        hc[a] <- hc[a] + 1; hc[b] <- hc[b] + 1
+        hs[a] <- hs[a] + (2 * y - 1); hs[b] <- hs[b] - (2 * y - 1)
+      }
+    }
+    do.call(rbind, rows)
+  }
+  f1 <- btl(sim(0.8, 1.0), "a", "b", winner = "winner", judge = "judge",
+            order = "t")
+  dp <- f1$dependence
+  expect_identical(dp$effect, c("exposure", "carry_over"))
+  expect_true(all(dp$p < 0.05))
+  expect_true(all(dp$estimate > 0))
+  f0 <- btl(sim(0, 0), "a", "b", winner = "winner", judge = "judge",
+            order = "t")
+  expect_true(all(f0$dependence$p > 0.05))
+  # order without judge, and with half-ties, are refused
+  expect_error(btl(sim(0, 0), "a", "b", winner = "winner", order = "t"),
+               "judge")
+})
+
+test_that("btl_dif finds a planted judge-group effect on the right object only", {
+  set.seed(2)
+  K <- 12; objs <- sprintf("S%02d", 1:K)
+  beta <- setNames(seq(-1.4, 1.4, length.out = K), objs)
+  jids <- sprintf("J%02d", 1:20)
+  grp <- setNames(rep(c("g1", "g2"), each = 10), jids)
+  pr <- t(combn(objs, 2))
+  d <- data.frame(a = rep(pr[, 1], each = 14), b = rep(pr[, 2], each = 14))
+  d$judge <- sample(jids, nrow(d), TRUE)
+  shift <- ifelse(grp[d$judge] == "g2" & d$a == "S06", 1,
+           ifelse(grp[d$judge] == "g2" & d$b == "S06", -1, 0))
+  d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b] + shift),
+                  d$a, d$b)
+  f <- btl(d, "a", "b", winner = "win", judge = "judge")
+  dif <- btl_dif(f, groups = grp)
+  expect_s3_class(dif, "rmt_btl_dif")
+  # ANOVA route: only S06 flagged
+  expect_true(dif$anova$uniform_DIF[dif$anova$object == "S06"])
+  expect_equal(sum(dif$anova$uniform_DIF), 1L)
+  # magnitude route: right size, right object, nothing else
+  s6 <- dif$sizes[dif$sizes$object == "S06", ]
+  expect_true(s6$significant && s6$practical)
+  expect_lt(abs(abs(s6$difference) - 1), 3 * s6$se)
+  expect_equal(sum(dif$sizes$significant), 1L)
+  # grouped characteristic curve renders
+  pdf(NULL); on.exit(dev.off())
+  expect_no_error(plot_btl_icc(f, "S06", group = grp))
 })

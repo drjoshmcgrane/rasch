@@ -13,6 +13,7 @@ btl(
   margin = NULL,
   judge = NULL,
   count = NULL,
+  order = NULL,
   ties = c("drop", "half", "error"),
   thresholds = c("free", "pc"),
   maxit = 60,
@@ -50,6 +51,16 @@ table and clusters the sandwich standard errors by judge.}
 
 \item{count}{Optional name of a column of replication counts (a row
 standing for several identical comparisons).}
+
+\item{order}{Optional name of a column giving each judge's judgment
+sequence (timestamps or ranks; requires \code{judge}). Adds the
+within-judge dependence analysis: an exposure effect (the advantage,
+in logits, of an object the judge has seen before over one they have
+not) and a carry-over effect (the pull of the judge's own earlier
+verdicts on the same object -- response dependence in the sense of
+Marais and Andrich 2008), estimated jointly with the locations and
+reported in \code{dependence}. Incompatible with
+\code{ties = "half"}.}
 
 \item{ties}{How to treat ties in the dichotomous analysis:
 \code{"drop"} (default, removed with a note), \code{"half"} (half a

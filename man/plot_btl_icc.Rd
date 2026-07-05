@@ -4,16 +4,22 @@
 \alias{plot_btl_icc}
 \title{Plot an object characteristic curve}
 \usage{
-plot_btl_icc(fit, object, grid = NULL, min_n = 10)
+plot_btl_icc(fit, object, group = NULL, grid = NULL, min_n = 10)
 }
 \arguments{
 \item{fit}{An object from \code{\link{btl}}.}
 
 \item{object}{Object name.}
 
+\item{group}{Optional judge grouping for a DIF overlay: either one value
+per comparison row of \code{fit$comparisons} or a vector named by
+judge. Observed means are then drawn separately per group, as
+\code{\link{plot_icc}} draws person groups.}
+
 \item{grid}{Opponent-location grid, in logits.}
 
-\item{min_n}{Opponents met fewer than this many times are drawn hollow.}
+\item{min_n}{Opponents met fewer than this many times are drawn hollow
+(ungrouped display only).}
 }
 \value{
 Called for its plotting side effect; invisibly \code{NULL}.
