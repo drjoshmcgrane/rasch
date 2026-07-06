@@ -50,9 +50,7 @@ Pairwise conditional estimation of the Rasch model family.
 ## Invariance and DIF
 
 - [`dif_anova()`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md)
-  : Differential item functioning by two-way residual ANOVA
-- [`dif_anova_factorial()`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova_factorial.md)
-  : Factorial DIF analysis with Tukey comparisons
+  : Differential item functioning by residual analysis of variance
 - [`dif_contrasts()`](https://drjoshmcgrane.github.io/rmt/reference/dif_contrasts.md)
   : Planned DIF contrasts derived from the factor structure
 - [`dif_size()`](https://drjoshmcgrane.github.io/rmt/reference/dif_size.md)

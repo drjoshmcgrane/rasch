@@ -75,7 +75,7 @@ z, raw and adjusted p, 95 per cent interval, `significant`,
 For an interaction, supply several factor names: levels are then the
 factor-combination cells, which is the post-hoc follow-up to a
 significant factor-by-factor term in
-[`dif_anova_factorial`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova_factorial.md).
+[`dif_anova`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md).
 
 ## Examples
 

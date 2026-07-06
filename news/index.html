@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rmt</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.9</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,13 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rmt/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.1.0" id="rmt-110">rmt 1.1.0<a class="anchor" aria-label="anchor" href="#rmt-110"></a></h2>
+<ul><li>
+<code><a href="../reference/dif_anova.html">dif_anova()</a></code> is now the single DIF analysis-of-variance function. One factor is analysed one-way; several factors are modelled jointly – the statistically correct treatment – with main effects by default and factor-by-factor interactions optional (<code>effects = "factorial"</code>). It handles within-subject factors (repeated-measures / mixed ANOVA) and returns a classed object with a <code>summary</code>, the full <code>terms</code> table, and Tukey comparisons. The separate <code>dif_anova_factorial()</code> is removed.</li>
+<li>
+<code><a href="../reference/resolve_dif.html">resolve_dif()</a></code> resolves DIF iteratively by item splitting, largest effect first, to clear artificial DIF.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.0.0" id="rmt-100">rmt 1.0.0<a class="anchor" aria-label="anchor" href="#rmt-100"></a></h2>
 <p>First stable release. The package delivers a complete Rasch Measurement Theory workflow built entirely from published measurement theory, with a pairwise conditional estimation core and a Shiny interface that exposes every analysis with reproducing R code attached to every output.</p>
