@@ -312,3 +312,31 @@ test_that("factorial DIF uses a mixed ANOVA when a factor is within-subject", {
                                   factors = "sex"))
   expect_length(fc$within, 0L)
 })
+
+test_that("resolve_dif splits DIF items by effect size and protects anchors", {
+  # one strong real DIF item: resolve_dif splits it and ends with no DIF
+  set.seed(3); n <- 800
+  d <- seq(-2, 2, length.out = 10); g <- rep(c("a", "b"), each = n / 2)
+  sh <- matrix(0, n, 10); sh[g == "b", 3] <- 1.4
+  X <- matrix(rbinom(n * 10, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 10)
+  colnames(X) <- sprintf("I%02d", 1:10)
+  fit <- rasch(data.frame(X, grp = g), factors = "grp")
+  rr <- resolve_dif(fit)
+  expect_s3_class(rr, "rmt_resolve_dif")
+  expect_true("I03" %in% rr$splits$item)          # the planted item is resolved
+  expect_equal(rr$n_remaining_dif, 0L)            # nothing left
+  expect_gt(ncol(rr$fit$X), ncol(fit$X))          # the fit gained resolved copies
+  expect_lt(abs(rr$splits$magnitude[rr$splits$item == "I03"] - 1.4), 0.3)
+
+  # pervasive, bidirectional DIF on most items must not resolve everything:
+  # the anchor floor is preserved (the invariant), whatever the stop reason
+  set.seed(5)
+  shp <- matrix(0, n, 10)
+  shp[g == "b", 1:4] <- 1.0; shp[g == "b", 5:8] <- -1.0
+  Xp <- matrix(rbinom(n * 10, 1, plogis(outer(rnorm(n), d, "-") - shp)), n, 10)
+  colnames(Xp) <- sprintf("I%02d", 1:10)
+  fp <- rasch(data.frame(Xp, grp = g), factors = "grp")
+  rp <- resolve_dif(fp, min_anchors = 3)
+  # never fewer than min_anchors original items left unsplit
+  expect_gte(10L - length(unique(rp$splits$item)), 3L)
+})

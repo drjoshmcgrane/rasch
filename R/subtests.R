@@ -130,3 +130,143 @@ split_items <- function(fit, items, by) {
                            paste0(items, " (", paste(levels(grp), collapse = "/"), ")")))
   refit
 }
+
+#' Resolve differential item functioning by iterative item splitting
+#'
+#' Splits DIF items one at a time, largest effect first, refitting after
+#' each split, until no item shows significant DIF (or the anchor set would
+#' fall too low). Splitting the item with the largest real DIF first
+#' removes the artificial DIF it induces on other items (Andrich & Hagquist
+#' 2012, 2015), so the procedure resolves genuine DIF without chasing the
+#' artificial DIF that a single simultaneous pass would flag. Each split
+#' resolves the item into one copy per group (or per factor-combination
+#' cell for an interaction), with independent locations and thresholds, so
+#' both uniform and non-uniform DIF are resolved together.
+#'
+#' @param fit A fitted object from \code{\link{rasch}} carrying person
+#'   factors.
+#' @param factors Person factors to test, as in \code{\link{dif_anova}};
+#'   defaults to every nominated factor.
+#' @param alpha Significance level for the adjusted probabilities.
+#' @param p_adjust Multiplicity adjustment across items each round.
+#' @param min_anchors Minimum number of original items to leave unsplit; the
+#'   procedure stops before the anchor set falls below this (pervasive DIF is
+#'   not artificial DIF). Default \code{max(3, items / 4)}.
+#' @param max_splits Hard cap on the number of splits. Default: the number
+#'   of items.
+#' @return A list of class \code{"rmt_resolve_dif"}: the final resolved
+#'   \code{fit}, the \code{splits} performed (order, item, factor, partial
+#'   eta-squared, DIF magnitude in logits), the \code{stopped} reason, and
+#'   the residual \code{dif} table for the final fit.
+#' @references Andrich, D., & Hagquist, C. (2012). Real and artificial
+#'   differential item functioning. \emph{Journal of Educational and
+#'   Behavioral Statistics}, 37(3), 387-416.
+#' @examples
+#' set.seed(1); n <- 600
+#' d <- seq(-2, 2, length.out = 8); g <- rep(c("a", "b"), each = n / 2)
+#' sh <- matrix(0, n, 8); sh[g == "b", 3] <- 1.2      # one strong DIF item
+#' X <- matrix(rbinom(n * 8, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 8)
+#' colnames(X) <- paste0("I", 1:8)
+#' fit <- rasch(data.frame(X, grp = g), factors = "grp")
+#' resolve_dif(fit)$splits
+#' @export
+resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "BH",
+                        min_anchors = NULL, max_splits = NULL) {
+  if (!inherits(fit, "rasch") || inherits(fit, c("rasch_mfrm", "rasch_efrm")))
+    stop("resolve_dif needs an ordinary rasch fit with person factors")
+  fac0 <- .dif_factors(fit, factors)
+  fnames <- names(fac0)
+  L0 <- ncol(fit$X)
+  if (is.null(min_anchors)) min_anchors <- max(3L, L0 %/% 4L)
+  if (is.null(max_splits)) max_splits <- L0
+
+  # significant, non-superseded group terms of the current fit, with the
+  # factors to split by and the partial eta-squared to rank on
+  flagged <- function(cur) {
+    keep <- intersect(fnames, names(cur$factors))
+    if (!length(keep)) return(NULL)
+    if (length(keep) == 1L) {
+      da <- dif_anova(cur, factors = keep, p_adjust = p_adjust, alpha = alpha)
+      sig <- da[da$uniform_DIF | da$nonuniform_DIF, , drop = FALSE]
+      if (!nrow(sig)) return(NULL)
+      data.frame(item = sig$item, vars = sig$factor,
+                 eta2 = pmax(ifelse(sig$uniform_DIF, sig$eta2_uniform, 0),
+                             ifelse(sig$nonuniform_DIF, sig$eta2_nonuniform, 0)),
+                 stringsAsFactors = FALSE)
+    } else {
+      fa <- dif_anova_factorial(cur, factors = keep, p_adjust = p_adjust,
+                                alpha = alpha)
+      s <- fa$summary
+      s <- s[(s$uniform_DIF | s$nonuniform_DIF) & !s$superseded, , drop = FALSE]
+      if (!nrow(s)) return(NULL)
+      data.frame(item = s$item,
+                 vars = vapply(s$term, function(t)
+                   paste(.term_vars(t), collapse = "+"), ""),
+                 eta2 = pmax(ifelse(s$uniform_DIF, s$eta2_uniform, 0),
+                             ifelse(s$nonuniform_DIF, s$eta2_nonuniform, 0)),
+                 stringsAsFactors = FALSE)
+    }
+  }
+  # the original item a (possibly resolved) column belongs to
+  base_of <- function(nm) sub(" \\(.*$", "", nm)
+
+  cur <- fit
+  splits <- list(); done <- character(0); stopped <- "no significant DIF remains"
+  repeat {
+    fl <- flagged(cur)
+    if (is.null(fl) || !nrow(fl)) break
+    fl <- fl[order(-fl$eta2), , drop = FALSE]
+    # first flagged item-factor not already split, ranked by effect size
+    pick <- NULL
+    for (r in seq_len(nrow(fl))) {
+      key <- paste(fl$item[r], fl$vars[r])
+      if (!key %in% done) { pick <- fl[r, ]; break }
+    }
+    if (is.null(pick)) { stopped <- "remaining DIF cannot be resolved further"; break }
+    if (length(splits) >= max_splits) { stopped <- "reached the split cap"; break }
+    n_anchor <- L0 - length(unique(base_of(unlist(lapply(splits, `[[`, "item")))))
+    if (n_anchor <= min_anchors) {
+      stopped <- sprintf("stopped to keep %d anchor items (pervasive DIF is not artificial DIF)",
+                         min_anchors)
+      break
+    }
+    by_vars <- strsplit(pick$vars, "+", fixed = TRUE)[[1]]
+    grp <- if (length(by_vars) == 1L) cur$factors[[by_vars]] else
+      interaction(cur$factors[by_vars], sep = ":", drop = TRUE)
+    # DIF magnitude in logits for the item about to be resolved
+    mag <- tryCatch(max(abs(dif_size(cur, pick$item, by = grp)$pairs$difference)),
+                    error = function(e) NA_real_)
+    refit <- tryCatch(split_items(cur, pick$item, by = grp),
+                      error = function(e) NULL)
+    if (is.null(refit)) { done <- c(done, paste(pick$item, pick$vars)); next }
+    splits[[length(splits) + 1L]] <- list(
+      order = length(splits) + 1L, item = pick$item, factor = pick$vars,
+      eta2 = pick$eta2, magnitude = mag)
+    done <- c(done, paste(pick$item, pick$vars))
+    cur <- refit
+  }
+  split_df <- if (length(splits))
+    do.call(rbind, lapply(splits, function(s) as.data.frame(s,
+                                                            stringsAsFactors = FALSE))) else
+    data.frame(order = integer(), item = character(), factor = character(),
+               eta2 = numeric(), magnitude = numeric())
+  rownames(split_df) <- NULL
+  final_dif <- tryCatch(flagged(cur), error = function(e) NULL)
+  out <- list(fit = cur, splits = split_df, n_splits = nrow(split_df),
+              stopped = stopped,
+              n_remaining_dif = if (is.null(final_dif)) 0L else nrow(final_dif))
+  class(out) <- "rmt_resolve_dif"
+  out
+}
+
+#' @export
+print.rmt_resolve_dif <- function(x, ...) {
+  cat(sprintf("Iterative DIF resolution: %d split(s); %s\n",
+              x$n_splits, x$stopped))
+  if (x$n_splits) {
+    d <- x$splits; d$eta2 <- round(d$eta2, 3); d$magnitude <- round(d$magnitude, 3)
+    print(d, row.names = FALSE)
+  }
+  cat(sprintf("Remaining items with significant DIF: %d\n", x$n_remaining_dif))
+  invisible(x)
+}
