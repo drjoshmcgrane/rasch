@@ -1,0 +1,74 @@
+url: https://drjoshmcgrane.github.io/rmt/
+template:
+  bootstrap: 5
+  bslib:
+    preset: shiny
+
+reference:
+- title: Estimation
+  desc: Pairwise conditional estimation of the Rasch model family.
+  contents:
+  - rasch
+  - rasch_mfrm
+  - rasch_efrm
+  - pcml
+  - pcml_pc
+  - threshold_index
+  - item_moments
+- title: Test of fit and comparison
+  contents:
+  - fit_summary_table
+  - targeting_table
+  - chisq_detail
+  - test_information
+  - lr_test
+  - compare_fits
+  - guttman_table
+- title: Persons
+  contents:
+  - person_wle
+  - person_extrapolated
+  - score_table
+- title: Invariance and DIF
+  contents:
+  - dif_anova
+  - dif_anova_factorial
+  - dif_contrasts
+  - dif_size
+  - split_items
+  - equate_tests
+  - tailored_analysis
+- title: Independence and dimensionality
+  contents:
+  - residual_correlations
+  - residual_pca
+  - dimensionality_test
+  - dimensionality_magnitude
+  - dependence_magnitude
+  - spread_test
+  - combine_items
+  - rack_data
+  - stack_data
+- title: Multiple choice and traditional statistics
+  contents:
+  - distractor_analysis
+  - distractor_rescore
+  - ctt_table
+- title: Paired comparisons
+  contents:
+  - btl
+  - btl_dif
+  - plot_btl
+  - plot_btl_categories
+  - plot_btl_icc
+- title: Plots
+  contents:
+  - starts_with("plot_")
+  - -starts_with("plot_btl")
+- title: Export and interface
+  contents:
+  - save_outputs
+  - save_item_plots
+  - save_person_plots
+  - report_html
+  - run_app

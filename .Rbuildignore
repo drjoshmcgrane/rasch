@@ -13,3 +13,7 @@
 ^converted$
 ^local_audit$
 ^\.DS_Store$
+^_pkgdown\.yml$
+^\.github$
+^docs$
+^pkgdown$

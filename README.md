@@ -1,5 +1,11 @@
 # rmt
 
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/drjoshmcgrane/rmt/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/drjoshmcgrane/rmt/actions/workflows/R-CMD-check.yaml)
+<!-- badges: end -->
+
+Documentation: <https://drjoshmcgrane.github.io/rmt/>
+
 A pairwise conditional Rasch measurement engine in R, built entirely from
 published measurement theory. Item estimation is pairwise conditional maximum
 likelihood (Andrich & Luo 2003; Zwinderman 1995); person locations use Warm's

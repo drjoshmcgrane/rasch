@@ -1,7 +1,7 @@
 Package: rmt
 Type: Package
 Title: Pairwise Conditional Rasch Measurement Analysis and Diagnostics
-Version: 0.9.35
+Version: 1.0.0
 Authors@R: person("Josh", "McGrane", role = c("aut", "cre"),
     email = "drjoshmcgrane@gmail.com")
 Description: Pairwise conditional maximum likelihood estimation of dichotomous
@@ -69,6 +69,8 @@ Description: Pairwise conditional maximum likelihood estimation of dichotomous
     interface and a one-call exporter for every table and plot are included.
     Implemented from published measurement theory in base R, with no
     dependence on other estimation engines.
+URL: https://drjoshmcgrane.github.io/rmt/, https://github.com/drjoshmcgrane/rmt
+BugReports: https://github.com/drjoshmcgrane/rmt/issues
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports: stats, graphics, grDevices, utils
