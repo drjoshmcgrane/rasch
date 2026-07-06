@@ -11,7 +11,9 @@ dif_anova_factorial(
   p_adjust = "BH",
   alpha = 0.05,
   effects = c("factorial", "main"),
-  sizes = FALSE
+  sizes = FALSE,
+  id = NULL,
+  within = NULL
 )
 }
 \arguments{
@@ -41,6 +43,13 @@ by the term's levels (interaction terms by their cells) and all
 pairwise location differences are returned with Holm familywise
 adjustment and the practical-significance flag. Each size involves a
 re-analysis, so this costs one refit per flagged item-term.}
+
+\item{id, within}{Person identifier and within-subject factor names for
+stacked repeated-measures designs, as in \code{\link{dif_anova}}. When
+any factor is within-subject the model becomes a mixed (split-plot)
+analysis of variance -- the class interval taken at the person level,
+the within factors carrying a person error stratum -- so their terms
+are tested validly. Auto-detected from the fit's person identifier.}
 }
 \value{
 A list with \code{summary}, the compact reading of the analysis

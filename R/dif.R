@@ -127,9 +127,11 @@
 #' @param id Optional person identifier (a vector, or the name of a
 #'   nominated factor) for stacked repeated-measures designs. A factor whose
 #'   levels vary within a person is treated as within-subject and tested
-#'   with a person-clustered sandwich, so the within-person dependence the
-#'   between-subjects F ignores is respected. Defaults to the fit's own
-#'   person identifier, so a stacked design is handled automatically.
+#'   with a repeated-measures (split-plot) analysis of variance -- the class
+#'   interval taken at the person level, the factor against the within-person
+#'   error -- so the dependence the between-subjects F ignores is respected.
+#'   Defaults to the fit's own person identifier, so a stacked design is
+#'   handled automatically.
 #' @param within Optional names of factors to treat as within-subject;
 #'   auto-detected from \code{id} when not given.
 #' @return A data frame per item and factor with the full two-way table
@@ -248,6 +250,28 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
 # variables of an ANOVA term label, e.g. "g1:ci" -> c("g1", "ci")
 .term_vars <- function(term) strsplit(term, ":", fixed = TRUE)[[1]]
 
+# Flatten an aov (single- or multi-stratum) into one row per term, carrying
+# the residual sum of squares of the term's own stratum so a partial
+# eta-squared can be formed against the right error in a mixed design.
+.aov_terms_flat <- function(a) {
+  sm <- summary(a)
+  strata <- if (inherits(a, "aovlist")) sm else list(sm)
+  rows <- list()
+  for (st in strata) {
+    tab <- st[[1L]]; rn <- trimws(rownames(tab))
+    nm <- names(tab)
+    rss <- if ("Residuals" %in% rn) tab[["Sum Sq"]][rn == "Residuals"] else NA_real_
+    for (k in seq_len(nrow(tab)))
+      rows[[length(rows) + 1L]] <- data.frame(
+        term = rn[k], df = tab[["Df"]][k], sum_sq = tab[["Sum Sq"]][k],
+        mean_sq = tab[["Mean Sq"]][k],
+        F_value = if ("F value" %in% nm) tab[["F value"]][k] else NA_real_,
+        p = if ("Pr(>F)" %in% nm) tab[["Pr(>F)"]][k] else NA_real_,
+        resid_ss = rss, stringsAsFactors = FALSE)
+  }
+  do.call(rbind, rows)
+}
+
 #' Factorial DIF analysis with Tukey comparisons
 #'
 #' Models all nominated person factors jointly: for each item the
@@ -283,6 +307,12 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
 #'   with every other and with the class interval; \code{"main"} fits the
 #'   factors additively (each factor's main effect and its interaction with
 #'   the class interval, but no factor-by-factor terms).
+#' @param id,within Person identifier and within-subject factor names for
+#'   stacked repeated-measures designs, as in \code{\link{dif_anova}}. When
+#'   any factor is within-subject the model becomes a mixed (split-plot)
+#'   analysis of variance -- the class interval taken at the person level,
+#'   the within factors carrying a person error stratum -- so their terms
+#'   are tested validly. Auto-detected from the fit's person identifier.
 #' @param sizes Also compute DIF magnitudes in logits (\code{\link{dif_size}})
 #'   for every significant, non-superseded group term: the item is resolved
 #'   by the term's levels (interaction terms by their cells) and all
@@ -320,24 +350,48 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
 dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
                                 p_adjust = "BH", alpha = 0.05,
                                 effects = c("factorial", "main"),
-                                sizes = FALSE) {
+                                sizes = FALSE, id = NULL, within = NULL) {
   effects <- match.arg(effects)
   Z <- fit$residuals; L <- ncol(Z)
   factors <- .dif_factors(fit, factors)
+
+  # within-subject factors (levels repeating within a person) turn the
+  # analysis into a mixed (split-plot) one: the class interval is taken at
+  # the person level so it is a clean whole-plot factor, and the within
+  # factors carry a person error stratum.
+  if (is.character(id) && length(id) == 1L && !is.null(fit$factors) &&
+      id %in% names(fit$factors)) id <- fit$factors[[id]]
+  if (is.null(id) && !is.null(fit$person$id)) id <- as.character(fit$person$id)
+  if (is.null(within) && !is.null(id) && anyDuplicated(id)) {
+    within <- names(factors)[vapply(names(factors), function(fn)
+      any(tapply(as.character(factors[[fn]]), id,
+                 function(v) length(unique(v)) > 1L)), TRUE)]
+  }
+  if (is.null(within)) within <- character(0)
+  within <- intersect(within, names(factors))
+  mixed <- length(within) > 0L
+
   if (is.null(n_groups)) {
     cells <- interaction(factors, drop = TRUE)
     n_groups <- .dif_n_groups(fit, cells)
   }
-  ci <- .dif_class_intervals(fit, n_groups)
+  ci <- if (mixed) .dif_person_ci(fit, id, n_groups) else
+    .dif_class_intervals(fit, n_groups)
 
   fnames <- names(factors)
   safe <- paste0("f", seq_along(fnames))           # syntactic stand-ins
   op <- if (effects == "factorial") " * " else " + "
-  form <- stats::as.formula(paste("z ~ (", paste(safe, collapse = op), ") * ci"))
+  err <- if (mixed) {
+    wsafe <- safe[match(within, fnames)]
+    paste0(" + Error(pid/(", paste(wsafe, collapse = " * "), "))")
+  } else ""
+  form <- stats::as.formula(
+    paste("z ~ (", paste(safe, collapse = op), ") * ci", err))
 
   fits <- vector("list", L); rows <- list()
   for (i in seq_len(L)) {
     d <- data.frame(z = Z[, i], ci = ci)
+    if (mixed) d$pid <- factor(id)
     for (j in seq_along(fnames)) d[[safe[j]]] <- factor(factors[[fnames[j]]])
     d <- d[stats::complete.cases(d), ]
     if (nrow(d) < 10 || any(vapply(safe, function(s)
@@ -345,26 +399,18 @@ dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
     a <- tryCatch(stats::aov(form, data = d), error = function(e) NULL)
     if (is.null(a)) next
     fits[[i]] <- a
-    sm <- summary(a)[[1]]
-    rows[[length(rows) + 1L]] <- data.frame(
-      item = colnames(Z)[i], term = trimws(rownames(sm)), df = sm$Df,
-      sum_sq = sm$`Sum Sq`, mean_sq = sm$`Mean Sq`,
-      F_value = sm$`F value`, p = sm$`Pr(>F)`)
+    ft <- .aov_terms_flat(a)
+    rows[[length(rows) + 1L]] <- data.frame(item = colnames(Z)[i], ft)
   }
   if (!length(rows)) stop("no item yielded an estimable factorial ANOVA")
   terms <- do.call(rbind, rows)
   rownames(terms) <- NULL
 
-  # partial eta-squared per term within each item's table
-  terms$eta2_partial <- NA_real_
-  for (it in unique(terms$item)) {
-    sel <- terms$item == it
-    ss_res <- terms$sum_sq[sel & terms$term == "Residuals"]
-    if (length(ss_res) == 1)
-      terms$eta2_partial[sel & terms$term != "Residuals"] <-
-        terms$sum_sq[sel & terms$term != "Residuals"] /
-        (terms$sum_sq[sel & terms$term != "Residuals"] + ss_res)
-  }
+  # partial eta-squared per term against its own stratum residual
+  terms$eta2_partial <- ifelse(
+    terms$term == "Residuals" | is.na(terms$resid_ss), NA_real_,
+    terms$sum_sq / (terms$sum_sq + terms$resid_ss))
+  terms$resid_ss <- NULL
 
   # adjust across items within each term (the residual rows carry no test)
   terms$p_adj <- NA_real_
@@ -474,7 +520,8 @@ dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
   rownames(summary_tab) <- NULL
 
   out <- list(summary = summary_tab, terms = terms, tukey = tukey,
-              n_groups = n_groups, alpha = alpha, p_adjust = p_adjust)
+              n_groups = n_groups, within = within,
+              alpha = alpha, p_adjust = p_adjust)
   if (isTRUE(sizes)) out$sizes <- size_tab
   out
 }

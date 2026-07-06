@@ -278,3 +278,37 @@ test_that("dif_anova tests a within-subject factor against person clustering", {
   expect_false(any(dc$within))
   expect_true(dc$uniform_DIF[dc$item == "I3"])
 })
+
+test_that("factorial DIF uses a mixed ANOVA when a factor is within-subject", {
+  set.seed(11)
+  N <- 350; d <- seq(-1.5, 1.5, length.out = 8); th <- rnorm(N)
+  sex <- rep(c("m", "f"), length.out = N)
+  gen <- function(occ_shift) {
+    s <- matrix(0, N, 8)
+    s[sex == "f", 4] <- 0.8      # between DIF on I4
+    s[, 6] <- occ_shift          # within DIF on I6
+    matrix(rbinom(N * 8, 1, plogis(outer(th, d, "-") - s)), N, 8)
+  }
+  X <- rbind(gen(0), gen(0.9)); colnames(X) <- paste0("I", 1:8)
+  dat <- data.frame(X, sex = rep(sex, 2), occasion = rep(c("t1", "t2"), each = N))
+  id <- rep(sprintf("P%03d", 1:N), 2)
+  fit <- rasch(dat, factors = c("sex", "occasion"), id = id)
+
+  fa <- dif_anova_factorial(fit)
+  expect_identical(fa$within, "occasion")
+  s <- fa$summary
+  # the between factor's DIF lands on the between item, the within factor's
+  # on the within item, and nowhere else
+  expect_true(s$uniform_DIF[s$item == "I4" & s$term == "sex"])
+  expect_false(s$uniform_DIF[s$item == "I4" & s$term == "occasion"])
+  expect_true(s$uniform_DIF[s$item == "I6" & s$term == "occasion"])
+  expect_false(s$uniform_DIF[s$item == "I6" & s$term == "sex"])
+  expect_equal(sum(s$uniform_DIF), 2L)
+
+  # forcing the between-subjects treatment reproduces the ordinary factorial
+  fb <- dif_anova_factorial(fit, within = character(0))
+  expect_length(fb$within, 0L)
+  fc <- dif_anova_factorial(rasch(data.frame(X[1:N, ], sex = sex),
+                                  factors = "sex"))
+  expect_length(fc$within, 0L)
+})
