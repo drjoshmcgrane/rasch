@@ -201,7 +201,6 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
     gone <- setdiff(colnames(mc$raw), colnames(X))
     if (length(gone)) mc$raw <- mc$raw[, setdiff(colnames(mc$raw), gone), drop = FALSE]
   }
-  m <- apply(X, 2, max, na.rm = TRUE); L <- ncol(X)
 
   if (!is.null(anchors)) {
     a_names <- if (is.character(anchors$item) || is.factor(anchors$item))
@@ -272,7 +271,7 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
   ci_list <- if (anyNA(X))
     .class_intervals_by_item(X, person$theta, person$extreme, ng_req)
   else NULL
-  it <- .item_trait(X, Z, mo, ci, adjust_N = adjust_N, ci_list = ci_list)
+  it <- .item_trait(X, mo, ci, adjust_N = adjust_N, ci_list = ci_list)
   ia <- .item_anova(Z, ci, person$extreme, ci_list = ci_list)
   psi <- .psi(person$theta, person$se)
   psi_noext <- .psi(person$theta, person$se, keep = !person$extreme)

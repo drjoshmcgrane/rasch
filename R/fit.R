@@ -218,7 +218,7 @@
 # (number of class intervals contributing at least 2 responders to that
 # item) - 1, so items with missing data are tested on the intervals they
 # actually reach.
-.item_trait <- function(X, Z, mo, ci, adjust_N = NA, ci_list = NULL) {
+.item_trait <- function(X, mo, ci, adjust_N = NA, ci_list = NULL) {
   L <- ncol(X)
   chi <- setNames(numeric(L), colnames(X))
   used <- integer(L)

@@ -84,7 +84,7 @@
   Pd <- ncol(A_D)
 
   # one inner Newton block on a linear design tau = off + B beta
-  newton_block <- function(B, off, beta, ll_prev, positive = FALSE, inner = 4) {
+  newton_block <- function(B, off, beta, positive = FALSE, inner = 4) {
     glh <- .pcml_glh(drop(off + B %*% beta), thr_v, pairs, m_v)
     for (it in seq_len(inner)) {
       gb <- drop(crossprod(B, glh$g))
@@ -121,7 +121,7 @@
   for (outer in seq_len(maxit)) {
     # delta step: tau = B_d beta_d with B_d = phi_g(v) * A_D[drow(v), ]
     B_d <- A_D[drow, , drop = FALSE] * phi[gidx]
-    res_d <- newton_block(B_d, 0, beta_d, ll)
+    res_d <- newton_block(B_d, 0, beta_d)
     beta_d <- res_d$beta
     dtil <- drop(A_D %*% beta_d)
     # phi step (skip when G = 1): tau = off + B_r phi[-1]
@@ -129,7 +129,7 @@
       off <- dtil[drow] * (gidx == 1L)
       B_r <- matrix(0, Mv, G - 1L)
       for (g in 2:G) B_r[gidx == g, g - 1L] <- dtil[drow][gidx == g]
-      res_r <- newton_block(B_r, off, phi[-1], res_d$ll, positive = TRUE)
+      res_r <- newton_block(B_r, off, phi[-1], positive = TRUE)
       phi <- c(1, res_r$beta)
       ll_new <- res_r$ll
     } else ll_new <- res_d$ll

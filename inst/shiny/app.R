@@ -179,6 +179,15 @@ NONE_CH <- c(None = "(none)")
 # defined here (not mid-server) because observers created early reference it
 FACTORIAL <- "(all factors: factorial)"
 
+# null-coalescing helper: defined here so the app does not depend on the
+# base R version that introduced it (R >= 4.4)
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
+# sanitise a proportion-type input (alpha level, chance probability): fall
+# back to the default outside the open interval (0, 1)
+clamp01 <- function(x, default)
+  if (is.null(x) || is.na(x) || x <= 0 || x >= 1) default else x
+
 # p-values as text: "%.3f" alone prints a misleading 0.000 for tiny p
 fmt_p <- function(p)
   ifelse(is.na(p), "NA", ifelse(p < 0.001, "< 0.001", sprintf("%.3f", p)))
@@ -634,7 +643,7 @@ panel_items <- nav_panel("Items", value = "p_items", icon = bs_icon("list-check"
             "input.items_nav != 'Frequencies' && input.items_nav != 'Chi-square'",
             div(class = "d-flex align-items-center gap-4 flex-wrap",
               div(style = "width: 200px;",
-                  sliderInput("ex_ng", "Class intervals", min = 2, max = 10,
+                  sliderInput("ex_ng", "Class intervals", min = 2, max = 16,
                               value = 8, step = 1, width = "100%")),
               div(style = "width: 260px;",
                   sliderInput("ex_rng", "Scale range (logits)", min = -8, max = 8,
@@ -792,7 +801,8 @@ panel_persons <- nav_panel("Persons", value = "p_persons", icon = bs_icon("peopl
     # offered only when a judge column was nominated)
     conditionalPanel("output.is_btl == true && output.has_judges == true",
       tableCard("btl_judges_tbl", "Judges",
-                "Available when a judge column is nominated; an erratic judge carries a large positive fit residual, exactly as an erratic person does."))
+                "Available when a judge column is nominated; an erratic judge carries a large positive fit residual, exactly as an erratic person does.",
+                controls = cols_switch("btl_judges_full")))
   )
 
 # ------------------------------------------------------------ TARGETING --
@@ -1311,7 +1321,7 @@ ui <- page_navbar(
   panel_persons,
   panel_targeting,
   panel_test,
-  nav_menu("Independence", value = "menu_structure",
+  nav_menu("Independence", value = "menu_independence",
     panel_ld,
     panel_dim),
   nav_menu("Invariance", value = "menu_invariance",
@@ -1328,7 +1338,7 @@ ui <- page_navbar(
   nav_item(downloadLink("dl_report_nav", label = bs_icon("file-earmark-text"),
                         class = "nav-link px-2",
                         title = "Analysis report (HTML)")),
-  nav_item(input_dark_mode(id = "app_mode"))
+  nav_item(input_dark_mode())
 )
 
 server <- function(input, output, session) {
@@ -1384,7 +1394,7 @@ server <- function(input, output, session) {
     updateSelectizeInput(session, "factor_cols", choices = nm, selected = guess_fac)
     updateSelectizeInput(session, "item_cols", choices = nm,
                          selected = setdiff(nm, c(guess_id, guess_fac)))
-    # long-format guesses
+    # MFRM role guesses
     g_per <- nm[grepl("person|candidate|student|^id$|_id$", tolower(nm))][1]
     g_itm <- nm[grepl("item|task|criterion|question", tolower(nm))][1]
     g_sco <- nm[grepl("score|rating|grade|mark", tolower(nm))][1]
@@ -1601,7 +1611,17 @@ server <- function(input, output, session) {
                      type = "message", duration = 5)
   })
 
-  analysis <- eventReactive(input$run, {
+  # estimation runs as a side-effecting observer that stores the completed
+  # fit in fit_val; analysis() is a pure accessor, so every reader keeps
+  # working unchanged
+  fit_val <- reactiveVal(NULL)
+  analysis <- reactive(fit_val())
+  btl_fit <- reactiveVal(NULL)
+  # shared estimation-control resolution (used by every model branch and
+  # the reproducible-code footers)
+  est_opts <- reactive(list(maxit = max(5, input$maxit %||% 60),
+                            tol = max(1e-12, input$tol %||% 1e-8)))
+  observeEvent(input$run, {
     df <- raw_data()
     # automatic class intervals pass NULL; rasch() resolves the rule and
     # reports the value used in fit$n_groups
@@ -1622,8 +1642,9 @@ server <- function(input, output, session) {
     code_args_common <- c(
       if (!is.null(ng)) paste0("n_groups = ", ng),
       if (!is.na(adjN)) paste0("adjust_N = ", adjN))
-    code_est <- c(paste0("maxit = ", max(5, input$maxit %||% 60)),
-                  paste0("tol = ", format(max(1e-12, input$tol %||% 1e-8))))
+    eo <- est_opts()
+    code_est <- c(paste0("maxit = ", eo$maxit),
+                  paste0("tol = ", format(eo$tol)))
     code_call <- NULL
     code_notes <- character(0)
     withProgress(message = "Estimating (pairwise conditional ML)…", value = 0.3, {
@@ -1661,39 +1682,24 @@ server <- function(input, output, session) {
             if ((bt_graded || bt_marg) && identical(bt_thr, "pc"))
               'thresholds = "pc"',
             code_est), collapse = ",\n  "), ")")
-          if (bt_graded)
-            btl(df, object_a = input$bt_a, object_b = input$bt_b,
-                response = input$bt_response,
-                judge = if (!is.null(input$bt_judge) && input$bt_judge != NONE)
-                  input$bt_judge else NULL,
-                order = bt_ord,
-                count = if (!is.null(input$bt_count) && input$bt_count != NONE)
-                  input$bt_count else NULL,
-                thresholds = bt_thr,
-                maxit = max(5, input$maxit %||% 60),
-                tol = max(1e-12, input$tol %||% 1e-8))
-          else if (bt_marg)
-            btl(df, object_a = input$bt_a, object_b = input$bt_b,
-                winner = input$bt_win, margin = input$bt_margin,
-                judge = if (!is.null(input$bt_judge) && input$bt_judge != NONE)
-                  input$bt_judge else NULL,
-                order = bt_ord,
-                count = if (!is.null(input$bt_count) && input$bt_count != NONE)
-                  input$bt_count else NULL,
-                thresholds = bt_thr,
-                maxit = max(5, input$maxit %||% 60),
-                tol = max(1e-12, input$tol %||% 1e-8))
-          else
-            btl(df, object_a = input$bt_a, object_b = input$bt_b,
-                winner = input$bt_win,
-                judge = if (!is.null(input$bt_judge) && input$bt_judge != NONE)
-                  input$bt_judge else NULL,
-                order = bt_ord,
-                count = if (!is.null(input$bt_count) && input$bt_count != NONE)
-                  input$bt_count else NULL,
-                ties = input$bt_ties %||% "drop",
-                maxit = max(5, input$maxit %||% 60),
-                tol = max(1e-12, input$tol %||% 1e-8))
+          # one shared argument list; the entry path (graded response,
+          # winner + margin, winner only) contributes its own arguments
+          bt_args <- c(
+            list(df, object_a = input$bt_a, object_b = input$bt_b,
+                 judge = if (!is.null(input$bt_judge) &&
+                             input$bt_judge != NONE) input$bt_judge else NULL,
+                 order = bt_ord,
+                 count = if (!is.null(input$bt_count) &&
+                             input$bt_count != NONE) input$bt_count else NULL,
+                 maxit = eo$maxit, tol = eo$tol),
+            if (bt_graded)
+              list(response = input$bt_response, thresholds = bt_thr)
+            else if (bt_marg)
+              list(winner = input$bt_win, margin = input$bt_margin,
+                   thresholds = bt_thr)
+            else
+              list(winner = input$bt_win, ties = input$bt_ties %||% "drop"))
+          do.call(btl, bt_args)
         } else if (identical(input$model_type, "efrm")) {
           sm <- ef_setmap()
           code_call <- paste0("fit <- rasch_efrm(dat,\n  ", paste(c(
@@ -1720,8 +1726,7 @@ server <- function(input, output, session) {
                        input$ef_id else NULL,
                      items = names(sm),
                      n_groups = ng, adjust_N = adjN,
-                     maxit = max(5, input$maxit %||% 60),
-                     tol = max(1e-12, input$tol %||% 1e-8),
+                     maxit = eo$maxit, tol = eo$tol,
                      se_method = input$ef_se %||% "hybrid",
                      boot_reps = if (!is.null(input$ef_reps) &&
                                      !is.na(input$ef_reps))
@@ -1748,8 +1753,7 @@ server <- function(input, output, session) {
             rasch_mfrm(df, person = input$lp_person,
                        facets = input$lp_facets, items = input$lp_items_wide,
                        n_groups = ng, adjust_N = adjN, interaction = lp_int,
-                       maxit = max(5, input$maxit %||% 60),
-                       tol = max(1e-12, input$tol %||% 1e-8))
+                       maxit = eo$maxit, tol = eo$tol)
           } else {
             if (any(c(input$lp_person, input$lp_item, input$lp_score) == NONE) ||
                 !length(input$lp_facets))
@@ -1765,8 +1769,7 @@ server <- function(input, output, session) {
             rasch_mfrm(df, person = input$lp_person, item = input$lp_item,
                        score = input$lp_score, facets = input$lp_facets,
                        n_groups = ng, adjust_N = adjN, interaction = lp_int,
-                       maxit = max(5, input$maxit %||% 60),
-                       tol = max(1e-12, input$tol %||% 1e-8))
+                       maxit = eo$maxit, tol = eo$tol)
           }
         } else {
           idc <- if (!is.null(input$id_col) && input$id_col != NONE) input$id_col else NULL
@@ -1837,15 +1840,16 @@ server <- function(input, output, session) {
                 id = idc, factors = fac, items = its,
                 n_groups = ng, adjust_N = adjN, anchors = anc,
                 key = mc_key, pc_components = pcc,
-                maxit = max(5, input$maxit %||% 60),
-                tol = max(1e-12, input$tol %||% 1e-8))
+                maxit = eo$maxit, tol = eo$tol)
         }
       }, error = function(e) e)
     })
     if (inherits(fit, "error")) {
       showNotification(paste("Analysis failed:", conditionMessage(fit)),
-                       type = "error", duration = NULL)
-      return(NULL)
+                       type = "error", duration = 10)
+      btl_fit(NULL)
+      fit_val(NULL)
+      return(invisible(NULL))
     }
     if (!is.null(code_call))
       rcode_str(paste(c("library(rmt)", "", src_line,
@@ -1858,26 +1862,37 @@ server <- function(input, output, session) {
     conv <- if (!is.null(fit$est)) fit$est$converged else fit$converged
     if (!isTRUE(conv))
       showNotification("Estimation did not converge; consider raising the maximum iterations or loosening the convergence criterion.",
-                       type = "warning", duration = NULL)
+                       type = "warning", duration = 10)
     override_fit(NULL); override_desc(NULL)
     # paired-comparison results render on the Summary / Items / Persons
     # pages (each page's Rasch variant hides while a BTL fit is current,
     # and vice versa); the Rasch outputs suspend meanwhile
     if (inherits(fit, "rmt_btl")) {
       btl_fit(fit)
+      fit_val(NULL)
       try(nav_select("nav", "p_summary", session = session), silent = TRUE)
-      return(NULL)
+      return(invisible(NULL))
     }
     btl_fit(NULL)
     try(nav_select("nav", "p_summary", session = session), silent = TRUE)
-    fit
+    # reactiveVal skips notification when the new value is identical to the
+    # old; clearing first guarantees the on-fit reset observer fires even
+    # when a re-run reproduces the same fit
+    fit_val(NULL)
+    fit_val(fit)
   })
-  btl_fit <- reactiveVal(NULL)
   fit <- reactive({
     f <- override_fit()
     if (is.null(f)) f <- analysis()
     req(f); f
   })
+  # the same override-first resolution without req(): NULL before any run,
+  # for UI that must render quietly in that state (navbar chips, report)
+  fit_or_null <- function() {
+    f <- override_fit()
+    if (is.null(f)) f <- tryCatch(analysis(), error = function(e) NULL)
+    f
+  }
 
   output$has_mc <- reactive({
     f <- tryCatch(fit(), error = function(e) NULL)
@@ -1923,8 +1938,12 @@ server <- function(input, output, session) {
     # paired-comparison fit with judge factors nominated
     show("p_dif", (rasch_on && !is.null(f$factors) &&
                      length(names(f$factors)) > 0) || btl_dif_on)
+    # Compare applies to Rasch fits only; for a paired-comparison fit the
+    # More menu offers Export alone (its BTL empty state points to the
+    # per-card CSV downloads)
+    show("p_compare", rasch_on)
     # menu headers hide too when everything inside them is hidden
-    show("menu_structure", rasch_on || btl_on)
+    show("menu_independence", rasch_on || btl_on)
     show("menu_invariance", rasch_on || btl_dif_on)
     show("menu_more", rasch_on || btl_on)
   })
@@ -2009,7 +2028,9 @@ server <- function(input, output, session) {
                                 ceiling((r[2] + 0.4) * 2) / 2))
     # results computed on request belong to the fit they came from
     lr_res(NULL); dep_res(NULL); spread_res(NULL); dm_res(NULL); guess_res(NULL)
-    contr_res(NULL)
+    contr_res(NULL); rescore_res(NULL); dif_size_res(NULL)
+    # manual dimensionality subsets too: they name items of the previous fit
+    dim_subsets(NULL)
   })
 
   observeEvent(input$make_subtest, {
@@ -2079,12 +2100,35 @@ server <- function(input, output, session) {
         })
     })
   }
-  register_table <- function(id, fun, dt_fun, code = NULL) {
+  # `csv_name` overrides the conventional rmt_<id>.csv download filename;
+  # the CSV content is always the full table from `fun` (never the curated
+  # on-screen display)
+  register_table <- function(id, fun, dt_fun, code = NULL, csv_name = NULL) {
     output[[id]] <- renderDT(dt_fun())
     if (!is.null(code)) register_code(id, code)
     output[[paste0(id, "_csv")]] <- downloadHandler(
-      filename = function() paste0("rmt_", id, ".csv"),
+      filename = function() csv_name %||% paste0("rmt_", id, ".csv"),
       content = function(file) write.csv(fun(), file, row.names = FALSE))
+  }
+  # the Statistic/Value summary tables (test of fit, targeting, BTL test of
+  # fit) share one renderer and CSV convention
+  register_summary_table <- function(id, fun, csv_name, code = NULL) {
+    register_table(id, fun, function() {
+      d <- fun()
+      names(d) <- c("Statistic", "Value")
+      num_dt(d, paging = FALSE)
+    }, code = code, csv_name = csv_name)
+  }
+  # paired PDF/ZIP batch downloads (all-items explorer plots, all-persons
+  # kidmaps): one handler per extension, same content function for both
+  # (the writer picks its format from the download file's extension)
+  register_batch_download <- function(prefix, base, content) {
+    for (ext in c("pdf", "zip")) local({
+      ext_ <- ext
+      output[[paste0(prefix, "_", ext_)]] <- downloadHandler(
+        filename = function() paste0(base(), ".", ext_),
+        content = content)
+    })
   }
   # APA-leaning DT wrapper: Bootstrap 5 skin, right-aligned numerics, paging
   # controls only when the table needs them. `fit_col` colours fit residuals
@@ -2224,8 +2268,7 @@ server <- function(input, output, session) {
              if (!finite1(osi)) "secondary"
              else if (osi >= 0.7) "success" else "warning")))
     }
-    f <- override_fit()
-    if (is.null(f)) f <- tryCatch(analysis(), error = function(e) NULL)
+    f <- fit_or_null()
     if (is.null(f)) return(NULL)
     psi <- f$psi$PSI
     # the chip states what was actually fitted: PCM/RSM only make sense for
@@ -2293,32 +2336,18 @@ server <- function(input, output, session) {
   # tables (the package builds them; the CSVs carry the raw column names).
   # The score-to-measure table stays available via score_table(fit) and the
   # everything-ZIP; thresholds live on the Items explorer Thresholds tab.
-  register_table("fitsum_tbl", function() fit_summary_table(fit()),
-                 function() {
-    d <- fit_summary_table(fit())
-    names(d) <- c("Statistic", "Value")
-    num_dt(d, paging = FALSE)
-  }, code = function() "fit_summary_table(fit)")
-  output$fitsum_tbl_csv <- downloadHandler(
-    filename = function() "fit_summary.csv",
-    content = function(file)
-      write.csv(fit_summary_table(fit()), file, row.names = FALSE))
+  register_summary_table("fitsum_tbl", function() fit_summary_table(fit()),
+                         csv_name = "fit_summary.csv",
+                         code = function() "fit_summary_table(fit)")
   # routine handling notes (the old text panel printed fit$notes)
   output$fitsum_notes <- renderUI({
     f <- fit()
     if (!length(f$notes)) return(NULL)
     sprintf("Note. %s.", paste(f$notes, collapse = "; "))
   })
-  register_table("targeting_tbl", function() targeting_table(fit()),
-                 function() {
-    d <- targeting_table(fit())
-    names(d) <- c("Statistic", "Value")
-    num_dt(d, paging = FALSE)
-  }, code = function() "targeting_table(fit)")
-  output$targeting_tbl_csv <- downloadHandler(
-    filename = function() "targeting.csv",
-    content = function(file)
-      write.csv(targeting_table(fit()), file, row.names = FALSE))
+  register_summary_table("targeting_tbl", function() targeting_table(fit()),
+                         csv_name = "targeting.csv",
+                         code = function() "targeting_table(fit)")
 
   # traditional (CTT) statistics: shown on the Items page (last accordion
   # panel), with the header line, CSV, and code footer registered here
@@ -2374,7 +2403,7 @@ server <- function(input, output, session) {
                       tryCatch(lr_test(f), error = function(e) e))
     if (inherits(r, "error"))
       showNotification(paste("LR test failed:", conditionMessage(r)),
-                       type = "error", duration = NULL)
+                       type = "error", duration = 10)
     else lr_res(r)
   })
   output$lr_txt <- renderPrint({
@@ -2474,7 +2503,8 @@ server <- function(input, output, session) {
     num_dt(fit()$est$components)
   }, code = function() "fit$est$components")
 
-  # explorer display settings (gear popover): class intervals and scale
+  # explorer display settings (inline on the tab-strip controls row):
+  # class intervals and scale
   # range, resolved with fallbacks; the code footers add n_groups / grid
   # only when they differ from the defaults, keeping default snippets minimal
   ex_ng <- reactive({
@@ -2523,16 +2553,13 @@ server <- function(input, output, session) {
   ex_what <- reactive(switch(input$items_nav %||% "ICC",
     ICC = "icc", Categories = "ccc", Thresholds = "tpc",
     Frequencies = "cfreq", "icc"))
-  for (ext in c("pdf", "zip")) local({
-    ext_ <- ext
-    output[[paste0("items_all_", ext_)]] <- downloadHandler(
-      filename = function() paste0(ex_what(), "_all_items.", ext_),
-      content = function(file)
-        withProgress(message = "Drawing every item…", value = 0.4,
-          save_item_plots(fit(), ex_what(), file, n_groups = ex_ng(),
-                          grid = ex_grid(),
-                          observed = isTRUE(input$show_obs))))
-  })
+  register_batch_download("items_all",
+    base = function() paste0(ex_what(), "_all_items"),
+    content = function(file)
+      withProgress(message = "Drawing every item…", value = 0.4,
+        save_item_plots(fit(), ex_what(), file, n_groups = ex_ng(),
+                        grid = ex_grid(),
+                        observed = isTRUE(input$show_obs))))
   mc_dat <- reactive({
     f <- fit()
     validate(need(!is.null(f$mc),
@@ -2659,15 +2686,12 @@ server <- function(input, output, session) {
               kid_level_arg())))
   # batch kidmaps: multi-page PDF or ZIP of PNGs, chosen by the extension
   # (the download temp file carries the filename's extension)
-  for (ext in c("pdf", "zip")) local({
-    ext_ <- ext
-    output[[paste0("kidmap_all_", ext_)]] <- downloadHandler(
-      filename = function() paste0("kidmaps.", ext_),
-      content = function(file)
-        withProgress(message = "Drawing a kidmap for every person…",
-                     value = 0.4,
-                     save_person_plots(fit(), file, level = kid_level())))
-  })
+  register_batch_download("kidmap_all",
+    base = function() "kidmaps",
+    content = function(file)
+      withProgress(message = "Drawing a kidmap for every person…",
+                   value = 0.4,
+                   save_person_plots(fit(), file, level = kid_level())))
   register_plot("rdist_p", function() plot_resid_dist(fit(), "persons"),
                 code = function() 'plot_resid_dist(fit, "persons")')
   register_plot("pfit",  function() plot_person_fit(fit()),
@@ -2722,10 +2746,7 @@ server <- function(input, output, session) {
   # ------------------------------------------------------------------ DIF --
   # (the FACTORIAL constant is defined at the top of the file: observers
   # created before this section reference it)
-  dif_alpha <- reactive({
-    a <- input$dif_alpha
-    if (is.null(a) || is.na(a) || a <= 0 || a >= 1) 0.05 else a
-  })
+  dif_alpha <- reactive(clamp01(input$dif_alpha, 0.05))
   dif_res <- reactive({
     f <- fit(); req(!is.null(f$factors), length(names(f$factors)) > 0)
     dif_anova(f, p_adjust = input$dif_padj %||% "BH", alpha = dif_alpha())
@@ -2964,16 +2985,7 @@ server <- function(input, output, session) {
             else "",
             if (nzchar(input$pc_id %||% ""))
               paste0(', id = "', input$pc_id, '"') else "")
-  })
-  # the conventional register_table CSV name is overridden: the download is
-  # the full contrast table under the function's own name
-  output$contr_tbl_csv <- downloadHandler(
-    filename = function() "dif_contrasts.csv",
-    content = function(file) {
-      r <- contr_res()
-      if (is.null(r)) stop("derive and test the contrasts first")
-      write.csv(r$table, file, row.names = FALSE)
-    })
+  }, csv_name = "dif_contrasts.csv")
 
   # ------------------------------------------------------------------- BTL --
   bfit <- reactive({
@@ -3008,16 +3020,10 @@ server <- function(input, output, session) {
   })
   # test-of-fit summary (Summary page): the paired-comparison headline set
   # from fit_summary_table()'s rmt_btl method
-  register_table("btl_fitsum_tbl", function() fit_summary_table(bfit()),
-                 function() {
-    d <- fit_summary_table(bfit())
-    names(d) <- c("Statistic", "Value")
-    num_dt(d, paging = FALSE)
-  }, code = function() "fit_summary_table(bt)")
-  output$btl_fitsum_tbl_csv <- downloadHandler(
-    filename = function() "fit_summary.csv",
-    content = function(file)
-      write.csv(fit_summary_table(bfit()), file, row.names = FALSE))
+  register_summary_table("btl_fitsum_tbl",
+                         function() fit_summary_table(bfit()),
+                         csv_name = "fit_summary.csv",
+                         code = function() "fit_summary_table(bt)")
   # routine handling notes (the old text panel printed bt$notes)
   output$btl_fitsum_notes <- renderUI({
     f <- bfit()
@@ -3042,7 +3048,7 @@ server <- function(input, output, session) {
     validate(need(!is.null(bfit()$judges), "No judge column was nominated."))
     d <- bfit()$judges
     d$misfit <- ifelse(!is.na(d$fit_resid) & abs(d$fit_resid) > 2.5, "*", "")
-    num_dt(curate(d, "btl_judge", full = isTRUE(input$btl_full)),
+    num_dt(curate(d, "btl_judge", full = isTRUE(input$btl_judges_full)),
            fit_col = "fit_resid")
   }, code = function() "bt$judges")
   register_plot("btl_plot", function() plot_btl(bfit()),
@@ -3078,8 +3084,13 @@ server <- function(input, output, session) {
       b <- bfit()
       pdf(file, width = 8, height = 5.5, onefile = TRUE)
       on.exit(dev.off(), add = TRUE)
+      # a failed object still gets its page: a placeholder naming the
+      # error, so no object silently vanishes from the batch
       for (o in b$objects$object)
-        tryCatch(plot_btl_icc(b, o), error = function(e) NULL)
+        tryCatch(plot_btl_icc(b, o), error = function(e) {
+          plot.new()
+          text(0.5, 0.5, sprintf("%s: %s", o, conditionMessage(e)))
+        })
     })
   # graded (ordinal) fits carry thresholds and category curves; the flag
   # hides both cards entirely for dichotomous fits
@@ -3141,10 +3152,7 @@ server <- function(input, output, session) {
     sprintf("grp <- setNames(as.character(dat$%s), dat$%s)[!duplicated(dat$%s)]",
             input$bdif_factor %||% "factor", input$bt_judge %||% "judge",
             input$bt_judge %||% "judge")
-  bdif_alpha <- reactive({
-    a <- input$bdif_alpha
-    if (is.null(a) || is.na(a) || a <= 0 || a >= 1) 0.05 else a
-  })
+  bdif_alpha <- reactive(clamp01(input$bdif_alpha, 0.05))
   # judge factors nominated (or changed) after the run still reach the
   # factor select; the results themselves are computed on request only
   observeEvent(input$bt_jfactors, {
@@ -3165,7 +3173,7 @@ server <- function(input, output, session) {
                                error = function(e) e))
     if (inherits(r, "error")) {
       showNotification(paste("DIF analysis failed:", conditionMessage(r)),
-                       type = "error", duration = NULL)
+                       type = "error", duration = 10)
       bdif_res(NULL)
     } else bdif_res(r)
   })
@@ -3213,9 +3221,11 @@ server <- function(input, output, session) {
   register_plot("bdif_occ", function() {
     b <- bfit()
     req(input$bdif_obj %in% b$objects$object)
-    grp <- tryCatch(bdif_groups_build(), error = function(e) NULL)
-    validate(need(!is.null(grp),
-                  "Choose a judge factor in the sidebar to overlay the per-group observed means."))
+    # surface the builder's own message (missing judge column, unchosen
+    # factor, …) instead of one generic hint
+    grp <- tryCatch(bdif_groups_build(), error = function(e) e)
+    if (inherits(grp, "error"))
+      validate(need(FALSE, conditionMessage(grp)))
     plot_btl_icc(b, input$bdif_obj, group = grp)
   }, w = 8, h = 5.5, code = function()
     paste0(bdif_code_grp(), "\n",
@@ -3373,7 +3383,6 @@ server <- function(input, output, session) {
 
   # --------------------------------------------------------- dimensionality --
   dim_subsets <- reactiveVal(NULL)
-  observeEvent(input$run, dim_subsets(NULL), priority = 9)
   observeEvent(input$dim_apply, {
     if (length(input$dim_pos) >= 2 && length(input$dim_neg) >= 2) {
       if (length(intersect(input$dim_pos, input$dim_neg))) {
@@ -3447,7 +3456,7 @@ server <- function(input, output, session) {
                                error = function(e) e))
     if (inherits(r, "error"))
       showNotification(paste("Magnitude estimate failed:", conditionMessage(r)),
-                       type = "error", duration = NULL)
+                       type = "error", duration = 10)
     else dm_res(r)
   })
   output$dm_tbl <- renderDT({
@@ -3523,7 +3532,7 @@ server <- function(input, output, session) {
                                error = function(e) e))
     if (inherits(r, "error"))
       showNotification(paste("Dependence estimate failed:", conditionMessage(r)),
-                       type = "error", duration = NULL)
+                       type = "error", duration = 10)
     else dep_res(r)
   })
   output$dep_txt <- renderPrint({
@@ -3555,7 +3564,7 @@ server <- function(input, output, session) {
                       tryCatch(spread_test(fit()), error = function(e) e))
     if (inherits(r, "error"))
       showNotification(paste("Spread test failed:", conditionMessage(r)),
-                       type = "error", duration = NULL)
+                       type = "error", duration = 10)
     else spread_res(r)
   })
   output$spread_tbl <- renderDT({
@@ -3583,8 +3592,7 @@ server <- function(input, output, session) {
                        type = "warning")
       return()
     }
-    ch <- input$guess_chance
-    if (is.null(ch) || is.na(ch) || ch <= 0 || ch >= 1) ch <- 0.25
+    ch <- clamp01(input$guess_chance, 0.25)
     anc <- if (length(input$guess_anchors)) input$guess_anchors else NULL
     r <- withProgress(message = "Tailored analysis (three re-analyses)…",
                       value = 0.3,
@@ -3593,7 +3601,7 @@ server <- function(input, output, session) {
                                error = function(e) e))
     if (inherits(r, "error"))
       showNotification(paste("Tailored analysis failed:", conditionMessage(r)),
-                       type = "error", duration = NULL)
+                       type = "error", duration = 10)
     else guess_res(r)
   })
   output$guess_txt <- renderPrint({
@@ -3620,11 +3628,9 @@ server <- function(input, output, session) {
     r <- guess_res()
     validate(need(!is.null(r), "Run the tailored analysis to see the comparison."))
     num_dt(r$table)
-  }, code = function() {
-    ch <- input$guess_chance
-    if (is.null(ch) || is.na(ch) || ch <= 0 || ch >= 1) ch <- 0.25
-    sprintf("ta <- tailored_analysis(fit, chance = %s)\nta$table", ch)
-  })
+  }, code = function()
+    sprintf("ta <- tailored_analysis(fit, chance = %s)\nta$table",
+            clamp01(input$guess_chance, 0.25)))
   register_plot("guess_plot", function() {
     validate(need(max(fit()$m) == 1L,
                   "Run a dichotomous (multiple-choice) analysis to use the tailored guessing procedure."))
@@ -3642,14 +3648,14 @@ server <- function(input, output, session) {
     lab <- sprintf("%d_%s", length(k) + 1L, f$model)
     k[[lab]] <- f
     kept_fits(k)
-    updateSelectInput(session, "cmp_ref", choices = names(k),
-                      selected = if (!is.null(input$cmp_ref) &&
-                                     input$cmp_ref %in% names(k))
-                        input$cmp_ref else names(k)[1])
-    updateSelectInput(session, "eq_kept", choices = names(k),
-                      selected = if (!is.null(input$eq_kept) &&
-                                     input$eq_kept %in% names(k))
-                        input$eq_kept else names(k)[length(k)])
+    updateSelectizeInput(session, "cmp_ref", choices = names(k),
+                         selected = if (!is.null(input$cmp_ref) &&
+                                        input$cmp_ref %in% names(k))
+                           input$cmp_ref else names(k)[1])
+    updateSelectizeInput(session, "eq_kept", choices = names(k),
+                         selected = if (!is.null(input$eq_kept) &&
+                                        input$eq_kept %in% names(k))
+                           input$eq_kept else names(k)[length(k)])
     showNotification(sprintf("Kept '%s' (%d fit(s) held).", lab, length(k)),
                      type = "message", duration = 5)
   })
@@ -3686,8 +3692,7 @@ server <- function(input, output, session) {
                        type = "warning", duration = 8)
       stop("report unavailable for a BTL fit")
     }
-    f <- override_fit()
-    if (is.null(f)) f <- tryCatch(analysis(), error = function(e) NULL)
+    f <- fit_or_null()
     if (is.null(f)) {
       showNotification("Run an analysis first, then download the report.",
                        type = "warning", duration = 8)

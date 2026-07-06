@@ -287,7 +287,7 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
       "%d row(s) with winner matching neither object treated as missing",
       sum(miss)))
     sel <- !miss
-    a <- a[sel]; b <- b[sel]; y <- y[sel]; w <- w[sel]; wn <- wn[sel]
+    a <- a[sel]; b <- b[sel]; y <- y[sel]; w <- w[sel]
     if (!is.null(jd)) jd <- jd[sel]
     if (!is.null(ord)) ord <- ord[sel]
     if (!length(a)) stop("no usable comparisons")
