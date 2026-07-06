@@ -663,7 +663,7 @@ panel_items <- nav_panel("Items", value = "p_items", icon = bs_icon("list-check"
                     "Show the observed class-interval points on the category and threshold curves.")),
         downloadButton("dl_anchors", "Save anchors (CSV: item,k,tau)",
                        class = "btn-outline-secondary btn-sm")),
-    layout_columns(col_widths = c(7, 5),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       tableCard("items_tbl", "Item statistics",
         controls = cols_switch("items_full"),
                 "Click a row to explore that item on the right. Fit residual ~ N(0,1) under fit.",

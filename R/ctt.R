@@ -21,8 +21,9 @@
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @return A list of class \code{"rmt_ctt"}: the per-item \code{table}
-#'   (\code{item}, \code{max}, \code{n}, \code{facility}, \code{item_total},
-#'   \code{item_rest}, \code{di}, \code{alpha_drop}), and the scalars
+#'   (\code{item}, \code{n}, \code{min}, \code{max}, \code{facility},
+#'   \code{item_total}, \code{item_rest}, \code{di}, \code{alpha_drop}), and
+#'   the scalars
 #'   \code{alpha}, \code{n} (complete cases), \code{mean}, \code{sd}, and
 #'   \code{sem}.
 #' @examples
@@ -49,7 +50,9 @@ ctt_table <- function(fit) {
   # pairwise covariance carries the alpha-if-deleted computation under
   # missing data (equal to the variance form when data are complete)
   C <- suppressWarnings(stats::cov(X, use = "pairwise.complete.obs"))
-  tab <- data.frame(item = colnames(X), max = fit$m, n = n_i,
+  min_i <- suppressWarnings(vapply(seq_len(L), function(i)
+    if (n_i[i] == 0) NA_real_ else min(X[, i], na.rm = TRUE), 0))
+  tab <- data.frame(item = colnames(X), n = n_i, min = min_i, max = fit$m,
                     facility = colMeans(X, na.rm = TRUE) / fit$m,
                     item_total = NA_real_, item_rest = NA_real_,
                     di = NA_real_, alpha_drop = NA_real_)
