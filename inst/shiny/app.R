@@ -196,6 +196,21 @@ fmt_p <- function(p)
 # a sprintf; such values display as an em dash on a neutral theme
 finite1 <- function(x) is.numeric(x) && length(x) == 1L && is.finite(x)
 
+# p-values phrased for prose ("p = 0.018" / "p < 0.001"), matching fmt_p's
+# thresholds; used by the curated stat rows
+p_lab <- function(p) {
+  if (!finite1(p)) "p = NA"
+  else if (p < 0.001) "p < 0.001"
+  else sprintf("p = %.3f", p)
+}
+
+# curated stat-box rows (Summary page): one label-value line per statistic
+stat_row <- function(label, value)
+  div(class = "stat-row",
+      span(class = "stat-label", label),
+      span(class = "stat-value", value))
+stat_rows <- function(...) div(class = "stat-rows", ...)
+
 # measurement-themed value-box glyphs: inline SVG stroked with currentColor,
 # so each glyph inherits its box's text colour in light and dark themes
 .glyph_body <- list(
@@ -272,6 +287,14 @@ css <- HTML("
     --bs-table-accent-bg: transparent;
   }
   .table-note { color: var(--bs-secondary-color); font-size: .8rem; }
+  /* curated stat boxes (Summary page): label-value rows with a hairline
+     separator; tabular numerals keep the values aligned in both themes */
+  .stat-rows { display: flex; flex-direction: column; }
+  .stat-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .45rem 0; border-bottom: 1px solid var(--bs-border-color-translucent); }
+  .stat-row:last-child { border-bottom: 0; }
+  .stat-label { color: var(--bs-secondary-color); font-size: .85rem; }
+  .stat-value { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .stat-head { color: var(--bs-secondary-color); font-size: .85rem; margin-bottom: .35rem; }
   /* card headers: title left, action chips right, with a small gap
      between chips (the chips row right-aligns even when there is no
      title, via margin-left:auto) */
@@ -378,6 +401,22 @@ tableCard <- function(id, title = NULL, note = NULL, info = NULL,
   )
 }
 
+
+# curated stat-box card: the body is a uiOutput of label-value rows built by
+# the server; the CSV chip downloads the COMPLETE summary table (never the
+# curated display), and the code footer names the call that builds it
+statCard <- function(id, title = NULL, info = NULL, footer = NULL) {
+  card(
+    full_screen = TRUE,
+    card_header_bar(title, info = info,
+      buttons = downloadButton(paste0(id, "_csv"), "CSV",
+                               class = "btn-outline-secondary btn-xs")),
+    card_body(uiOutput(id),
+              if (!is.null(footer)) div(class = "table-note mt-2", footer),
+              rcode_details(id),
+              padding = 12, fillable = FALSE)
+  )
+}
 
 # compact header switch revealing every column of a curated table
 cols_switch <- function(id)
@@ -591,13 +630,14 @@ panel_summary <- nav_panel("Summary", value = "p_summary", icon = bs_icon("clipb
     # Rasch fits (hidden while a paired-comparison fit is active)
     conditionalPanel("output.is_btl != true",
     uiOutput("vboxes"),
-    # DT cards sit inside plain divs: the grid row would otherwise stretch
-    # them to equal height and crop the taller table mid-row
+    # stat-box cards sit inside plain divs: the grid row would otherwise
+    # stretch them to equal height and pad the shorter card mid-row
     layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
-      div(tableCard("fitsum_tbl", "Test of fit",
-        info = "The total item-trait chi-square tests the invariance of item ordering across the trait; a significant result means at least one item's difficulty is not invariant across class intervals (Andrich & Marais 2019). The cell df factor scales each item's chi-square degrees of freedom by the proportion of class-interval cells with enough responders to contribute.",
+      div(statCard("fitsum_tbl", "Test of fit",
+        info = "The total item-trait chi-square tests the invariance of item ordering across the trait; a significant result means at least one item's difficulty is not invariant across class intervals (Andrich & Marais 2019). The CSV download carries the complete test-of-fit summary, including the fit residual moments and fit-location correlations.",
         footer = uiOutput("fitsum_notes"))),
-      div(tableCard("targeting_tbl", "Targeting & reliability"))
+      div(statCard("targeting_tbl", "Targeting & reliability",
+        info = "How well the item thresholds cover the person distribution, with the reliability indices; the CSV download carries the complete targeting summary, including the location moments and item separation."))
     ),
     # server-rendered: the likelihood-ratio card only when it applies
     uiOutput("summary_bottom")),
@@ -606,8 +646,8 @@ panel_summary <- nav_panel("Summary", value = "p_summary", icon = bs_icon("clipb
     conditionalPanel("output.is_btl == true",
       uiOutput("btl_boxes"),
       layout_columns(col_widths = breakpoints(sm = 12, xl = 6),
-        div(tableCard("btl_fitsum_tbl", "Test of fit",
-          info = "The pairwise chi-square tests the observed against the expected win proportions over every pair of objects; the object separation index is the paired-comparison counterpart of the PSI. Within-judge dependence effects (exposure and carry-over) appear when a judgment-order column was nominated.",
+        div(statCard("btl_fitsum_tbl", "Test of fit",
+          info = "The pairwise chi-square tests the observed against the expected win proportions over every pair of objects; the object separation index is the paired-comparison counterpart of the PSI. Within-judge dependence effects (exposure and carry-over) appear when a judgment-order column was nominated. The CSV download carries the complete summary.",
           footer = uiOutput("btl_fitsum_notes")))))
   )
 
@@ -2110,14 +2150,15 @@ server <- function(input, output, session) {
       filename = function() csv_name %||% paste0("rmt_", id, ".csv"),
       content = function(file) write.csv(fun(), file, row.names = FALSE))
   }
-  # the Statistic/Value summary tables (test of fit, targeting, BTL test of
-  # fit) share one renderer and CSV convention
-  register_summary_table <- function(id, fun, csv_name, code = NULL) {
-    register_table(id, fun, function() {
-      d <- fun()
-      names(d) <- c("Statistic", "Value")
-      num_dt(d, paging = FALSE)
-    }, code = code, csv_name = csv_name)
+  # the curated stat boxes (test of fit, targeting, BTL test of fit) share
+  # one registration: `ui_fun` builds the on-screen label-value rows, while
+  # the CSV chip always downloads the COMPLETE table from `csv_fun`
+  register_stat_box <- function(id, csv_fun, csv_name, ui_fun, code = NULL) {
+    output[[id]] <- renderUI(ui_fun())
+    if (!is.null(code)) register_code(id, code)
+    output[[paste0(id, "_csv")]] <- downloadHandler(
+      filename = function() csv_name,
+      content = function(file) write.csv(csv_fun(), file, row.names = FALSE))
   }
   # paired PDF/ZIP batch downloads (all-items explorer plots, all-persons
   # kidmaps): one handler per extension, same content function for both
@@ -2332,22 +2373,78 @@ server <- function(input, output, session) {
     )
   })
 
-  # test-of-fit and targeting/reliability summaries as statistic/value
-  # tables (the package builds them; the CSVs carry the raw column names).
+  # test-of-fit and targeting/reliability summaries as curated stat boxes
+  # (values read off the fit object directly); the CSV chips download the
+  # COMPLETE fit_summary_table / targeting_table with raw column names.
   # The score-to-measure table stays available via score_table(fit) and the
   # everything-ZIP; thresholds live on the Items explorer Thresholds tab.
-  register_summary_table("fitsum_tbl", function() fit_summary_table(fit()),
-                         csv_name = "fit_summary.csv",
-                         code = function() "fit_summary_table(fit)")
+  register_stat_box("fitsum_tbl",
+    csv_fun = function() fit_summary_table(fit()),
+    csv_name = "fit_summary.csv",
+    ui_fun = function() {
+      f <- fit()
+      est <- f$est %||% f
+      dis <- names(which(vapply(f$thresholds_diag, function(d)
+        !d$ordered && length(d$thresholds) > 1, TRUE)))
+      conv <- if (isTRUE(est$converged))
+        sprintf("converged in %d iterations", est$iterations)
+      else span(class = "text-danger",
+                sprintf("did not converge in %d iterations", est$iterations))
+      tagList(
+        div(class = "stat-head",
+            f$model, " · pairwise conditional ML · ", conv),
+        stat_rows(
+          stat_row("Item-trait chi-square",
+                   sprintf("%.2f on %d df, %s", f$total_chisq, f$total_df,
+                           p_lab(f$total_chisq_p))),
+          stat_row("Item fit residual",
+                   sprintf("mean %.2f, SD %.2f", f$item_fit_summary$mean,
+                           f$item_fit_summary$sd)),
+          stat_row("Person fit residual",
+                   sprintf("mean %.2f, SD %.2f", f$person_fit_summary$mean,
+                           f$person_fit_summary$sd)),
+          stat_row("Items with adj. chi-square p < .05",
+                   sprintf("%d of %d",
+                           sum(f$items$p_adj < 0.05, na.rm = TRUE),
+                           nrow(f$items))),
+          stat_row("Disordered thresholds",
+                   if (length(dis)) paste(dis, collapse = ", ") else "none")))
+    },
+    code = function() "fit_summary_table(fit)")
   # routine handling notes (the old text panel printed fit$notes)
   output$fitsum_notes <- renderUI({
     f <- fit()
     if (!length(f$notes)) return(NULL)
     sprintf("Note. %s.", paste(f$notes, collapse = "; "))
   })
-  register_summary_table("targeting_tbl", function() targeting_table(fit()),
-                         csv_name = "targeting.csv",
-                         code = function() "targeting_table(fit)")
+  register_stat_box("targeting_tbl",
+    csv_fun = function() targeting_table(fit()),
+    csv_name = "targeting.csv",
+    ui_fun = function() {
+      f <- fit(); ss <- f$summary_stats; tg <- f$targeting
+      psi_txt <- if (!finite1(f$psi$PSI)) "—"
+      else if (finite1(f$psi_noext$PSI))
+        sprintf("%.3f (%.3f without extremes)", f$psi$PSI, f$psi_noext$PSI)
+      else sprintf("%.3f", f$psi$PSI)
+      alpha_txt <- if (finite1(f$alpha$alpha)) sprintf("%.3f", f$alpha$alpha)
+      else sprintf("not applicable (%d complete cases)", f$alpha$n %||% 0L)
+      stat_rows(
+        stat_row("Person location",
+                 sprintf("mean %.2f, SD %.2f", ss$person_location$mean,
+                         ss$person_location$sd)),
+        stat_row("Item location",
+                 sprintf("SD %.2f (mean constrained to 0)",
+                         ss$item_location$sd)),
+        stat_row("Threshold range",
+                 sprintf("%.2f to %.2f", tg$threshold_range[1],
+                         tg$threshold_range[2])),
+        stat_row("Persons beyond thresholds",
+                 sprintf("%.1f%% below · %.1f%% above",
+                         100 * tg$prop_below, 100 * tg$prop_above)),
+        stat_row("PSI", psi_txt),
+        stat_row("Coefficient alpha", alpha_txt))
+    },
+    code = function() "targeting_table(fit)")
 
   # traditional (CTT) statistics: shown on the Items page (last accordion
   # panel), with the header line, CSV, and code footer registered here
@@ -3018,12 +3115,53 @@ server <- function(input, output, session) {
                 theme = if (finite1(f$total_p) && f$total_p >= 0.05)
                   "success" else "secondary"))
   })
-  # test-of-fit summary (Summary page): the paired-comparison headline set
-  # from fit_summary_table()'s rmt_btl method
-  register_summary_table("btl_fitsum_tbl",
-                         function() fit_summary_table(bfit()),
-                         csv_name = "fit_summary.csv",
-                         code = function() "fit_summary_table(bt)")
+  # test-of-fit stat box (Summary page): the paired-comparison headline set
+  # read off the fit; the CSV chip downloads the COMPLETE table from
+  # fit_summary_table()'s rmt_btl method
+  register_stat_box("btl_fitsum_tbl",
+    csv_fun = function() fit_summary_table(bfit()),
+    csv_name = "fit_summary.csv",
+    ui_fun = function() {
+      f <- bfit()
+      graded <- !is.null(f$m) && f$m > 1L
+      model_lab <- if (graded)
+        sprintf("Graded paired comparisons (%d categories)", f$m + 1L)
+      else "Paired comparisons (BTL)"
+      conv <- if (isTRUE(f$converged))
+        sprintf("converged in %d iterations", f$iterations)
+      else span(class = "text-danger",
+                sprintf("did not converge in %d iterations", f$iterations))
+      design <- paste(c(
+        sprintf("%d objects", nrow(f$objects)),
+        sprintf("%.0f comparisons", f$n_comparisons),
+        if (!is.null(f$judges)) sprintf("%d judges", nrow(f$judges))),
+        collapse = " · ")
+      dep_rows <- if (!is.null(f$dependence))
+        lapply(seq_len(nrow(f$dependence)), function(r)
+          stat_row(sprintf("Within-judge %s",
+                           gsub("_", "-", f$dependence$effect[r])),
+                   sprintf("%.2f logits (%s)", f$dependence$estimate[r],
+                           p_lab(f$dependence$p[r]))))
+      tagList(
+        div(class = "stat-head",
+            model_lab, " · conditional ML · ", conv,
+            if (isTRUE(f$clustered)) " · SEs clustered by judge"),
+        stat_rows(
+          stat_row("Pairwise chi-square",
+                   sprintf("%.2f on %d df, %s", f$total_chisq, f$total_df,
+                           p_lab(f$total_p))),
+          stat_row("Design", design),
+          stat_row("Object separation index",
+                   if (finite1(f$osi$PSI)) sprintf("%.3f", f$osi$PSI)
+                   else "—"),
+          if (graded && !is.null(f$thr_structure))
+            stat_row("Threshold structure",
+                     if (identical(f$thr_structure, "pc"))
+                       "principal components (spread)"
+                     else "free symmetric"),
+          dep_rows))
+    },
+    code = function() "fit_summary_table(bt)")
   # routine handling notes (the old text panel printed bt$notes)
   output$btl_fitsum_notes <- renderUI({
     f <- bfit()
