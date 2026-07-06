@@ -22,18 +22,20 @@ test_that("dif_anova reports the full two-way table with effect sizes", {
   s <- sim_dif(shifts = list(a = rep(0, 8), b = c(0, 0, 1, rep(0, 5))))
   fit <- rasch(data.frame(s$X, grp = s$g), factors = "grp")
   da <- dif_anova(fit)
-  expect_true(all(c("F_class", "p_class", "eta2_uniform",
-                    "eta2_nonuniform") %in% names(da)))
-  # the planted item carries by far the largest uniform effect size
-  expect_equal(which.max(da$eta2_uniform), 3L)
-  expect_gt(da$eta2_uniform[3], max(da$eta2_uniform[-3]) * 3)
-  expect_true(da$uniform_DIF[3])
-  # eta2 within (0, 1); class-interval F present for every item
-  expect_true(all(da$eta2_uniform > 0 & da$eta2_uniform < 1, na.rm = TRUE))
-  expect_true(all(is.finite(da$F_class)))
+  su <- da$summary
+  expect_true(all(c("eta2_uniform", "eta2_nonuniform", "uniform_DIF",
+                    "nonuniform_DIF") %in% names(su)))
+  # one row per item (single factor); the planted item has the largest effect
+  expect_equal(which.max(su$eta2_uniform), 3L)
+  expect_gt(su$eta2_uniform[3], max(su$eta2_uniform[-3]) * 3)
+  expect_true(su$uniform_DIF[3])
+  expect_true(all(su$eta2_uniform > 0 & su$eta2_uniform < 1, na.rm = TRUE))
+  # the class-interval main effect lives in the full terms table
+  expect_true(all(is.finite(da$terms$F_value[da$terms$term == "ci"])))
   # familywise option flows through
   db <- dif_anova(fit, p_adjust = "bonferroni")
-  expect_true(all(db$p_uniform_adj >= da$p_uniform_adj - 1e-12, na.rm = TRUE))
+  expect_true(all(db$summary$p_uniform_adj >= su$p_uniform_adj - 1e-12,
+                  na.rm = TRUE))
 })
 
 test_that("dif_size recovers a planted uniform DIF in logits", {
@@ -84,7 +86,7 @@ test_that("factorial procedure: interaction post-hocs and sizes for significant 
     plogis(outer(th, d, "-") - outer(sh, c(0, 0, 1, 0, 0, 0)))), n, 6)
   colnames(X) <- paste0("I", 1:6)
   fit <- rasch(data.frame(X, g1 = g1, g2 = g2), factors = c("g1", "g2"))
-  fa <- dif_anova_factorial(fit, sizes = TRUE)
+  fa <- dif_anova(fit, sizes = TRUE, effects = "factorial")
 
   # the g1:g2 interaction is significant for the planted item and
   # supersedes the main effects it involves
@@ -194,7 +196,7 @@ test_that("the factorial summary pivots to uniform/non-uniform per group term", 
   X <- matrix(rbinom(n * 6, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 6)
   colnames(X) <- paste0("I", 1:6)
   fit <- rasch(data.frame(X, sex = g1, age = g2), factors = c("sex", "age"))
-  fa <- dif_anova_factorial(fit)
+  fa <- dif_anova(fit, effects = "factorial")
   s <- fa$summary
   # one row per item and group term (no ci terms, no residual row)
   expect_setequal(unique(s$term), c("sex", "age", "sex:age"))
@@ -220,23 +222,19 @@ test_that("DIF class intervals adapt to the cells each analysis uses", {
   X <- matrix(rbinom(n * 8, 1, plogis(outer(rnorm(n), d, "-"))), n, 8)
   colnames(X) <- paste0("I", 1:8)
   f <- rasch(data.frame(X, sex = g1, age = g2), factors = c("sex", "age"))
-  da <- dif_anova(f)
-  ng <- attr(da, "n_groups")
-  # per factor: smallest level / 30, clamped to 2..10, independent of overall
-  expect_equal(unname(ng["sex"]),
+  # the joint model sets one interval count from the smallest cell used:
+  # a single factor from that factor's smallest group
+  ds <- dif_anova(f, factors = "sex")
+  expect_equal(ds$n_groups,
                max(2L, min(10L, min(table(g1[!is.na(f$person$theta)])) %/% 30L)))
-  expect_equal(unname(ng["age"]),
-               max(2L, min(10L, min(table(g2[!is.na(f$person$theta)])) %/% 30L)))
-  expect_gt(ng["sex"], ng["age"])   # fewer levels leave bigger cells
-  # factorial: set from the smallest factor-combination cell
-  fa <- dif_anova_factorial(f)
+  # several factors from the smallest factor-combination cell
+  da <- dif_anova(f)
   cells <- interaction(g1, g2, drop = TRUE)
-  expect_equal(fa$n_groups,
+  expect_equal(da$n_groups,
                max(2L, min(10L, min(table(cells[!is.na(f$person$theta)])) %/% 30L)))
-  expect_lt(fa$n_groups, ng["sex"])
+  expect_gt(ds$n_groups, da$n_groups)   # combination cells are smaller
   # explicit n_groups still overrides
-  da5 <- dif_anova(f, n_groups = 5)
-  expect_true(all(attr(da5, "n_groups") == 5))
+  expect_equal(dif_anova(f, n_groups = 5)$n_groups, 5)
 })
 
 test_that("dif_anova tests a within-subject factor against person clustering", {
@@ -253,17 +251,17 @@ test_that("dif_anova tests a within-subject factor against person clustering", {
 
   da <- dif_anova(fit)
   # the repeated occasion factor is auto-detected as within-subject
-  expect_identical(attr(da, "within"), "occasion")
-  expect_true(all(da$within))
+  expect_identical(da$within, "occasion")
+  su <- da$summary
   # the planted within-subject DIF on I3 is recovered, clean items are null
-  expect_true(da$uniform_DIF[da$item == "I3"])
-  expect_equal(sum(da$uniform_DIF), 1L)
+  expect_true(su$uniform_DIF[su$item == "I3"])
+  expect_equal(sum(su$uniform_DIF), 1L)
   # the within uniform test equals the person-level paired test (its gold
   # standard) up to the class-interval filtering
   z <- fit$residuals[, 3]; g <- factor(fit$factors$occasion); pid <- factor(id)
   dp <- tapply(z[g == "t2"], pid[g == "t2"], mean) -
         tapply(z[g == "t1"], pid[g == "t1"], mean)
-  expect_lt(abs(da$F_uniform[da$item == "I3"] -
+  expect_lt(abs(su$F_uniform[su$item == "I3"] -
                 t.test(dp)$statistic^2), 3)
 
   # a cross-sectional design (unique ids) is unchanged: nothing within,
@@ -274,9 +272,8 @@ test_that("dif_anova tests a within-subject factor against person clustering", {
                500, 8)
   colnames(Xc) <- paste0("I", 1:8)
   dc <- dif_anova(rasch(data.frame(Xc, grp = gg), factors = "grp"))
-  expect_length(attr(dc, "within"), 0L)
-  expect_false(any(dc$within))
-  expect_true(dc$uniform_DIF[dc$item == "I3"])
+  expect_length(dc$within, 0L)
+  expect_true(dc$summary$uniform_DIF[dc$summary$item == "I3"])
 })
 
 test_that("factorial DIF uses a mixed ANOVA when a factor is within-subject", {
@@ -294,7 +291,7 @@ test_that("factorial DIF uses a mixed ANOVA when a factor is within-subject", {
   id <- rep(sprintf("P%03d", 1:N), 2)
   fit <- rasch(dat, factors = c("sex", "occasion"), id = id)
 
-  fa <- dif_anova_factorial(fit)
+  fa <- dif_anova(fit)
   expect_identical(fa$within, "occasion")
   s <- fa$summary
   # the between factor's DIF lands on the between item, the within factor's
@@ -306,9 +303,9 @@ test_that("factorial DIF uses a mixed ANOVA when a factor is within-subject", {
   expect_equal(sum(s$uniform_DIF), 2L)
 
   # forcing the between-subjects treatment reproduces the ordinary factorial
-  fb <- dif_anova_factorial(fit, within = character(0))
+  fb <- dif_anova(fit, within = character(0))
   expect_length(fb$within, 0L)
-  fc <- dif_anova_factorial(rasch(data.frame(X[1:N, ], sex = sex),
+  fc <- dif_anova(rasch(data.frame(X[1:N, ], sex = sex),
                                   factors = "sex"))
   expect_length(fc$within, 0L)
 })

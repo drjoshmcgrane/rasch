@@ -218,14 +218,11 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
     wtab(fit$score_curves, "score_curves")
   }
   if (!is.null(fit$factors)) {
-    dif <- tryCatch(dif_anova(fit), error = function(e) NULL)
-    if (!is.null(dif)) wtab(dif, "dif_anova")
-    if (ncol(fit$factors) > 1) {
-      fa <- tryCatch(dif_anova_factorial(fit), error = function(e) NULL)
-      if (!is.null(fa)) {
-        wtab(fa$terms, "dif_factorial_terms")
-        if (nrow(fa$tukey)) wtab(fa$tukey, "dif_factorial_tukey")
-      }
+    da <- tryCatch(dif_anova(fit), error = function(e) NULL)
+    if (!is.null(da)) {
+      wtab(da$summary, "dif_anova")
+      wtab(da$terms, "dif_anova_terms")
+      if (nrow(da$tukey)) wtab(da$tukey, "dif_tukey")
     }
   }
   if (any(fit$person$extreme)) {
@@ -499,11 +496,11 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
     if (!is.null(fit$factors)) {
       da <- tryCatch(dif_anova(fit), error = function(e) NULL)
       if (!is.null(da)) s("<h2>Differential item functioning</h2>",
-        .html_table(da[, intersect(c("factor", "item", "F_uniform",
+        .html_table(da$summary[, intersect(c("item", "term", "F_uniform",
                                      "p_uniform_adj", "eta2_uniform",
                                      "F_nonuniform", "p_nonuniform_adj",
                                      "eta2_nonuniform", "uniform_DIF",
-                                     "nonuniform_DIF"), names(da))])) else ""
+                                     "nonuniform_DIF"), names(da$summary))])) else ""
     } else "",
     if (!is.null(fit$mc)) s("<h2>Distractor analysis</h2>",
       "<p class='note'>Locations use the rest measure; a distractor whose takers are abler than the keyed option's flags a possible miskey.</p>",

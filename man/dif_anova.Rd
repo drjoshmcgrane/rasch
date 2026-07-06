@@ -2,7 +2,7 @@
 % Please edit documentation in R/dif.R
 \name{dif_anova}
 \alias{dif_anova}
-\title{Differential item functioning by two-way residual ANOVA}
+\title{Differential item functioning by residual analysis of variance}
 \usage{
 dif_anova(
   fit,
@@ -10,6 +10,8 @@ dif_anova(
   n_groups = NULL,
   p_adjust = "BH",
   alpha = 0.05,
+  effects = c("main", "factorial"),
+  sizes = FALSE,
   id = NULL,
   within = NULL
 )
@@ -18,65 +20,85 @@ dif_anova(
 \item{fit}{A fitted object from \code{\link{rasch}}.}
 
 \item{factors}{A vector (one factor), a data frame of person factors, or a
-character vector naming factor columns already nominated in the fit (via
-\code{rasch(..., factors = )}). Defaults to every factor stored in the
-fit.}
+character vector naming factor columns nominated in the fit. Defaults to
+every factor stored in the fit.}
 
-\item{n_groups}{Number of trait class intervals. By default set per
-factor from the smallest group so every interval-by-group cell keeps
-about 30 expected responses (between 2 and 10 intervals) --
-independently of the interval count of the overall fit, whose rule
-guards intervals, not cells. The counts used are returned as the
-\code{n_groups} attribute.}
+\item{n_groups}{Number of trait class intervals. By default set from
+the smallest factor-combination cell so every interval-by-cell count
+keeps about 30 expected responses (between 2 and 10 intervals); the
+value used is returned in \code{n_groups}.}
 
-\item{p_adjust}{Multiplicity adjustment method passed to
-\code{\link[stats]{p.adjust}}; \code{"BH"} (default) controls the false
-discovery rate, \code{"holm"} or \code{"bonferroni"} the familywise
-error rate.}
+\item{p_adjust}{Multiplicity adjustment across items within each term;
+default \code{"BH"}.}
 
 \item{alpha}{Significance level applied to the adjusted probabilities.}
 
-\item{id}{Optional person identifier (a vector, or the name of a
-nominated factor) for stacked repeated-measures designs. A factor whose
-levels vary within a person is treated as within-subject and tested
-with a repeated-measures (split-plot) analysis of variance -- the class
-interval taken at the person level, the factor against the within-person
-error -- so the dependence the between-subjects F ignores is respected.
-Defaults to the fit's own person identifier, so a stacked design is
-handled automatically.}
+\item{effects}{\code{"main"} (default) models several factors additively
+(each factor's main effect and its class-interval interaction, but no
+factor-by-factor terms); \code{"factorial"} also crosses the factors
+with each other. Immaterial with a single factor.}
 
-\item{within}{Optional names of factors to treat as within-subject;
-auto-detected from \code{id} when not given.}
+\item{sizes}{Also compute DIF magnitudes in logits (\code{\link{dif_size}})
+for every significant, non-superseded group term: the item is resolved
+by the term's levels (interaction terms by their cells) and all
+pairwise location differences are returned with Holm familywise
+adjustment and the practical-significance flag. Each size involves a
+re-analysis, so this costs one refit per flagged item-term.}
+
+\item{id, within}{Person identifier and within-subject factor names for
+stacked repeated-measures designs. When any factor is within-subject the
+model becomes a mixed (split-plot) analysis of variance -- the class
+interval taken at the person level, the within factors carrying a person
+error stratum -- so their terms are tested validly. Auto-detected from
+the fit's person identifier.}
 }
 \value{
-A data frame per item and factor with the full two-way table
-  (Andrich and Marais 2019, ch. 16): the group main effect (uniform
-  DIF), the
-  group-by-interval interaction (non-uniform DIF), and the
-  class-interval main effect, each with its F statistic; raw and
-  adjusted probabilities and flags for the two DIF terms; and partial
-  eta-squared effect sizes (\code{eta2_uniform}, \code{eta2_nonuniform}),
-  the proportion of residual-plus-effect variance the term accounts for;
-  and a \code{within} indicator per factor. Factors treated as
-  within-subject are named in the \code{within} attribute. For DIF
-  magnitude on the logit scale, where practical significance is judged,
-  see \code{\link{dif_size}}.
+A list with \code{summary}, the compact reading of the analysis
+  (one row per item and group term with the uniform F, adjusted p, and
+  partial eta-squared -- the term itself -- and the non-uniform ones --
+  the term crossed with class interval -- plus \code{uniform_DIF},
+  \code{nonuniform_DIF} and \code{superseded} flags); \code{terms},
+  the complete per-item analysis of
+  variance table (term, df, sum of squares, mean square, F, partial
+  eta-squared, raw and adjusted p, significance, supersession, including
+  the residual row);
+  and \code{tukey} (per item, term, and level comparison: difference,
+  95 per cent interval, and Tukey-adjusted p), plus the \code{alpha} and
+  adjustment used. Tukey comparisons are reported for significant,
+  non-superseded group terms except two-level main effects, where the
+  F test is already the only comparison. With \code{sizes = TRUE},
+  \code{sizes} holds the logit DIF magnitudes per item, term, and level
+  pair (two-level main effects included, since the single difference is
+  exactly the DIF size).
 }
 \description{
-For each item and each person factor separately, analyses the
-standardised residuals by factor group and trait class interval. The
-group main effect indicates uniform DIF and the group-by-interval
-interaction indicates non-uniform DIF. Probabilities are adjusted across
-items within each factor by the Benjamini-Hochberg false-discovery-rate
-procedure (or any \code{\link[stats]{p.adjust}} method). With several
-factors, consider \code{\link{dif_anova_factorial}}, which models them
-jointly.
+For each item the standardised residuals are analysed by the nominated
+person factor(s) crossed with the trait class interval. A term not
+involving the class interval is uniform DIF; a term crossing it is
+non-uniform DIF (Hagquist and Marais 2019, ch. 16). With one factor this
+is a one-way analysis, \code{z ~ g * ci}. With several factors they are
+modelled jointly -- the statistically correct treatment, rather than one
+factor at a time -- with main effects by default
+(\code{z ~ (f1 + f2 + ...) * ci}); set \code{effects = "factorial"} to add
+the factor-by-factor interactions (\code{z ~ (f1 * f2 * ...) * ci}). When
+interactions are fitted, a significant one supersedes the lower-order
+terms built from its variables, recorded in the \code{superseded} column;
+interpret the highest-order significant terms.
+}
+\details{
+Probabilities are adjusted across items within each term
+(Benjamini-Hochberg by default). Tukey HSD comparisons are returned for
+each significant, non-superseded group term. Sums of squares are
+sequential (factors in the order given, class interval last).
 }
 \examples{
-set.seed(1); n <- 600
-d <- seq(-2, 2, length.out = 8); g <- rep(c("a", "b"), each = n / 2)
-sh <- matrix(0, n, 8); sh[g == "b", 3] <- 1
-X <- matrix(rbinom(n * 8, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 8)
-colnames(X) <- paste0("I", 1:8)
-dif_anova(rasch(X), factors = data.frame(group = g))
+set.seed(1); n <- 800
+d <- seq(-1.5, 1.5, length.out = 6)
+g1 <- rep(c("a", "b"), each = n / 2)
+g2 <- rep(c("x", "y"), times = n / 2)
+sh <- matrix(0, n, 6); sh[g1 == "b", 2] <- 0.8
+X <- matrix(rbinom(n * 6, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 6)
+colnames(X) <- paste0("I", 1:6)
+fit <- rasch(data.frame(X, g1 = g1, g2 = g2), factors = c("g1", "g2"))
+dif_anova(fit)$summary
 }

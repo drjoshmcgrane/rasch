@@ -35,13 +35,13 @@ test_that("split_items resolves planted uniform DIF", {
   X <- matrix(rbinom(Np * L, 1, plogis(outer(th, d, "-") - shift)), Np, L)
   colnames(X) <- sprintf("G%02d", 1:L)
   fit <- rasch(data.frame(X, grp = grp), factors = "grp", n_groups = 6)
-  expect_true(dif_anova(fit)$uniform_DIF[3])
+  expect_true(dif_anova(fit)$summary$uniform_DIF[3])
 
   fit2 <- split_items(fit, "G03", by = "grp")
   locs <- setNames(fit2$items$location, fit2$items$item)
   expect_true(all(c("G03 (foc)", "G03 (ref)") %in% names(locs)))
   expect_equal(unname(locs["G03 (foc)"] - locs["G03 (ref)"]), 1.0, tolerance = 0.3)
-  expect_false(any(dif_anova(fit2)$uniform_DIF, na.rm = TRUE))
+  expect_false(any(dif_anova(fit2)$summary$uniform_DIF, na.rm = TRUE))
   expect_true(any(grepl("split", fit2$notes)))
   expect_error(split_items(fit, "G03", by = "nope"), "not a person factor")
 })
@@ -110,7 +110,7 @@ test_that("factorial DIF: full table, Tukey rules, main-effects mode", {
   colnames(X) <- paste0("I", 1:8)
   fit <- rasch(data.frame(X, g1 = g1, g2 = g2), factors = c("g1", "g2"))
 
-  df <- dif_anova_factorial(fit)
+  df <- dif_anova(fit, effects = "factorial")
   # the complete ANOVA table: SS/MS columns and the residual row per item
   expect_true(all(c("sum_sq", "mean_sq") %in% names(df$terms)))
   expect_true(all(table(df$terms$item[df$terms$term == "Residuals"]) == 1))
@@ -129,14 +129,14 @@ test_that("factorial DIF: full table, Tukey rules, main-effects mode", {
   expect_lt(min(tk6$p_tukey), 0.01)
 
   # main-effects mode drops the factor-by-factor terms
-  dm <- dif_anova_factorial(fit, effects = "main")
+  dm <- dif_anova(fit, effects = "main")
   expect_false(any(grepl("g1:g2", dm$terms$term)))
   expect_true(dm$terms$significant[dm$terms$item == "I3" & dm$terms$term == "g1"])
 
-  # per-factor analysis with BH agrees on the planted items
-  da <- dif_anova(fit)
-  expect_true(da$uniform_DIF[da$factor == "g1" & da$item == "I3"])
-  expect_true("p_uniform_adj" %in% names(da))
+  # the joint main-effects model flags the planted g1 DIF on I3
+  su <- dif_anova(fit)$summary
+  expect_true(su$uniform_DIF[su$term == "g1" & su$item == "I3"])
+  expect_true("p_uniform_adj" %in% names(su))
 })
 
 test_that("a significant interaction supersedes its main effects", {
@@ -151,7 +151,7 @@ test_that("a significant interaction supersedes its main effects", {
     rbinom(n, 1, plogis(th - d[i] - if (i == 2) sh else 0)))
   colnames(X) <- paste0("I", 1:6)
   fit <- rasch(data.frame(X, g1 = g1, g2 = g2), factors = c("g1", "g2"))
-  df <- dif_anova_factorial(fit)
+  df <- dif_anova(fit, effects = "factorial")
   t2 <- df$terms[df$terms$item == "I2", ]
   expect_true(t2$significant[t2$term == "g1:g2"])
   # the cell-shift induces main effects too; they must be marked superseded

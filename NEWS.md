@@ -1,3 +1,15 @@
+# rmt 1.1.0
+
+* `dif_anova()` is now the single DIF analysis-of-variance function. One
+  factor is analysed one-way; several factors are modelled jointly -- the
+  statistically correct treatment -- with main effects by default and
+  factor-by-factor interactions optional (`effects = "factorial"`). It
+  handles within-subject factors (repeated-measures / mixed ANOVA) and
+  returns a classed object with a `summary`, the full `terms` table, and
+  Tukey comparisons. The separate `dif_anova_factorial()` is removed.
+* `resolve_dif()` resolves DIF iteratively by item splitting, largest
+  effect first, to clear artificial DIF.
+
 # rmt 1.0.0
 
 First stable release. The package delivers a complete Rasch Measurement

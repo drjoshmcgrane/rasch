@@ -59,7 +59,7 @@ against the test's targeting and purpose.
 \details{
 For an interaction, supply several factor names: levels are then the
 factor-combination cells, which is the post-hoc follow-up to a
-significant factor-by-factor term in \code{\link{dif_anova_factorial}}.
+significant factor-by-factor term in \code{\link{dif_anova}}.
 }
 \examples{
 set.seed(1); n <- 600

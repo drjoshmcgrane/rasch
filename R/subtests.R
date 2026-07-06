@@ -185,27 +185,15 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "BH",
   flagged <- function(cur) {
     keep <- intersect(fnames, names(cur$factors))
     if (!length(keep)) return(NULL)
-    if (length(keep) == 1L) {
-      da <- dif_anova(cur, factors = keep, p_adjust = p_adjust, alpha = alpha)
-      sig <- da[da$uniform_DIF | da$nonuniform_DIF, , drop = FALSE]
-      if (!nrow(sig)) return(NULL)
-      data.frame(item = sig$item, vars = sig$factor,
-                 eta2 = pmax(ifelse(sig$uniform_DIF, sig$eta2_uniform, 0),
-                             ifelse(sig$nonuniform_DIF, sig$eta2_nonuniform, 0)),
-                 stringsAsFactors = FALSE)
-    } else {
-      fa <- dif_anova_factorial(cur, factors = keep, p_adjust = p_adjust,
-                                alpha = alpha)
-      s <- fa$summary
-      s <- s[(s$uniform_DIF | s$nonuniform_DIF) & !s$superseded, , drop = FALSE]
-      if (!nrow(s)) return(NULL)
-      data.frame(item = s$item,
-                 vars = vapply(s$term, function(t)
-                   paste(.term_vars(t), collapse = "+"), ""),
-                 eta2 = pmax(ifelse(s$uniform_DIF, s$eta2_uniform, 0),
-                             ifelse(s$nonuniform_DIF, s$eta2_nonuniform, 0)),
-                 stringsAsFactors = FALSE)
-    }
+    s <- dif_anova(cur, factors = keep, p_adjust = p_adjust, alpha = alpha)$summary
+    s <- s[(s$uniform_DIF | s$nonuniform_DIF) & !s$superseded, , drop = FALSE]
+    if (!nrow(s)) return(NULL)
+    data.frame(item = s$item,
+               vars = vapply(s$term, function(t)
+                 paste(.term_vars(t), collapse = "+"), ""),
+               eta2 = pmax(ifelse(s$uniform_DIF, s$eta2_uniform, 0),
+                           ifelse(s$nonuniform_DIF, s$eta2_nonuniform, 0)),
+               stringsAsFactors = FALSE)
   }
   # the original item a (possibly resolved) column belongs to
   base_of <- function(nm) sub(" \\(.*$", "", nm)

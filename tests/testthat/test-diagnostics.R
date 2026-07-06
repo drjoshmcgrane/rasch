@@ -39,12 +39,14 @@ test_that("uniform DIF is detected on planted items only, across two factors", {
 
   fit <- rasch(data.frame(X, group = grp, sex = sex), factors = c("group", "sex"),
                n_groups = 6)
-  dif <- dif_anova(fit)
-  expect_setequal(unique(dif$factor), c("group", "sex"))
-  dg <- dif[dif$factor == "group", ]
-  expect_true(dg$uniform_DIF[3]); expect_true(dg$uniform_DIF[10])
-  expect_equal(sum(dg$uniform_DIF[-c(3, 10)]), 0)
-  expect_equal(sum(dif$uniform_DIF[dif$factor == "sex"]), 0)
+  # the joint main-effects model gives one row per item and factor term
+  s <- dif_anova(fit)$summary
+  expect_setequal(unique(s$term), c("group", "sex"))
+  dg <- s[s$term == "group", ]
+  expect_true(dg$uniform_DIF[dg$item == "G03"])
+  expect_true(dg$uniform_DIF[dg$item == "G10"])
+  expect_equal(sum(dg$uniform_DIF[!dg$item %in% c("G03", "G10")]), 0)
+  expect_equal(sum(s$uniform_DIF[s$term == "sex"]), 0)
 })
 
 test_that("threshold disordering is detected", {

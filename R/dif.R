@@ -4,12 +4,12 @@
 # Andrich 2017). For each item, residuals are analysed by person factor and
 # trait class interval: a factor main effect indicates uniform DIF and a
 # factor-by-interval interaction indicates non-uniform DIF. With several
-# person factors the analysis can be run factor-at-a-time (dif_anova) or as
-# one factorial model per item (dif_anova_factorial) with factor-by-factor
-# interactions, Tukey HSD comparisons on the significant group terms, and
-# the convention that a significant interaction supersedes the main effects
-# of the factors involved. Multiplicity across items is handled by
-# Benjamini-Hochberg false-discovery-rate adjustment.
+# person factors they are modelled jointly by dif_anova (main effects by
+# default, factor-by-factor interactions optional), with Tukey HSD
+# comparisons on the significant group terms and the convention that a
+# significant interaction supersedes the main effects of the factors
+# involved. Multiplicity across items is handled by Benjamini-Hochberg
+# false-discovery-rate adjustment.
 # ===========================================================================
 
 .dif_factors <- function(fit, factors) {
@@ -41,51 +41,6 @@
   factor(ci)
 }
 
-# F, p and Sum Sq of a term, searched across the strata of a multi-stratum
-# aov summary (a within-subjects / mixed design)
-.aov_term <- function(sm, term) {
-  for (st in sm) {
-    tab <- st[[1L]]; rn <- trimws(rownames(tab))
-    if (term %in% rn)
-      return(c(F = tab[rn == term, "F value"], p = tab[rn == term, "Pr(>F)"],
-               ss = tab[rn == term, "Sum Sq"]))
-  }
-  c(F = NA_real_, p = NA_real_, ss = NA_real_)
-}
-.aov_resid_ss <- function(sm) {   # residual SS of the innermost (within) stratum
-  tab <- sm[[length(sm)]][[1L]]; rn <- trimws(rownames(tab))
-  if ("Residuals" %in% rn) tab[rn == "Residuals", "Sum Sq"] else NA_real_
-}
-
-# Within-subjects residual DIF for one within factor: a repeated-measures
-# (split-plot) analysis of variance with the person as the error stratum.
-# The class interval is taken at the person level so it is a clean
-# between-person (whole-plot) factor; the factor varies within person, so
-# its main effect (uniform DIF) and its interaction with the class interval
-# (non-uniform DIF) are tested against the within-person error.
-.dif_within <- function(z, g, ci, id) {
-  ok <- stats::complete.cases(z, g, ci, id)
-  z <- z[ok]; g <- droplevels(factor(g[ok])); ci <- droplevels(factor(ci[ok]))
-  id <- droplevels(factor(id[ok]))
-  if (nlevels(g) < 2L || length(z) < 10L) return(NULL)
-  single_ci <- nlevels(ci) < 2L
-  form <- if (single_ci) z ~ g + Error(id / g) else
-    z ~ ci * g + Error(id / g)
-  sm <- tryCatch(summary(stats::aov(form)), error = function(e) NULL)
-  if (is.null(sm)) return(NULL)
-  u <- .aov_term(sm, "g")
-  nu <- if (single_ci) c(F = NA_real_, p = NA_real_, ss = NA_real_) else
-    .aov_term(sm, "ci:g")
-  cl <- if (single_ci) c(F = NA_real_, p = NA_real_, ss = NA_real_) else
-    .aov_term(sm, "ci")
-  rss <- .aov_resid_ss(sm)
-  peta <- function(x) if (is.na(x["ss"]) || is.na(rss)) NA_real_ else
-    unname(x["ss"] / (x["ss"] + rss))
-  list(uniform = u[c("F", "p")], nonuniform = nu[c("F", "p")],
-       class = cl[c("F", "p")],
-       eta2_uniform = peta(u), eta2_nonuniform = peta(nu))
-}
-
 # Person-level class intervals for a within-subjects analysis: each person
 # gets one interval from their mean location, so the interval is a clean
 # whole-plot factor. Returned aligned to the rows of the fit.
@@ -95,156 +50,6 @@
   pex <- tapply(ex, id, function(v) all(v, na.rm = TRUE))
   pci <- .class_intervals(as.numeric(pth), as.logical(pex), n_groups)
   factor(pci[match(as.character(id), names(pth))])
-}
-
-#' Differential item functioning by two-way residual ANOVA
-#'
-#' For each item and each person factor separately, analyses the
-#' standardised residuals by factor group and trait class interval. The
-#' group main effect indicates uniform DIF and the group-by-interval
-#' interaction indicates non-uniform DIF. Probabilities are adjusted across
-#' items within each factor by the Benjamini-Hochberg false-discovery-rate
-#' procedure (or any \code{\link[stats]{p.adjust}} method). With several
-#' factors, consider \code{\link{dif_anova_factorial}}, which models them
-#' jointly.
-#'
-#' @param fit A fitted object from \code{\link{rasch}}.
-#' @param factors A vector (one factor), a data frame of person factors, or a
-#'   character vector naming factor columns already nominated in the fit (via
-#'   \code{rasch(..., factors = )}). Defaults to every factor stored in the
-#'   fit.
-#' @param n_groups Number of trait class intervals. By default set per
-#'   factor from the smallest group so every interval-by-group cell keeps
-#'   about 30 expected responses (between 2 and 10 intervals) --
-#'   independently of the interval count of the overall fit, whose rule
-#'   guards intervals, not cells. The counts used are returned as the
-#'   \code{n_groups} attribute.
-#' @param p_adjust Multiplicity adjustment method passed to
-#'   \code{\link[stats]{p.adjust}}; \code{"BH"} (default) controls the false
-#'   discovery rate, \code{"holm"} or \code{"bonferroni"} the familywise
-#'   error rate.
-#' @param alpha Significance level applied to the adjusted probabilities.
-#' @param id Optional person identifier (a vector, or the name of a
-#'   nominated factor) for stacked repeated-measures designs. A factor whose
-#'   levels vary within a person is treated as within-subject and tested
-#'   with a repeated-measures (split-plot) analysis of variance -- the class
-#'   interval taken at the person level, the factor against the within-person
-#'   error -- so the dependence the between-subjects F ignores is respected.
-#'   Defaults to the fit's own person identifier, so a stacked design is
-#'   handled automatically.
-#' @param within Optional names of factors to treat as within-subject;
-#'   auto-detected from \code{id} when not given.
-#' @return A data frame per item and factor with the full two-way table
-#'   (Andrich and Marais 2019, ch. 16): the group main effect (uniform
-#'   DIF), the
-#'   group-by-interval interaction (non-uniform DIF), and the
-#'   class-interval main effect, each with its F statistic; raw and
-#'   adjusted probabilities and flags for the two DIF terms; and partial
-#'   eta-squared effect sizes (\code{eta2_uniform}, \code{eta2_nonuniform}),
-#'   the proportion of residual-plus-effect variance the term accounts for;
-#'   and a \code{within} indicator per factor. Factors treated as
-#'   within-subject are named in the \code{within} attribute. For DIF
-#'   magnitude on the logit scale, where practical significance is judged,
-#'   see \code{\link{dif_size}}.
-#' @examples
-#' set.seed(1); n <- 600
-#' d <- seq(-2, 2, length.out = 8); g <- rep(c("a", "b"), each = n / 2)
-#' sh <- matrix(0, n, 8); sh[g == "b", 3] <- 1
-#' X <- matrix(rbinom(n * 8, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 8)
-#' colnames(X) <- paste0("I", 1:8)
-#' dif_anova(rasch(X), factors = data.frame(group = g))
-#' @export
-dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
-                      alpha = 0.05, id = NULL, within = NULL) {
-  Z <- fit$residuals; L <- ncol(Z)
-  factors <- .dif_factors(fit, factors)
-
-  # person identifier for repeated-measures designs: a within-subject factor
-  # (the same person seen at several of its levels, as with occasion or
-  # time) breaks the independence the between-subjects F assumes, so it is
-  # tested against a person-blocked error stratum instead (a split plot:
-  # persons carry the class interval between, the factor varies within).
-  if (is.character(id) && length(id) == 1L && !is.null(fit$factors) &&
-      id %in% names(fit$factors)) id <- fit$factors[[id]]
-  if (is.null(id) && !is.null(fit$person$id)) id <- as.character(fit$person$id)
-  if (is.null(within) && !is.null(id) && anyDuplicated(id)) {
-    within <- names(factors)[vapply(names(factors), function(fn)
-      any(tapply(as.character(factors[[fn]]), id,
-                 function(v) length(unique(v)) > 1L)), TRUE)]
-  }
-  if (is.null(within)) within <- character(0)
-  within <- intersect(within, names(factors))
-
-  res <- list(); ng_used <- integer(0); within_used <- character(0)
-  for (fname in names(factors)) {
-    grp <- factor(factors[[fname]])
-    is_within <- fname %in% within
-    if (is_within) within_used <- c(within_used, fname)
-    ng_f <- if (is.null(n_groups)) .dif_n_groups(fit, grp) else n_groups
-    ng_used[fname] <- ng_f
-    # between-subjects analyses stratify on the fit's own class intervals; a
-    # within-subjects factor needs a person-level interval (one per person)
-    # so the interval is a clean whole-plot factor in the repeated-measures
-    # analysis of variance
-    ci <- if (is_within) .dif_person_ci(fit, id, ng_f) else
-      .dif_class_intervals(fit, ng_f)
-    out <- data.frame(factor = fname, item = colnames(Z),
-                      F_uniform = NA_real_, p_uniform = NA_real_,
-                      eta2_uniform = NA_real_,
-                      F_nonuniform = NA_real_, p_nonuniform = NA_real_,
-                      eta2_nonuniform = NA_real_,
-                      F_class = NA_real_, p_class = NA_real_,
-                      within = is_within)
-    for (i in seq_len(L)) {
-      d <- data.frame(z = Z[, i], g = grp, ci = ci)
-      if (is_within) d$id <- factor(id)
-      d <- d[stats::complete.cases(d), ]
-      if (nrow(d) < 10 || length(unique(d$g)) < 2) next
-      if (is_within) {
-        # within-subjects factor: a repeated-measures (split-plot) analysis
-        # of variance with the person as the error stratum, so the uniform
-        # and non-uniform terms are tested against the within-person error
-        cl <- .dif_within(d$z, d$g, d$ci, d$id)
-        if (is.null(cl)) next
-        out$F_uniform[i] <- cl$uniform["F"]; out$p_uniform[i] <- cl$uniform["p"]
-        out$eta2_uniform[i] <- cl$eta2_uniform
-        out$F_nonuniform[i] <- cl$nonuniform["F"]
-        out$p_nonuniform[i] <- cl$nonuniform["p"]
-        out$eta2_nonuniform[i] <- cl$eta2_nonuniform
-        out$F_class[i] <- cl$class["F"]; out$p_class[i] <- cl$class["p"]
-      } else {
-        a <- tryCatch(stats::anova(stats::lm(z ~ g * ci, data = d)),
-                      error = function(e) NULL)
-        if (is.null(a)) next
-        rn <- rownames(a)
-        ss_res <- if ("Residuals" %in% rn) a["Residuals", "Sum Sq"] else NA_real_
-        peta <- function(term) a[term, "Sum Sq"] / (a[term, "Sum Sq"] + ss_res)
-        if ("g" %in% rn) {
-          out$F_uniform[i] <- a["g", "F value"]; out$p_uniform[i] <- a["g", "Pr(>F)"]
-          out$eta2_uniform[i] <- peta("g")
-        }
-        if ("g:ci" %in% rn) {
-          out$F_nonuniform[i] <- a["g:ci", "F value"]
-          out$p_nonuniform[i] <- a["g:ci", "Pr(>F)"]
-          out$eta2_nonuniform[i] <- peta("g:ci")
-        }
-        if ("ci" %in% rn) {
-          out$F_class[i] <- a["ci", "F value"]; out$p_class[i] <- a["ci", "Pr(>F)"]
-        }
-      }
-    }
-    out$p_uniform_adj <- p.adjust(out$p_uniform, method = p_adjust)
-    out$p_nonuniform_adj <- p.adjust(out$p_nonuniform, method = p_adjust)
-    out$uniform_DIF <- !is.na(out$p_uniform_adj) & out$p_uniform_adj < alpha
-    out$nonuniform_DIF <- !is.na(out$p_nonuniform_adj) &
-      out$p_nonuniform_adj < alpha
-    res[[fname]] <- out
-  }
-  out <- do.call(rbind, res)
-  rownames(out) <- NULL
-  attr(out, "n_groups") <- ng_used
-  attr(out, "within") <- within_used
-  out
 }
 
 # variables of an ANOVA term label, e.g. "g1:ci" -> c("g1", "ci")
@@ -272,47 +77,47 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
   do.call(rbind, rows)
 }
 
-#' Factorial DIF analysis with Tukey comparisons
+#' Differential item functioning by residual analysis of variance
 #'
-#' Models all nominated person factors jointly: for each item the
-#' standardised residuals are analysed by the full factorial of the person
-#' factors crossed with the trait class interval,
-#' \code{z ~ (f1 * f2 * ...) * ci}. Terms not involving the class interval
-#' are uniform DIF effects (main effects and factor-by-factor interactions);
-#' terms involving it are non-uniform. Probabilities are adjusted across
-#' items within each term (Benjamini-Hochberg by default). A significant
-#' interaction supersedes the main effects (and lower-order interactions) of
-#' the factors it involves, which is recorded in the \code{superseded}
-#' column; interpret the highest-order significant terms. Tukey HSD
-#' comparisons are returned for every significant, non-superseded group term
-#' (the cell-mean contrasts for interactions), with Tukey's own familywise
-#' adjustment within each term.
+#' For each item the standardised residuals are analysed by the nominated
+#' person factor(s) crossed with the trait class interval. A term not
+#' involving the class interval is uniform DIF; a term crossing it is
+#' non-uniform DIF (Hagquist and Marais 2019, ch. 16). With one factor this
+#' is a one-way analysis, \code{z ~ g * ci}. With several factors they are
+#' modelled jointly -- the statistically correct treatment, rather than one
+#' factor at a time -- with main effects by default
+#' (\code{z ~ (f1 + f2 + ...) * ci}); set \code{effects = "factorial"} to add
+#' the factor-by-factor interactions (\code{z ~ (f1 * f2 * ...) * ci}). When
+#' interactions are fitted, a significant one supersedes the lower-order
+#' terms built from its variables, recorded in the \code{superseded} column;
+#' interpret the highest-order significant terms.
 #'
-#' Sums of squares are sequential (factors in the order given, class
-#' interval last), as is conventional for this residual diagnostic; with
-#' markedly unbalanced groups the term order matters and the factor-at-a-time
-#' \code{\link{dif_anova}} is a useful cross-check.
+#' Probabilities are adjusted across items within each term
+#' (Benjamini-Hochberg by default). Tukey HSD comparisons are returned for
+#' each significant, non-superseded group term. Sums of squares are
+#' sequential (factors in the order given, class interval last).
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
-#' @param factors As in \code{\link{dif_anova}}; at least one factor, usually
-#'   two or more.
+#' @param factors A vector (one factor), a data frame of person factors, or a
+#'   character vector naming factor columns nominated in the fit. Defaults to
+#'   every factor stored in the fit.
 #' @param n_groups Number of trait class intervals. By default set from
 #'   the smallest factor-combination cell so every interval-by-cell count
 #'   keeps about 30 expected responses (between 2 and 10 intervals); the
-#'   value used is returned as \code{n_groups}.
+#'   value used is returned in \code{n_groups}.
 #' @param p_adjust Multiplicity adjustment across items within each term;
 #'   default \code{"BH"}.
 #' @param alpha Significance level applied to the adjusted probabilities.
-#' @param effects \code{"factorial"} (default) crosses every person factor
-#'   with every other and with the class interval; \code{"main"} fits the
-#'   factors additively (each factor's main effect and its interaction with
-#'   the class interval, but no factor-by-factor terms).
+#' @param effects \code{"main"} (default) models several factors additively
+#'   (each factor's main effect and its class-interval interaction, but no
+#'   factor-by-factor terms); \code{"factorial"} also crosses the factors
+#'   with each other. Immaterial with a single factor.
 #' @param id,within Person identifier and within-subject factor names for
-#'   stacked repeated-measures designs, as in \code{\link{dif_anova}}. When
-#'   any factor is within-subject the model becomes a mixed (split-plot)
-#'   analysis of variance -- the class interval taken at the person level,
-#'   the within factors carrying a person error stratum -- so their terms
-#'   are tested validly. Auto-detected from the fit's person identifier.
+#'   stacked repeated-measures designs. When any factor is within-subject the
+#'   model becomes a mixed (split-plot) analysis of variance -- the class
+#'   interval taken at the person level, the within factors carrying a person
+#'   error stratum -- so their terms are tested validly. Auto-detected from
+#'   the fit's person identifier.
 #' @param sizes Also compute DIF magnitudes in logits (\code{\link{dif_size}})
 #'   for every significant, non-superseded group term: the item is resolved
 #'   by the term's levels (interaction terms by their cells) and all
@@ -345,11 +150,11 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL, p_adjust = "BH",
 #' X <- matrix(rbinom(n * 6, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 6)
 #' colnames(X) <- paste0("I", 1:6)
 #' fit <- rasch(data.frame(X, g1 = g1, g2 = g2), factors = c("g1", "g2"))
-#' dif_anova_factorial(fit)$terms
+#' dif_anova(fit)$summary
 #' @export
-dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
+dif_anova <- function(fit, factors = NULL, n_groups = NULL,
                                 p_adjust = "BH", alpha = 0.05,
-                                effects = c("factorial", "main"),
+                                effects = c("main", "factorial"),
                                 sizes = FALSE, id = NULL, within = NULL) {
   effects <- match.arg(effects)
   Z <- fit$residuals; L <- ncol(Z)
@@ -520,10 +325,34 @@ dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
   rownames(summary_tab) <- NULL
 
   out <- list(summary = summary_tab, terms = terms, tukey = tukey,
-              n_groups = n_groups, within = within,
+              n_groups = n_groups, within = within, effects = effects,
               alpha = alpha, p_adjust = p_adjust)
   if (isTRUE(sizes)) out$sizes <- size_tab
+  class(out) <- "rmt_dif"
   out
+}
+
+#' @export
+print.rmt_dif <- function(x, ...) {
+  s <- x$summary
+  nf <- length(unique(vapply(s$term, function(t)
+    .term_vars(t)[1], "")))
+  cat(sprintf("DIF by residual analysis of variance (%s; %d class intervals%s)\n",
+              if (length(unique(s$term)) > length(unique(s$item)) ||
+                  x$effects == "factorial")
+                sprintf("%d terms, %s effects", length(unique(s$term)),
+                        x$effects) else "one-way",
+              x$n_groups[1],
+              if (length(x$within))
+                sprintf("; within-subject: %s", paste(x$within, collapse = ", "))
+              else ""))
+  show <- s[, c("item", "term", "F_uniform", "p_uniform_adj", "uniform_DIF",
+                "F_nonuniform", "p_nonuniform_adj", "nonuniform_DIF")]
+  print(.fmt_df(show), row.names = FALSE)
+  cat(sprintf("%d uniform, %d non-uniform DIF flag(s) after %s adjustment.\n",
+              sum(s$uniform_DIF, na.rm = TRUE),
+              sum(s$nonuniform_DIF, na.rm = TRUE), x$p_adjust))
+  invisible(x)
 }
 
 #' DIF magnitude in logits with pairwise comparisons
@@ -545,7 +374,7 @@ dif_anova_factorial <- function(fit, factors = NULL, n_groups = NULL,
 #'
 #' For an interaction, supply several factor names: levels are then the
 #' factor-combination cells, which is the post-hoc follow-up to a
-#' significant factor-by-factor term in \code{\link{dif_anova_factorial}}.
+#' significant factor-by-factor term in \code{\link{dif_anova}}.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param item Item name or index.

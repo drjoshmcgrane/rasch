@@ -32,7 +32,6 @@ reference:
 - title: Invariance and DIF
   contents:
   - dif_anova
-  - dif_anova_factorial
   - dif_contrasts
   - dif_size
   - split_items
