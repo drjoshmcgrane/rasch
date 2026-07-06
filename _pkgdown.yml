@@ -36,6 +36,7 @@ reference:
   - dif_contrasts
   - dif_size
   - split_items
+  - resolve_dif
   - equate_tests
   - tailored_analysis
 - title: Independence and dimensionality
