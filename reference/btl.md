@@ -1,0 +1,176 @@
+# Fit the Bradley-Terry-Luce model to paired comparisons
+
+Estimates object locations from paired-comparison data by conditional
+maximum likelihood. The Bradley-Terry-Luce model is the conditional form
+of the dichotomous Rasch model – within an item pair, given one correct
+response, the Rasch probability that it was the easier item is exactly
+of BTL form – so it belongs to the same measurement family and is
+estimated by the same conventions as the rest of the package:
+Newton-Raphson on the person-free likelihood, locations identified by
+the sum-zero constraint, and Godambe sandwich standard errors, clustered
+by judge when a judge column is given (so repeated comparisons by the
+same judge need not be independent). Objects that win or lose every
+comparison have no finite estimate and are removed with a note, exactly
+as extreme persons are set aside in a Rasch calibration; the comparison
+graph must remain connected.
+
+## Usage
+
+``` r
+btl(
+  data,
+  object_a,
+  object_b,
+  winner = NULL,
+  response = NULL,
+  margin = NULL,
+  judge = NULL,
+  count = NULL,
+  order = NULL,
+  ties = c("drop", "half", "error"),
+  thresholds = c("free", "pc"),
+  maxit = 60,
+  tol = 1e-08
+)
+```
+
+## Arguments
+
+- data:
+
+  A data frame with one comparison per row.
+
+- object_a, object_b:
+
+  Names of the columns holding the two objects compared.
+
+- winner:
+
+  Name of the column holding the winner of each row: its value must
+  equal the row's `object_a` or `object_b` entry; `"tie"` or `"draw"`
+  marks a tie; anything else (including blanks) is treated as missing
+  and dropped with a note. Ignored when `response` is given.
+
+- response:
+
+  Optional name of a column holding a graded preference for `object_a`
+  over `object_b` – an ordered factor (worst to best for `object_a`) or
+  integer scores `0..m`. Fits the adjacent-categories ordinal extension
+  of BTL (Tutz 1986; Agresti 1992): a partial-credit structure on the
+  difference of locations with thresholds constrained symmetric,
+  `tau_k = -tau_(m+1-k)`, so the model is invariant to presentation
+  order. Two categories reproduce BTL exactly; three give the
+  Davidson (1970) ties model.
+
+- margin:
+
+  Optional name of a column holding the extent of the win ("a little",
+  "much", ...), as an ordered factor or increasing values; combined with
+  `winner` it assembles the graded response without any orientation
+  bookkeeping ("B by much" means the same thing whichever column B sits
+  in). Winner values matching neither object are ties and form the
+  middle category.
+
+- judge:
+
+  Optional name of a judge column; enables the judge fit table and
+  clusters the sandwich standard errors by judge.
+
+- count:
+
+  Optional name of a column of replication counts (a row standing for
+  several identical comparisons).
+
+- order:
+
+  Optional name of a column giving each judge's judgment sequence
+  (timestamps or ranks; requires `judge`). Adds the within-judge
+  dependence analysis: an exposure effect (the advantage, in logits, of
+  an object the judge has seen before over one they have not) and a
+  carry-over effect (the pull of the judge's own earlier verdicts on the
+  same object – response dependence in the sense of Marais and Andrich
+  2008), estimated jointly with the locations and reported in
+  `dependence`. Incompatible with `ties = "half"`.
+
+- ties:
+
+  How to treat ties in the dichotomous analysis: `"drop"` (default,
+  removed with a note), `"half"` (half a win each way, a common
+  pragmatic device – flagged in the notes because the halves are not
+  independent Bernoulli trials), or `"error"`. With graded responses,
+  code ties as a middle category instead.
+
+- thresholds:
+
+  `"free"` (default) estimates every symmetric threshold parameter;
+  `"pc"` pools them to the spread (linear) principal component – the
+  symmetric case of the principal-component threshold structure, whose
+  even skewness component is structurally zero here – so thinly used
+  categories borrow strength from every response. Both modes report the
+  component decomposition.
+
+- maxit, tol:
+
+  Newton-Raphson iteration cap and convergence tolerance.
+
+## Value
+
+A list of class `"rmt_btl"`: `objects` (location, se, comparisons, wins
+– or the graded `score` – outfit mean square, fit residual and its df),
+`pairs` (per pair: n, observed and expected win proportions – or mean
+graded responses – standardised residual, chi-square component),
+`judges` (when given: per judge n, outfit, fit residual, df),
+`total_chisq`, `total_df`, `total_p`, the object separation index `osi`,
+`loglik`, convergence details, and `notes`. Graded fits add `thresholds`
+(the symmetric threshold estimates with standard errors), `m`, and
+`categories`.
+
+## Details
+
+Fit is reported at three levels, mirroring the Rasch diagnostics. Per
+object and (when given) per judge: the log-of-mean-square fit residual
+of Andrich and Marais (2019, ch. 23) over their comparisons, with
+apportioned degrees of freedom – an erratic judge or an object of
+inconsistent quality shows exactly as an erratic person or misfitting
+item does. Per pair: the classical goodness-of-fit table comparing
+observed and expected win proportions, with the total chi-square on
+(pairs used) - (objects - 1) degrees of freedom. The object separation
+index is the analogue of the PSI: the proportion of observed location
+variance not due to error.
+
+## References
+
+Bradley, R. A. and Terry, M. E. (1952). Rank analysis of incomplete
+block designs: I. The method of paired comparisons. Biometrika, 39,
+324-345. Luce, R. D. (1959). Individual Choice Behavior. Wiley. Andrich,
+D. (1978). Relationships between the Thurstone and Rasch approaches to
+item scaling. Applied Psychological Measurement, 2, 451-462.
+
+Tutz, G. (1986). Bradley-Terry-Luce models with an ordered response.
+Journal of Mathematical Psychology, 30(3), 306-316. Agresti, A. (1992).
+Analysis of ordinal paired comparison data. Journal of the Royal
+Statistical Society C, 41(2), 287-297. Davidson, R. R. (1970). On
+extending the Bradley-Terry model to accommodate ties in paired
+comparison experiments. Journal of the American Statistical Association,
+65(329), 317-328.
+
+## Examples
+
+``` r
+set.seed(1)
+beta <- c(A = -1, B = -0.3, C = 0.4, D = 0.9)
+pairs <- t(combn(names(beta), 2))
+d <- data.frame(a = rep(pairs[, 1], each = 30),
+                b = rep(pairs[, 2], each = 30))
+p <- plogis(beta[d$a] - beta[d$b])
+d$win <- ifelse(runif(nrow(d)) < p, d$a, d$b)
+btl(d, object_a = "a", object_b = "b", winner = "win")
+#> Bradley-Terry-Luce analysis: 4 objects, 180 comparisons
+#> Conditional ML: converged in 6 iterations; sandwich SEs
+#> Object separation index 0.963; pairwise chi-square 1.07 on 3 df, p = 0.783
+#>  object location    se comparisons wins fit_resid
+#>       A   -1.238 0.214          90   16    -0.111
+#>       B   -0.354 0.186          90   36     0.526
+#>       C    0.448 0.180          90   56    -0.056
+#>       D    1.144 0.209          90   72     0.037
+```

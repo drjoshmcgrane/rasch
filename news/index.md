@@ -1,0 +1,80 @@
+# Changelog
+
+## rmt 1.0.0
+
+First stable release. The package delivers a complete Rasch Measurement
+Theory workflow built entirely from published measurement theory, with a
+pairwise conditional estimation core and a Shiny interface that exposes
+every analysis with reproducing R code attached to every output.
+
+### Models
+
+- [`rasch()`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md):
+  dichotomous and polytomous (partial credit and rating scale) Rasch
+  models by pairwise conditional maximum likelihood (Andrich & Luo 2003;
+  Zwinderman 1995), with Godambe sandwich standard errors, sum-zero
+  identification, Warm (1989) weighted likelihood person estimation, and
+  the principal-component threshold parameterisation as an estimation
+  option.
+- [`rasch_mfrm()`](https://drjoshmcgrane.github.io/rmt/reference/rasch_mfrm.md):
+  many-facet models with additive facet severities or item-by-facet
+  interactions, accepting wide (one column per item) or long data.
+- [`rasch_efrm()`](https://drjoshmcgrane.github.io/rmt/reference/rasch_efrm.md):
+  the extended frame-of-reference model (Humphry) with frame units
+  estimated by within-frame pairwise conditional likelihood.
+- [`btl()`](https://drjoshmcgrane.github.io/rmt/reference/btl.md):
+  paired comparisons as the conditional form of the dichotomous Rasch
+  model (Bradley & Terry 1952; Andrich 1978), including the
+  adjacent-categories graded extension (Tutz 1986; Agresti 1992) with
+  symmetric thresholds – the Davidson (1970) ties model is its
+  three-category case – winner-plus-margin data entry, judge-clustered
+  errors, and within-judge exposure and carry-over effects estimated
+  jointly with the locations.
+
+### Diagnostics
+
+- The test-of-fit suite follows Andrich & Marais (2019):
+  log-of-mean-square fit residuals with apportioned degrees of freedom,
+  the item-trait chi-square on automatically sized, tie-preserving class
+  intervals with per-interval detail, the ANOVA item fit, and person
+  fit.
+- Unidimensionality: residual principal components with parallel
+  analysis, the Smith (2002) subset t-test, and magnitude estimation.
+- Local dependence: Yen’s (1984) Q3 with the Christensen, Makransky &
+  Horton (2017) flagging convention, response-dependence magnitude
+  (Andrich & Kreiner), subtest formation, and the spread test.
+- Guessing: tailored analysis with origin-equated comparison
+  calibrations.
+- DIF: two-way residual ANOVA per factor, the joint factorial analysis
+  with a compact uniform/non-uniform summary, resolved DIF magnitudes in
+  logits with familywise control and a practical-significance criterion,
+  planned contrasts derived from the factor structure (with
+  repeated-measures support via person-level residual scores), and class
+  intervals sized to the cells each analysis actually uses. For paired
+  comparisons,
+  [`btl_dif()`](https://drjoshmcgrane.github.io/rmt/reference/btl_dif.md)
+  tests object-by-judge-group interaction by the same two routes.
+- Equating and invariance: common-item comparison with drift flags, and
+  calibration anchoring.
+
+### Display and reporting
+
+- A complete base-graphics plot suite: expected value curves with
+  observed class-interval means, category and threshold probability
+  curves, the person-item threshold distribution, Wright maps, kidmaps
+  (Wright, Mead & Ludlow 1980), object characteristic curves for paired
+  comparisons, threshold and item maps, test characteristic and
+  information curves, residual displays, and Guttman scalograms – all
+  with adjustable class intervals and scale ranges, and batch export to
+  multi-page PDF or ZIP at publication resolution.
+- [`fit_summary_table()`](https://drjoshmcgrane.github.io/rmt/reference/fit_summary_table.md)
+  and
+  [`targeting_table()`](https://drjoshmcgrane.github.io/rmt/reference/targeting_table.md)
+  return the headline statistics as tidy tables;
+  [`save_outputs()`](https://drjoshmcgrane.github.io/rmt/reference/save_outputs.md)
+  writes every table and plot to disk;
+  [`report_html()`](https://drjoshmcgrane.github.io/rmt/reference/report_html.md)
+  produces a single-file HTML report.
+- [`run_app()`](https://drjoshmcgrane.github.io/rmt/reference/run_app.md)
+  launches the Shiny interface: model-adaptive navigation, reproducing R
+  code beneath every output, and one-click export.
