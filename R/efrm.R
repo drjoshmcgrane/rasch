@@ -733,7 +733,7 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
     rows <- which(thr_items$item == i)
     data.frame(item = items_o[i], set = set_of[items_o[i]],
                location = mean(delta[rows]),
-               se = sqrt(mean(cov_delta[rows, rows, drop = FALSE])))
+               se = sqrt(max(mean(cov_delta[rows, rows, drop = FALSE]), 0)))
   }))
   rownames(fit$item_arbitrary) <- NULL
 

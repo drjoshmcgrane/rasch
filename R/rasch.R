@@ -291,7 +291,9 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
   loc <- vapply(tau_list, mean, 0)
   se_loc <- vapply(seq_len(L), function(i) {
     rows <- thr$id[thr$item == i]
-    sqrt(mean(est$cov_tau[rows, rows]))
+    # anchored items have a structurally zero variance that floating-point
+    # noise can render as a tiny negative number on some BLAS builds
+    sqrt(max(mean(est$cov_tau[rows, rows]), 0))
   }, 0)
   items_df <- data.frame(item = colnames(X), max = m, location = loc,
                          se = se_loc,

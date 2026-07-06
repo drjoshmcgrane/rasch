@@ -291,7 +291,7 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
       mean(delta[thr_items$item == i]), 0),
     se = vapply(seq_along(items_u), function(i) {
       rows <- which(thr_items$item == i)
-      sqrt(mean(cov_d[rows, rows]))
+      sqrt(max(mean(cov_d[rows, rows]), 0))
     }, 0),
     n = vapply(item_fit, `[[`, 0, "n"),
     infit_ms = vapply(item_fit, `[[`, 0, "infit_ms"),
