@@ -59,6 +59,8 @@ Pairwise conditional estimation of the Rasch model family.
   : DIF magnitude in logits with pairwise comparisons
 - [`split_items()`](https://drjoshmcgrane.github.io/rmt/reference/split_items.md)
   : Split items by a person factor to resolve DIF
+- [`resolve_dif()`](https://drjoshmcgrane.github.io/rmt/reference/resolve_dif.md)
+  : Resolve differential item functioning by iterative item splitting
 - [`equate_tests()`](https://drjoshmcgrane.github.io/rmt/reference/equate_tests.md)
   : Equate two test calibrations through their common items
 - [`tailored_analysis()`](https://drjoshmcgrane.github.io/rmt/reference/tailored_analysis.md)
