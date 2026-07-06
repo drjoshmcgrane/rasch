@@ -898,11 +898,14 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
         p(class = "text-muted small",
           "ANOVA of standardised residuals: factor effects = uniform DIF; factor x class-interval terms = non-uniform DIF. Probabilities are adjusted across items by the chosen method. With several factors, choose the factorial option to model them jointly: significant interactions supersede their main effects, and the pairwise comparisons resolve the levels of the selected term."),
         hr(),
-        conditionalPanel("input.dif_factor != '(all factors: factorial)'",
-          input_task_button("make_split", "Resolve: split this item by this factor",
-                            type = "primary", class = "w-100"),
-          p(class = "text-muted small mt-2",
-            "Replaces the selected item with one item per group level (each level keeps only its own responses) and re-analyses; the split locations quantify the DIF. Splitting works one factor at a time; choose a single factor above."))),
+        input_task_button("make_split", "Resolve the selected item",
+                          type = "primary", class = "w-100"),
+        p(class = "text-muted small mt-2",
+          "Splits the selected analysis-of-variance row's item into independent copies by that row's factor(s) and re-analyses (the override)."),
+        input_task_button("resolve_all", "Resolve all DIF automatically",
+                          type = "primary", class = "w-100 mt-2"),
+        p(class = "text-muted small mt-2",
+          "Splits DIF items one at a time, largest effect first, refitting until no item shows significant DIF or the anchor set would fall too low (Andrich & Hagquist 2012).")),
       accordion(id = "dif_acc", open = "dif_anova",
         accordion_panel("DIF analysis of variance", value = "dif_anova",
           layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
@@ -932,6 +935,17 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
                  uiOutput("dif_levels_note"),
                  DT::DTOutput("dif_size_tbl"),
                  rcode_details("dif_size_tbl")))),
+        # shown only after an automatic run: the trace of the splits that
+        # resolved the DIF (the resolved fit is the active override)
+        accordion_panel("Automatic resolution", value = "dif_resolve",
+          conditionalPanel("output.has_resolve == true",
+            card(
+              card_header_bar(
+                buttons = downloadButton("resolve_tbl_csv", "CSV",
+                                         class = "btn-outline-secondary btn-xs")),
+              card_body(fillable = FALSE,
+                uiOutput("resolve_summary"),
+                DT::DTOutput("resolve_tbl"))))),
         accordion_panel(
           title = span("Planned contrasts",
                        info_icon("Planned one-degree-of-freedom questions derived from the factor structure, tested with familywise control over the small planned family instead of all cell pairs (Maxwell & Delaney 2004). Estimates are DIF magnitudes in logits from resolved item locations. With a person ID and repeated rows, time-like factors are treated within-subjects via person-level residual scores.")),
@@ -2048,6 +2062,9 @@ server <- function(input, output, session) {
     # results computed on request belong to the fit they came from
     lr_res(NULL); dep_res(NULL); spread_res(NULL); dm_res(NULL); guess_res(NULL)
     contr_res(NULL); rescore_res(NULL)
+    # an automatic resolution sets the override fit itself, so its trace must
+    # survive its own refit; a fresh run or any other override clears it
+    if (!grepl("^auto-resolved", override_desc() %||% "")) resolve_res(NULL)
     # manual dimensionality subsets too: they name items of the previous fit
     dim_subsets(NULL)
   })
@@ -2073,21 +2090,69 @@ server <- function(input, output, session) {
   observeEvent(input$make_split, {
     f <- fit()
     it <- dif_sel_item()
+    vars <- dif_sel_vars()
     req(it %in% f$items$item,
-        !is.null(f$factors), input$dif_factor %in% names(f$factors))
-    res <- tryCatch(split_items(f, it, by = input$dif_factor),
-                    error = function(e) e)
+        !is.null(f$factors), length(vars) >= 1, all(vars %in% names(f$factors)))
+    # one factor -> split by the factor name; an interaction row -> split by
+    # the factor-combination cells, so both uniform and non-uniform DIF resolve
+    by <- if (length(vars) == 1L) vars
+          else interaction(f$factors[vars], sep = ":", drop = TRUE)
+    res <- tryCatch(split_items(f, it, by = by), error = function(e) e)
+    lab <- paste(vars, collapse = ":")
     if (inherits(res, "error")) {
       showNotification(paste("Split failed:", conditionMessage(res)), type = "error")
     } else {
       override_fit(res)
-      override_desc(sprintf("split: item %s by %s", it, input$dif_factor))
+      override_desc(sprintf("split: item %s by %s", it, lab))
       showNotification(
         sprintf("Re-analysed with %s split by %s. Reset the override (Data page) or run again to return to the base fit.",
-                it, input$dif_factor),
+                it, lab),
         type = "message", duration = 8)
     }
   })
+
+  # automatic iterative DIF resolution: split the largest-effect item, refit,
+  # repeat until no item flags DIF (or the anchor set would fall too low). The
+  # resolved fit becomes the active override; the trace is kept for the panel.
+  resolve_res <- reactiveVal(NULL)
+  observeEvent(input$resolve_all, {
+    rr <- tryCatch(
+      resolve_dif(fit(), factors = names(fit()$factors), alpha = dif_alpha(),
+                  p_adjust = input$dif_padj %||% "BH"),
+      error = function(e) e)
+    if (inherits(rr, "error")) {
+      showNotification(paste("Automatic resolution failed:", conditionMessage(rr)),
+                       type = "error")
+    } else {
+      resolve_res(rr)
+      override_fit(rr$fit)
+      override_desc(sprintf("auto-resolved DIF: %d split(s)", rr$n_splits))
+      showNotification(
+        sprintf("Automatic DIF resolution: %d split(s); %s. Reset the override (Data page) or run again to return to the base fit.",
+                rr$n_splits, rr$stopped),
+        type = "message", duration = 8)
+    }
+  })
+  output$has_resolve <- reactive(!is.null(resolve_res()))
+  outputOptions(output, "has_resolve", suspendWhenHidden = FALSE)
+  output$resolve_summary <- renderUI({
+    rr <- resolve_res(); req(!is.null(rr))
+    p(class = "text-muted small mb-2",
+      sprintf("%d split(s); %s; %d item(s) still flag DIF.",
+              rr$n_splits, rr$stopped, rr$n_remaining_dif))
+  })
+  output$resolve_tbl <- DT::renderDT({
+    rr <- resolve_res(); req(!is.null(rr))
+    d <- rr$splits
+    if (nrow(d)) { d$eta2 <- round(d$eta2, 3); d$magnitude <- round(d$magnitude, 3) }
+    num_dt(d)
+  })
+  output$resolve_tbl_csv <- downloadHandler(
+    filename = function() "dif_resolution.csv",
+    content = function(file) {
+      rr <- resolve_res(); req(!is.null(rr))
+      write.csv(rr$splits, file, row.names = FALSE)
+    })
 
   sel_item <- reactive({
     f <- fit()
@@ -2908,13 +2973,15 @@ server <- function(input, output, session) {
       fr <- dif_fact()
       d <- fr$terms
       sup <- sum(d$superseded, na.rm = TRUE)
-      sprintf("Note. %d of %d terms significant after adjustment%s. Class intervals: %d, set from the smallest factor-combination cell (about 30 responses per interval-by-cell count).",
+      within <- fr$within
+      base <- sprintf("Note. %d of %d terms significant after adjustment%s. Class intervals: %d, set from the smallest factor-combination cell (about 30 responses per interval-by-cell count).",
               sum(d$significant, na.rm = TRUE), nrow(d),
               if (sup) sprintf(" (%d superseded by an interaction)", sup)
               else "", fr$n_groups %||% NA_integer_)
     } else {
       d <- dif_res()
       ng <- attr(d, "n_groups")
+      within <- attr(d, "within")
       parts <- vapply(split(d, d$factor), function(g)
         sprintf("%s: %d uniform, %d non-uniform", g$factor[1],
                 sum(g$uniform_DIF, na.rm = TRUE),
@@ -2923,9 +2990,15 @@ server <- function(input, output, session) {
         sprintf(" Class intervals per factor: %s (set from each factor's smallest group).",
                 paste(names(ng), ng, sep = " = ", collapse = ", "))
       else ""
-      paste0("Note. Items flagged per factor - ",
+      base <- paste0("Note. Items flagged per factor - ",
              paste(parts, collapse = "; "), ".", ci_txt)
     }
+    within <- within[!is.na(within)]
+    if (length(within))
+      base <- paste0(base,
+        sprintf(" Within-subject factor(s) tested by repeated-measures ANOVA: %s.",
+                paste(within, collapse = ", ")))
+    base
   })
   # the items of the DIF summary in the ROW ORDER of the table actually
   # rendered (single-factor mode filters dif_res by the chosen factor; curate
