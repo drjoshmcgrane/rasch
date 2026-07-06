@@ -176,8 +176,6 @@ NONE <- "(none)"
 # is always displayed as "None"; selects with no meaningful pre-fit choice
 # use empty choices plus a selectize placeholder instead of a sentinel row
 NONE_CH <- c(None = "(none)")
-# defined here (not mid-server) because observers created early reference it
-FACTORIAL <- "(all factors: factorial)"
 
 # null-coalescing helper: defined here so the app does not depend on the
 # base R version that introduced it (R >= 4.4)
@@ -882,12 +880,10 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
     conditionalPanel("output.is_btl != true",
     layout_sidebar(
       sidebar = sidebar(width = 280, open = "always",
-        selectizeInput("dif_factor", "Person factor", NULL,
-                       options = list(placeholder = "run an analysis first")),
-        conditionalPanel("input.dif_factor == '(all factors: factorial)'",
+        conditionalPanel("output.dif_multifactor == true",
           radioButtons("dif_effects", "Model",
-                       c("Full factorial" = "factorial",
-                         "Main effects only" = "main"))),
+                       c("Main effects" = "main",
+                         "With interactions" = "factorial"))),
         numericInput("dif_alpha", "Significance level (alpha)", value = 0.05,
                      min = 0.001, max = 0.5, step = 0.01),
         selectInput("dif_padj", "Multiplicity adjustment",
@@ -896,7 +892,7 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
                       "Bonferroni" = "bonferroni",
                       "None" = "none")),
         p(class = "text-muted small",
-          "ANOVA of standardised residuals: factor effects = uniform DIF; factor x class-interval terms = non-uniform DIF. Probabilities are adjusted across items by the chosen method. With several factors, choose the factorial option to model them jointly: significant interactions supersede their main effects, and the pairwise comparisons resolve the levels of the selected term."),
+          "ANOVA of standardised residuals: a factor effect is uniform DIF, a factor-by-class-interval term is non-uniform DIF. One factor is analysed one-way; several are modelled jointly with main effects by default. Adding interactions lets a significant interaction supersede its main effects. Click a row to see its characteristic curves by group and, below, the pairwise comparisons that resolve that term."),
         hr(),
         input_task_button("make_split", "Resolve the selected item",
                           type = "primary", class = "w-100"),
@@ -2030,10 +2026,6 @@ server <- function(input, output, session) {
     its <- fit()$items$item
     updateSelectizeInput(session, "subtest_items", choices = its, selected = character(0))
     fac <- names(fit()$factors)
-    dif_choices <- if (length(fac)) c(fac, FACTORIAL) else character(0)
-    updateSelectizeInput(session, "dif_factor", choices = dif_choices,
-                         selected = if (length(dif_choices)) dif_choices[1]
-                                    else character(0))
     updateSelectizeInput(session, "pc_items", choices = its,
                          selected = character(0))
     updateSelectInput(session, "pc_id", choices = c("None" = "", fac),
@@ -2226,8 +2218,6 @@ server <- function(input, output, session) {
     items = c("item", "location", "se", "fit_resid", "infit_ms", "outfit_ms",
               "chisq", "df", "p_adj"),
     person = c("id", "raw", "max_raw", "theta", "se", "extreme", "fit_resid"),
-    dif = c("factor", "item", "F_uniform", "p_uniform_adj", "eta2_uniform",
-            "F_nonuniform", "p_nonuniform_adj", "eta2_nonuniform"),
     dif_fact = c("item", "term", "F_uniform", "p_uniform_adj", "eta2_uniform",
                  "F_nonuniform", "p_nonuniform_adj", "eta2_nonuniform"),
     facet = c("level", "severity", "se", "n", "fit_resid"),
@@ -2898,122 +2888,70 @@ server <- function(input, output, session) {
                 code = function() "plot_guttman(fit)")
 
   # ------------------------------------------------------------------ DIF --
-  # (the FACTORIAL constant is defined at the top of the file: observers
-  # created before this section reference it)
   dif_alpha <- reactive(clamp01(input$dif_alpha, 0.05))
+  # the Model toggle (main effects vs interactions) is immaterial with a
+  # single nominated factor, where the model is always the one-way ANOVA
+  dif_multi <- reactive(!is.null(fit()$factors) &&
+                          length(names(fit()$factors)) > 1)
+  output$dif_multifactor <- reactive(dif_multi())
+  outputOptions(output, "dif_multifactor", suspendWhenHidden = FALSE)
+  # one merged reactive: one factor -> one-way ANOVA (one row per item); several
+  # factors -> joint model, main effects by default or factor-by-factor
+  # interactions when requested (effects is ignored with a single factor)
   dif_res <- reactive({
-    f <- fit(); req(!is.null(f$factors), length(names(f$factors)) > 0)
-    dif_anova(f, p_adjust = input$dif_padj %||% "BH", alpha = dif_alpha())
+    f <- fit(); req(!is.null(f$factors))
+    dif_anova(f, effects = input$dif_effects %||% "main",
+              p_adjust = input$dif_padj %||% "BH", alpha = dif_alpha())
   })
-  dif_fact <- reactive({
-    f <- fit(); req(!is.null(f$factors), length(names(f$factors)) >= 1)
-    dif_anova_factorial(f, p_adjust = input$dif_padj %||% "BH",
-                        alpha = dif_alpha(),
-                        effects = input$dif_effects %||% "factorial")
-  })
-  register_table("dif_tbl", function() {
-    if (identical(input$dif_factor, FACTORIAL)) dif_fact()$summary else dif_res()
-  }, function() {
-    if (identical(input$dif_factor, FACTORIAL)) {
-      d <- curate(dif_fact()$summary, "dif_fact",
-                  full = isTRUE(input$dif_full))
-      if ("superseded" %in% names(d))
-        d$superseded <- ifelse(d$superseded, "(superseded)", "")
-      dt <- num_dt(d, selection = "single")
-    } else {
-      d <- dif_res()
-      if (!is.null(input$dif_factor) && input$dif_factor %in% d$factor)
-        d <- d[d$factor == input$dif_factor, ]
-      d <- curate(d, "dif", full = isTRUE(input$dif_full))
-      dt <- num_dt(d, selection = "single")
-    }
+  # code footer: omit the effects argument when there is only one factor
+  dif_effects_arg <- function()
+    if (dif_multi()) sprintf('effects = "%s", ', input$dif_effects %||% "main")
+    else ""
+  register_table("dif_tbl", function() dif_res()$summary, function() {
+    d <- curate(dif_res()$summary, "dif_fact", full = isTRUE(input$dif_full))
+    if ("superseded" %in% names(d))
+      d$superseded <- ifelse(d$superseded, "(superseded)", "")
+    dt <- num_dt(d, selection = "single")
     # no boolean DIF flag columns: the adjusted probability turns red when it
     # crosses alpha (uniform = factor effect, non-uniform = factor x interval)
     dt <- style_lo_red(dt, d, "p_uniform_adj", dif_alpha())
     style_lo_red(dt, d, "p_nonuniform_adj", dif_alpha())
-  }, code = function() {
-    if (identical(input$dif_factor, FACTORIAL))
-      sprintf('dif_anova_factorial(fit, effects = "%s", p_adjust = "%s", alpha = %s)$summary',
-              input$dif_effects %||% "factorial", input$dif_padj %||% "BH",
-              dif_alpha())
-    else
-      sprintf('dif_anova(fit, p_adjust = "%s", alpha = %s)',
-              input$dif_padj %||% "BH", dif_alpha())
-  })
-  # full per-item ANOVA table, computed lazily when its disclosure is first
-  # switched on (the DT renders only once visible): factorial -> the joint
-  # model's terms; single-factor mode -> one factorial fit per nominated
-  # factor, stacked with a factor column
-  dif_full_dat <- reactive({
-    f <- fit()
-    if (identical(input$dif_factor, FACTORIAL)) return(dif_fact()$terms)
-    req(!is.null(f$factors), length(names(f$factors)) > 0)
-    do.call(rbind, lapply(names(f$factors), function(fc)
-      cbind(factor = fc,
-            dif_anova_factorial(f, factors = fc,
-                                p_adjust = input$dif_padj %||% "BH",
-                                alpha = dif_alpha())$terms)))
-  })
-  register_table("dif_full_tbl", function() dif_full_dat(), function() {
-    d <- dif_full_dat()
+  }, code = function()
+    sprintf('dif_anova(fit, %sp_adjust = "%s", alpha = %s)$summary',
+            dif_effects_arg(), input$dif_padj %||% "BH", dif_alpha()))
+  # full per-item ANOVA table: every model term, computed lazily when its
+  # disclosure is first switched on (the DT renders only once visible)
+  register_table("dif_full_tbl", function() dif_res()$terms, function() {
+    d <- dif_res()$terms
     d$significant <- NULL                     # red adjusted p replaces the flag
     d$superseded <- ifelse(d$superseded, "(superseded)", "")
     style_lo_red(num_dt(d), d, "p_adj", dif_alpha())
-  }, code = function() {
-    if (identical(input$dif_factor, FACTORIAL))
-      sprintf('dif_anova_factorial(fit, effects = "%s", p_adjust = "%s", alpha = %s)$terms',
-              input$dif_effects %||% "factorial", input$dif_padj %||% "BH",
-              dif_alpha())
-    else
-      sprintf('do.call(rbind, lapply(names(fit$factors), function(f)\n  cbind(factor = f,\n        dif_anova_factorial(fit, factors = f, p_adjust = "%s", alpha = %s)$terms)))',
-              input$dif_padj %||% "BH", dif_alpha())
-  })
+  }, code = function()
+    sprintf('dif_anova(fit, %sp_adjust = "%s", alpha = %s)$terms',
+            dif_effects_arg(), input$dif_padj %||% "BH", dif_alpha()))
   output$dif_note <- renderUI({
-    if (identical(input$dif_factor, FACTORIAL)) {
-      fr <- dif_fact()
-      d <- fr$terms
+    r <- dif_res(); d <- r$summary
+    sig <- sum(d$uniform_DIF | d$nonuniform_DIF, na.rm = TRUE)
+    base <- sprintf("Note. %d of %d terms significant after adjustment. Class intervals: %s (from the smallest cell).",
+                    sig, nrow(d),
+                    if (is.null(r$n_groups)) "NA" else r$n_groups)
+    if (identical(r$effects, "factorial")) {
       sup <- sum(d$superseded, na.rm = TRUE)
-      within <- fr$within
-      base <- sprintf("Note. %d of %d terms significant after adjustment%s. Class intervals: %d, set from the smallest factor-combination cell (about 30 responses per interval-by-cell count).",
-              sum(d$significant, na.rm = TRUE), nrow(d),
-              if (sup) sprintf(" (%d superseded by an interaction)", sup)
-              else "", fr$n_groups %||% NA_integer_)
-    } else {
-      d <- dif_res()
-      ng <- attr(d, "n_groups")
-      within <- attr(d, "within")
-      parts <- vapply(split(d, d$factor), function(g)
-        sprintf("%s: %d uniform, %d non-uniform", g$factor[1],
-                sum(g$uniform_DIF, na.rm = TRUE),
-                sum(g$nonuniform_DIF, na.rm = TRUE)), "")
-      ci_txt <- if (!is.null(ng))
-        sprintf(" Class intervals per factor: %s (set from each factor's smallest group).",
-                paste(names(ng), ng, sep = " = ", collapse = ", "))
-      else ""
-      base <- paste0("Note. Items flagged per factor - ",
-             paste(parts, collapse = "; "), ".", ci_txt)
+      if (sup)
+        base <- paste0(base,
+          sprintf(" %d main-effect term(s) superseded by an interaction.", sup))
     }
-    within <- within[!is.na(within)]
+    within <- r$within[!is.na(r$within)]
     if (length(within))
       base <- paste0(base,
         sprintf(" Within-subject factor(s) tested by repeated-measures ANOVA: %s.",
                 paste(within, collapse = ", ")))
     base
   })
-  # the items of the DIF summary in the ROW ORDER of the table actually
-  # rendered (single-factor mode filters dif_res by the chosen factor; curate
-  # only drops columns, so the row order is preserved). The selected row drives
-  # the group-ICC and the pairwise-comparisons panel; nothing selected defaults
-  # to the top row.
-  dif_tbl_items <- reactive({
-    if (identical(input$dif_factor, FACTORIAL)) dif_fact()$summary$item
-    else {
-      d <- dif_res()
-      if (!is.null(input$dif_factor) && input$dif_factor %in% d$factor)
-        d <- d[d$factor == input$dif_factor, ]
-      d$item
-    }
-  })
+  # the items of the DIF summary in rendered row order (curate only drops
+  # columns, so the order is preserved). The selected row drives the group-ICC
+  # and the pairwise-comparisons panel; nothing selected defaults to the top row.
+  dif_tbl_items <- reactive(dif_res()$summary$item)
   # the item and term of the currently selected summary row (top row by
   # default); the term's factor variables (":"-separated for interactions)
   # feed dif_size and the group-ICC
@@ -3027,27 +2965,18 @@ server <- function(input, output, session) {
     its <- dif_tbl_items(); req(length(its) >= 1); its[dif_sel_row()]
   })
   dif_sel_term <- reactive({
-    if (identical(input$dif_factor, FACTORIAL)) {
-      tm <- dif_fact()$summary$term; req(length(tm) >= 1); tm[dif_sel_row()]
-    } else { req(nzchar(input$dif_factor %||% "")); input$dif_factor }
+    tm <- dif_res()$summary$term; req(length(tm) >= 1); tm[dif_sel_row()]
   })
   dif_sel_vars <- reactive(strsplit(dif_sel_term(), ":", fixed = TRUE)[[1]])
-  # in factorial mode the graphical display uses the factor-combination
-  # cells; plot_icc accepts several factor names for exactly this
-  dif_icc_group <- function(f) {
-    if (identical(input$dif_factor, FACTORIAL)) names(f$factors)
-    else { req(input$dif_factor %in% names(f$factors)); input$dif_factor }
-  }
+  # the group-ICC uses the selected term's factor(s); plot_icc accepts several
+  # factor names, so an interaction row overlays the factor-combination cells
   register_plot("dif_icc", function() {
     f <- fit()
     req(dif_sel_item() %in% f$items$item, !is.null(f$factors))
-    plot_icc(f, dif_sel_item(), group = dif_icc_group(f))
-  }, code = function() {
-    g <- if (identical(input$dif_factor, FACTORIAL))
-      paste0('c("', paste(names(fit()$factors), collapse = '", "'), '")')
-    else sprintf('"%s"', input$dif_factor %||% "")
-    sprintf('plot_icc(fit, "%s", group = %s)', dif_sel_item() %||% "", g)
-  })
+    plot_icc(f, dif_sel_item(), group = dif_sel_vars())
+  }, code = function()
+    sprintf('plot_icc(fit, "%s", group = %s)', dif_sel_item() %||% "",
+            qvec(dif_sel_vars())))
 
   # Pairwise comparisons for the selected DIF row: the row's item resolved by
   # the row's term (interaction terms resolve by their cells), giving the
