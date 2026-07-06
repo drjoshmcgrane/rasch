@@ -19,6 +19,15 @@ residual analysis of variance over multiple person factors. Includes a
 modern Shiny interface (\code{\link{run_app}}) and a one-call exporter
 (\code{\link{save_outputs}}).
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://drjoshmcgrane.github.io/rmt/}
+  \item \url{https://github.com/drjoshmcgrane/rmt}
+  \item Report bugs at \url{https://github.com/drjoshmcgrane/rmt/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Josh McGrane \email{drjoshmcgrane@gmail.com}
 

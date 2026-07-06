@@ -274,7 +274,7 @@ css <- HTML("
   .form-label { font-weight: 600; font-size: .85rem; }
   /* APA-style tables: tabular numerals, no vertical rules, no zebra,
      a strong rule under the header row */
-  table.dataTable { font-size: .85rem; }
+  table.dataTable { font-size: .85rem; width: auto !important; max-width: 100%; }
   table.dataTable td { font-variant-numeric: tabular-nums; }
   table.dataTable thead th {
     font-weight: 600;
@@ -2545,8 +2545,7 @@ server <- function(input, output, session) {
   # any chi-square sample-size adjustment is applied inside the fit (the
   # adjust_N run control), so the table shows the fit's own statistics
   register_table("items_tbl", function() fit()$items, function() {
-    d <- curate(fit()$items, "items", full = isTRUE(input$items_full),
-                extra = if (length(unique(fit()$m)) > 1) "max")
+    d <- curate(fit()$items, "items", full = isTRUE(input$items_full))
     dt <- num_dt(d, page_len = 25, selection = "single",
                  fit_col = "fit_resid", p_bold = c("p_adj", "p_anova"))
     # per-statistic misfit highlighting (no single flag column): adjusted

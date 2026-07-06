@@ -11,7 +11,7 @@ ctt_table(fit)
 }
 \value{
 A list of class \code{"rmt_ctt"}: the per-item \code{table}
-  (\code{item}, \code{n}, \code{facility}, \code{item_total},
+  (\code{item}, \code{max}, \code{n}, \code{facility}, \code{item_total},
   \code{item_rest}, \code{di}, \code{alpha_drop}), and the scalars
   \code{alpha}, \code{n} (complete cases), \code{mean}, \code{sd}, and
   \code{sem}.
