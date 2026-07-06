@@ -61,9 +61,11 @@ dif_anova(
   Optional person identifier (a vector, or the name of a nominated
   factor) for stacked repeated-measures designs. A factor whose levels
   vary within a person is treated as within-subject and tested with a
-  person-clustered sandwich, so the within-person dependence the
-  between-subjects F ignores is respected. Defaults to the fit's own
-  person identifier, so a stacked design is handled automatically.
+  repeated-measures (split-plot) analysis of variance – the class
+  interval taken at the person level, the factor against the
+  within-person error – so the dependence the between-subjects F ignores
+  is respected. Defaults to the fit's own person identifier, so a
+  stacked design is handled automatically.
 
 - within:
 

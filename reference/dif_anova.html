@@ -21,7 +21,7 @@ jointly."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">rmt</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -110,9 +110,11 @@ error rate.</p></dd>
 <dd><p>Optional person identifier (a vector, or the name of a
 nominated factor) for stacked repeated-measures designs. A factor whose
 levels vary within a person is treated as within-subject and tested
-with a person-clustered sandwich, so the within-person dependence the
-between-subjects F ignores is respected. Defaults to the fit's own
-person identifier, so a stacked design is handled automatically.</p></dd>
+with a repeated-measures (split-plot) analysis of variance – the class
+interval taken at the person level, the factor against the within-person
+error – so the dependence the between-subjects F ignores is respected.
+Defaults to the fit's own person identifier, so a stacked design is
+handled automatically.</p></dd>
 
 
 <dt id="arg-within">within<a class="anchor" aria-label="anchor" href="#arg-within"></a></dt>

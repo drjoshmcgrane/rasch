@@ -31,7 +31,7 @@ adjustment within each term."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">rmt</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -82,7 +82,9 @@ adjustment within each term.</p>
 <span>  p_adjust <span class="op">=</span> <span class="st">"BH"</span>,</span>
 <span>  alpha <span class="op">=</span> <span class="fl">0.05</span>,</span>
 <span>  effects <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"factorial"</span>, <span class="st">"main"</span><span class="op">)</span>,</span>
-<span>  sizes <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  sizes <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  within <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -129,6 +131,15 @@ by the term's levels (interaction terms by their cells) and all
 pairwise location differences are returned with Holm familywise
 adjustment and the practical-significance flag. Each size involves a
 re-analysis, so this costs one refit per flagged item-term.</p></dd>
+
+
+<dt id="arg-id-within">id, within<a class="anchor" aria-label="anchor" href="#arg-id-within"></a></dt>
+<dd><p>Person identifier and within-subject factor names for
+stacked repeated-measures designs, as in <code><a href="dif_anova.html">dif_anova</a></code>. When
+any factor is within-subject the model becomes a mixed (split-plot)
+analysis of variance – the class interval taken at the person level,
+the within factors carrying a person error stratum – so their terms
+are tested validly. Auto-detected from the fit's person identifier.</p></dd>
 
 </dl></div>
     <div class="section level2">
