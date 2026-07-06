@@ -815,24 +815,24 @@ panel_persons <- nav_panel("Persons", value = "p_persons", icon = bs_icon("peopl
     # Rasch fits (hidden while a paired-comparison fit is active)
     conditionalPanel("output.is_btl != true",
     uiOutput("persons_vboxes"),
-    tableCard("person_tbl", "Person estimates",
-        controls = cols_switch("persons_full"),
-              "Warm WLE location and SE per person, with raw score, fit statistics, and your ID and factor columns. Click a row to draw that person's kidmap below."),
-    accordion(id = "persons_acc", open = "persons_kidmap", class = "mt-3",
-      accordion_panel("Kidmap", value = "persons_kidmap",
-        plotCard("kidmap",
-          info = "The person diagnostic map (Wright, Mead & Ludlow 1980): thresholds the person achieved print to the right of the logit axis, thresholds not achieved to the left; the dashed line inside its confidence band is the person location. Achieved thresholds above the band and unachieved thresholds below it are unexpected responses.",
-          controls = div(class = "d-flex align-items-center gap-1 me-1",
-            span(class = "small text-secondary", "Confidence"),
-            div(class = "rmt-inline-select",
-                selectInput("kid_level", NULL,
-                            c("90%" = "0.9", "95%" = "0.95", "99%" = "0.99"),
-                            selected = "0.95", width = "85px"))),
-          extra = tagList(
-            downloadButton("kidmap_all_pdf", "PDF (all persons)",
-                           class = "btn-outline-secondary btn-xs"),
-            downloadButton("kidmap_all_zip", "ZIP (all persons)",
-                           class = "btn-outline-secondary btn-xs")))),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+      tableCard("person_tbl", "Person estimates",
+          controls = cols_switch("persons_full"),
+                "Warm WLE location and SE per person, with raw score, fit statistics, and your ID and factor columns. Click a row to draw that person's kidmap on the right."),
+      plotCard("kidmap", "Kidmap",
+        info = "The person diagnostic map (Wright, Mead & Ludlow 1980): thresholds the person achieved print to the right of the logit axis, thresholds not achieved to the left; the dashed line inside its confidence band is the person location. Achieved thresholds above the band and unachieved thresholds below it are unexpected responses.",
+        controls = div(class = "d-flex align-items-center gap-1 me-1",
+          span(class = "small text-secondary", "Confidence"),
+          div(class = "rmt-inline-select",
+              selectInput("kid_level", NULL,
+                          c("90%" = "0.9", "95%" = "0.95", "99%" = "0.99"),
+                          selected = "0.95", width = "85px"))),
+        extra = tagList(
+          downloadButton("kidmap_all_pdf", "PDF (all persons)",
+                         class = "btn-outline-secondary btn-xs"),
+          downloadButton("kidmap_all_zip", "ZIP (all persons)",
+                         class = "btn-outline-secondary btn-xs")))),
+    accordion(id = "persons_acc", open = "persons_pfit", class = "mt-3",
       accordion_panel("Person fit", value = "persons_pfit",
         plotCard("pfit")),
       accordion_panel("Fit residual distribution", value = "persons_rdist",
@@ -907,10 +907,13 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
             "Replaces the selected item with one item per group level (each level keeps only its own responses) and re-analyses; the split locations quantify the DIF. Splitting works one factor at a time; choose a single factor above."))),
       accordion(id = "dif_acc", open = "dif_anova",
         accordion_panel("DIF analysis of variance", value = "dif_anova",
-          tableCard("dif_tbl",
-            controls = cols_switch("dif_full"),
-                    info = "ANOVA of standardised residuals: a significant factor effect indicates uniform DIF, a significant factor-by-class-interval interaction indicates non-uniform DIF (Andrich & Marais 2019).",
-                    footer = uiOutput("dif_note"))),
+          layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+            tableCard("dif_tbl",
+              controls = cols_switch("dif_full"),
+                      info = "ANOVA of standardised residuals: a significant factor effect indicates uniform DIF, a significant factor-by-class-interval interaction indicates non-uniform DIF (Andrich & Marais 2019). Click a row to draw that item's characteristic curves by group on the right.",
+                      footer = uiOutput("dif_note")),
+            plotCard("dif_icc", "Characteristic curves by group",
+              info = "The item characteristic curve drawn separately for each level of the person factor (in factorial mode, each factor-combination cell), with the observed class-interval means overlaid: the graphical display of DIF for the item selected in the table."))),
         # collapsed by default: the DT output suspends while hidden, so the
         # per-item terms table is only computed when the panel is first opened
         accordion_panel("Full ANOVA table", value = "dif_full_panel",
@@ -971,9 +974,7 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
                       note = "Pairwise level comparisons for significant, non-superseded group terms (factorial mode).")),
           conditionalPanel("output.dif_is_factorial != true",
             p(class = "text-muted",
-              "Choose the factorial option in the sidebar to see Tukey HSD comparisons."))),
-        accordion_panel("Characteristic curves by group", value = "dif_icc_panel",
-          plotCard("dif_icc")))
+              "Choose the factorial option in the sidebar to see Tukey HSD comparisons."))))
     )),
     # paired-comparison (BTL) fits: differential object functioning by
     # judge group (Bradley-Terry counterpart of the person-factor analysis)
@@ -2863,7 +2864,7 @@ server <- function(input, output, session) {
       d$nonuniform_DIF <- ifelse(d$nonuniform_DIF, "*", "")
       if ("superseded" %in% names(d))
         d$superseded <- ifelse(d$superseded, "(superseded)", "")
-      num_dt(d)
+      num_dt(d, selection = "single")
     } else {
       d <- dif_res()
       if (!is.null(input$dif_factor) && input$dif_factor %in% d$factor)
@@ -2871,7 +2872,7 @@ server <- function(input, output, session) {
       d <- curate(d, "dif", full = isTRUE(input$dif_full))
       d$uniform_DIF <- ifelse(d$uniform_DIF, "*", "")
       d$nonuniform_DIF <- ifelse(d$nonuniform_DIF, "*", "")
-      num_dt(d)
+      num_dt(d, selection = "single")
     }
   }, code = function() {
     if (identical(input$dif_factor, FACTORIAL))
@@ -2945,6 +2946,27 @@ server <- function(input, output, session) {
                        options = list(dom = "t")))
     num_dt(tk)
   }, code = function() "dif_anova_factorial(fit)$tukey")
+  # clicking a row of the DIF summary points the group-ICC (and the split /
+  # magnitude tools) at that item: the items in the ROW ORDER of the table
+  # actually rendered (single-factor mode filters dif_res by the chosen
+  # factor; curate only drops columns, so the row order is preserved), then
+  # sync the sidebar item selector so it stays a live fallback
+  dif_tbl_items <- reactive({
+    if (identical(input$dif_factor, FACTORIAL)) dif_fact()$summary$item
+    else {
+      d <- dif_res()
+      if (!is.null(input$dif_factor) && input$dif_factor %in% d$factor)
+        d <- d[d$factor == input$dif_factor, ]
+      d$item
+    }
+  })
+  observeEvent(input$dif_tbl_rows_selected, {
+    its <- dif_tbl_items()
+    r <- input$dif_tbl_rows_selected[1]
+    if (length(r) && !is.na(r) && r <= length(its) &&
+        !identical(input$dif_item, its[r]))
+      updateSelectizeInput(session, "dif_item", selected = its[r])
+  })
   # in factorial mode the graphical display uses the factor-combination
   # cells; plot_icc accepts several factor names for exactly this
   dif_icc_group <- function(f) {
