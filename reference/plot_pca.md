@@ -1,12 +1,13 @@
 # Plot residual principal-component loadings
 
-First-contrast loadings against item location; opposing clusters at top
-and bottom suggest a second dimension.
+Residual-component loadings against item location; opposing clusters at
+top and bottom suggest a further dimension. Any leading component may be
+shown, not only the first contrast.
 
 ## Usage
 
 ``` r
-plot_pca(fit)
+plot_pca(fit, component = 1)
 ```
 
 ## Arguments
@@ -15,6 +16,11 @@ plot_pca(fit)
 
   A fitted object from
   [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+
+- component:
+
+  Which residual principal component to plot (default the first
+  contrast).
 
 ## Value
 

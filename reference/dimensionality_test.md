@@ -2,10 +2,11 @@
 
 Estimates each person separately on two item subsets and compares the
 two estimates with a per-person t-test (Smith 2002). By default the
-subsets are defined by the sign of the first residual-contrast loading;
-they can also be nominated manually (for example, by content). Under
-unidimensionality and local independence the two subset estimates are
-independent given the person location, so
+subsets are defined by the sign of a residual-contrast loading (the
+first by default; any leading component may be chosen); they can also be
+nominated manually (for example, by content). Under unidimensionality
+and local independence the two subset estimates are independent given
+the person location, so
 `t = (theta_A - theta_B) / sqrt(se_A^2 + se_B^2)` is approximately
 standard normal and about `alpha` of the tests should reach
 significance. Persons with an extreme score on either subset are
@@ -21,7 +22,8 @@ dimensionality_test(
   fit,
   alpha = 0.05,
   items_positive = NULL,
-  items_negative = NULL
+  items_negative = NULL,
+  component = 1
 )
 ```
 
@@ -39,8 +41,13 @@ dimensionality_test(
 - items_positive, items_negative:
 
   Optional character vectors naming the two item subsets; both must be
-  given (disjoint, at least two items each), otherwise the first
-  residual contrast defines the split.
+  given (disjoint, at least two items each), otherwise the sign of a
+  residual component defines the split.
+
+- component:
+
+  Which residual principal component's loading sign defines the default
+  split (ignored when subsets are named). Default the first contrast.
 
 ## Value
 
