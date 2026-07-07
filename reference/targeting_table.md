@@ -46,10 +46,11 @@ targeting_table(rasch(X))
 #> 13  Persons below threshold range (%)   13.3
 #> 14  Persons above threshold range (%)    2.7
 #> 15                                PSI  0.371
-#> 16                         Separation  0.769
-#> 17               PSI without extremes  0.140
-#> 18                 n without extremes    281
-#> 19              Item separation index  0.991
-#> 20                  Coefficient alpha  0.470
-#> 21                 n complete (alpha)    300
+#> 16                         Separation   0.77
+#> 17                      Person strata    1.4
+#> 18               PSI without extremes  0.140
+#> 19                 n without extremes    281
+#> 20        Item separation reliability  0.991
+#> 21                  Coefficient alpha  0.470
+#> 22                 n complete (alpha)    300
 ```
