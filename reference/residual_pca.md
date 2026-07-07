@@ -1,9 +1,9 @@
 # Principal components of the residual correlations
 
-The first residual contrast (PC1) carries any second dimension; items
+The first residual component (PC1) carries any second dimension; items
 with opposing loadings define the split used by the unidimensionality
 t-test. Loadings for the leading components and the eigenvalue table
-support inspection beyond the first contrast.
+support inspection beyond the first component.
 
 ## Usage
 
@@ -26,7 +26,7 @@ residual_pca(fit, n_components = 10)
 ## Value
 
 A list with the residual `eigenvalues`, their `prop`ortions, the
-first-contrast `loadings` (sorted), the `loadings_matrix` for the
+first-component `loadings` (sorted), the `loadings_matrix` for the
 leading components, the `eigen_table` (component, eigenvalue,
 proportion, cumulative), and the `first_eigen`value.
 

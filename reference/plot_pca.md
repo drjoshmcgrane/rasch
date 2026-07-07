@@ -2,7 +2,7 @@
 
 Residual-component loadings against item location; opposing clusters at
 top and bottom suggest a further dimension. Any leading component may be
-shown, not only the first contrast.
+shown, not only the first.
 
 ## Usage
 
@@ -20,7 +20,7 @@ plot_pca(fit, component = 1)
 - component:
 
   Which residual principal component to plot (default the first
-  contrast).
+  component).
 
 ## Value
 

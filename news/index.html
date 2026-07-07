@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rmt</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,11 +33,12 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="1.1.0" id="rmt-110">rmt 1.1.0<a class="anchor" aria-label="anchor" href="#rmt-110"></a></h2>
-<ul><li>
-<code><a href="../reference/dif_anova.html">dif_anova()</a></code> is now the single DIF analysis-of-variance function. One factor is analysed one-way; several factors are modelled jointly – the statistically correct treatment – with main effects by default and factor-by-factor interactions optional (<code>effects = "factorial"</code>). It handles within-subject factors (repeated-measures / mixed ANOVA) and returns a classed object with a <code>summary</code>, the full <code>terms</code> table, and Tukey comparisons. The separate <code>dif_anova_factorial()</code> is removed.</li>
-<li>
-<code><a href="../reference/resolve_dif.html">resolve_dif()</a></code> resolves DIF iteratively by item splitting, largest effect first, to clear artificial DIF.</li>
+<h2 class="pkg-version" data-toc-text="1.2.0" id="rmt-120">rmt 1.2.0<a class="anchor" aria-label="anchor" href="#rmt-120"></a></h2>
+<ul><li><p><code><a href="../reference/plot_pca_biplot.html">plot_pca_biplot()</a></code> draws the item loadings on the first two residual principal components – the pair that usually carries any interpretable contrast – on equal axes, coloured by the sign of the PC1 loading.</p></li>
+<li><p><code><a href="../reference/residual_correlations.html">residual_correlations()</a></code> now also returns the adjusted-Q3 <code>star_matrix</code> (each Q3 less the average off-diagonal), and <code><a href="../reference/plot_resid_cor.html">plot_resid_cor()</a></code> gains a <code>stat</code> argument to colour either the raw Q3 or the adjusted Q3*, drawing the lower triangle only.</p></li>
+<li><p>Shiny app: the trait- and local-dependence pages pair each table with its plot (loadings with a PC1-PC2 biplot; Q3 and Q3* matrices with heatmaps), the raw and adjusted correlations are each flagged by their own rule (|Q3| and Q3*), and every data-restructuring action (subtest, item split, automatic DIF resolution) offers an in-place reset to the original data.</p></li>
+<li><p><code><a href="../reference/dif_anova.html">dif_anova()</a></code> is now the single DIF analysis-of-variance function. One factor is analysed one-way; several factors are modelled jointly – the statistically correct treatment – with main effects by default and factor-by-factor interactions optional (<code>effects = "factorial"</code>). It handles within-subject factors (repeated-measures / mixed ANOVA) and returns a classed object with a <code>summary</code>, the full <code>terms</code> table, and Tukey comparisons. The separate <code>dif_anova_factorial()</code> is removed.</p></li>
+<li><p><code><a href="../reference/resolve_dif.html">resolve_dif()</a></code> resolves DIF iteratively by item splitting, largest effect first, to clear artificial DIF.</p></li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.0.0" id="rmt-100">rmt 1.0.0<a class="anchor" aria-label="anchor" href="#rmt-100"></a></h2>

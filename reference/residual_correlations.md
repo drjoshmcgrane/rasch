@@ -28,9 +28,10 @@ residual_correlations(fit, flag = 0.2)
 
 ## Value
 
-A list with the Q3 `matrix`, the `average` off-diagonal value, `pairs`
-(every item pair with `q3`, `q3_star` and a `flagged` indicator, sorted
-by `q3`), and the subset of `flagged` pairs.
+A list with the Q3 `matrix`, the adjusted-Q3 `star_matrix` (each Q3 less
+the average off-diagonal value, diagonal empty), the `average`
+off-diagonal value, `pairs` (every item pair with `q3`, `q3_star` and a
+`flagged` indicator, sorted by `q3`), and the subset of `flagged` pairs.
 
 ## References
 

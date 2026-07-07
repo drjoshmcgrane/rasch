@@ -615,6 +615,8 @@ Pairwise conditional estimation of the Rasch model family.
   : Plot a kidmap
 - [`plot_pca()`](https://drjoshmcgrane.github.io/rmt/reference/plot_pca.md)
   : Plot residual principal-component loadings
+- [`plot_pca_biplot()`](https://drjoshmcgrane.github.io/rmt/reference/plot_pca_biplot.md)
+  : Biplot of the first two residual components
 - [`plot_pcc()`](https://drjoshmcgrane.github.io/rmt/reference/plot_pcc.md)
   : Plot a person characteristic curve
 - [`plot_person_fit()`](https://drjoshmcgrane.github.io/rmt/reference/plot_person_fit.md)
