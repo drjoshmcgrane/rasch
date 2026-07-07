@@ -10,7 +10,7 @@ plot_pca(fit, component = 1)
 \item{fit}{A fitted object from \code{\link{rasch}}.}
 
 \item{component}{Which residual principal component to plot (default the
-first contrast).}
+first component).}
 }
 \value{
 Called for its plotting side effect; invisibly \code{NULL}.
@@ -18,7 +18,7 @@ Called for its plotting side effect; invisibly \code{NULL}.
 \description{
 Residual-component loadings against item location; opposing clusters at top
 and bottom suggest a further dimension. Any leading component may be shown,
-not only the first contrast.
+not only the first.
 }
 \examples{
 set.seed(1)

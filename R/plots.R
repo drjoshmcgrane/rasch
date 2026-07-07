@@ -552,19 +552,21 @@ plot_person_fit <- function(fit, band = 2.5) {
 # ---------------------------------------------------------------------------
 #' Plot the residual-correlation heatmap
 #'
-#' Cells are coloured by Q3* -- each pair's residual correlation minus the
-#' average off-diagonal correlation -- so white marks the value expected
-#' under local independence and warm colour marks dependence. The scale
-#' saturates at a Q3* of \code{cap} rather than the +/-1 of an ordinary
-#' correlation: a residual correlation seldom reaches even 0.5 under a
-#' fitting model, and the conventional flag (Q3* above 0.2; Christensen,
-#' Makransky and Horton 2017, marked on the key) sits well within the
-#' range, so the colour is spent where the values actually discriminate.
+#' Only the lower triangle is drawn -- the matrix is symmetric, so each pair
+#' is shown once. With \code{stat = "q3star"} (the default) cells are coloured
+#' by Q3* -- each pair's residual correlation minus the average off-diagonal
+#' correlation -- so white marks the value expected under local independence
+#' and warm colour marks dependence; with \code{stat = "q3"} the raw residual
+#' correlation is coloured, white at zero. The scale saturates at \code{cap}
+#' rather than the +/-1 of an ordinary correlation: a residual correlation
+#' seldom reaches even 0.5 under a fitting model (the conventional flag is Q3*
+#' above 0.2; Christensen, Makransky and Horton 2017), so the colour is spent
+#' where the values actually discriminate.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
-#' @param cap Q3* value at which the colour saturates (default 0.5).
-#' @param flag Q3* value marked on the key as the dependence flag
-#'   (default 0.2).
+#' @param stat Which statistic to colour: \code{"q3star"} (adjusted Q3, the
+#'   default) or \code{"q3"} (the raw residual correlation).
+#' @param cap Value at which the colour saturates (default 0.5).
 #' @return Called for its plotting side effect; invisibly \code{NULL}.
 #' @examples
 #' set.seed(1)
@@ -573,41 +575,45 @@ plot_person_fit <- function(fit, band = 2.5) {
 #' colnames(X) <- paste0("I", 1:6)
 #' plot_resid_cor(rasch(X))
 #' @export
-plot_resid_cor <- function(fit, cap = 0.5, flag = 0.2) {
+plot_resid_cor <- function(fit, stat = c("q3star", "q3"), cap = 0.5) {
+  stat <- match.arg(stat)
   rc <- residual_correlations(fit)
   R <- rc$matrix; L <- ncol(R); avg <- rc$average
-  # colour by Q3* = Q3 - average off-diagonal correlation, so white marks the
-  # independence baseline and colour tracks the dependence signal itself
-  S <- R - avg
-  diag(S) <- NA   # self-correlations carry no dependence information
+  # Q3* colours the excess over the average off-diagonal correlation, so white
+  # marks the local-independence baseline and warm colour marks dependence;
+  # Q3 colours the raw residual correlation, white at zero. Only the lower
+  # triangle is drawn -- the matrix is symmetric, so each pair is read once.
+  star <- stat == "q3star"
+  S <- if (star) R - avg else R
+  diag(S) <- NA                    # self-correlations carry no dependence
+  # keep the visual lower-left triangle once image() flips the rows, so the
+  # heatmap matches the lower-triangular table beside it
+  S[lower.tri(S)] <- NA
+  lab <- if (star) "Q3*" else "Q3"
   pal <- colorRampPalette(c("#1d4ed8", "#93c5fd", "#f8fafc",
                             "#f59e0b", "#dc2626"))(128)
   Sc <- pmax(pmin(S, cap), -cap)             # saturate at +/- cap
-  op <- par(mar = c(5.5, 5.5, 3.6, 5.5), las = 1, col.axis = .rr$ink,
+  op <- par(mar = c(5.5, 5.5, 1.6, 6.4), las = 1, col.axis = .rr$ink,
             col.main = .rr$ink, font.main = 2, cex.main = 1.15)
   on.exit(par(op))
   image(1:L, 1:L, Sc[, L:1, drop = FALSE], col = pal, zlim = c(-cap, cap),
         axes = FALSE, xlab = "", ylab = "", main = "")
-  title(main = "Residual correlations (Q3)", adj = 0, line = 2.3)
-  mtext(bquote("colour = Q3* (Q3 above the average " *
-               .(sprintf("%.2f", avg)) * "); flag at +" *
-               .(sprintf("%.2f", flag))),
-        side = 3, line = 0.8, adj = 0, cex = 0.75, col = .rr$soft)
   cx <- if (L > 25) 0.5 else if (L > 15) 0.62 else 0.75
   axis(1, 1:L, colnames(R), las = 2, cex.axis = cx, col = NA, col.ticks = NA)
   axis(2, 1:L, rev(colnames(R)), cex.axis = cx, col = NA, col.ticks = NA)
   abline(h = 0.5 + 0:L, v = 0.5 + 0:L, col = "white", lwd = 0.6)
-  # colour key on the right: scale ticks at -cap, 0, +cap; the flag marked
-  ky <- seq(0.15, 0.85, length.out = 129) * L
+  # colour key: the bar is titled by the statistic and captioned so its
+  # meaning stands on its own; ticks at -cap, 0, +cap
+  ky <- seq(0.12, 0.80, length.out = 129) * L
   rect(L + 1.1, ky[-129], L + 1.5, ky[-1], col = pal, border = NA, xpd = TRUE)
   yof <- function(v) (v + cap) / (2 * cap) * (max(ky) - min(ky)) + min(ky)
   for (v in c(-cap, 0, cap))
     text(L + 1.6, yof(v), sprintf("%+.1f", v), cex = 0.62, xpd = TRUE,
          adj = 0, col = .rr$ink)
-  segments(L + 1.05, yof(flag), L + 1.55, yof(flag), col = .rr$ink,
-           lwd = 1.4, xpd = TRUE)
-  text(L + 1.6, yof(flag), sprintf("flag %.1f", flag), cex = 0.58,
-       xpd = TRUE, adj = 0, col = .rr$ink, font = 3)
+  text(L + 1.05, max(ky) + 0.55, lab, cex = 0.78, xpd = TRUE, adj = 0,
+       col = .rr$ink, font = 2)
+  text(L + 1.62, yof(cap * 0.72), "more\ndependence", cex = 0.55, xpd = TRUE,
+       adj = 0, col = .rr$soft, font = 3)
   invisible(NULL)
 }
 
@@ -615,11 +621,11 @@ plot_resid_cor <- function(fit, cap = 0.5, flag = 0.2) {
 #'
 #' Residual-component loadings against item location; opposing clusters at top
 #' and bottom suggest a further dimension. Any leading component may be shown,
-#' not only the first contrast.
+#' not only the first.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param component Which residual principal component to plot (default the
-#'   first contrast).
+#'   first component).
 #' @return Called for its plotting side effect; invisibly \code{NULL}.
 #' @examples
 #' set.seed(1)
@@ -646,6 +652,52 @@ plot_pca <- function(fit, component = 1) {
   points(loc, ld, pch = 21, cex = 1.6,
          bg = ifelse(ld > 0, .rr$blue, .rr$amber), col = "white", lwd = 1.2)
   text(loc, ld, fit$items$item, pos = 3, offset = 0.45, cex = 0.7, col = .rr$soft)
+  invisible(NULL)
+}
+
+#' Biplot of the first two residual components
+#'
+#' Item loadings on the first two residual principal components -- the pair
+#' that usually carries any interpretable second dimension -- plotted against
+#' one another on equal (isometric) axes. Items far from the origin with
+#' opposing signs on PC1 mark a possible contrast, and PC2 separates them
+#' further. Point colour follows the sign of the PC1 loading, the split the
+#' unidimensionality t-test uses by default.
+#'
+#' @param fit A fitted object from \code{\link{rasch}}.
+#' @return Called for its plotting side effect; invisibly \code{NULL}.
+#' @examples
+#' set.seed(1)
+#' d <- seq(-2, 2, length.out = 8)
+#' X <- matrix(rbinom(500 * 8, 1, plogis(outer(rnorm(500), d, "-"))), 500, 8)
+#' colnames(X) <- paste0("I", 1:8)
+#' plot_pca_biplot(rasch(X))
+#' @export
+plot_pca_biplot <- function(fit) {
+  pc <- residual_pca(fit); lm <- pc$loadings_matrix
+  if (!all(c("PC1", "PC2") %in% names(lm))) {
+    op <- par(mar = c(0, 0, 0, 0)); on.exit(par(op)); plot.new()
+    text(0.5, 0.5, "At least two residual components are needed for a biplot.",
+         col = .rr$soft, cex = 0.9)
+    return(invisible(NULL))
+  }
+  x <- lm$PC1; y <- lm$PC2; items <- lm$item
+  L <- max(abs(c(x, y)), na.rm = TRUE) * 1.2
+  pct <- 100 * pc$eigen_table$proportion
+  # equal (asp = 1) axes, so distances between items are read faithfully
+  op <- par(mar = c(4.2, 4.4, 1.6, 1.6), mgp = c(2.5, 0.7, 0), tcl = -0.25,
+            las = 1, col.axis = .rr$ink, col.lab = .rr$ink)
+  on.exit(par(op))
+  plot(NA, xlim = c(-L, L), ylim = c(-L, L), asp = 1, axes = FALSE,
+       xlab = sprintf("PC1 loading  (%.1f%% of residual variance)", pct[1]),
+       ylab = sprintf("PC2 loading  (%.1f%%)", pct[2]))
+  abline(h = pretty(c(-L, L)), v = pretty(c(-L, L)), col = .rr$grid, lwd = 0.8)
+  abline(h = 0, v = 0, lty = 2, col = .rr$soft)
+  axis(1, col = .rr$grid, col.ticks = .rr$soft)
+  axis(2, col = .rr$grid, col.ticks = .rr$soft)
+  points(x, y, pch = 21, cex = 1.6, bg = ifelse(x > 0, .rr$blue, .rr$amber),
+         col = "white", lwd = 1.2)
+  text(x, y, items, pos = 3, offset = 0.4, cex = 0.7, col = .rr$soft)
   invisible(NULL)
 }
 

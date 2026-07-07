@@ -13,10 +13,11 @@ residual_correlations(fit, flag = 0.2)
 flagged as dependent.}
 }
 \value{
-A list with the Q3 \code{matrix}, the \code{average} off-diagonal
-  value, \code{pairs} (every item pair with \code{q3}, \code{q3_star} and
-  a \code{flagged} indicator, sorted by \code{q3}), and the subset of
-  \code{flagged} pairs.
+A list with the Q3 \code{matrix}, the adjusted-Q3
+  \code{star_matrix} (each Q3 less the average off-diagonal value, diagonal
+  empty), the \code{average} off-diagonal value, \code{pairs} (every item
+  pair with \code{q3}, \code{q3_star} and a \code{flagged} indicator, sorted
+  by \code{q3}), and the subset of \code{flagged} pairs.
 }
 \description{
 The pairwise correlations of the standardised response residuals are

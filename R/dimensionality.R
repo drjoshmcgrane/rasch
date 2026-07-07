@@ -2,7 +2,7 @@
 # ===========================================================================
 # Residual correlations for local dependence, principal components of the
 # residuals, and the Smith (2002) paired t-test of unidimensionality on the
-# first residual contrast.
+# first residual component.
 # ===========================================================================
 
 #' Residual correlations for local dependence (Yen's Q3)
@@ -18,10 +18,11 @@
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param flag Excess above the average off-diagonal Q3 at which a pair is
 #'   flagged as dependent.
-#' @return A list with the Q3 \code{matrix}, the \code{average} off-diagonal
-#'   value, \code{pairs} (every item pair with \code{q3}, \code{q3_star} and
-#'   a \code{flagged} indicator, sorted by \code{q3}), and the subset of
-#'   \code{flagged} pairs.
+#' @return A list with the Q3 \code{matrix}, the adjusted-Q3
+#'   \code{star_matrix} (each Q3 less the average off-diagonal value, diagonal
+#'   empty), the \code{average} off-diagonal value, \code{pairs} (every item
+#'   pair with \code{q3}, \code{q3_star} and a \code{flagged} indicator, sorted
+#'   by \code{q3}), and the subset of \code{flagged} pairs.
 #' @references Yen, W. M. (1984). Effects of local item dependence on the
 #'   fit and equating performance of the three-parameter logistic model.
 #'   \emph{Applied Psychological Measurement}, 8(2), 125-145.
@@ -49,22 +50,26 @@ residual_correlations <- function(fit, flag = 0.2) {
   pairs <- pairs[!is.na(pairs$q3), ]
   pairs <- pairs[order(-pairs$q3), ]
   rownames(pairs) <- NULL
-  list(matrix = R, average = avg, pairs = pairs,
+  # the adjusted-Q3 (Q3*) matrix: each residual correlation less the average
+  # off-diagonal Q3, so 0 marks the local-independence baseline. Self-pairs
+  # carry no dependence, so the diagonal is left empty.
+  star <- R - avg; diag(star) <- NA
+  list(matrix = R, star_matrix = star, average = avg, pairs = pairs,
        flagged = pairs[pairs$flagged, ])
 }
 
 #' Principal components of the residual correlations
 #'
-#' The first residual contrast (PC1) carries any second dimension; items with
+#' The first residual component (PC1) carries any second dimension; items with
 #' opposing loadings define the split used by the unidimensionality t-test.
 #' Loadings for the leading components and the eigenvalue table support
-#' inspection beyond the first contrast.
+#' inspection beyond the first component.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param n_components Number of leading components to return loadings and
 #'   eigenvalue rows for (capped at the number of items).
 #' @return A list with the residual \code{eigenvalues}, their
-#'   \code{prop}ortions, the first-contrast \code{loadings} (sorted), the
+#'   \code{prop}ortions, the first-component \code{loadings} (sorted), the
 #'   \code{loadings_matrix} for the leading components, the
 #'   \code{eigen_table} (component, eigenvalue, proportion, cumulative), and
 #'   the \code{first_eigen}value.
@@ -214,9 +219,7 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
     ldg <- pca$loadings_matrix[[cn]][match(colnames(X), pca$loadings_matrix$item)]
     pos <- which(ldg > 0)
     neg <- setdiff(seq_len(ncol(X)), pos)
-    split_source <- if (as.integer(component) == 1L)
-      "first residual contrast" else
-      sprintf("residual component %d", as.integer(component))
+    split_source <- sprintf("residual component %d", as.integer(component))
   }
   if (length(pos) < 2 || length(neg) < 2)
     return(list(note = "need >= 2 items in each subset"))

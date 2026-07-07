@@ -223,7 +223,7 @@ test_that("dimensionality: 10-component PCA, scree, manual subsets, exact CI", {
   # default split detects the planted second dimension; exact CI fields present
   dt <- dimensionality_test(fit)
   expect_true(dt$multidimensional)
-  expect_identical(dt$split, "first residual contrast")
+  expect_identical(dt$split, "residual component 1")
   expect_true(dt$ci[1] >= 0 && dt$ci[2] <= 1 && dt$ci[1] < dt$ci[2])
   expect_true(dt$n + dt$n_excluded_extreme >= dt$n)
 

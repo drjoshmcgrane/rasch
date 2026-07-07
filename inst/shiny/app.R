@@ -899,7 +899,10 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
         input_task_button("resolve_all", "Resolve all DIF automatically",
                           type = "primary", class = "w-100 mt-2"),
         p(class = "text-muted small mt-2",
-          "Splits DIF items one at a time, largest effect first, refitting until no item shows significant DIF or the anchor set would fall too low (Andrich & Hagquist 2012).")),
+          "Splits DIF items one at a time, largest effect first, refitting until no item shows significant DIF or the anchor set would fall too low (Andrich & Hagquist 2012)."),
+        conditionalPanel("output.has_override_dif",
+          actionButton("reset_split", "Reset to original data",
+                       class = "btn-outline-warning w-100 mt-2"))),
       accordion(id = "dif_acc", open = "dif_anova",
         accordion_panel("DIF analysis of variance", value = "dif_anova",
           layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
@@ -1094,7 +1097,17 @@ panel_frames <- nav_panel("Frames", value = "p_frames", icon = bs_icon("grid-3x3
 panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
     p(class = "text-muted small",
       "Trait dependence (dimensionality) threatens local independence: more than one trait driving the responses (Marais & Andrich 2008)."),
-    accordion(id = "dim_acc", open = "dim_ttest",
+    accordion(id = "dim_acc", open = "dim_components",
+      accordion_panel("Residual components", value = "dim_components",
+        p(class = "text-muted small",
+          "Loadings of each item on the leading residual principal components, with a biplot of the first two - typically the only interpretable contrasts. Items with opposing signs and large magnitude on PC1 mark a possible second dimension; PC2 separates them further."),
+        layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
+          tableCard("loadings_tbl", title = "Loadings",
+                    note = "First 10 components shown."),
+          plotCard("pca_biplot", title = "Biplot (PC1 vs PC2)",
+                   height = "auto"))),
+      accordion_panel("Scree plot", value = "dim_scree",
+        plotCard("scree")),
       accordion_panel(
         title = span("Unidimensionality t-test",
                      info_icon("Smith's test: each person is measured separately on the two item subsets and the estimates compared by t-test; unidimensionality is questioned when clearly more than 5% of tests are significant.")),
@@ -1102,29 +1115,20 @@ panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
         layout_columns(col_widths = breakpoints(sm = 12, xl = c(4, 8)),
           div(
             h6("t-test item subsets"),
+            div(class = "mb-2 d-flex align-items-center gap-2",
+              span(class = "small text-secondary", "Automatic split component"),
+              div(class = "rmt-inline-select",
+                  selectInput("pca_component", NULL, choices = 1, selected = 1,
+                              width = "80px"))),
             selectizeInput("dim_pos", "Subset A", NULL, multiple = TRUE,
                            options = list(placeholder = "positive loadings on the selected component")),
             selectizeInput("dim_neg", "Subset B", NULL, multiple = TRUE,
                            options = list(placeholder = "negative loadings on the selected component")),
-            input_task_button("dim_apply", "Run t-test with these subsets",
+            input_task_button("dim_apply", "Run t-test",
                               type = "primary", class = "w-100"),
             p(class = "text-muted small mt-2",
               "Leave both empty (and press the button) to return to the split from the selected component. Persons extreme on either subset are excluded; the proportion of significant tests carries an exact binomial confidence interval.")),
           card(card_body(verbatimTextOutput("dim_txt"), rcode_details("dim"))))),
-      accordion_panel("Scree", value = "dim_scree",
-        plotCard("scree")),
-      accordion_panel("Component loadings", value = "dim_pca",
-        plotCard("pca_plot",
-          controls = div(class = "d-flex align-items-center gap-1 me-1",
-            span(class = "small text-secondary", "Component"),
-            div(class = "rmt-inline-select",
-                selectInput("pca_component", NULL, choices = 1, selected = 1,
-                            width = "80px"))))),
-      accordion_panel("Loadings", value = "dim_loadings",
-        tableCard("loadings_tbl", note = "First 10 components shown.",
-                  controls = cols_switch("load_full"))),
-      accordion_panel("Eigenvalues", value = "dim_eigen",
-        tableCard("eigen_tbl", note = "First 10 eigenvalues shown.")),
       accordion_panel("Magnitude of multidimensionality", value = "dim_magnitude",
         card(
           full_screen = TRUE,
@@ -1141,7 +1145,9 @@ panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
                   downloadButton("dm_tbl_csv", "CSV",
                                  class = "btn-outline-secondary btn-xs")),
               DTOutput("dm_tbl"), rcode_details("dm_tbl")),
-            padding = 12, fillable = FALSE))))
+            padding = 12, fillable = FALSE))),
+      accordion_panel("Eigenvalues", value = "dim_eigen",
+        tableCard("eigen_tbl", note = "First 10 eigenvalues shown.")))
   )
 
 # -------------------------------------------------- INDEPENDENCE: LOCAL --
@@ -1170,29 +1176,21 @@ panel_ld <- nav_panel("Local", value = "p_ld", icon = bs_icon("link-45deg"),
     p(class = "text-muted small",
       "Local (response) dependence threatens local independence (Marais & Andrich 2008): responses depending on one another directly, over and above the trait."),
     accordion(id = "ld_acc", open = "ld_cormat",
-      accordion_panel("Residual correlations", value = "ld_cormat",
-        tableCard("cormat_tbl",
-                  info = "Yen's Q3 residual correlation matrix: the pairwise correlation of the standardised residuals over every item pair, with 1.00 on the diagonal. Response dependence shows as an off-diagonal correlation well above the average (Yen 1984).")),
-      accordion_panel("Q3 statistics", value = "ld_q3",
+      accordion_panel("Residual Correlations (Q3 statistics)", value = "ld_cormat",
+        p(class = "text-muted small",
+          "Yen's (1984) Q3 is the correlation of the standardised residuals for an item pair; Q3* subtracts the average off-diagonal Q3, so 0 is the local-independence baseline and a pair well above it signals response dependence. Each matrix shows the lower triangle only, beside its heatmap. A pair is shown in red when it clears the flag threshold under its own rule: |Q3| for the raw matrix (Yen 1993) and Q3* for the adjusted matrix (Christensen, Makransky & Horton 2017); 0.2 is conventional for both."),
         numericInput("ld_flag",
-                     "Flag threshold (Q3* above this value flags a pair)",
+                     "Flag threshold (|Q3| or Q3* at or above this value)",
                      value = 0.2, min = 0.05, max = 0.9, step = 0.05,
                      width = "420px"),
-        tableCard("rpairs_tbl",
-                  info = "Yen's Q3: the residual correlation of an item pair; Q3* is its excess over the average off-diagonal Q3, the conventional criterion for flagging response dependence (Yen 1984).",
-                  footer = uiOutput("rpairs_note"))),
-      accordion_panel("Residual correlations (heatmap)", value = "ld_rcor",
-        plotCard("rcor", height = "640px")),
-      accordion_panel("Subtest (combine dependent items)", value = "ld_subtest",
-        card(
-          card_body(
-            p(class = "text-muted small",
-              "Select two or more items to merge into one polytomous super-item and re-analyse; the dependence is absorbed into the subtest."),
-            selectizeInput("subtest_items", NULL, NULL, multiple = TRUE,
-                           options = list(placeholder = "items to combine")),
-            div(input_task_button("make_subtest", "Combine and re-analyse",
-                                  type = "primary")),
-            uiOutput("subtest_status")))),
+        layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
+          tableCard("cormat_q3_tbl", title = "Q3 correlations",
+                    info = "The residual correlation of every item pair, with 1.00 on the diagonal (Yen 1984). Pairs with |Q3| at or above the threshold are red (Yen 1993)."),
+          plotCard("rcor_q3", height = "auto")),
+        layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
+          tableCard("cormat_q3s_tbl", title = "Adjusted Q3 (Q3*)",
+                    info = "Each Q3 less the average off-diagonal Q3: 0 marks local independence. Pairs with Q3* at or above the threshold are red (Christensen, Makransky & Horton 2017)."),
+          plotCard("rcor_q3s", height = "auto"))),
       accordion_panel("Response dependence magnitude", value = "ld_dep",
         card(
           full_screen = TRUE,
@@ -1216,6 +1214,20 @@ panel_ld <- nav_panel("Local", value = "p_ld", icon = bs_icon("link-45deg"),
               verbatimTextOutput("dep_txt"),
               DTOutput("dep_tbl"), rcode_details("dep_tbl")),
             padding = 12, fillable = FALSE))),
+      accordion_panel("Subtest (combine dependent items)", value = "ld_subtest",
+        card(
+          card_body(
+            p(class = "text-muted small",
+              "Select two or more items to merge into one polytomous super-item and re-analyse; the dependence is absorbed into the subtest."),
+            selectizeInput("subtest_items", NULL, NULL, multiple = TRUE,
+                           options = list(placeholder = "items to combine")),
+            div(input_task_button("make_subtest", "Combine and re-analyse",
+                                  type = "primary")),
+            conditionalPanel("output.has_override_subtest",
+              div(class = "mt-2",
+                actionButton("reset_subtest", "Reset to original data",
+                             class = "btn-outline-warning w-100"))),
+            uiOutput("subtest_status")))),
       accordion_panel("Spread test (LUB)", value = "ld_spread",
         card(
           full_screen = TRUE,
@@ -1639,16 +1651,33 @@ server <- function(input, output, session) {
                priority = 10)
   output$has_override <- reactive(!is.null(override_fit()))
   outputOptions(output, "has_override", suspendWhenHidden = FALSE)
+  # per-kind flags, so each local reset button shows (and undoes) only its own
+  # restructure: the subtest button reverts a subtest, the DIF button reverts a
+  # split or an automatic resolution. The single override_fit means only one
+  # kind is ever active, so exactly one local button is visible at a time.
+  output$has_override_subtest <- reactive(
+    grepl("^subtest", override_desc() %||% ""))
+  output$has_override_dif <- reactive(
+    grepl("^(split|auto-resolved)", override_desc() %||% ""))
+  outputOptions(output, "has_override_subtest", suspendWhenHidden = FALSE)
+  outputOptions(output, "has_override_dif", suspendWhenHidden = FALSE)
   output$override_status <- renderUI({
     if (is.null(override_desc())) return(NULL)
     p(class = "text-warning small mb-1 mt-2",
       paste("Active override -", override_desc()))
   })
-  observeEvent(input$reset_override, {
-    override_fit(NULL); override_desc(NULL)
-    showNotification("Override cleared; showing the base analysis.",
+  # clearing an override returns every page to the base analysis; the automatic
+  # DIF-resolution trace is dropped too, so nothing stale lingers. The same
+  # reset is offered locally beside each transforming action (subtest, split,
+  # automatic resolution) as well as on the Data page.
+  reset_to_original <- function() {
+    override_fit(NULL); override_desc(NULL); resolve_res(NULL)
+    showNotification("Reset to the original data; showing the base analysis.",
                      type = "message", duration = 5)
-  })
+  }
+  observeEvent(input$reset_override, reset_to_original())
+  observeEvent(input$reset_split,   reset_to_original())
+  observeEvent(input$reset_subtest, reset_to_original())
 
   # estimation runs as a side-effecting observer that stores the completed
   # fit in fit_val; analysis() is a pure accessor, so every reader keeps
@@ -2080,7 +2109,7 @@ server <- function(input, output, session) {
     } else {
       override_fit(res)
       override_desc(paste("subtest:", paste(input$subtest_items, collapse = " + ")))
-      showNotification("Re-analysed with the subtest in place. Reset the override (Data page) or run again to return to the base fit.",
+      showNotification("Re-analysed with the subtest in place. Use Reset to original data (or run again) to return to the base fit.",
                        type = "message", duration = 8)
     }
   })
@@ -2107,7 +2136,7 @@ server <- function(input, output, session) {
       override_fit(res)
       override_desc(sprintf("split: item %s by %s", it, lab))
       showNotification(
-        sprintf("Re-analysed with %s split by %s. Reset the override (Data page) or run again to return to the base fit.",
+        sprintf("Re-analysed with %s split by %s. Use Reset to original data (or run again) to return to the base fit.",
                 it, lab),
         type = "message", duration = 8)
     }
@@ -2130,7 +2159,7 @@ server <- function(input, output, session) {
       override_fit(rr$fit)
       override_desc(sprintf("auto-resolved DIF: %d split(s)", rr$n_splits))
       showNotification(
-        sprintf("Automatic DIF resolution: %d split(s); %s. Reset the override (Data page) or run again to return to the base fit.",
+        sprintf("Automatic DIF resolution: %d split(s); %s. Use Reset to original data (or run again) to return to the base fit.",
                 rr$n_splits, rr$stopped),
         type = "message", duration = 8)
     }
@@ -2172,8 +2201,12 @@ server <- function(input, output, session) {
     output[[cid]] <- renderText(code())
     outputOptions(output, cid, suspendWhenHidden = FALSE)
   }
-  register_plot <- function(id, fun, w = 9, h = 6, code = NULL) {
-    output[[id]] <- renderPlot(fun(), res = 96)
+  # `px` optionally sets a reactive on-screen height (a function returning
+  # pixels), for plots whose natural size grows with the data (e.g. a matrix
+  # heatmap that should track its item count and the table beside it)
+  register_plot <- function(id, fun, w = 9, h = 6, code = NULL, px = NULL) {
+    output[[id]] <- if (is.null(px)) renderPlot(fun(), res = 96)
+                    else renderPlot(fun(), res = 96, height = px)
     if (!is.null(code)) register_code(id, code)
     for (fmt in c("png", "pdf")) local({
       fmt_ <- fmt
@@ -2329,6 +2362,39 @@ server <- function(input, output, session) {
       dt <- formatStyle(dt, pc,
                         fontWeight = styleInterval(0.05, c("bold", "normal")))
     dt
+  }
+  # Lower-triangular display of a symmetric matrix: the redundant strictly-upper
+  # cells are blanked so each item pair is read once, the first column carries
+  # the item name, and NA cells (e.g. the Q3* diagonal) show empty. Values are
+  # pre-formatted, so the columns are right-aligned by column definition rather
+  # than by numeric class.
+  tri_dt <- function(M, digits = 2, flagged = NULL) {
+    disp <- formatC(M, format = "f", digits = digits)
+    dim(disp) <- dim(M); dimnames(disp) <- dimnames(M)
+    # flagged pairs (Q3* above the threshold) are shown red in place of the
+    # heatmap's flag mark; wrap before the triangle is blanked so only kept
+    # cells carry the span
+    if (!is.null(flagged)) {
+      hot <- flagged & !is.na(M) & lower.tri(M, diag = FALSE)
+      hot[is.na(hot)] <- FALSE
+      disp[hot] <- sprintf(
+        '<span style="color:var(--bs-danger);font-weight:600">%s</span>',
+        disp[hot])
+    }
+    disp[upper.tri(M)] <- ""                 # redundant upper triangle
+    disp[is.na(M)] <- ""                     # empty diagonal / missing pairs
+    df <- data.frame(item = rownames(M), disp, check.names = FALSE,
+                     stringsAsFactors = FALSE)
+    dt <- datatable(df, rownames = FALSE, escape = FALSE, style = "bootstrap5",
+              class = "table hover order-column",
+              options = list(paging = FALSE, ordering = FALSE,
+                             scrollX = TRUE, dom = "t",
+                             columnDefs = list(list(className = "dt-right",
+                               targets = seq_len(ncol(M))))))
+    # a roomier grid than the compact default, so the matrix reads at a weight
+    # closer to its heatmap alongside it
+    formatStyle(dt, names(df), fontSize = "1rem",
+                paddingTop = "7px", paddingBottom = "7px")
   }
   # Red-highlight a triggering value in place of a boolean flag column (the
   # items table pattern): colour the cell with the theme danger colour when
@@ -3555,7 +3621,9 @@ server <- function(input, output, session) {
       } else dim_subsets(list(pos = input$dim_pos, neg = input$dim_neg))
     } else if (!length(input$dim_pos) && !length(input$dim_neg)) {
       dim_subsets(NULL)
-      showNotification("Reset to the first-contrast split.", type = "message")
+      showNotification(sprintf("Ran the t-test on the automatic split (residual component %d).",
+                               pca_k()),
+                       type = "message")
     } else {
       showNotification("Nominate at least two items in each subset (or leave both empty).",
                        type = "warning")
@@ -3652,11 +3720,12 @@ server <- function(input, output, session) {
                 code = function() "plot_scree(fit)")
   register_table("loadings_tbl", function() residual_pca(fit())$loadings_matrix,
                  function() {
-    d <- residual_pca(fit())$loadings_matrix
-    if (!isTRUE(input$load_full))
-      d <- d[, intersect(c("item", "PC1", "PC2", "PC3"), names(d)),
-             drop = FALSE]
-    num_dt(d)
+    d <- residual_pca(fit())$loadings_matrix   # up to the first 10 components
+    # roomier rows than the compact default, so the table reads at a weight
+    # closer to the biplot beside it (matching the local dependence page)
+    num_dt(d, paging = FALSE) |>
+      formatStyle(names(d), fontSize = "1rem",
+                  paddingTop = "7px", paddingBottom = "7px")
   }, code = function() "residual_pca(fit)$loadings_matrix")
   register_table("eigen_tbl", function() residual_pca(fit())$eigen_table,
                  function() {
@@ -3667,46 +3736,60 @@ server <- function(input, output, session) {
       c("Proportion %", "Cumulative %")
     num_dt(d) |> formatRound(c("Proportion %", "Cumulative %"), 1)
   }, code = function() "residual_pca(fit)$eigen_table")
-  register_plot("pca_plot", function() plot_pca(fit(), component = pca_k()),
-                code = function() {
-                  k <- pca_k()
-                  if (k == 1L) "plot_pca(fit)"
-                  else sprintf("plot_pca(fit, component = %d)", k)
-                })
+  # biplot of the first two residual components; its card grows with the item
+  # count so it stays level with the loadings table beside it (as on the local
+  # dependence page)
+  biplot_px <- function() {
+    n <- tryCatch(nrow(fit()$items), error = function(e) 10L)
+    as.integer(max(400L, min(820L, 260L + 26L * n)))
+  }
+  register_plot("pca_biplot", function() plot_pca_biplot(fit()),
+                w = 7, h = 7, px = biplot_px,
+                code = function() "plot_pca_biplot(fit)")
 
   # -------------------------------------------------------- local dependence --
-  # the residual (Yen Q3) correlation matrix as a wide table: first column the
-  # item name, the remaining columns the per-item correlations (diagonal 1.00)
-  cormat_df <- reactive({
-    R <- round(residual_correlations(fit())$matrix, 2)
-    data.frame(item = rownames(R), R, check.names = FALSE)
-  })
-  register_table("cormat_tbl", function() cormat_df(),
-                 function() num_dt(cormat_df(), digits = 2, paging = FALSE),
+  # the residual correlations as two paired matrices, each with its heatmap:
+  # the Yen Q3 correlation (diagonal 1.00) and the adjusted Q3* (each Q3 less
+  # the average off-diagonal, diagonal empty). Both tables show the lower
+  # triangle only, so each item pair is read once, matching the heatmaps.
+  rc_all <- reactive(residual_correlations(fit()))
+  q3_mat <- reactive(rc_all()$matrix)
+  q3s_mat <- reactive(rc_all()$star_matrix)
+  # each matrix is flagged by its own rule at the shared threshold: the raw
+  # matrix by |Q3| (Yen 1993), the adjusted matrix by Q3* (Christensen,
+  # Makransky & Horton 2017). Flagging the raw matrix by the Q3* rule would
+  # redden pairs whose own Q3 is nowhere near the cut.
+  q3_flag <- reactive(abs(q3_mat()) >= ld_flag())
+  q3s_flag <- reactive(q3s_mat() >= ld_flag())
+  register_table("cormat_q3_tbl",
+                 function() data.frame(item = rownames(q3_mat()), q3_mat(),
+                                       check.names = FALSE),
+                 function() tri_dt(q3_mat(), flagged = q3_flag()),
                  code = function() "residual_correlations(fit)$matrix")
-  register_plot("rcor", function() plot_resid_cor(fit()), w = 8, h = 8,
-                code = function() "plot_resid_cor(fit)")
+  register_table("cormat_q3s_tbl",
+                 function() data.frame(item = rownames(q3s_mat()), q3s_mat(),
+                                       check.names = FALSE),
+                 function() tri_dt(q3s_mat(), flagged = q3s_flag()),
+                 code = function() "residual_correlations(fit)$star_matrix")
+  # on-screen height grows with the item count, so the triangle keeps readable
+  # cells and stays level with the table beside it instead of shrinking into a
+  # fixed box; ~520px at 10 items, clamped so it never runs tiny or huge
+  cormat_px <- function() {
+    n <- tryCatch(ncol(q3_mat()), error = function(e) 10L)
+    as.integer(max(400L, min(820L, 260L + 26L * n)))
+  }
+  register_plot("rcor_q3", function() plot_resid_cor(fit(), stat = "q3"),
+                w = 8, h = 7, px = cormat_px,
+                code = function() 'plot_resid_cor(fit, stat = "q3")')
+  register_plot("rcor_q3s", function() plot_resid_cor(fit(), stat = "q3star"),
+                w = 8, h = 7, px = cormat_px,
+                code = function() 'plot_resid_cor(fit, stat = "q3star")')
+  # the flag threshold (shared by both matrices' red highlighting); defaults to
+  # the conventional Q3* > 0.2 (Christensen, Makransky & Horton 2017)
   ld_flag <- reactive({
     fl <- input$ld_flag
     if (is.null(fl) || is.na(fl) || fl <= 0) 0.2 else fl
   })
-  ld_res <- reactive(residual_correlations(fit(), flag = ld_flag()))
-  # Yen's Q3 for every item pair, sorted by Q3; Q3* is the excess over the
-  # average off-diagonal Q3, and pairs above the flag threshold are starred
-  output$rpairs_tbl <- renderDT({
-    d <- ld_res()$pairs
-    d$flagged <- NULL                        # red Q3* above the flag replaces it
-    style_hi_red(num_dt(d), d, "q3_star", ld_flag())
-  })
-  register_code("rpairs_tbl", function()
-    sprintf("residual_correlations(fit, flag = %s)$pairs", ld_flag()))
-  output$rpairs_tbl_csv <- downloadHandler(
-    filename = function() "q3_statistics.csv",
-    content = function(file)
-      write.csv(ld_res()$pairs, file, row.names = FALSE))
-  output$rpairs_note <- renderUI(
-    sprintf("Average off-diagonal Q3 %.3f; pairs with Q3* above %.1f are flagged (Yen 1984; Christensen, Makransky & Horton 2017).",
-            ld_res()$average, ld_flag()))
 
   # response dependence magnitude (Andrich & Kreiner resolved-item refit)
   dep_res <- reactiveVal(NULL)

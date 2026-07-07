@@ -14,16 +14,16 @@ eigenvalue rows for (capped at the number of items).}
 }
 \value{
 A list with the residual \code{eigenvalues}, their
-  \code{prop}ortions, the first-contrast \code{loadings} (sorted), the
+  \code{prop}ortions, the first-component \code{loadings} (sorted), the
   \code{loadings_matrix} for the leading components, the
   \code{eigen_table} (component, eigenvalue, proportion, cumulative), and
   the \code{first_eigen}value.
 }
 \description{
-The first residual contrast (PC1) carries any second dimension; items with
+The first residual component (PC1) carries any second dimension; items with
 opposing loadings define the split used by the unidimensionality t-test.
 Loadings for the leading components and the eigenvalue table support
-inspection beyond the first contrast.
+inspection beyond the first component.
 }
 \examples{
 set.seed(1)

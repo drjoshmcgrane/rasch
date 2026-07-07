@@ -87,6 +87,6 @@ test_that("residual components beyond the first can be inspected and tested", {
   expect_no_error(plot_pca(f, component = 3))
   expect_error(plot_pca(f, component = 99), "not available")
   # the t-test default split follows the chosen component
-  expect_match(dimensionality_test(f, component = 1)$split, "first")
+  expect_match(dimensionality_test(f, component = 1)$split, "component 1")
   expect_match(dimensionality_test(f, component = 2)$split, "component 2")
 })

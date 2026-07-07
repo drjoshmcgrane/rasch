@@ -4,28 +4,30 @@
 \alias{plot_resid_cor}
 \title{Plot the residual-correlation heatmap}
 \usage{
-plot_resid_cor(fit, cap = 0.5, flag = 0.2)
+plot_resid_cor(fit, stat = c("q3star", "q3"), cap = 0.5)
 }
 \arguments{
 \item{fit}{A fitted object from \code{\link{rasch}}.}
 
-\item{cap}{Q3* value at which the colour saturates (default 0.5).}
+\item{stat}{Which statistic to colour: \code{"q3star"} (adjusted Q3, the
+default) or \code{"q3"} (the raw residual correlation).}
 
-\item{flag}{Q3* value marked on the key as the dependence flag
-(default 0.2).}
+\item{cap}{Value at which the colour saturates (default 0.5).}
 }
 \value{
 Called for its plotting side effect; invisibly \code{NULL}.
 }
 \description{
-Cells are coloured by Q3* -- each pair's residual correlation minus the
-average off-diagonal correlation -- so white marks the value expected
-under local independence and warm colour marks dependence. The scale
-saturates at a Q3* of \code{cap} rather than the +/-1 of an ordinary
-correlation: a residual correlation seldom reaches even 0.5 under a
-fitting model, and the conventional flag (Q3* above 0.2; Christensen,
-Makransky and Horton 2017, marked on the key) sits well within the
-range, so the colour is spent where the values actually discriminate.
+Only the lower triangle is drawn -- the matrix is symmetric, so each pair
+is shown once. With \code{stat = "q3star"} (the default) cells are coloured
+by Q3* -- each pair's residual correlation minus the average off-diagonal
+correlation -- so white marks the value expected under local independence
+and warm colour marks dependence; with \code{stat = "q3"} the raw residual
+correlation is coloured, white at zero. The scale saturates at \code{cap}
+rather than the +/-1 of an ordinary correlation: a residual correlation
+seldom reaches even 0.5 under a fitting model (the conventional flag is Q3*
+above 0.2; Christensen, Makransky and Horton 2017), so the colour is spent
+where the values actually discriminate.
 }
 \examples{
 set.seed(1)

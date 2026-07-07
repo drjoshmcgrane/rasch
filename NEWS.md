@@ -1,4 +1,18 @@
-# rmt 1.1.0
+# rmt 1.2.0
+
+* `plot_pca_biplot()` draws the item loadings on the first two residual
+  principal components -- the pair that usually carries any interpretable
+  contrast -- on equal axes, coloured by the sign of the PC1 loading.
+* `residual_correlations()` now also returns the adjusted-Q3 `star_matrix`
+  (each Q3 less the average off-diagonal), and `plot_resid_cor()` gains a
+  `stat` argument to colour either the raw Q3 or the adjusted Q3*, drawing
+  the lower triangle only.
+* Shiny app: the trait- and local-dependence pages pair each table with its
+  plot (loadings with a PC1-PC2 biplot; Q3 and Q3* matrices with heatmaps),
+  the raw and adjusted correlations are each flagged by their own rule
+  (|Q3| and Q3*), and every data-restructuring action (subtest, item split,
+  automatic DIF resolution) offers an in-place reset to the original data.
+
 
 * `dif_anova()` is now the single DIF analysis-of-variance function. One
   factor is analysed one-way; several factors are modelled jointly -- the
