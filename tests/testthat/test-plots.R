@@ -90,3 +90,36 @@ test_that("residual components beyond the first can be inspected and tested", {
   expect_match(dimensionality_test(f, component = 1)$split, "component 1")
   expect_match(dimensionality_test(f, component = 2)$split, "component 2")
 })
+
+test_that("residual dependence displays generalise to MFRM and EFRM fits", {
+  # MFRM and EFRM inherit from "rasch" and carry residuals over their virtual
+  # items, so the residual-PCA / Q3 / biplot suite must run on them unchanged
+  set.seed(11); Np <- 300; L <- 6
+  d <- seq(-1.5, 1.5, length.out = L)
+  X <- matrix(rbinom(Np * L, 1, plogis(outer(rnorm(Np), d, "-"))), Np, L)
+  colnames(X) <- sprintf("I%02d", 1:L)
+  mf <- rasch_mfrm(data.frame(person = seq_len(Np), X,
+                              rater = sample(c("A", "B"), Np, TRUE),
+                              check.names = FALSE),
+                   person = "person", facets = "rater", items = colnames(X))
+  expect_false(is.null(mf$residuals))
+  expect_s3_class(residual_pca(mf)$loadings_matrix, "data.frame")
+  expect_true("star_matrix" %in% names(residual_correlations(mf)))
+  pdf(NULL); on.exit(dev.off())
+  expect_no_error(plot_pca_biplot(mf))
+  expect_no_error(plot_resid_cor(mf, stat = "q3"))
+  expect_no_error(plot_resid_cor(mf, stat = "q3star"))
+
+  # EFRM: one item set, two groups differing in discrimination so the sets link
+  set.seed(12); per_g <- 300; glev <- c("G1", "G2")
+  phi <- c(0.7, 1.3); grp <- rep(glev, each = per_g); Np2 <- length(grp)
+  th <- rnorm(Np2, 0, 1.3); dd <- scale(seq(-2, 2, length.out = 10), scale = FALSE)[, 1]
+  XE <- sapply(1:10, function(i)
+    rbinom(Np2, 1, plogis(phi[match(grp, glev)] * (th - dd[i]))))
+  colnames(XE) <- sprintf("E%02d", 1:10)
+  ef <- rasch_efrm(data.frame(XE, g = grp),
+                   item_sets = list(core = colnames(XE)), groups = "g")
+  expect_false(is.null(ef$residuals))
+  expect_no_error(plot_pca_biplot(ef))
+  expect_no_error(plot_resid_cor(ef))
+})
