@@ -638,7 +638,20 @@ panel_summary <- nav_panel("Summary", value = "p_summary", icon = bs_icon("clipb
         info = "How well the item thresholds cover the person distribution, with the reliability indices; the CSV download carries the complete targeting summary, including the location moments and item separation."))
     ),
     # server-rendered: the likelihood-ratio card only when it applies
-    uiOutput("summary_bottom")),
+    uiOutput("summary_bottom"),
+    # test-level displays (the scale-range control drives the characteristic
+    # curve and information plots; default -6..6 matches the plot defaults)
+    div(class = "mt-3 mb-2", style = "max-width: 300px;",
+        sliderInput("ts_rng", "Scale range (logits)", min = -8, max = 8,
+                    value = c(-6, 6), step = 0.5, width = "100%")),
+    accordion(id = "test_acc", open = "test_tcc", class = "mb-3",
+      accordion_panel("Test characteristic curve", value = "test_tcc",
+        plotCard("tcc")),
+      accordion_panel("Test information", value = "test_tif",
+        plotCard("tif",
+          info = "Information across the scale, with the standard error of measurement (SEM = 1/sqrt(information)) overlaid.")),
+      accordion_panel("Guttman scalogram", value = "test_guttman",
+        plotCard("guttman", height = "640px")))),
     # paired-comparison (BTL) fits: the headline value boxes and the
     # test-of-fit summary table
     conditionalPanel("output.is_btl == true",
@@ -857,21 +870,6 @@ panel_targeting <- nav_panel("Targeting", value = "p_targeting", icon = bs_icon(
         plotCard("pim_p", "Person-item threshold distribution"),
         plotCard("wright", "Wright map", height = "640px"))
     )
-  )
-
-# ----------------------------------------------------------------- TEST --
-panel_test <- nav_panel("Test", value = "p_test", icon = bs_icon("graph-up"),
-    div(class = "mb-2", style = "max-width: 300px;",
-        sliderInput("ts_rng", "Scale range (logits)", min = -8, max = 8,
-                    value = c(-6, 6), step = 0.5, width = "100%")),
-    accordion(id = "test_acc", open = "test_tcc",
-      accordion_panel("Test characteristic curve", value = "test_tcc",
-        plotCard("tcc")),
-      accordion_panel("Test information", value = "test_tif",
-        plotCard("tif",
-          info = "Information across the scale, with the standard error of measurement (SEM = 1/sqrt(information)) overlaid.")),
-      accordion_panel("Guttman scalogram", value = "test_guttman",
-        plotCard("guttman", height = "640px")))
   )
 
 # ------------------------------------------------------------------ DIF --
@@ -1354,7 +1352,6 @@ ui <- page_navbar(
   panel_items,
   panel_persons,
   panel_targeting,
-  panel_test,
   nav_menu("Independence", value = "menu_independence",
     panel_ld,
     panel_dim),
@@ -1963,7 +1960,7 @@ server <- function(input, output, session) {
     show("p_summary", rasch_on || btl_on)
     show("p_items", rasch_on || btl_on)
     show("p_persons", rasch_on || (btl_on && !is.null(bf$judges)))
-    for (tgt in c("p_targeting", "p_test", "p_dim", "p_equating"))
+    for (tgt in c("p_targeting", "p_dim", "p_equating"))
       show(tgt, rasch_on)
     # Local dependence: the Rasch Q3 suite, or the within-judge dependence
     # analysis of a paired-comparison fit
@@ -2451,6 +2448,12 @@ server <- function(input, output, session) {
           stat_row("Person fit residual",
                    sprintf("mean %.2f, SD %.2f", f$person_fit_summary$mean,
                            f$person_fit_summary$sd)),
+          stat_row("Item location-residual correlation",
+                   { v <- f$summary_stats$cor_item_fit_location
+                     if (finite1(v)) sprintf("%.3f", v) else "NA" }),
+          stat_row("Person location-residual correlation",
+                   { v <- f$summary_stats$cor_person_fit_location
+                     if (finite1(v)) sprintf("%.3f", v) else "NA" }),
           stat_row("Items with adj. chi-square p < .05",
                    sprintf("%d of %d",
                            sum(f$items$p_adj < 0.05, na.rm = TRUE),
@@ -2490,6 +2493,12 @@ server <- function(input, output, session) {
                  sprintf("%.1f%% below · %.1f%% above",
                          100 * tg$prop_below, 100 * tg$prop_above)),
         stat_row("PSI", psi_txt),
+        stat_row("Item reliability",
+                 { v <- f$isi$PSI
+                   if (finite1(v)) sprintf("%.3f", v) else "NA" }),
+        stat_row("Person strata",
+                 { v <- f$psi$strata
+                   if (finite1(v)) sprintf("%.1f", v) else "NA" }),
         stat_row("Coefficient alpha", alpha_txt))
     },
     code = function() "targeting_table(fit)")

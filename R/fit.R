@@ -339,17 +339,21 @@ chisq_detail <- function(fit, item) {
        chisq = it_row$chisq, df = it_row$df, p = it_row$p)
 }
 
-# Person separation index (separation reliability; Andrich 1982).
+# Person separation index (separation reliability; Andrich 1982), with the
+# separation ratio and the number of distinct strata (4G + 1)/3 (Wright &
+# Masters 1982): the count of statistically distinguishable performance
+# levels the instrument supports.
 .psi <- function(theta, se, keep = TRUE) {
   ok <- !is.na(theta) & !is.na(se) & keep
   if (sum(ok) < 3) return(list(PSI = NA_real_, separation = NA_real_,
-                               var_theta = NA_real_, mean_error_var = NA_real_,
-                               n = sum(ok)))
+                               strata = NA_real_, var_theta = NA_real_,
+                               mean_error_var = NA_real_, n = sum(ok)))
   vt <- var(theta[ok]); mse <- mean(se[ok]^2)
   psi <- max((vt - mse) / vt, 0)
   sep <- if (psi < 1) sqrt(psi / (1 - psi)) else Inf
-  list(PSI = psi, separation = sep, var_theta = vt, mean_error_var = mse,
-       n = sum(ok))
+  strata <- if (is.finite(sep)) (4 * sep + 1) / 3 else Inf
+  list(PSI = psi, separation = sep, strata = strata, var_theta = vt,
+       mean_error_var = mse, n = sum(ok))
 }
 
 # Cronbach's alpha (Cronbach 1951) on complete cases, reported alongside
