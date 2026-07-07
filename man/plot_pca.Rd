@@ -4,17 +4,21 @@
 \alias{plot_pca}
 \title{Plot residual principal-component loadings}
 \usage{
-plot_pca(fit)
+plot_pca(fit, component = 1)
 }
 \arguments{
 \item{fit}{A fitted object from \code{\link{rasch}}.}
+
+\item{component}{Which residual principal component to plot (default the
+first contrast).}
 }
 \value{
 Called for its plotting side effect; invisibly \code{NULL}.
 }
 \description{
-First-contrast loadings against item location; opposing clusters at top and
-bottom suggest a second dimension.
+Residual-component loadings against item location; opposing clusters at top
+and bottom suggest a further dimension. Any leading component may be shown,
+not only the first contrast.
 }
 \examples{
 set.seed(1)

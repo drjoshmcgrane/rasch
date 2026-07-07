@@ -8,7 +8,8 @@ dimensionality_test(
   fit,
   alpha = 0.05,
   items_positive = NULL,
-  items_negative = NULL
+  items_negative = NULL,
+  component = 1
 )
 }
 \arguments{
@@ -18,7 +19,11 @@ dimensionality_test(
 
 \item{items_positive, items_negative}{Optional character vectors naming the
 two item subsets; both must be given (disjoint, at least two items
-each), otherwise the first residual contrast defines the split.}
+each), otherwise the sign of a residual component defines the split.}
+
+\item{component}{Which residual principal component's loading sign defines
+the default split (ignored when subsets are named). Default the first
+contrast.}
 }
 \value{
 A list with the proportion of significant tests, its exact
@@ -31,8 +36,9 @@ A list with the proportion of significant tests, its exact
 \description{
 Estimates each person separately on two item subsets and compares the two
 estimates with a per-person t-test (Smith 2002). By default the subsets
-are defined by the sign of the first residual-contrast loading; they can
-also be nominated manually (for example, by content). Under
+are defined by the sign of a residual-contrast loading (the first by
+default; any leading component may be chosen); they can also be nominated
+manually (for example, by content). Under
 unidimensionality and local independence the two subset estimates are
 independent given the person location, so
 \code{t = (theta_A - theta_B) / sqrt(se_A^2 + se_B^2)} is approximately

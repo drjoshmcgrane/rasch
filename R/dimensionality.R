@@ -156,8 +156,9 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 20) {
 #'
 #' Estimates each person separately on two item subsets and compares the two
 #' estimates with a per-person t-test (Smith 2002). By default the subsets
-#' are defined by the sign of the first residual-contrast loading; they can
-#' also be nominated manually (for example, by content). Under
+#' are defined by the sign of a residual-contrast loading (the first by
+#' default; any leading component may be chosen); they can also be nominated
+#' manually (for example, by content). Under
 #' unidimensionality and local independence the two subset estimates are
 #' independent given the person location, so
 #' \code{t = (theta_A - theta_B) / sqrt(se_A^2 + se_B^2)} is approximately
@@ -172,7 +173,10 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 20) {
 #' @param alpha Nominal significance level for the per-person t-tests.
 #' @param items_positive,items_negative Optional character vectors naming the
 #'   two item subsets; both must be given (disjoint, at least two items
-#'   each), otherwise the first residual contrast defines the split.
+#'   each), otherwise the sign of a residual component defines the split.
+#' @param component Which residual principal component's loading sign defines
+#'   the default split (ignored when subsets are named). Default the first
+#'   contrast.
 #' @return A list with the proportion of significant tests, its exact
 #'   confidence interval, the sample sizes (\code{n} used,
 #'   \code{n_excluded_extreme}), the item split and its source, a
@@ -187,7 +191,7 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 20) {
 #' dimensionality_test(rasch(X))$multidimensional
 #' @export
 dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
-                                items_negative = NULL) {
+                                items_negative = NULL, component = 1) {
   X <- fit$X
   manual <- !is.null(items_positive) || !is.null(items_negative)
   pca <- residual_pca(fit)
@@ -204,9 +208,15 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
       stop("the two subsets must be disjoint")
     split_source <- "manual"
   } else {
-    pos <- which(pca$loadings$pc1_loading[match(colnames(X), pca$loadings$item)] > 0)
+    cn <- paste0("PC", as.integer(component))
+    if (!cn %in% names(pca$loadings_matrix))
+      stop("component ", component, " is not available")
+    ldg <- pca$loadings_matrix[[cn]][match(colnames(X), pca$loadings_matrix$item)]
+    pos <- which(ldg > 0)
     neg <- setdiff(seq_len(ncol(X)), pos)
-    split_source <- "first residual contrast"
+    split_source <- if (as.integer(component) == 1L)
+      "first residual contrast" else
+      sprintf("residual component %d", as.integer(component))
   }
   if (length(pos) < 2 || length(neg) < 2)
     return(list(note = "need >= 2 items in each subset"))

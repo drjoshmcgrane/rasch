@@ -1103,18 +1103,23 @@ panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
           div(
             h6("t-test item subsets"),
             selectizeInput("dim_pos", "Subset A", NULL, multiple = TRUE,
-                           options = list(placeholder = "positive PC1 loadings")),
+                           options = list(placeholder = "positive loadings on the selected component")),
             selectizeInput("dim_neg", "Subset B", NULL, multiple = TRUE,
-                           options = list(placeholder = "negative PC1 loadings")),
+                           options = list(placeholder = "negative loadings on the selected component")),
             input_task_button("dim_apply", "Run t-test with these subsets",
                               type = "primary", class = "w-100"),
             p(class = "text-muted small mt-2",
-              "Leave both empty (and press the button) to return to the first-contrast split. Persons extreme on either subset are excluded; the proportion of significant tests carries an exact binomial confidence interval.")),
+              "Leave both empty (and press the button) to return to the split from the selected component. Persons extreme on either subset are excluded; the proportion of significant tests carries an exact binomial confidence interval.")),
           card(card_body(verbatimTextOutput("dim_txt"), rcode_details("dim"))))),
       accordion_panel("Scree", value = "dim_scree",
         plotCard("scree")),
-      accordion_panel("First contrast", value = "dim_pca",
-        plotCard("pca_plot")),
+      accordion_panel("Component loadings", value = "dim_pca",
+        plotCard("pca_plot",
+          controls = div(class = "d-flex align-items-center gap-1 me-1",
+            span(class = "small text-secondary", "Component"),
+            div(class = "rmt-inline-select",
+                selectInput("pca_component", NULL, choices = 1, selected = 1,
+                            width = "80px"))))),
       accordion_panel("Loadings", value = "dim_loadings",
         tableCard("loadings_tbl", note = "First 10 components shown.",
                   controls = cols_switch("load_full"))),
@@ -1164,7 +1169,10 @@ panel_ld <- nav_panel("Local", value = "p_ld", icon = bs_icon("link-45deg"),
     conditionalPanel("output.is_btl != true",
     p(class = "text-muted small",
       "Local (response) dependence threatens local independence (Marais & Andrich 2008): responses depending on one another directly, over and above the trait."),
-    accordion(id = "ld_acc", open = "ld_q3",
+    accordion(id = "ld_acc", open = "ld_cormat",
+      accordion_panel("Residual correlations", value = "ld_cormat",
+        tableCard("cormat_tbl",
+                  info = "Yen's Q3 residual correlation matrix: the pairwise correlation of the standardised residuals over every item pair, with 1.00 on the diagonal. Response dependence shows as an off-diagonal correlation well above the average (Yen 1984).")),
       accordion_panel("Q3 statistics", value = "ld_q3",
         numericInput("ld_flag",
                      "Flag threshold (Q3* above this value flags a pair)",
@@ -2036,6 +2044,11 @@ server <- function(input, output, session) {
                          selected = if (length(fi)) fi[1] else character(0))
     updateSelectizeInput(session, "dim_pos", choices = its, selected = character(0))
     updateSelectizeInput(session, "dim_neg", choices = its, selected = character(0))
+    # residual principal components available for the loadings plot and the
+    # t-test default split: 1..min(10, n_items - 1)
+    updateSelectInput(session, "pca_component",
+                      choices = seq_len(max(1L, min(10L, length(its) - 1L))),
+                      selected = 1)
     updateSelectInput(session, "dep_item", choices = its,
                       selected = its[min(2L, length(its))])
     updateSelectInput(session, "ind_item", choices = its, selected = its[1])
@@ -3548,9 +3561,15 @@ server <- function(input, output, session) {
                        type = "warning")
     }
   })
+  # the residual principal component chosen for the loadings plot and, when no
+  # manual subsets are named, the t-test default split
+  pca_k <- reactive({
+    k <- suppressWarnings(as.integer(input$pca_component %||% 1))
+    if (is.na(k) || k < 1L) 1L else k
+  })
   dim_res <- reactive({
     s <- dim_subsets()
-    if (is.null(s)) dimensionality_test(fit())
+    if (is.null(s)) dimensionality_test(fit(), component = pca_k())
     else dimensionality_test(fit(), items_positive = s$pos,
                              items_negative = s$neg)
   })
@@ -3574,7 +3593,11 @@ server <- function(input, output, session) {
   })
   register_code("dim", function() {
     s <- dim_subsets()
-    if (is.null(s)) return("dimensionality_test(fit)")
+    if (is.null(s)) {
+      k <- pca_k()
+      return(if (k == 1L) "dimensionality_test(fit)"
+             else sprintf("dimensionality_test(fit, component = %d)", k))
+    }
     sprintf("dimensionality_test(fit, items_positive = %s,\n  items_negative = %s)",
             qvec(s$pos), qvec(s$neg))
   })
@@ -3644,10 +3667,23 @@ server <- function(input, output, session) {
       c("Proportion %", "Cumulative %")
     num_dt(d) |> formatRound(c("Proportion %", "Cumulative %"), 1)
   }, code = function() "residual_pca(fit)$eigen_table")
-  register_plot("pca_plot", function() plot_pca(fit()),
-                code = function() "plot_pca(fit)")
+  register_plot("pca_plot", function() plot_pca(fit(), component = pca_k()),
+                code = function() {
+                  k <- pca_k()
+                  if (k == 1L) "plot_pca(fit)"
+                  else sprintf("plot_pca(fit, component = %d)", k)
+                })
 
   # -------------------------------------------------------- local dependence --
+  # the residual (Yen Q3) correlation matrix as a wide table: first column the
+  # item name, the remaining columns the per-item correlations (diagonal 1.00)
+  cormat_df <- reactive({
+    R <- round(residual_correlations(fit())$matrix, 2)
+    data.frame(item = rownames(R), R, check.names = FALSE)
+  })
+  register_table("cormat_tbl", function() cormat_df(),
+                 function() num_dt(cormat_df(), digits = 2, paging = FALSE),
+                 code = function() "residual_correlations(fit)$matrix")
   register_plot("rcor", function() plot_resid_cor(fit()), w = 8, h = 8,
                 code = function() "plot_resid_cor(fit)")
   ld_flag <- reactive({

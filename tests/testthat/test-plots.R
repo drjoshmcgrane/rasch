@@ -74,3 +74,19 @@ test_that("the DIF overlay accepts one or several nominated factor names", {
   # a raw person vector still works
   expect_no_error(plot_icc(f, "I2", group = s))
 })
+
+test_that("residual components beyond the first can be inspected and tested", {
+  set.seed(4)
+  d <- seq(-2, 2, length.out = 10)
+  X <- matrix(rbinom(500 * 10, 1, plogis(outer(rnorm(500), d, "-"))), 500, 10)
+  colnames(X) <- sprintf("I%02d", 1:10)
+  f <- rasch(X)
+  pdf(NULL); on.exit(dev.off())
+  expect_no_error(plot_pca(f, component = 1))
+  expect_no_error(plot_pca(f, component = 2))
+  expect_no_error(plot_pca(f, component = 3))
+  expect_error(plot_pca(f, component = 99), "not available")
+  # the t-test default split follows the chosen component
+  expect_match(dimensionality_test(f, component = 1)$split, "first")
+  expect_match(dimensionality_test(f, component = 2)$split, "component 2")
+})

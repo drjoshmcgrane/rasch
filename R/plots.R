@@ -552,7 +552,19 @@ plot_person_fit <- function(fit, band = 2.5) {
 # ---------------------------------------------------------------------------
 #' Plot the residual-correlation heatmap
 #'
+#' Cells are coloured by Q3* -- each pair's residual correlation minus the
+#' average off-diagonal correlation -- so white marks the value expected
+#' under local independence and warm colour marks dependence. The scale
+#' saturates at a Q3* of \code{cap} rather than the +/-1 of an ordinary
+#' correlation: a residual correlation seldom reaches even 0.5 under a
+#' fitting model, and the conventional flag (Q3* above 0.2; Christensen,
+#' Makransky and Horton 2017, marked on the key) sits well within the
+#' range, so the colour is spent where the values actually discriminate.
+#'
 #' @param fit A fitted object from \code{\link{rasch}}.
+#' @param cap Q3* value at which the colour saturates (default 0.5).
+#' @param flag Q3* value marked on the key as the dependence flag
+#'   (default 0.2).
 #' @return Called for its plotting side effect; invisibly \code{NULL}.
 #' @examples
 #' set.seed(1)
@@ -561,31 +573,53 @@ plot_person_fit <- function(fit, band = 2.5) {
 #' colnames(X) <- paste0("I", 1:6)
 #' plot_resid_cor(rasch(X))
 #' @export
-plot_resid_cor <- function(fit) {
-  R <- residual_correlations(fit)$matrix; L <- ncol(R)
-  diag(R) <- NA   # self-correlations carry no dependence information
-  pal <- colorRampPalette(c("#1d4ed8", "#f8fafc", "#dc2626"))(64)
-  op <- par(mar = c(6, 6, 3.2, 3), las = 1, col.axis = .rr$ink,
+plot_resid_cor <- function(fit, cap = 0.5, flag = 0.2) {
+  rc <- residual_correlations(fit)
+  R <- rc$matrix; L <- ncol(R); avg <- rc$average
+  # colour by Q3* = Q3 - average off-diagonal correlation, so white marks the
+  # independence baseline and colour tracks the dependence signal itself
+  S <- R - avg
+  diag(S) <- NA   # self-correlations carry no dependence information
+  pal <- colorRampPalette(c("#1d4ed8", "#93c5fd", "#f8fafc",
+                            "#f59e0b", "#dc2626"))(128)
+  Sc <- pmax(pmin(S, cap), -cap)             # saturate at +/- cap
+  op <- par(mar = c(5.5, 5.5, 3.6, 5.5), las = 1, col.axis = .rr$ink,
             col.main = .rr$ink, font.main = 2, cex.main = 1.15)
   on.exit(par(op))
-  image(1:L, 1:L, R[, L:1, drop = FALSE], col = pal, zlim = c(-1, 1),
+  image(1:L, 1:L, Sc[, L:1, drop = FALSE], col = pal, zlim = c(-cap, cap),
         axes = FALSE, xlab = "", ylab = "", main = "")
-  axis(1, 1:L, colnames(R), las = 2, cex.axis = 0.65, col = NA, col.ticks = NA)
-  axis(2, 1:L, rev(colnames(R)), cex.axis = 0.65, col = NA, col.ticks = NA)
-  # compact colour key
-  ky <- seq(0.25, 0.75, length.out = 65) * L
-  rect(L + 0.62, ky[-65], L + 0.95, ky[-1], col = pal, border = NA, xpd = TRUE)
-  text(L + 0.8, c(min(ky), max(ky)) + c(-0.4, 0.4), c("-1", "+1"),
-       cex = 0.65, xpd = TRUE, col = .rr$ink)
+  title(main = "Residual correlations (Q3)", adj = 0, line = 2.3)
+  mtext(bquote("colour = Q3* (Q3 above the average " *
+               .(sprintf("%.2f", avg)) * "); flag at +" *
+               .(sprintf("%.2f", flag))),
+        side = 3, line = 0.8, adj = 0, cex = 0.75, col = .rr$soft)
+  cx <- if (L > 25) 0.5 else if (L > 15) 0.62 else 0.75
+  axis(1, 1:L, colnames(R), las = 2, cex.axis = cx, col = NA, col.ticks = NA)
+  axis(2, 1:L, rev(colnames(R)), cex.axis = cx, col = NA, col.ticks = NA)
+  abline(h = 0.5 + 0:L, v = 0.5 + 0:L, col = "white", lwd = 0.6)
+  # colour key on the right: scale ticks at -cap, 0, +cap; the flag marked
+  ky <- seq(0.15, 0.85, length.out = 129) * L
+  rect(L + 1.1, ky[-129], L + 1.5, ky[-1], col = pal, border = NA, xpd = TRUE)
+  yof <- function(v) (v + cap) / (2 * cap) * (max(ky) - min(ky)) + min(ky)
+  for (v in c(-cap, 0, cap))
+    text(L + 1.6, yof(v), sprintf("%+.1f", v), cex = 0.62, xpd = TRUE,
+         adj = 0, col = .rr$ink)
+  segments(L + 1.05, yof(flag), L + 1.55, yof(flag), col = .rr$ink,
+           lwd = 1.4, xpd = TRUE)
+  text(L + 1.6, yof(flag), sprintf("flag %.1f", flag), cex = 0.58,
+       xpd = TRUE, adj = 0, col = .rr$ink, font = 3)
   invisible(NULL)
 }
 
 #' Plot residual principal-component loadings
 #'
-#' First-contrast loadings against item location; opposing clusters at top and
-#' bottom suggest a second dimension.
+#' Residual-component loadings against item location; opposing clusters at top
+#' and bottom suggest a further dimension. Any leading component may be shown,
+#' not only the first contrast.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
+#' @param component Which residual principal component to plot (default the
+#'   first contrast).
 #' @return Called for its plotting side effect; invisibly \code{NULL}.
 #' @examples
 #' set.seed(1)
@@ -594,14 +628,19 @@ plot_resid_cor <- function(fit) {
 #' colnames(X) <- paste0("I", 1:6)
 #' plot_pca(rasch(X))
 #' @export
-plot_pca <- function(fit) {
-  pc <- residual_pca(fit)
-  ld <- pc$loadings$pc1_loading[match(fit$items$item, pc$loadings$item)]
+plot_pca <- function(fit, component = 1) {
+  pc <- residual_pca(fit); k <- as.integer(component)
+  cn <- paste0("PC", k)
+  if (!cn %in% names(pc$loadings_matrix))
+    stop("component ", k, " is not available (", ncol(pc$loadings_matrix) - 1L,
+         " returned)")
+  ld <- pc$loadings_matrix[[cn]][match(fit$items$item, pc$loadings_matrix$item)]
   loc <- fit$items$location
   op <- .rr_canvas(range(loc) + c(-0.5, 0.5), range(ld) * 1.25,
-                   "Item location (logits)", "PC1 loading",
-                   sprintf("eigenvalue %.3f  (%.1f%% of residual variance)",
-                           pc$first_eigen, 100 * pc$prop[1]), grid_x = TRUE)
+                   "Item location (logits)", paste0("PC", k, " loading"),
+                   sprintf("PC%d: eigenvalue %.3f  (%.1f%% of residual variance)",
+                           k, pc$eigen_table$eigenvalue[k],
+                           100 * pc$eigen_table$proportion[k]), grid_x = TRUE)
   on.exit(par(op))
   abline(h = 0, lty = 2, col = .rr$soft)
   points(loc, ld, pch = 21, cex = 1.6,
