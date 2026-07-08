@@ -2,7 +2,8 @@
 
 ## Estimation
 
-Pairwise conditional estimation of the Rasch model family.
+Pairwise conditional estimation of the Rasch model family, with Godambe
+sandwich standard errors and Warm person measures.
 
 - [`rasch()`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md) :
   Fit and diagnose a Rasch model by pairwise conditional estimation
@@ -21,6 +22,9 @@ Pairwise conditional estimation of the Rasch model family.
   : Category-score moments for a polytomous item
 
 ## Test of fit and comparison
+
+The fit-residual and chi-square apparatus, targeting and reliability,
+and model comparison.
 
 - [`fit_summary_table()`](https://drjoshmcgrane.github.io/rmt/reference/fit_summary_table.md)
   : Test-of-fit summary as a table
@@ -49,6 +53,9 @@ Pairwise conditional estimation of the Rasch model family.
 
 ## Invariance and DIF
 
+Differential item functioning over any number of person factors, DIF
+magnitudes in logits, resolution by item splitting, and equating.
+
 - [`dif_anova()`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md)
   : Differential item functioning by residual analysis of variance
 - [`dif_contrasts()`](https://drjoshmcgrane.github.io/rmt/reference/dif_contrasts.md)
@@ -65,6 +72,9 @@ Pairwise conditional estimation of the Rasch model family.
   : Tailored analysis for guessing
 
 ## Independence and dimensionality
+
+Residual principal components, the Smith t-test with magnitude
+estimation, Q3 local dependence, and the structural remedies.
 
 - [`residual_correlations()`](https://drjoshmcgrane.github.io/rmt/reference/residual_correlations.md)
   : Residual correlations for local dependence (Yen's Q3)
@@ -95,6 +105,10 @@ Pairwise conditional estimation of the Rasch model family.
 
 ## Paired comparisons
 
+The Bradley-Terry-Luce model as the conditional form of the dichotomous
+Rasch model, with judge diagnostics, within-judge dependence, and
+judge-group DIF.
+
 - [`btl()`](https://drjoshmcgrane.github.io/rmt/reference/btl.md) : Fit
   the Bradley-Terry-Luce model to paired comparisons
 - [`btl_dif()`](https://drjoshmcgrane.github.io/rmt/reference/btl_dif.md)
@@ -105,8 +119,12 @@ Pairwise conditional estimation of the Rasch model family.
   : Plot graded-comparison category curves
 - [`plot_btl_icc()`](https://drjoshmcgrane.github.io/rmt/reference/plot_btl_icc.md)
   : Plot an object characteristic curve
+- [`plot_btl_dependence()`](https://drjoshmcgrane.github.io/rmt/reference/plot_btl_dependence.md)
+  : Plot a within-judge dependence effect
 
 ## Plots
+
+One plotting function per display, all base graphics.
 
 - [`plot_catfreq()`](https://drjoshmcgrane.github.io/rmt/reference/plot_catfreq.md)
   : Plot category frequencies

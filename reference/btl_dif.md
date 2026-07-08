@@ -1,25 +1,35 @@
 # DIF analysis for paired comparisons
 
 Tests whether objects function differently for identifiable groups of
-judges. For each object: (i) the standardised residuals of its
-comparisons, oriented to the object, are analysed by judge group crossed
-with opponent-strength bands – a group main effect is uniform DIF and a
-group-by-band interaction non-uniform DIF, mirroring
-[`dif_anova`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md);
-and (ii) the object is resolved into one copy per judge group inside a
-joint refit and the differences between the resolved locations are
-reported in logits with judge-clustered Wald tests, familywise
-adjustment, and the practical-significance flag, mirroring
+judges. One judge factor is analysed on its own; several factors are
+modelled jointly – with main effects by default and factor-by-factor
+interactions optional – exactly as
+[`dif_anova`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md)
+treats person factors. For each object the standardised residuals of its
+comparisons, oriented to the object, are analysed by the judge factor(s)
+crossed with opponent-strength bands: a term is uniform DIF, its
+crossing with the band non-uniform DIF, and a significant higher-order
+group term supersedes the lower-order group terms built from a subset of
+its factors. Each term flagged for uniform DIF and not superseded is
+then resolved – the object split into one copy per cell of the term's
+factors inside a joint refit – and the differences between the resolved
+locations reported in logits with judge-clustered Wald tests and the
+practical-significance flag, mirroring
 [`dif_size`](https://drjoshmcgrane.github.io/rmt/reference/dif_size.md).
+Fits with within-judge dependence effects (`order`) keep those effects
+in the residual moments and in the refits, so dependence is not mistaken
+for judge-group DIF; count-weighted comparisons enter all tests with
+their weights.
 
 ## Usage
 
 ``` r
 btl_dif(
   fit,
-  groups,
+  factors,
   objects = NULL,
-  p_adjust = "holm",
+  effects = c("main", "factorial"),
+  p_adjust = "BH",
   alpha = 0.05,
   flag_logits = 0.5,
   min_n = 20,
@@ -35,21 +45,26 @@ btl_dif(
   An object from
   [`btl`](https://drjoshmcgrane.github.io/rmt/reference/btl.md).
 
-- groups:
+- factors:
 
-  Judge grouping: one value per row of `fit$comparisons`, or a vector
-  named by judge.
+  A judge factor, or a named list of them, each either one value per row
+  of `fit$comparisons` or a vector named by judge.
 
 - objects:
 
   Objects to test; all by default.
 
+- effects:
+
+  `"main"` (default) models several factors additively (each factor's
+  main effect and its band interaction); `"factorial"` also crosses the
+  factors with one another.
+
 - p_adjust:
 
-  Familywise adjustment over all pairwise location comparisons; the
-  ANOVA probabilities are adjusted across objects by Benjamini-Hochberg
-  within each term, as in
-  [`dif_anova`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md).
+  Multiplicity adjustment across objects within each term; the
+  resolved-size probabilities are adjusted in one pool over all objects,
+  terms, and cell pairs.
 
 - alpha:
 
@@ -61,7 +76,7 @@ btl_dif(
 
 - min_n:
 
-  Group levels with fewer comparisons involving the object are dropped
+  Term cells with fewer comparisons involving the object are dropped
   from its resolution, with a note.
 
 - maxit, tol:
@@ -70,13 +85,29 @@ btl_dif(
 
 ## Value
 
-A list of class `"rmt_btl_dif"`: `anova` (per object: uniform and
-non-uniform F, raw and adjusted p, flags), `levels` (resolved location
-and SE per object and group), `sizes` (per object and group pair:
-difference in logits, SE, z, adjusted p, significance and practical
-flags), and `notes`.
+A list of class `"rmt_btl_dif"`: `summary` (one row per object and group
+term with the uniform F, adjusted p and partial eta-squared – the term
+itself – the non-uniform ones – the term crossed with the opponent band
+– plus `uniform_DIF`, `nonuniform_DIF` and `superseded` flags); `terms`
+(the full per-object analysis-of-variance table); `levels` (resolved
+location and SE per object, term and cell); `sizes` (per object, term
+and cell pair: difference in logits, SE, z, adjusted p, significance and
+practical flags); `effects`, `factors`, and `notes`.
+
+## Details
+
+Each object is resolved against the other objects' common locations.
+When several objects carry real DIF, resolving them one at a time can
+spread a large effect onto clean objects as compensating,
+opposite-signed artificial DIF (Andrich & Hagquist 2012, 2015); read
+large flags on several objects together with that hazard in mind, and
+prefer resolving the largest effect first and re-running.
 
 ## References
+
+Andrich, D., & Hagquist, C. (2012). Real and artificial differential
+item functioning. *Journal of Educational and Behavioral Statistics*,
+37(3), 387-416.
 
 Dittrich, R., Hatzinger, R., & Katzenbeisser, W. (1998). Modelling the
 effect of subject-specific covariates in paired comparison studies with
@@ -97,15 +128,17 @@ p <- plogis(beta[d$a] - beta[d$b] + shift)
 d$win <- ifelse(runif(nrow(d)) < p, d$a, d$b)
 f <- btl(d, "a", "b", winner = "win", judge = "judge")
 grp <- setNames(rep(c("g1", "g2"), each = 6), sprintf("J%02d", 1:12))
-btl_dif(f, groups = grp, objects = "C")
-#> DIF for paired comparisons: 1 object(s) by judge group
-#> Residual ANOVA (uniform = group; non-uniform = group x opponent band; BH across objects)
-#>  object   n F_uniform p_uniform_adj uniform_DIF F_nonuniform p_nonuniform_adj
-#>       C 180    14.495       < 0.001           *        0.081            0.922
+btl_dif(f, grp, objects = "C")
+#> DIF for paired comparisons: 1 factor(s) [group], main effects
+#> Residual ANOVA per object and term (uniform = term; non-uniform = term x opponent band)
+#>  object  term F_uniform p_uniform_adj uniform_DIF F_nonuniform p_nonuniform_adj
+#>       C group    14.495       < 0.001           *        0.081            0.922
 #>  nonuniform_DIF
 #>                
 #> 
-#> Resolved locations (logits; holm over 1 comparison(s); practical 0.50)
-#>  object level_a level_b difference    se     z   p_adj significant practical
-#>       C      g1      g2      1.404 0.271 5.186 < 0.001           *         *
+#> Resolved locations (logits; BH over 1 comparison(s); practical 0.50)
+#>  object  term level_a level_b difference    se     z   p_adj significant
+#>       C group      g1      g2      1.404 0.271 5.186 < 0.001           *
+#>  practical
+#>          *
 ```

@@ -39,12 +39,15 @@ plot_btl_icc(fit, object, group = NULL, grid = NULL, min_n = 10)
 
 - min_n:
 
-  Opponents met fewer than this many times are drawn hollow (ungrouped
-  display only).
+  An opponent's observed point is drawn only when the object (or, in the
+  grouped display, that judge group) met it at least this many times;
+  sparser pairs from incomplete or unbalanced designs are omitted.
 
 ## Value
 
-Called for its plotting side effect; invisibly `NULL`.
+Called for its plotting side effect; invisibly the names of the
+opponents drawn (the ungrouped display), or `NULL` for the grouped
+display.
 
 ## Examples
 

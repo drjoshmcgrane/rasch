@@ -2,7 +2,7 @@
 
 Estimates each person separately on two item subsets and compares the
 two estimates with a per-person t-test (Smith 2002). By default the
-subsets are defined by the sign of a residual-contrast loading (the
+subsets are defined by the sign of a residual-component loading (the
 first by default; any leading component may be chosen); they can also be
 nominated manually (for example, by content). Under unidimensionality
 and local independence the two subset estimates are independent given
@@ -47,7 +47,7 @@ dimensionality_test(
 - component:
 
   Which residual principal component's loading sign defines the default
-  split (ignored when subsets are named). Default the first contrast.
+  split (ignored when subsets are named). Default the first component.
 
 ## Value
 

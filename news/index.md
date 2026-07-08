@@ -1,5 +1,52 @@
 # Changelog
 
+## rmt 1.3.0
+
+A full statistical audit of the independence, invariance, and paired-
+comparison procedures, with fixes throughout.
+
+- Paired comparisons:
+  [`btl()`](https://drjoshmcgrane.github.io/rmt/reference/btl.md) now
+  interrogates within-judge dependence – `dependence_data` holds every
+  comparison’s exposure and carry-over covariates (count-weighted),
+  [`plot_btl_dependence()`](https://drjoshmcgrane.github.io/rmt/reference/plot_btl_dependence.md)
+  displays an effect as a partial-residual curve, and a separated effect
+  (one-sided informative comparisons) is set aside with a note instead
+  of reported as a runaway estimate. The graded engine’s
+  threshold-by-dependence Hessian block is corrected (free-threshold
+  fits with five or more categories and an order column now converge),
+  rows with a missing judge are dropped with a note, category checks
+  re-run after boundary objects are removed, and the dichotomous path
+  now routes through the one (vectorised) estimator.
+- [`btl_dif()`](https://drjoshmcgrane.github.io/rmt/reference/btl_dif.md)
+  holds fitted dependence effects fixed in its residual moments and
+  resolution refits (dependence is no longer absorbed as spurious
+  judge-group DIF), weights count-aggregated comparisons exactly as
+  expanded rows, restricts supersession to group terms, and notes every
+  significant term it does not resolve.
+- [`dif_anova()`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md)
+  keeps each ANOVA term in its own error stratum, so a mixed
+  (within-subject) design with missing responses no longer un-flags real
+  DIF; factors named like internals (`ci`, `f1`) are safe; a term’s own
+  class-interval crossing no longer supersedes it (so
+  [`resolve_dif()`](https://drjoshmcgrane.github.io/rmt/reference/resolve_dif.md)
+  again splits items with both uniform and non-uniform DIF); mixed
+  designs say plainly that Tukey comparisons are unavailable; and
+  [`dif_size()`](https://drjoshmcgrane.github.io/rmt/reference/dif_size.md)
+  notes when a within-person factor makes its standard errors
+  conservative.
+- [`plot_scree()`](https://drjoshmcgrane.github.io/rmt/reference/plot_scree.md)’s
+  parallel-analysis reference is now model-simulated (responses drawn
+  from the calibrated model, persons re-estimated), so model-true data
+  sits at the reference instead of always “showing structure” (Raiche
+  2005; Chou & Wang 2010).
+- Shiny app: judge-group DIF results freeze their run’s factors and
+  alpha (later sidebar edits cannot silently regroup the overlay or
+  break the reproducible snippets), superseded terms are shown, the
+  within-judge dependence panel explains dropped effects, and fit flags
+  are consistent on every table (fit residual \|2.5\|; outfit 0.7-1.3;
+  infit 0.8-1.2).
+
 ## rmt 1.2.0
 
 - [`plot_pca_biplot()`](https://drjoshmcgrane.github.io/rmt/reference/plot_pca_biplot.md)
