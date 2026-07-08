@@ -34,7 +34,7 @@ dif_anova(
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - factors:
 
@@ -67,7 +67,7 @@ dif_anova(
 - sizes:
 
   Also compute DIF magnitudes in logits
-  ([`dif_size`](https://drjoshmcgrane.github.io/rmt/reference/dif_size.md))
+  ([`dif_size`](https://drjoshmcgrane.github.io/rasch/reference/dif_size.md))
   for every significant, non-superseded group term: the item is resolved
   by the term's levels (interaction terms by their cells) and all
   pairwise location differences are returned with Holm familywise

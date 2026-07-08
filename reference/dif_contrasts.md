@@ -36,7 +36,7 @@ dif_contrasts(
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - factors:
 
@@ -86,7 +86,7 @@ dif_contrasts(
 
 ## Value
 
-A list of class `"rmt_dif_contrasts"`: `table` (one row per item and
+A list of class `"rasch_dif_contrasts"`: `table` (one row per item and
 contrast: estimate in logits, SE, statistic, df where a t test was used,
 raw and adjusted p, 95 per cent interval, `significant`, `practical`,
 `within`), `family` (the derived questions with their cell weights), the
@@ -96,7 +96,7 @@ settings, and any `notes`.
 
 Each contrast is estimated in logits from resolved item locations (the
 item split into one copy per design cell and the model refitted, as in
-[`dif_size`](https://drjoshmcgrane.github.io/rmt/reference/dif_size.md)),
+[`dif_size`](https://drjoshmcgrane.github.io/rasch/reference/dif_size.md)),
 with cell weights scaled so every estimate is a difference between two
 weighted averages – directly comparable to the practical-significance
 criterion. Because resolution is used, magnitudes are read from a

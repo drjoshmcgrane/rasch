@@ -16,7 +16,7 @@ plot_icc_frames(fit, item, n_groups = fit$n_groups, grid = seq(-5, 5, 0.05))
 - fit:
 
   A fitted object from
-  [`rasch_efrm`](https://drjoshmcgrane.github.io/rmt/reference/rasch_efrm.md).
+  [`rasch_efrm`](https://drjoshmcgrane.github.io/rasch/reference/rasch_efrm.md).
 
 - item:
 

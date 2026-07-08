@@ -16,9 +16,9 @@ fit_summary_table(fit)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md), or
-  a paired-comparison fit from
-  [`btl`](https://drjoshmcgrane.github.io/rmt/reference/btl.md) (which
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md),
+  or a paired-comparison fit from
+  [`btl`](https://drjoshmcgrane.github.io/rasch/reference/btl.md) (which
   reports its own headline set: convergence, pairwise chi-square, object
   separation, thresholds structure, and dependence effects when
   estimated).

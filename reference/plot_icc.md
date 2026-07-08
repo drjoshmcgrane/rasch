@@ -15,7 +15,7 @@ plot_icc(fit, item, group = NULL, n_groups = NULL, grid = seq(-5, 5, 0.05))
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - item:
 

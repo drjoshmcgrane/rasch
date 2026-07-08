@@ -14,7 +14,7 @@ assumed zero), with familywise adjustment over the pairs. For a
 within-person factor – the same persons behind several levels, as in a
 stacked repeated-measures design – the sandwich carries no person
 clustering, so the standard errors are conservative; a note says so, and
-[`dif_contrasts`](https://drjoshmcgrane.github.io/rmt/reference/dif_contrasts.md)
+[`dif_contrasts`](https://drjoshmcgrane.github.io/rasch/reference/dif_contrasts.md)
 handles that case with person-level differencing. Differences at least
 `flag_logits` in absolute size are flagged as practically significant;
 half a logit is a common working criterion, to be weighed against the
@@ -39,7 +39,7 @@ dif_size(
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - item:
 
@@ -70,9 +70,9 @@ dif_size(
 
 ## Value
 
-A list of class `"rmt_dif_size"`: `levels` (resolved location and SE per
-level, with its n), `pairs` (per comparison: difference in logits, SE,
-z, raw and adjusted p, 95 per cent interval, `significant`,
+A list of class `"rasch_dif_size"`: `levels` (resolved location and SE
+per level, with its n), `pairs` (per comparison: difference in logits,
+SE, z, raw and adjusted p, 95 per cent interval, `significant`,
 `practical`), the settings, and any notes.
 
 ## Details
@@ -80,7 +80,7 @@ z, raw and adjusted p, 95 per cent interval, `significant`,
 For an interaction, supply several factor names: levels are then the
 factor-combination cells, which is the post-hoc follow-up to a
 significant factor-by-factor term in
-[`dif_anova`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md).
+[`dif_anova`](https://drjoshmcgrane.github.io/rasch/reference/dif_anova.md).
 
 ## Examples
 

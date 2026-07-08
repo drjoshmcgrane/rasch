@@ -16,7 +16,7 @@ residual_pca(fit, n_components = 10)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - n_components:
 

@@ -1,7 +1,7 @@
 # Save a kidmap for every person
 
 Writes one kidmap
-([`plot_kidmap`](https://drjoshmcgrane.github.io/rmt/reference/plot_kidmap.md))
+([`plot_kidmap`](https://drjoshmcgrane.github.io/rasch/reference/plot_kidmap.md))
 per person to a single multi-page PDF or a ZIP archive of PNGs, chosen
 by the extension of `file`. Persons without a location estimate are
 skipped.
@@ -25,7 +25,7 @@ save_person_plots(
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - file:
 

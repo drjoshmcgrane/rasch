@@ -19,8 +19,8 @@ lr_test(fit, maxit = 60, tol = 1e-08)
 - fit:
 
   A `"PCM"` fit from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md) with
-  equal maximum scores across items (the rating parameterisation
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md)
+  with equal maximum scores across items (the rating parameterisation
   requires them).
 
 - maxit, tol:
@@ -29,7 +29,7 @@ lr_test(fit, maxit = 60, tol = 1e-08)
 
 ## Value
 
-A list of class `"rmt_lr"`: raw `chisq`, `df`, `p` (the conventional
+A list of class `"rasch_lr"`: raw `chisq`, `df`, `p` (the conventional
 display); adjusted `chisq_adj`, `p_adj`, and the eigenvalues `lambda`;
 the two log-likelihoods; and the rating-scale refit (`fit_rsm`).
 

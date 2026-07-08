@@ -4,7 +4,7 @@ Replaces each nominated item with one item per level of a person factor,
 each carrying that level's responses only (other levels missing). Every
 group then receives its own item location, which resolves the invariance
 violation flagged by
-[`dif_anova`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md);
+[`dif_anova`](https://drjoshmcgrane.github.io/rasch/reference/dif_anova.md);
 the distance between the split locations estimates the DIF size. The
 model is refitted with the same settings.
 
@@ -19,7 +19,7 @@ split_items(fit, items, by)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - items:
 
@@ -32,9 +32,10 @@ split_items(fit, items, by)
 
 ## Value
 
-A new [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md)
-fit in which each split item appears as `"item (level)"`, with the
-splits recorded in its notes.
+A new
+[`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md) fit
+in which each split item appears as `"item (level)"`, with the splits
+recorded in its notes.
 
 ## Examples
 

@@ -1,4 +1,4 @@
-# Launch the rmt graphical interface
+# Launch the rasch graphical interface
 
 Opens the Shiny application: data upload with ID, person-factor, and
 item column nomination; the full analysis; interactive tables and plots;

@@ -16,7 +16,7 @@ plot_guttman(fit, max_persons = 80)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - max_persons:
 

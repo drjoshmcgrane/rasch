@@ -4,7 +4,7 @@ Tests whether objects function differently for identifiable groups of
 judges. One judge factor is analysed on its own; several factors are
 modelled jointly – with main effects by default and factor-by-factor
 interactions optional – exactly as
-[`dif_anova`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md)
+[`dif_anova`](https://drjoshmcgrane.github.io/rasch/reference/dif_anova.md)
 treats person factors. For each object the standardised residuals of its
 comparisons, oriented to the object, are analysed by the judge factor(s)
 crossed with opponent-strength bands: a term is uniform DIF, its
@@ -15,7 +15,7 @@ then resolved – the object split into one copy per cell of the term's
 factors inside a joint refit – and the differences between the resolved
 locations reported in logits with judge-clustered Wald tests and the
 practical-significance flag, mirroring
-[`dif_size`](https://drjoshmcgrane.github.io/rmt/reference/dif_size.md).
+[`dif_size`](https://drjoshmcgrane.github.io/rasch/reference/dif_size.md).
 Fits with within-judge dependence effects (`order`) keep those effects
 in the residual moments and in the refits, so dependence is not mistaken
 for judge-group DIF; count-weighted comparisons enter all tests with
@@ -43,7 +43,7 @@ btl_dif(
 - fit:
 
   An object from
-  [`btl`](https://drjoshmcgrane.github.io/rmt/reference/btl.md).
+  [`btl`](https://drjoshmcgrane.github.io/rasch/reference/btl.md).
 
 - factors:
 
@@ -85,14 +85,14 @@ btl_dif(
 
 ## Value
 
-A list of class `"rmt_btl_dif"`: `summary` (one row per object and group
-term with the uniform F, adjusted p and partial eta-squared – the term
-itself – the non-uniform ones – the term crossed with the opponent band
-– plus `uniform_DIF`, `nonuniform_DIF` and `superseded` flags); `terms`
-(the full per-object analysis-of-variance table); `levels` (resolved
-location and SE per object, term and cell); `sizes` (per object, term
-and cell pair: difference in logits, SE, z, adjusted p, significance and
-practical flags); `effects`, `factors`, and `notes`.
+A list of class `"rasch_btl_dif"`: `summary` (one row per object and
+group term with the uniform F, adjusted p and partial eta-squared – the
+term itself – the non-uniform ones – the term crossed with the opponent
+band – plus `uniform_DIF`, `nonuniform_DIF` and `superseded` flags);
+`terms` (the full per-object analysis-of-variance table); `levels`
+(resolved location and SE per object, term and cell); `sizes` (per
+object, term and cell pair: difference in logits, SE, z, adjusted p,
+significance and practical flags); `effects`, `factors`, and `notes`.
 
 ## Details
 

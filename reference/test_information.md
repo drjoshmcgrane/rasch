@@ -14,7 +14,7 @@ test_information(fit, grid = seq(-6, 6, by = 0.1))
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - grid:
 

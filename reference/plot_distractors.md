@@ -17,8 +17,8 @@ plot_distractors(fit, item, n_groups = fit$n_groups)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md) run
-  with a `key`.
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md)
+  run with a `key`.
 
 - item:
 

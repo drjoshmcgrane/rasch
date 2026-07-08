@@ -2,7 +2,7 @@
 
 Runs a complete Rasch analysis: Andrich and Luo pairwise conditional
 maximum likelihood item estimation (see
-[`pcml`](https://drjoshmcgrane.github.io/rmt/reference/pcml.md)), Warm
+[`pcml`](https://drjoshmcgrane.github.io/rasch/reference/pcml.md)), Warm
 weighted likelihood person estimates per missing-data pattern, item and
 person fit residuals (the log-of-mean-square statistic of Andrich and
 Marais 2019, ch. 23, with its untransformed natural form and degrees of
@@ -76,9 +76,10 @@ rasch(
 
   Optional anchor table for equating: a data frame with columns `item`,
   `k`, and `tau` fixing nominated thresholds at known values; see
-  [`pcml`](https://drjoshmcgrane.github.io/rmt/reference/pcml.md). With
-  anchors in place the scale origin comes from the anchors, so person
-  measures are directly comparable across separately analysed datasets.
+  [`pcml`](https://drjoshmcgrane.github.io/rasch/reference/pcml.md).
+  With anchors in place the scale origin comes from the anchors, so
+  person measures are directly comparable across separately analysed
+  datasets.
 
 - na_codes:
 
@@ -98,19 +99,19 @@ rasch(
   every credited option (unlisted options score 0), so informative
   distractors receive partial credit and the item is fitted as
   polytomous; see
-  [`distractor_rescore`](https://drjoshmcgrane.github.io/rmt/reference/distractor_rescore.md)
+  [`distractor_rescore`](https://drjoshmcgrane.github.io/rasch/reference/distractor_rescore.md)
   for an evidence-based proposal. Raw responses are retained in `fit$mc`
   for
-  [`distractor_analysis`](https://drjoshmcgrane.github.io/rmt/reference/distractor_analysis.md)
+  [`distractor_analysis`](https://drjoshmcgrane.github.io/rasch/reference/distractor_analysis.md)
   and
-  [`plot_distractors`](https://drjoshmcgrane.github.io/rmt/reference/plot_distractors.md).
+  [`plot_distractors`](https://drjoshmcgrane.github.io/rasch/reference/plot_distractors.md).
 
 - pc_components:
 
   `NULL` (default) estimates every PCM threshold freely. An integer 1 to
   4 instead estimates each item's thresholds through the Andrich
   principal-components reparameterisation (see
-  [`pcml_pc`](https://drjoshmcgrane.github.io/rmt/reference/pcml_pc.md)):
+  [`pcml_pc`](https://drjoshmcgrane.github.io/rasch/reference/pcml_pc.md)):
   1 = location only, 2 = + spread (the dispersion model of Andrich
   1982), 3 = + skewness, 4 = + kurtosis (the full principal-components
   model; Pedler 1987). Useful when some categories are sparsely

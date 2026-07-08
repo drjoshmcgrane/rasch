@@ -5,14 +5,14 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>rmt — Rasch Measurement Theory in R • rmt</title>
+<title>rasch — Rasch Measurement Theory in R • rasch</title>
 <script src="lightswitch.js"></script><script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/Source_Sans_3-0.4.10/font.css" rel="stylesheet">
 <link href="deps/JetBrains_Mono-0.4.10/font.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="rmt — Rasch Measurement Theory in R">
+<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="rasch — Rasch Measurement Theory in R">
 <meta name="description" content="Pairwise conditional estimation of the Rasch model family — partial credit, rating scale, many-facet, extended frame of reference, and Bradley-Terry-Luce paired comparisons — with the complete diagnostic apparatus of published Rasch Measurement Theory and a Shiny interface that attaches reproducing R code to every output.
 ">
 <meta property="og:description" content="Pairwise conditional estimation of the Rasch model family — partial credit, rating scale, many-facet, extended frame of reference, and Bradley-Terry-Luce paired comparisons — with the complete diagnostic apparatus of published Rasch Measurement Theory and a Shiny interface that attaches reproducing R code to every output.
@@ -24,9 +24,9 @@
 
     <nav class="navbar navbar-expand-lg fixed-top " aria-label="Site navigation"><div class="container">
 
-    <a class="navbar-brand me-2" href="index.html">rmt</a>
+    <a class="navbar-brand me-2" href="index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -42,7 +42,7 @@
 <li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="search.json">
 </form></li>
-<li class="nav-item"><a class="external-link nav-link" href="https://github.com/drjoshmcgrane/rmt/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
+<li class="nav-item"><a class="external-link nav-link" href="https://github.com/drjoshmcgrane/rasch/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-lightswitch" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" aria-label="Light switch"><span class="fa fa-sun"></span></button>
   <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdown-lightswitch">
@@ -59,14 +59,14 @@
 </nav><div class="container template-home">
 <div class="row">
   <main id="main" class="col-md-9"><div class="section level1">
-<div class="page-header"><h1 id="rmt--rasch-measurement-theory-in-r">rmt — Rasch Measurement Theory in R<a class="anchor" aria-label="anchor" href="#rmt--rasch-measurement-theory-in-r"></a>
+<div class="page-header"><h1 id="rasch--rasch-measurement-theory-in-r">rasch — Rasch Measurement Theory in R<a class="anchor" aria-label="anchor" href="#rasch--rasch-measurement-theory-in-r"></a>
 </h1></div>
 <!-- badges: start -->
 
-<p><strong>rmt</strong> is a Rasch Measurement Theory engine for R, built entirely from published measurement theory. Items are estimated by pairwise conditional maximum likelihood (Andrich &amp; Luo 2003; Zwinderman 1995) with Godambe sandwich standard errors, persons by Warm’s (1989) weighted likelihood, and the complete diagnostic apparatus follows the conventions of Andrich &amp; Marais (2019). A modern Shiny interface exposes every analysis with the reproducing R code attached to every output.</p>
-<p><strong>Documentation:</strong> <a href="https://drjoshmcgrane.github.io/rmt/" class="uri">https://drjoshmcgrane.github.io/rmt/</a></p>
+<p><strong>rasch</strong> is a Rasch Measurement Theory engine for R, built entirely from published measurement theory. Items are estimated by pairwise conditional maximum likelihood (Andrich &amp; Luo 2003; Zwinderman 1995) with Godambe sandwich standard errors, persons by Warm’s (1989) weighted likelihood, and the complete diagnostic apparatus follows the conventions of Andrich &amp; Marais (2019). A modern Shiny interface exposes every analysis with the reproducing R code attached to every output.</p>
+<p><strong>Documentation:</strong> <a href="https://drjoshmcgrane.github.io/rasch/" class="uri">https://drjoshmcgrane.github.io/rasch/</a></p>
 <p align="center">
-<img src="reference/figures/app-trait.png" alt="The rmt Shiny interface: residual principal components with loadings table and biplot" width="90%"></p>
+<img src="reference/figures/app-trait.png" alt="The rasch Shiny interface: residual principal components with loadings table and biplot" width="90%"></p>
 <div class="section level2">
 <h2 id="highlights">Highlights<a class="anchor" aria-label="anchor" href="#highlights"></a>
 </h2>
@@ -90,14 +90,14 @@
 </h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("remotes")</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"drjoshmcgrane/rmt"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"drjoshmcgrane/rasch"</span><span class="op">)</span></span></code></pre></div>
 <p>The analysis engine is base R only (<code>stats</code>, <code>graphics</code>, <code>grDevices</code>, <code>utils</code>). The Shiny interface additionally uses <code>shiny</code>, <code>bslib</code>, and <code>DT</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
 </h2>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://drjoshmcgrane.github.io/rmt/">rmt</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://drjoshmcgrane.github.io/rasch/">rasch</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># a persons-by-items data frame; item names, an ID column, and person</span></span>
 <span><span class="co"># factors carry through the whole analysis</span></span>
@@ -124,8 +124,8 @@
 <h2 id="the-shiny-interface">The Shiny interface<a class="anchor" aria-label="anchor" href="#the-shiny-interface"></a>
 </h2>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">rmt</span><span class="fu">::</span><span class="fu"><a href="reference/run_app.html">run_app</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p>A guided bslib (Bootstrap 5) workflow: one-tap example datasets, grouped run settings, status badges once a fit exists, and dark mode. Every plot and table lives in a full-screen-capable card with downloads; master–detail explorers drive the item, person, and DIF pages; dynamic notes summarise each table’s verdict in words; and an “R code for this analysis” panel shows the exact <code>rmt</code> call reproducing the current run. Wide, long (rated), frame-of-reference, and paired-comparison data layouts are all supported, including anchor upload for equating and one-click structural remedies (subtests, item splitting, automatic DIF resolution) with in-place reset.</p>
+<code class="sourceCode R"><span><span class="fu">rasch</span><span class="fu">::</span><span class="fu"><a href="reference/run_app.html">run_app</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p>A guided bslib (Bootstrap 5) workflow: one-tap example datasets, grouped run settings, status badges once a fit exists, and dark mode. Every plot and table lives in a full-screen-capable card with downloads; master–detail explorers drive the item, person, and DIF pages; dynamic notes summarise each table’s verdict in words; and an “R code for this analysis” panel shows the exact <code>rasch</code> call reproducing the current run. Wide, long (rated), frame-of-reference, and paired-comparison data layouts are all supported, including anchor upload for equating and one-click structural remedies (subtests, item splitting, automatic DIF resolution) with in-place reset.</p>
 <p align="center">
 <img src="reference/figures/app-dif.png" alt="Judge-group DIF for paired comparisons: joint factors with the characteristic curves of the selected term" width="90%"></p>
 <details><summary><strong>Capability tour — the full API by example</strong>
@@ -259,8 +259,8 @@
 <h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">
 <li>
-<p><a href="https://github.com/drjoshmcgrane/rmt" class="external-link">Browse source code</a></p>
-<p><a href="https://github.com/drjoshmcgrane/rmt/issues" class="external-link">Report a bug</a></p>
+<p><a href="https://github.com/drjoshmcgrane/rasch" class="external-link">Browse source code</a></p>
+<p><a href="https://github.com/drjoshmcgrane/rasch/issues" class="external-link">Report a bug</a></p>
 </li>
 </ul>
 </div>
@@ -277,7 +277,7 @@
 <div class="citation">
 <h2 data-toc-skip>Citation</h2>
 <ul class="list-unstyled">
-<li><a href="authors.html#citation">Citing rmt</a></li>
+<li><a href="authors.html#citation">Citing rasch</a></li>
 </ul>
 </div>
 
@@ -291,8 +291,8 @@
 <div class="dev-status">
 <h2 data-toc-skip>Dev status</h2>
 <ul class="list-unstyled">
-<li><a href="https://github.com/drjoshmcgrane/rmt/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/drjoshmcgrane/rmt/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
-<li><a href="https://drjoshmcgrane.github.io/rmt/"><img src="https://github.com/drjoshmcgrane/rmt/actions/workflows/pkgdown.yaml/badge.svg" alt="pkgdown"></a></li>
+<li><a href="https://github.com/drjoshmcgrane/rasch/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/drjoshmcgrane/rasch/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
+<li><a href="https://drjoshmcgrane.github.io/rasch/"><img src="https://github.com/drjoshmcgrane/rasch/actions/workflows/pkgdown.yaml/badge.svg" alt="pkgdown"></a></li>
 </ul>
 </div>
 

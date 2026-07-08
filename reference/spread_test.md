@@ -4,13 +4,13 @@ Andrich's (1985) least-upper-bound screen: the spread component
 \\\lambda\\ of a polytomous item (half the distance between successive
 thresholds in the principal-components parameterisation, estimated here
 by
-[`pcml_pc`](https://drjoshmcgrane.github.io/rmt/reference/pcml_pc.md))
+[`pcml_pc`](https://drjoshmcgrane.github.io/rasch/reference/pcml_pc.md))
 cannot fall below the value implied by the binomial distribution when
 the item is a subtest of equally difficult, independent dichotomous
 items; different difficulties only raise it. A spread estimate below the
 bound therefore indicates response dependence among the members (Andrich
 and Marais 2019, Table 24.1). Typically applied after
-[`combine_items`](https://drjoshmcgrane.github.io/rmt/reference/combine_items.md),
+[`combine_items`](https://drjoshmcgrane.github.io/rasch/reference/combine_items.md),
 whose super-items are exactly such subtests.
 
 ## Usage
@@ -24,12 +24,12 @@ spread_test(fit, maxit = 60, tol = 1e-08)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - maxit, tol:
 
   Passed to the
-  [`pcml_pc`](https://drjoshmcgrane.github.io/rmt/reference/pcml_pc.md)
+  [`pcml_pc`](https://drjoshmcgrane.github.io/rasch/reference/pcml_pc.md)
   refit.
 
 ## Value

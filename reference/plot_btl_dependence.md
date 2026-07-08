@@ -24,7 +24,7 @@ plot_btl_dependence(fit, effect = c("exposure", "carry_over"), bins = 6)
 - fit:
 
   An object from
-  [`btl`](https://drjoshmcgrane.github.io/rmt/reference/btl.md) fitted
+  [`btl`](https://drjoshmcgrane.github.io/rasch/reference/btl.md) fitted
   with an `order` column, so `fit$dependence_data` is present.
 
 - effect:

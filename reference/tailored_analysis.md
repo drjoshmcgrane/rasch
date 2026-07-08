@@ -12,7 +12,7 @@ every item at its tailored difficulty and re-estimates persons on the
 original data. Guessing is indicated when difficult items are estimated
 harder in the tailored analysis than in the origin-equated one; the
 comparison table and
-[`plot_equate`](https://drjoshmcgrane.github.io/rmt/reference/plot_equate.md)
+[`plot_equate`](https://drjoshmcgrane.github.io/rasch/reference/plot_equate.md)
 on the two calibrations show it directly.
 
 ## Usage
@@ -26,7 +26,7 @@ tailored_analysis(fit, chance = 0.25, anchor_items = NULL)
 - fit:
 
   A dichotomous fit from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - chance:
 
@@ -43,7 +43,7 @@ tailored_analysis(fit, chance = 0.25, anchor_items = NULL)
 
 ## Value
 
-A list of class `"rmt_tailored"`: `tailored`, `origin_equated`, and
+A list of class `"rasch_tailored"`: `tailored`, `origin_equated`, and
 `anchored` fits, the comparison `table` (initial, tailored,
 origin-equated locations, the tailored-minus-equated `shift`, and its
 `z`), the number of responses removed, and the anchor items used.

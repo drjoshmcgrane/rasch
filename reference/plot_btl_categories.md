@@ -17,7 +17,7 @@ plot_btl_categories(fit, grid = seq(-4, 4, 0.05))
 - fit:
 
   A graded fit from
-  [`btl`](https://drjoshmcgrane.github.io/rmt/reference/btl.md) (with
+  [`btl`](https://drjoshmcgrane.github.io/rasch/reference/btl.md) (with
   `response`).
 
 - grid:

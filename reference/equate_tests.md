@@ -17,13 +17,14 @@ equate_tests(fit, reference, shift = c("mean", "none"))
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - reference:
 
   A second
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md) fit,
-  or a data frame with columns `item`, `location`, and optionally `se`.
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md)
+  fit, or a data frame with columns `item`, `location`, and optionally
+  `se`.
 
 - shift:
 

@@ -15,7 +15,7 @@ plot_pimap(fit, bins = 35, xlim = NULL)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - bins:
 

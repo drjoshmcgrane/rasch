@@ -16,7 +16,7 @@ plot_wright(fit, bins = 35, xlim = NULL, cex_labels = 0.8)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - bins:
 

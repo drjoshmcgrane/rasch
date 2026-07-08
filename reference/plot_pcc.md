@@ -19,7 +19,7 @@ plot_pcc(fit, person, n_groups = 5, grid = seq(-5, 5, 0.05))
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - person:
 

@@ -115,19 +115,19 @@ btl(
 
 ## Value
 
-A list of class `"rmt_btl"`: `objects` (location, se, comparisons, wins
-– or the graded `score` – infit and outfit mean squares, fit residual
-and its df), `pairs` (per pair: n, observed and expected win proportions
-– or mean graded responses – standardised residual, chi-square
-component), `judges` (when given: per judge n, infit, outfit, fit
-residual, df), `total_chisq`, `total_df`, `total_p`, the object
+A list of class `"rasch_btl"`: `objects` (location, se, comparisons,
+wins – or the graded `score` – infit and outfit mean squares, fit
+residual and its df), `pairs` (per pair: n, observed and expected win
+proportions – or mean graded responses – standardised residual,
+chi-square component), `judges` (when given: per judge n, infit, outfit,
+fit residual, df), `total_chisq`, `total_df`, `total_p`, the object
 separation index `osi`, `loglik`, convergence details, and `notes`.
 Graded fits add `thresholds` (the symmetric threshold estimates with
 standard errors), `m`, and `categories`. With an `order` column the
 within-judge `dependence` effects table carries an `n_informative`
 count, and `dependence_data` holds every comparison with its
 per-comparison exposure and carry-over covariates (see
-[`plot_btl_dependence`](https://drjoshmcgrane.github.io/rmt/reference/plot_btl_dependence.md)).
+[`plot_btl_dependence`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_dependence.md)).
 
 ## Details
 

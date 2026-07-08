@@ -1,7 +1,7 @@
 # Estimate Rasch thresholds via the Andrich principal-components reparameterisation
 
 An optional alternative to
-[`pcml`](https://drjoshmcgrane.github.io/rmt/reference/pcml.md)'s
+[`pcml`](https://drjoshmcgrane.github.io/rasch/reference/pcml.md)'s
 free-threshold estimation, useful when some response categories are
 sparsely populated. Each item's thresholds are re-expressed as up to
 four orthogonal polynomial components in the category score: location,

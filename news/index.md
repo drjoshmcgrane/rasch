@@ -1,15 +1,27 @@
 # Changelog
 
-## rmt 1.3.0
+## rasch 1.3.1
+
+- The package is now called **rasch** (it was developed under the
+  working title `rmt`). The name `rmt` belongs to an unrelated package
+  on CRAN, and `rasch` says plainly what this is – and mirrors
+  `mirt::mirt()` with
+  [`rasch::rasch()`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
+  No functions, arguments, or results change; only the package and
+  library name. The auxiliary result classes were unified under the
+  `rasch_` prefix (`rasch_btl`, `rasch_dif`, …) to match the fit
+  classes.
+
+## rasch 1.3.0
 
 A full statistical audit of the independence, invariance, and paired-
 comparison procedures, with fixes throughout.
 
 - Paired comparisons:
-  [`btl()`](https://drjoshmcgrane.github.io/rmt/reference/btl.md) now
+  [`btl()`](https://drjoshmcgrane.github.io/rasch/reference/btl.md) now
   interrogates within-judge dependence – `dependence_data` holds every
   comparison’s exposure and carry-over covariates (count-weighted),
-  [`plot_btl_dependence()`](https://drjoshmcgrane.github.io/rmt/reference/plot_btl_dependence.md)
+  [`plot_btl_dependence()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_dependence.md)
   displays an effect as a partial-residual curve, and a separated effect
   (one-sided informative comparisons) is set aside with a note instead
   of reported as a runaway estimate. The graded engine’s
@@ -18,24 +30,24 @@ comparison procedures, with fixes throughout.
   rows with a missing judge are dropped with a note, category checks
   re-run after boundary objects are removed, and the dichotomous path
   now routes through the one (vectorised) estimator.
-- [`btl_dif()`](https://drjoshmcgrane.github.io/rmt/reference/btl_dif.md)
+- [`btl_dif()`](https://drjoshmcgrane.github.io/rasch/reference/btl_dif.md)
   holds fitted dependence effects fixed in its residual moments and
   resolution refits (dependence is no longer absorbed as spurious
   judge-group DIF), weights count-aggregated comparisons exactly as
   expanded rows, restricts supersession to group terms, and notes every
   significant term it does not resolve.
-- [`dif_anova()`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md)
+- [`dif_anova()`](https://drjoshmcgrane.github.io/rasch/reference/dif_anova.md)
   keeps each ANOVA term in its own error stratum, so a mixed
   (within-subject) design with missing responses no longer un-flags real
   DIF; factors named like internals (`ci`, `f1`) are safe; a term’s own
   class-interval crossing no longer supersedes it (so
-  [`resolve_dif()`](https://drjoshmcgrane.github.io/rmt/reference/resolve_dif.md)
+  [`resolve_dif()`](https://drjoshmcgrane.github.io/rasch/reference/resolve_dif.md)
   again splits items with both uniform and non-uniform DIF); mixed
   designs say plainly that Tukey comparisons are unavailable; and
-  [`dif_size()`](https://drjoshmcgrane.github.io/rmt/reference/dif_size.md)
+  [`dif_size()`](https://drjoshmcgrane.github.io/rasch/reference/dif_size.md)
   notes when a within-person factor makes its standard errors
   conservative.
-- [`plot_scree()`](https://drjoshmcgrane.github.io/rmt/reference/plot_scree.md)’s
+- [`plot_scree()`](https://drjoshmcgrane.github.io/rasch/reference/plot_scree.md)’s
   parallel-analysis reference is now model-simulated (responses drawn
   from the calibrated model, persons re-estimated), so model-true data
   sits at the reference instead of always “showing structure” (Raiche
@@ -47,17 +59,17 @@ comparison procedures, with fixes throughout.
   are consistent on every table (fit residual \|2.5\|; outfit 0.7-1.3;
   infit 0.8-1.2).
 
-## rmt 1.2.0
+## rasch 1.2.0
 
-- [`plot_pca_biplot()`](https://drjoshmcgrane.github.io/rmt/reference/plot_pca_biplot.md)
+- [`plot_pca_biplot()`](https://drjoshmcgrane.github.io/rasch/reference/plot_pca_biplot.md)
   draws the item loadings on the first two residual principal components
   – the pair that usually carries any interpretable contrast – on equal
   axes, coloured by the sign of the PC1 loading.
 
-- [`residual_correlations()`](https://drjoshmcgrane.github.io/rmt/reference/residual_correlations.md)
+- [`residual_correlations()`](https://drjoshmcgrane.github.io/rasch/reference/residual_correlations.md)
   now also returns the adjusted-Q3 `star_matrix` (each Q3 less the
   average off-diagonal), and
-  [`plot_resid_cor()`](https://drjoshmcgrane.github.io/rmt/reference/plot_resid_cor.md)
+  [`plot_resid_cor()`](https://drjoshmcgrane.github.io/rasch/reference/plot_resid_cor.md)
   gains a `stat` argument to colour either the raw Q3 or the adjusted
   Q3\*, drawing the lower triangle only.
 
@@ -68,7 +80,7 @@ comparison procedures, with fixes throughout.
   (subtest, item split, automatic DIF resolution) offers an in-place
   reset to the original data.
 
-- [`dif_anova()`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md)
+- [`dif_anova()`](https://drjoshmcgrane.github.io/rasch/reference/dif_anova.md)
   is now the single DIF analysis-of-variance function. One factor is
   analysed one-way; several factors are modelled jointly – the
   statistically correct treatment – with main effects by default and
@@ -77,11 +89,11 @@ comparison procedures, with fixes throughout.
   returns a classed object with a `summary`, the full `terms` table, and
   Tukey comparisons. The separate `dif_anova_factorial()` is removed.
 
-- [`resolve_dif()`](https://drjoshmcgrane.github.io/rmt/reference/resolve_dif.md)
+- [`resolve_dif()`](https://drjoshmcgrane.github.io/rasch/reference/resolve_dif.md)
   resolves DIF iteratively by item splitting, largest effect first, to
   clear artificial DIF.
 
-## rmt 1.0.0
+## rasch 1.0.0
 
 First stable release. The package delivers a complete Rasch Measurement
 Theory workflow built entirely from published measurement theory, with a
@@ -90,20 +102,20 @@ every analysis with reproducing R code attached to every output.
 
 ### Models
 
-- [`rasch()`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md):
+- [`rasch()`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md):
   dichotomous and polytomous (partial credit and rating scale) Rasch
   models by pairwise conditional maximum likelihood (Andrich & Luo 2003;
   Zwinderman 1995), with Godambe sandwich standard errors, sum-zero
   identification, Warm (1989) weighted likelihood person estimation, and
   the principal-component threshold parameterisation as an estimation
   option.
-- [`rasch_mfrm()`](https://drjoshmcgrane.github.io/rmt/reference/rasch_mfrm.md):
+- [`rasch_mfrm()`](https://drjoshmcgrane.github.io/rasch/reference/rasch_mfrm.md):
   many-facet models with additive facet severities or item-by-facet
   interactions, accepting wide (one column per item) or long data.
-- [`rasch_efrm()`](https://drjoshmcgrane.github.io/rmt/reference/rasch_efrm.md):
+- [`rasch_efrm()`](https://drjoshmcgrane.github.io/rasch/reference/rasch_efrm.md):
   the extended frame-of-reference model (Humphry) with frame units
   estimated by within-frame pairwise conditional likelihood.
-- [`btl()`](https://drjoshmcgrane.github.io/rmt/reference/btl.md):
+- [`btl()`](https://drjoshmcgrane.github.io/rasch/reference/btl.md):
   paired comparisons as the conditional form of the dichotomous Rasch
   model (Bradley & Terry 1952; Andrich 1978), including the
   adjacent-categories graded extension (Tutz 1986; Agresti 1992) with
@@ -133,7 +145,7 @@ every analysis with reproducing R code attached to every output.
   repeated-measures support via person-level residual scores), and class
   intervals sized to the cells each analysis actually uses. For paired
   comparisons,
-  [`btl_dif()`](https://drjoshmcgrane.github.io/rmt/reference/btl_dif.md)
+  [`btl_dif()`](https://drjoshmcgrane.github.io/rasch/reference/btl_dif.md)
   tests object-by-judge-group interaction by the same two routes.
 - Equating and invariance: common-item comparison with drift flags, and
   calibration anchoring.
@@ -148,14 +160,14 @@ every analysis with reproducing R code attached to every output.
   information curves, residual displays, and Guttman scalograms – all
   with adjustable class intervals and scale ranges, and batch export to
   multi-page PDF or ZIP at publication resolution.
-- [`fit_summary_table()`](https://drjoshmcgrane.github.io/rmt/reference/fit_summary_table.md)
+- [`fit_summary_table()`](https://drjoshmcgrane.github.io/rasch/reference/fit_summary_table.md)
   and
-  [`targeting_table()`](https://drjoshmcgrane.github.io/rmt/reference/targeting_table.md)
+  [`targeting_table()`](https://drjoshmcgrane.github.io/rasch/reference/targeting_table.md)
   return the headline statistics as tidy tables;
-  [`save_outputs()`](https://drjoshmcgrane.github.io/rmt/reference/save_outputs.md)
+  [`save_outputs()`](https://drjoshmcgrane.github.io/rasch/reference/save_outputs.md)
   writes every table and plot to disk;
-  [`report_html()`](https://drjoshmcgrane.github.io/rmt/reference/report_html.md)
+  [`report_html()`](https://drjoshmcgrane.github.io/rasch/reference/report_html.md)
   produces a single-file HTML report.
-- [`run_app()`](https://drjoshmcgrane.github.io/rmt/reference/run_app.md)
+- [`run_app()`](https://drjoshmcgrane.github.io/rasch/reference/run_app.md)
   launches the Shiny interface: model-adaptive navigation, reproducing R
   code beneath every output, and one-click export.

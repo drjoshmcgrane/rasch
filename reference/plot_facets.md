@@ -15,7 +15,7 @@ plot_facets(fit, facet = NULL, band = 2.5)
 - fit:
 
   A fitted object from
-  [`rasch_mfrm`](https://drjoshmcgrane.github.io/rmt/reference/rasch_mfrm.md).
+  [`rasch_mfrm`](https://drjoshmcgrane.github.io/rasch/reference/rasch_mfrm.md).
 
 - facet:
 

@@ -29,7 +29,7 @@ dependence_magnitude(fit, dependent, independent)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - dependent, independent:
 
@@ -39,10 +39,10 @@ dependence_magnitude(fit, dependent, independent)
 
 ## Value
 
-A list of class `"rmt_dependence"`: the estimate `d`, its `se`, `z` and
-`p` for the hypothesis \\d = 0\\, the per-threshold table `thresholds`
-(columns `k`, `delta_lo`, `delta_hi`, `d_k`, `se_k`), and the resolved
-`refit`.
+A list of class `"rasch_dependence"`: the estimate `d`, its `se`, `z`
+and `p` for the hypothesis \\d = 0\\, the per-threshold table
+`thresholds` (columns `k`, `delta_lo`, `delta_hi`, `d_k`, `se_k`), and
+the resolved `refit`.
 
 ## References
 

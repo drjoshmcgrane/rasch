@@ -21,7 +21,7 @@ plot_scree(fit, n_components = 10, parallel = TRUE, reps = 20)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - n_components:
 

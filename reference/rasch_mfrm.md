@@ -9,8 +9,8 @@ structure is estimated in one pass of the pairwise conditional
 likelihood, in which the person parameter cancels. Facet severities are
 reported with standard errors and pooled fit statistics; the returned
 object is also a full
-[`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md) fit at
-the virtual-item level, so every diagnostic table and plot in the
+[`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md) fit
+at the virtual-item level, so every diagnostic table and plot in the
 package applies to it.
 
 ## Usage
@@ -100,7 +100,7 @@ rasch_mfrm(
 
 An object of classes `"rasch_mfrm"` and `"rasch"`. In addition to every
 component of a
-[`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md) fit
+[`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md) fit
 (computed over the virtual items), it carries `facet_effects` (per
 facet: level, severity, standard error, observation count, pooled fit),
 `item_effects` (underlying item locations and pooled fit),

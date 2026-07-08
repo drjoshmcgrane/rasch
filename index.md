@@ -1,16 +1,16 @@
-# rmt — Rasch Measurement Theory in R
+# rasch — Rasch Measurement Theory in R
 
-**rmt** is a Rasch Measurement Theory engine for R, built entirely from
-published measurement theory. Items are estimated by pairwise
+**rasch** is a Rasch Measurement Theory engine for R, built entirely
+from published measurement theory. Items are estimated by pairwise
 conditional maximum likelihood (Andrich & Luo 2003; Zwinderman 1995)
 with Godambe sandwich standard errors, persons by Warm’s (1989) weighted
 likelihood, and the complete diagnostic apparatus follows the
 conventions of Andrich & Marais (2019). A modern Shiny interface exposes
 every analysis with the reproducing R code attached to every output.
 
-**Documentation:** <https://drjoshmcgrane.github.io/rmt/>
+**Documentation:** <https://drjoshmcgrane.github.io/rasch/>
 
-![The rmt Shiny interface: residual principal components with loadings
+![The rasch Shiny interface: residual principal components with loadings
 table and biplot](reference/figures/app-trait.png)
 
 ## Highlights
@@ -52,7 +52,7 @@ table and biplot](reference/figures/app-trait.png)
 ``` r
 
 # install.packages("remotes")
-remotes::install_github("drjoshmcgrane/rmt")
+remotes::install_github("drjoshmcgrane/rasch")
 ```
 
 The analysis engine is base R only (`stats`, `graphics`, `grDevices`,
@@ -63,7 +63,7 @@ The analysis engine is base R only (`stats`, `graphics`, `grDevices`,
 
 ``` r
 
-library(rmt)
+library(rasch)
 
 # a persons-by-items data frame; item names, an ID column, and person
 # factors carry through the whole analysis
@@ -94,7 +94,7 @@ collapsed and constant items dropped, with notes recorded on the fit.
 
 ``` r
 
-rmt::run_app()
+rasch::run_app()
 ```
 
 A guided bslib (Bootstrap 5) workflow: one-tap example datasets, grouped
@@ -102,8 +102,8 @@ run settings, status badges once a fit exists, and dark mode. Every plot
 and table lives in a full-screen-capable card with downloads;
 master–detail explorers drive the item, person, and DIF pages; dynamic
 notes summarise each table’s verdict in words; and an “R code for this
-analysis” panel shows the exact `rmt` call reproducing the current run.
-Wide, long (rated), frame-of-reference, and paired-comparison data
+analysis” panel shows the exact `rasch` call reproducing the current
+run. Wide, long (rated), frame-of-reference, and paired-comparison data
 layouts are all supported, including anchor upload for equating and
 one-click structural remedies (subtests, item splitting, automatic DIF
 resolution) with in-place reset.
@@ -258,9 +258,9 @@ rack_data(t1, t2)            # change-in-items
   person-free within-frame pairwise conditioning, item-set units from
   persons common to the sets, reconciled over the linking graph.
 - The Bradley–Terry–Luce model (`btl`) as a member of the same family —
-  [`btl()`](https://drjoshmcgrane.github.io/rmt/reference/btl.md) on the
-  pair-conditional comparisons extracted from Rasch data reproduces
-  [`pcml()`](https://drjoshmcgrane.github.io/rmt/reference/pcml.md)’s
+  [`btl()`](https://drjoshmcgrane.github.io/rasch/reference/btl.md) on
+  the pair-conditional comparisons extracted from Rasch data reproduces
+  [`pcml()`](https://drjoshmcgrane.github.io/rasch/reference/pcml.md)’s
   item locations to solver tolerance. Dichotomous or graded preferences
   (symmetric thresholds, so the model is invariant to presentation
   order), judge-clustered sandwich standard errors, object and judge

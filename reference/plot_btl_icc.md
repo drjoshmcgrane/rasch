@@ -19,7 +19,7 @@ plot_btl_icc(fit, object, group = NULL, grid = NULL, min_n = 10)
 - fit:
 
   An object from
-  [`btl`](https://drjoshmcgrane.github.io/rmt/reference/btl.md).
+  [`btl`](https://drjoshmcgrane.github.io/rasch/reference/btl.md).
 
 - object:
 
@@ -30,7 +30,7 @@ plot_btl_icc(fit, object, group = NULL, grid = NULL, min_n = 10)
   Optional judge grouping for a DIF overlay: either one value per
   comparison row of `fit$comparisons` or a vector named by judge.
   Observed means are then drawn separately per group, as
-  [`plot_icc`](https://drjoshmcgrane.github.io/rmt/reference/plot_icc.md)
+  [`plot_icc`](https://drjoshmcgrane.github.io/rasch/reference/plot_icc.md)
   draws person groups.
 
 - grid:

@@ -14,7 +14,7 @@ plot_threshold_map(fit, order_by_location = TRUE)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - order_by_location:
 

@@ -1,10 +1,10 @@
 # Compare fitted Rasch models
 
 Builds a comparison table for two or more fits from
-[`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md),
-[`rasch_mfrm`](https://drjoshmcgrane.github.io/rmt/reference/rasch_mfrm.md),
+[`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md),
+[`rasch_mfrm`](https://drjoshmcgrane.github.io/rasch/reference/rasch_mfrm.md),
 or
-[`rasch_efrm`](https://drjoshmcgrane.github.io/rmt/reference/rasch_efrm.md).
+[`rasch_efrm`](https://drjoshmcgrane.github.io/rasch/reference/rasch_efrm.md).
 For fits of the same response data (identical item columns, maximum
 scores, and number of persons) the pairwise conditional log-likelihoods
 share their conditional information, and twice the difference from the

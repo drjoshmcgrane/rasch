@@ -14,7 +14,7 @@ plot_btl(fit, band = 2.5)
 - fit:
 
   An object from
-  [`btl`](https://drjoshmcgrane.github.io/rmt/reference/btl.md).
+  [`btl`](https://drjoshmcgrane.github.io/rasch/reference/btl.md).
 
 - band:
 

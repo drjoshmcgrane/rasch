@@ -6,7 +6,7 @@ comparisons; Andrich and Marais (2019, ch. 10) therefore describe an
 extrapolated measure for them, continuing the growth of the
 score-to-score differences so the last difference is the geometric mean
 of its neighbours (see
-[`score_table`](https://drjoshmcgrane.github.io/rmt/reference/score_table.md)).
+[`score_table`](https://drjoshmcgrane.github.io/rasch/reference/score_table.md)).
 This helper applies the same rule to the person table: for each
 missing-data pattern with extreme persons, the score-to-measure
 conversion over that pattern's items is extrapolated at its ends, and
@@ -27,7 +27,7 @@ person_extrapolated(fit)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md)
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md)
   (equal discriminations; not EFRM).
 
 ## Value

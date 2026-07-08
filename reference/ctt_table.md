@@ -21,11 +21,11 @@ ctt_table(fit)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 ## Value
 
-A list of class `"rmt_ctt"`: the per-item `table` (`item`, `n`, `min`,
+A list of class `"rasch_ctt"`: the per-item `table` (`item`, `n`, `min`,
 `max`, `facility`, `item_total`, `item_rest`, `di`, `alpha_drop`), and
 the scalars `alpha`, `n` (complete cases), `mean`, `sd`, and `sem`.
 

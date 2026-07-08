@@ -13,9 +13,10 @@ across frames through the sets shared by several groups. Item-set units
 pairs of sets, using error-corrected true-score variances, and
 reconciled over the linking graph by weighted least squares. Everything
 is reported in a common arbitrary unit, and the returned object is also
-a full [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md)
-fit at the item-by-group level, so the package's diagnostic tables and
-plots apply.
+a full
+[`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md) fit
+at the item-by-group level, so the package's diagnostic tables and plots
+apply.
 
 ## Usage
 
@@ -43,7 +44,7 @@ rasch_efrm(
 - data:
 
   Persons-by-items data (matrix or data frame, like
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md)),
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md)),
   plus a person-group column.
 
 - item_sets:
@@ -60,7 +61,7 @@ rasch_efrm(
 - id, factors, items, n_groups, adjust_N, na_codes:
 
   As in
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - maxit, tol:
 

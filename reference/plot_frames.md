@@ -16,7 +16,7 @@ plot_frames(fit, band = 2.5)
 - fit:
 
   A fitted object from
-  [`rasch_efrm`](https://drjoshmcgrane.github.io/rmt/reference/rasch_efrm.md).
+  [`rasch_efrm`](https://drjoshmcgrane.github.io/rasch/reference/rasch_efrm.md).
 
 - band:
 

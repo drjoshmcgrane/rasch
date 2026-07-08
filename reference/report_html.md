@@ -17,7 +17,7 @@ report_html(fit, file, title = "Rasch measurement analysis", dpi = 150)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - file:
 

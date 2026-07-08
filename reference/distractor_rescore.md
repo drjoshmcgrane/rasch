@@ -10,7 +10,7 @@ more than `z` standard errors of the difference, and it remains below
 the keyed option. Qualifying distractors are ranked by mean location and
 scored 1, 2, ... below the keyed option's top score. The result is a
 proposal for substantive review, not an automatic decision: inspect
-[`plot_distractors`](https://drjoshmcgrane.github.io/rmt/reference/plot_distractors.md)
+[`plot_distractors`](https://drjoshmcgrane.github.io/rasch/reference/plot_distractors.md)
 and the item content, edit as needed, then refit with
 `rasch(raw_data, key = proposal$option_scores)`.
 
@@ -25,8 +25,8 @@ distractor_rescore(fit, items = NULL, min_n = 20, z = 1.96)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md) run
-  with a `key`.
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md)
+  run with a `key`.
 
 - items:
 
@@ -43,10 +43,10 @@ distractor_rescore(fit, items = NULL, min_n = 20, z = 1.96)
 
 ## Value
 
-A list of class `"rmt_rescore"`: `option_scores`, a data frame (`item`,
-`option`, `score`) ready for `rasch(key = )` and covering every observed
-option of the examined items, and `evidence`, the distractor analysis
-with the proposed scores and the separation z per option.
+A list of class `"rasch_rescore"`: `option_scores`, a data frame
+(`item`, `option`, `score`) ready for `rasch(key = )` and covering every
+observed option of the examined items, and `evidence`, the distractor
+analysis with the proposed scores and the separation z per option.
 
 ## References
 

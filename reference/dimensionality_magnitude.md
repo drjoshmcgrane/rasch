@@ -25,7 +25,7 @@ dimensionality_magnitude(fit, subtests)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - subtests:
 
@@ -35,8 +35,8 @@ dimensionality_magnitude(fit, subtests)
 
 ## Value
 
-A list of class `"rmt_dim_magnitude"`: the comparison `table` (rows PSI
-and alpha; columns `run1`, `subtest`, `c2`, `c`, `rho`, `A`), the
+A list of class `"rasch_dim_magnitude"`: the comparison `table` (rows
+PSI and alpha; columns `run1`, `subtest`, `c2`, `c`, `rho`, `A`), the
 subtest `refit`, and the design constants `S` and `K`.
 
 ## References

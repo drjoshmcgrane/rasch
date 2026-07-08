@@ -28,13 +28,13 @@ resolve_dif(
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md)
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md)
   carrying person factors.
 
 - factors:
 
   Person factors to test, as in
-  [`dif_anova`](https://drjoshmcgrane.github.io/rmt/reference/dif_anova.md);
+  [`dif_anova`](https://drjoshmcgrane.github.io/rasch/reference/dif_anova.md);
   defaults to every nominated factor.
 
 - alpha:
@@ -57,7 +57,7 @@ resolve_dif(
 
 ## Value
 
-A list of class `"rmt_resolve_dif"`: the final resolved `fit`, the
+A list of class `"rasch_resolve_dif"`: the final resolved `fit`, the
 `splits` performed (order, item, factor, partial eta-squared, DIF
 magnitude in logits), the `stopped` reason, and the residual `dif` table
 for the final fit.

@@ -22,7 +22,7 @@ plot_resid_cor(fit, stat = c("q3star", "q3"), cap = 0.5)
 - fit:
 
   A fitted object from
-  [`rasch`](https://drjoshmcgrane.github.io/rmt/reference/rasch.md).
+  [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md).
 
 - stat:
 
