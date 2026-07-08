@@ -26,7 +26,7 @@
 # unseen). Both enter the exponent like the location difference does, so
 # the dependence is measured in logits (Davidson & Beaver 1977 order-effect
 # device; response-dependence logic of Marais & Andrich 2008).
-.btl_exposure <- function(a, b, x, m, jd, ord) {
+.btl_exposure <- function(a, b, x, m, jd, ord, w = rep(1, length(a))) {
   R <- length(a)
   Fa <- Fb <- Wa <- Wb <- numeric(R)
   cnt <- new.env(hash = TRUE, parent = emptyenv())
@@ -38,9 +38,11 @@
     Fa[r] <- as.numeric(na_ > 0); Fb[r] <- as.numeric(nb_ > 0)
     if (na_ > 0) Wa[r] <- gets(tot, ka) / na_
     if (nb_ > 0) Wb[r] <- gets(tot, kb) / nb_
-    cnt[[ka]] <- na_ + 1; cnt[[kb]] <- nb_ + 1
-    tot[[ka]] <- gets(tot, ka) + (2 * x[r] / m - 1)
-    tot[[kb]] <- gets(tot, kb) + (2 * (m - x[r]) / m - 1)
+    # count-weighted rows stand for w identical comparisons, so they enter
+    # the history with weight w, consistent with the weighted likelihood
+    cnt[[ka]] <- na_ + w[r]; cnt[[kb]] <- nb_ + w[r]
+    tot[[ka]] <- gets(tot, ka) + w[r] * (2 * x[r] / m - 1)
+    tot[[kb]] <- gets(tot, kb) + w[r] * (2 * (m - x[r]) / m - 1)
   }
   cbind(exposure = Fa - Fb, carry_over = Wa - Wb)
 }
@@ -131,16 +133,20 @@
 #'   category instead.
 #' @param maxit,tol Newton-Raphson iteration cap and convergence tolerance.
 #' @return A list of class \code{"rmt_btl"}: \code{objects} (location, se,
-#'   comparisons, wins -- or the graded \code{score} -- outfit mean
-#'   square, fit residual and its df),
+#'   comparisons, wins -- or the graded \code{score} -- infit and outfit
+#'   mean squares, fit residual and its df),
 #'   \code{pairs} (per pair: n, observed and expected win proportions --
 #'   or mean graded responses --
 #'   standardised residual, chi-square component), \code{judges} (when
-#'   given: per judge n, outfit, fit residual, df), \code{total_chisq},
+#'   given: per judge n, infit, outfit, fit residual, df), \code{total_chisq},
 #'   \code{total_df}, \code{total_p}, the object separation index
 #'   \code{osi}, \code{loglik}, convergence details, and \code{notes}.
 #'   Graded fits add \code{thresholds} (the symmetric threshold estimates
-#'   with standard errors), \code{m}, and \code{categories}.
+#'   with standard errors), \code{m}, and \code{categories}. With an
+#'   \code{order} column the within-judge \code{dependence} effects table
+#'   carries an \code{n_informative} count, and \code{dependence_data} holds
+#'   every comparison with its per-comparison exposure and carry-over
+#'   covariates (see \code{\link{plot_btl_dependence}}).
 #' @references Bradley, R. A. and Terry, M. E. (1952). Rank analysis of
 #'   incomplete block designs: I. The method of paired comparisons.
 #'   Biometrika, 39, 324-345. Luce, R. D. (1959). Individual Choice
@@ -199,6 +205,7 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
       cats <- as.character(0:max(x, na.rm = TRUE))
     }
     keep <- !is.na(a) & !is.na(b) & !is.na(x) & a != b & !is.na(w) & w > 0
+    if (!is.null(jd)) keep <- keep & !is.na(jd)
     if (!is.null(ord)) keep <- keep & !is.na(ord)
     if (any(!keep)) {
       notes <- c(notes, sprintf(
@@ -210,9 +217,9 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
     }
     if (!length(a)) stop("no usable comparisons")
     Z <- if (is.null(ord)) NULL else
-      .btl_exposure(a, b, x, length(cats) - 1L, jd, ord)
+      .btl_exposure(a, b, x, length(cats) - 1L, jd, ord, w)
     return(.btl_graded(a, b, x, jd, w, cats, maxit, tol, notes,
-                       thr = thresholds, Z = Z))
+                       thr = thresholds, Z = Z, ord = ord))
   }
 
   if (!is.null(margin)) {
@@ -237,6 +244,7 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
     ties_present <- any(tie)
     keep <- !is.na(a) & !is.na(b) & !is.na(wn) & a != b & !is.na(w) & w > 0 &
       (tie | !is.na(mgi)) & !miss_wn
+    if (!is.null(jd)) keep <- keep & !is.na(jd)
     if (!is.null(ord)) keep <- keep & !is.na(ord)
     if (any(!keep)) {
       notes <- c(notes, sprintf(
@@ -257,13 +265,14 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
       notes <- c(notes, sprintf("%d tie(s) placed in the middle category",
                                 sum(tie)))
     Z <- if (is.null(ord)) NULL else
-      .btl_exposure(a, b, as.integer(x), length(cats) - 1L, jd, ord)
+      .btl_exposure(a, b, as.integer(x), length(cats) - 1L, jd, ord, w)
     return(.btl_graded(a, b, as.integer(x), jd, w, cats, maxit, tol, notes,
-                       thr = thresholds, Z = Z))
+                       thr = thresholds, Z = Z, ord = ord))
   }
 
   wn <- trimws(as.character(data[[winner]]))
   keep <- !is.na(a) & !is.na(b) & !is.na(wn) & a != b & !is.na(w) & w > 0
+  if (!is.null(jd)) keep <- keep & !is.na(jd)
   if (!is.null(ord)) keep <- keep & !is.na(ord)
   if (any(!keep)) {
     notes <- c(notes, sprintf("%d row(s) dropped (missing, zero-count, or self-comparison)",
@@ -315,171 +324,17 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
   if (!is.null(ord)) {
     # exposure covariates route through the graded engine, whose two-
     # category case reproduces the dichotomous analysis exactly
-    Z <- .btl_exposure(a, b, as.integer(y), 1L, jd, ord)
+    Z <- .btl_exposure(a, b, as.integer(y), 1L, jd, ord, w)
     return(.btl_graded(a, b, as.integer(y), jd, w, c("0", "1"), maxit, tol,
-                       notes, thr = "free", Z = Z))
+                       notes, thr = "free", Z = Z, ord = ord))
   }
 
-  # remove undefeated / winless objects iteratively (no finite estimate),
-  # as extreme persons are set aside in a Rasch calibration
-  repeat {
-    objs <- sort(unique(c(a, b)))
-    win_of <- setNames(numeric(length(objs)), objs)
-    n_of <- win_of
-    for (r in seq_along(a)) {
-      win_of[a[r]] <- win_of[a[r]] + w[r] * y[r]
-      win_of[b[r]] <- win_of[b[r]] + w[r] * (1 - y[r])
-      n_of[a[r]] <- n_of[a[r]] + w[r]; n_of[b[r]] <- n_of[b[r]] + w[r]
-    }
-    ext <- names(win_of)[win_of == 0 | win_of == n_of]
-    if (!length(ext)) break
-    notes <- c(notes, sprintf("object(s) with no wins or no losses removed (no finite estimate): %s",
-                              paste(ext, collapse = ", ")))
-    sel <- !(a %in% ext) & !(b %in% ext)
-    a <- a[sel]; b <- b[sel]; y <- y[sel]; w <- w[sel]
-    if (!is.null(jd)) jd <- jd[sel]
-    if (!length(a)) stop("no comparisons remain after removing extreme objects")
-  }
-  objs <- sort(unique(c(a, b)))
-  K <- length(objs)
-  if (K < 3) stop("need at least three comparable objects")
-  ia <- match(a, objs); ib <- match(b, objs)
-
-  comp <- .btl_components(K, ia, ib)
-  if (length(unique(comp)) > 1) {
-    parts <- split(objs, comp)
-    stop("the comparison graph is disconnected; components: ",
-         paste(vapply(parts, paste, "", collapse = ","), collapse = " | "))
-  }
-
-  # Newton-Raphson on the sum-zero design (as pcml identifies item locations)
-  B <- rbind(diag(K - 1L), rep(-1, K - 1L))
-  beta <- numeric(K)
-  for (it in seq_len(maxit)) {
-    eta <- beta[ia] - beta[ib]
-    P <- plogis(eta); V <- pmax(P * (1 - P), 1e-12)
-    res <- w * (y - P)
-    g_full <- vapply(seq_len(K), function(k)
-      sum(res[ia == k]) - sum(res[ib == k]), 0)
-    H_full <- matrix(0, K, K)
-    for (r in seq_along(ia)) {
-      hv <- w[r] * V[r]
-      H_full[ia[r], ia[r]] <- H_full[ia[r], ia[r]] + hv
-      H_full[ib[r], ib[r]] <- H_full[ib[r], ib[r]] + hv
-      H_full[ia[r], ib[r]] <- H_full[ia[r], ib[r]] - hv
-      H_full[ib[r], ia[r]] <- H_full[ib[r], ia[r]] - hv
-    }
-    g <- drop(crossprod(B, g_full))
-    H <- crossprod(B, H_full %*% B)
-    step <- solve(H, g)
-    beta <- beta + drop(B %*% step)
-    if (max(abs(step)) < tol) break
-  }
-  eta <- beta[ia] - beta[ib]
-  P <- plogis(eta); V <- pmax(P * (1 - P), 1e-12)
-  loglik <- sum(w * (y * log(pmax(P, 1e-12)) +
-                     (1 - y) * log(pmax(1 - P, 1e-12))))
-  converged <- max(abs(drop(crossprod(B, vapply(seq_len(K), function(k)
-    sum((w * (y - P))[ia == k]) - sum((w * (y - P))[ib == k]), 0))))) < 1e-4
-
-  # Godambe sandwich, clustered by judge when identified
-  cl <- if (is.null(jd)) seq_along(ia) else jd
-  res <- w * (y - P)
-  Gm <- matrix(0, length(unique(cl)), K)
-  rownames(Gm) <- as.character(unique(cl))
-  for (r in seq_along(ia)) {
-    rc <- as.character(cl[r])
-    Gm[rc, ia[r]] <- Gm[rc, ia[r]] + res[r]
-    Gm[rc, ib[r]] <- Gm[rc, ib[r]] - res[r]
-  }
-  Gb <- Gm %*% B
-  J <- crossprod(Gb)
-  Hi <- solve(crossprod(B, {
-    H_full <- matrix(0, K, K)
-    for (r in seq_along(ia)) {
-      hv <- w[r] * V[r]
-      H_full[ia[r], ia[r]] <- H_full[ia[r], ia[r]] + hv
-      H_full[ib[r], ib[r]] <- H_full[ib[r], ib[r]] + hv
-      H_full[ia[r], ib[r]] <- H_full[ia[r], ib[r]] - hv
-      H_full[ib[r], ia[r]] <- H_full[ib[r], ia[r]] - hv
-    }
-    H_full
-  } %*% B))
-  covb <- Hi %*% J %*% Hi
-  cov_beta <- B %*% covb %*% t(B)
-  se <- sqrt(pmax(diag(cov_beta), 0))
-
-  # fit: per-comparison z; objects and judges pool their cells
-  z <- (y - P) / sqrt(V)
-  c4v <- (1 - 3 * V) / V - 1                 # Bernoulli C4/V^2 - 1
-  n_rows <- sum(w)
-  f_cell <- (n_rows - (K - 1)) / n_rows
-  pool <- function(sel) {
-    if (sum(w[sel]) < 3)
-      return(list(outfit_ms = NA_real_, fit_resid = NA_real_, df = NA_real_,
-                  n = sum(w[sel])))
-    y2 <- sum(w[sel] * z[sel]^2); f <- f_cell * sum(w[sel])
-    v <- sum(w[sel] * c4v[sel])
-    fr <- if (v > 1e-8 && y2 > 0) f * (log(y2) - log(f)) / sqrt(v) else NA_real_
-    list(outfit_ms = y2 / f, fit_resid = fr, df = f, n = sum(w[sel]))
-  }
-  ofit <- lapply(seq_len(K), function(k) pool(ia == k | ib == k))
-  objects <- data.frame(object = objs, location = beta, se = se,
-                        comparisons = vapply(ofit, `[[`, 0, "n"),
-                        wins = vapply(seq_len(K), function(k)
-                          sum(w[ia == k] * y[ia == k]) +
-                          sum(w[ib == k] * (1 - y[ib == k])), 0),
-                        outfit_ms = vapply(ofit, `[[`, 0, "outfit_ms"),
-                        fit_resid = vapply(ofit, `[[`, 0, "fit_resid"),
-                        df_fit = vapply(ofit, `[[`, 0, "df"))
-  rownames(objects) <- NULL
-
-  judges <- NULL
-  if (!is.null(jd)) {
-    ju <- sort(unique(jd))
-    jfit <- lapply(ju, function(j) pool(jd == j))
-    judges <- data.frame(judge = ju,
-                         n = vapply(jfit, `[[`, 0, "n"),
-                         outfit_ms = vapply(jfit, `[[`, 0, "outfit_ms"),
-                         fit_resid = vapply(jfit, `[[`, 0, "fit_resid"),
-                         df_fit = vapply(jfit, `[[`, 0, "df"))
-    rownames(judges) <- NULL
-  }
-
-  # classical pairwise goodness of fit: observed vs expected win proportions
-  key <- ifelse(ia < ib, paste(ia, ib), paste(ib, ia))
-  wins_lo <- tapply(w * ifelse(ia < ib, y, 1 - y), key, sum)
-  n_pair <- tapply(w, key, sum)
-  Ppair <- plogis(vapply(strsplit(names(n_pair), " "), function(s)
-    beta[as.integer(s[1])] - beta[as.integer(s[2])], 0))
-  zp <- (wins_lo - n_pair * Ppair) / sqrt(pmax(n_pair * Ppair * (1 - Ppair), 1e-12))
-  idx <- do.call(rbind, strsplit(names(n_pair), " "))
-  pairs <- data.frame(object_a = objs[as.integer(idx[, 1])],
-                      object_b = objs[as.integer(idx[, 2])],
-                      n = as.numeric(n_pair),
-                      obs_prop = as.numeric(wins_lo / n_pair),
-                      exp_prop = as.numeric(Ppair),
-                      residual = as.numeric(zp),
-                      chisq = as.numeric(zp^2))
-  rownames(pairs) <- NULL
-  used <- pairs$n >= 2
-  total_chisq <- sum(pairs$chisq[used])
-  total_df <- max(sum(used) - (K - 1), 1L)
-  osi <- .psi(objects$location, objects$se)
-
-  out <- list(objects = objects, pairs = pairs, judges = judges,
-              total_chisq = total_chisq, total_df = total_df,
-              total_p = pchisq(total_chisq, total_df, lower.tail = FALSE),
-              osi = osi, loglik = loglik, iterations = it,
-              converged = converged, n_comparisons = n_rows,
-              clustered = !is.null(jd), cov_beta = cov_beta,
-              comparisons = data.frame(object_a = a, object_b = b,
-                                       response = y, weight = w,
-                                       judge = if (is.null(jd))
-                                         NA_character_ else jd),
-              notes = notes)
-  class(out) <- "rmt_btl"
-  out
+  # the two-category graded engine IS the dichotomous conditional model
+  # (their equivalence is tested to machine precision), so one estimator
+  # serves both routes; m == 1 results are presented as wins / win
+  # proportions inside .btl_graded
+  .btl_graded(a, b, as.integer(y), jd, w, c("0", "1"), maxit, tol,
+              notes, thr = "free")
 }
 
 #' @export
@@ -575,7 +430,7 @@ plot_btl <- function(fit, band = 2.5) {
 # follow the package conventions established in btl().
 # ---------------------------------------------------------------------------
 .btl_graded <- function(a, b, x, jd, w, cats, maxit, tol, notes,
-                        thr = "free", Z = NULL) {
+                        thr = "free", Z = NULL, ord = NULL) {
   m <- length(cats) - 1L
   if (m < 1L) stop("graded responses need at least two categories")
   # identifiability: empty EXTREME categories leave no finite spread (the
@@ -583,24 +438,29 @@ plot_btl <- function(fit, band = 2.5) {
   # infinite person location); empty interior categories are unidentified
   # under free thresholds but pooled over by the principal-component
   # structure
-  xs <- c(x, m - x)
-  emp <- which(tabulate(xs + 1L, m + 1L) == 0) - 1L
-  if (any(emp %in% c(0L, m)))
-    stop("extreme category never used (in either orientation): ",
-         paste(cats[intersect(emp, c(0L, m)) + 1L], collapse = ", "),
-         "; no finite threshold estimate exists - collapse categories")
-  if (length(emp) && thr == "free")
-    stop("interior category never used (in either orientation): ",
-         paste(cats[emp + 1L], collapse = ", "),
-         "; use thresholds = 'pc' (pooled principal-component structure)",
-         " or collapse categories")
-  if (length(emp))
-    notes <- c(notes, sprintf(
-      "interior category unused (%s); thresholds pooled by the principal-component structure",
-      paste(cats[emp + 1L], collapse = ", ")))
+  check_cats <- function(x, note_interior) {
+    xs <- c(x, m - x)
+    emp <- which(tabulate(xs + 1L, m + 1L) == 0) - 1L
+    if (any(emp %in% c(0L, m)))
+      stop("extreme category never used (in either orientation): ",
+           paste(cats[intersect(emp, c(0L, m)) + 1L], collapse = ", "),
+           "; no finite threshold estimate exists - collapse categories")
+    if (length(emp) && thr == "free")
+      stop("interior category never used (in either orientation): ",
+           paste(cats[emp + 1L], collapse = ", "),
+           "; use thresholds = 'pc' (pooled principal-component structure)",
+           " or collapse categories")
+    if (length(emp) && note_interior)
+      notes <<- c(notes, sprintf(
+        "interior category unused (%s); thresholds pooled by the principal-component structure",
+        paste(cats[emp + 1L], collapse = ", ")))
+    invisible(NULL)
+  }
+  check_cats(x, note_interior = TRUE)
 
   # objects whose every response sits at the boundary have no finite
   # estimate, as extreme persons are set aside in a Rasch calibration
+  removed_any <- FALSE
   repeat {
     objs <- sort(unique(c(a, b)))
     T_of <- setNames(numeric(length(objs)), objs); N_of <- T_of
@@ -618,9 +478,14 @@ plot_btl <- function(fit, band = 2.5) {
     sel <- !(a %in% ext) & !(b %in% ext)
     a <- a[sel]; b <- b[sel]; x <- x[sel]; w <- w[sel]
     if (!is.null(jd)) jd <- jd[sel]
+    if (!is.null(ord)) ord <- ord[sel]
     if (!is.null(Z)) Z <- Z[sel, , drop = FALSE]
+    removed_any <- TRUE
     if (!length(a)) stop("no comparisons remain after removing extreme objects")
   }
+  # removing boundary objects can itself empty a category; re-check so the
+  # user gets the collapse-categories error, not a singular Newton step
+  if (removed_any) check_cats(x, note_interior = FALSE)
   objs <- sort(unique(c(a, b)))
   K <- length(objs)
   if (K < 3) stop("need at least three comparable objects")
@@ -648,6 +513,7 @@ plot_btl <- function(fit, band = 2.5) {
   }
   Bmat <- rbind(diag(K - 1L), rep(-1, K - 1L))
   pz <- if (is.null(Z)) 0L else ncol(Z)
+  Zfull <- Z                         # all effect columns, for the audit table
   if (pz) {
     keepz <- colSums(abs(Z)) > 0
     if (!all(keepz)) {
@@ -683,77 +549,95 @@ plot_btl <- function(fit, band = 2.5) {
   }
   cumInd <- outer(x, seq_len(m), ">=") * 1
 
+  # accumulate per-comparison rows (vector or matrix) into indexed slots:
+  # rowsum() replaces the interpreted per-row loops that dominated large fits
+  acc <- function(v, idx, nrows) {
+    out <- matrix(0, nrows, if (is.matrix(v)) ncol(v) else 1L)
+    rs <- rowsum(v, idx)
+    out[as.integer(rownames(rs)), ] <- rs
+    out
+  }
+
   # generic gradient/Hessian over theta = (beta_red, tfree, dep): the
   # covariates enter the exponent multiplied by the score, exactly as the
   # location difference does, so every block follows the same moments
   gH <- function(mo) {
     resE <- w * (x - mo$E)
-    g_beta_full <- vapply(seq_len(K), function(k)
-      sum(resE[ia == k]) - sum(resE[ib == k]), 0)
+    g_beta_full <- drop(acc(resE, ia, K) - acc(resE, ib, K))
     g <- drop(crossprod(Bmat, g_beta_full))
     if (q) g <- c(g, drop(crossprod(Cmat, colSums(w * (mo$S - cumInd)))))
     if (pz) g <- c(g, drop(crossprod(Z, resE)))
     H <- matrix(0, np, np)
+    hv <- w * mo$V
     Hbb <- matrix(0, K, K)
-    for (r in seq_along(ia)) {
-      hv <- w[r] * mo$V[r]
-      Hbb[ia[r], ia[r]] <- Hbb[ia[r], ia[r]] + hv
-      Hbb[ib[r], ib[r]] <- Hbb[ib[r], ib[r]] + hv
-      Hbb[ia[r], ib[r]] <- Hbb[ia[r], ib[r]] - hv
-      Hbb[ib[r], ia[r]] <- Hbb[ib[r], ia[r]] - hv
-    }
+    diag(Hbb) <- drop(acc(hv, ia, K) + acc(hv, ib, K))
+    # off-diagonal cells accumulated over the unordered pair, so both
+    # presentation orders of the same pair land in the same cell
+    lo <- pmin(ia, ib); hi <- pmax(ia, ib)
+    hp <- rowsum(hv, (lo - 1L) * K + hi)
+    kk <- as.integer(rownames(hp))
+    i0 <- (kk - 1L) %/% K + 1L; j0 <- (kk - 1L) %% K + 1L
+    Hbb[cbind(i0, j0)] <- Hbb[cbind(i0, j0)] - hp
+    Hbb[cbind(j0, i0)] <- Hbb[cbind(j0, i0)] - hp
     H[1:(K - 1L), 1:(K - 1L)] <- crossprod(Bmat, Hbb %*% Bmat)
     if (q) {
       CovXc <- mo$EXc - mo$E * mo$S              # rows: Cov(X, 1(X>=k))
-      Hbt_full <- matrix(0, K, q)
       wc <- (w * CovXc) %*% Cmat
-      for (r in seq_along(ia)) {
-        Hbt_full[ia[r], ] <- Hbt_full[ia[r], ] - wc[r, ]
-        Hbt_full[ib[r], ] <- Hbt_full[ib[r], ] + wc[r, ]
-      }
+      Hbt_full <- acc(wc, ib, K) - acc(wc, ia, K)
       ti <- (K - 1L + 1L):(K - 1L + q)
       H[1:(K - 1L), ti] <- crossprod(Bmat, Hbt_full)
       H[ti, 1:(K - 1L)] <- t(H[1:(K - 1L), ti])
-      Htt <- matrix(0, q, q)
-      for (r in seq_along(ia)) {
-        Sk <- mo$S[r, ]
-        Covcc <- outer(seq_len(m), seq_len(m),
-                       function(i, j) Sk[pmax(i, j)]) - tcrossprod(Sk)
-        Htt <- Htt + w[r] * crossprod(Cmat, Covcc %*% Cmat)
-      }
-      H[(K - 1L + 1L):(K - 1L + q), (K - 1L + 1L):(K - 1L + q)] <- Htt
+      # sum_r w_r Cov(1(X>=i), 1(X>=j)) = ws[max(i,j)] - crossprod term,
+      # since S_r[max(i, j)] depends only on the larger index
+      ws <- colSums(w * mo$S)
+      Mcc <- outer(seq_len(m), seq_len(m), function(i, j) ws[pmax(i, j)]) -
+        crossprod(mo$S, w * mo$S)
+      H[ti, ti] <- crossprod(Cmat, Mcc %*% Cmat)
     }
     if (pz) {
       zi <- (K - 1L + q + 1L):np
       wv <- w * mo$V
       H[zi, zi] <- crossprod(Z, Z * wv)
-      Hbz_full <- matrix(0, K, pz)
-      for (r in seq_along(ia)) {
-        Hbz_full[ia[r], ] <- Hbz_full[ia[r], ] + wv[r] * Z[r, ]
-        Hbz_full[ib[r], ] <- Hbz_full[ib[r], ] - wv[r] * Z[r, ]
-      }
+      Hbz_full <- acc(Z * wv, ia, K) - acc(Z * wv, ib, K)
       H[1:(K - 1L), zi] <- crossprod(Bmat, Hbz_full)
       H[zi, 1:(K - 1L)] <- t(H[1:(K - 1L), zi])
       if (q) {
         CovXc <- mo$EXc - mo$E * mo$S
         wc <- (w * CovXc) %*% Cmat
-        Htz <- -crossprod(wc, Z)
-        H[(K - 1L + 1L):(K - 1L + q), zi] <- t(Htz)
-        H[zi, (K - 1L + 1L):(K - 1L + q)] <- Htz
+        Htz <- -crossprod(wc, Z)                     # q x pz
+        H[(K - 1L + 1L):(K - 1L + q), zi] <- Htz
+        H[zi, (K - 1L + 1L):(K - 1L + q)] <- t(Htz)
       }
     }
     list(g = g, H = H, resE = resE)
   }
 
   beta <- numeric(K); tfree <- numeric(q)
-  for (it in seq_len(maxit)) {
-    mo <- moments(beta, tfree, dep)
-    gh <- gH(mo)
-    step <- solve(gh$H, gh$g)
-    beta <- beta + drop(Bmat %*% step[1:(K - 1L)])
-    if (q) tfree <- tfree + step[(K - 1L + 1L):(K - 1L + q)]
-    if (pz) dep <- dep + step[(K - 1L + q + 1L):np]
-    if (max(abs(step)) < tol) break
+  repeat {
+    for (it in seq_len(maxit)) {
+      mo <- moments(beta, tfree, dep)
+      gh <- gH(mo)
+      step <- solve(gh$H, gh$g)
+      beta <- beta + drop(Bmat %*% step[1:(K - 1L)])
+      if (q) tfree <- tfree + step[(K - 1L + 1L):(K - 1L + q)]
+      if (pz) dep <- dep + step[(K - 1L + q + 1L):np]
+      if (max(abs(step)) < tol) break
+    }
+    # a dependence effect running to a boundary is separation: its informative
+    # comparisons all point one way, so the data are evidence of an infinite
+    # effect (as an all-wins object is of an infinite location). The gradient
+    # plateaus there, so the usual test would report convergence with an
+    # arbitrary, maxit-dependent estimate; instead the column is set aside
+    # with a note and the model refitted without it.
+    runaway <- if (pz) which(abs(dep) > 10) else integer(0)
+    if (!length(runaway)) break
+    notes <- c(notes, sprintf(
+      "dependence effect(s) separated (one-sided informative comparisons) and dropped: %s",
+      paste(colnames(Z)[runaway], collapse = ", ")))
+    Z <- Z[, -runaway, drop = FALSE]; pz <- ncol(Z)
+    np <- (K - 1L) + q + pz
+    dep <- numeric(pz)
+    beta <- numeric(K); tfree <- numeric(q)
   }
   mo <- moments(beta, tfree, dep)
   tau <- mo$tau
@@ -762,22 +646,22 @@ plot_btl <- function(fit, band = 2.5) {
   resE <- gh$resE
   converged <- max(abs(gh$g)) < 1e-4
 
-  # Godambe sandwich over the full parameter, clustered by judge
+  # Godambe sandwich over the full parameter, clustered by judge (each
+  # cluster's score contributions accumulated by rowsum, not per-row loops)
   cl <- if (is.null(jd)) as.character(seq_along(ia)) else jd
   ucl <- unique(cl)
-  Gm <- matrix(0, length(ucl), np, dimnames = list(ucl, NULL))
-  st_tau <- if (q) (w * (mo$S - cumInd)) %*% Cmat else NULL
-  for (r in seq_along(ia)) {
-    rc <- cl[r]
-    zfull <- numeric(K)
-    zfull[ia[r]] <- 1; zfull[ib[r]] <- -1
-    Gm[rc, 1:(K - 1L)] <- Gm[rc, 1:(K - 1L)] +
-      resE[r] * drop(crossprod(Bmat, zfull))
-    if (q) Gm[rc, (K - 1L + 1L):(K - 1L + q)] <-
-      Gm[rc, (K - 1L + 1L):(K - 1L + q)] + st_tau[r, ]
-    if (pz) Gm[rc, (K - 1L + q + 1L):np] <-
-      Gm[rc, (K - 1L + q + 1L):np] + resE[r] * Z[r, ]
+  nc <- length(ucl); cidx <- match(cl, ucl)
+  Gm <- matrix(0, nc, np, dimnames = list(ucl, NULL))
+  # beta block: per-cluster sums of resE into the winner / loser slots,
+  # laid out cluster-major so one rowsum fills the (cluster x object) grid
+  gA <- drop(acc(resE, (cidx - 1L) * K + ia, nc * K))
+  gB <- drop(acc(resE, (cidx - 1L) * K + ib, nc * K))
+  Gm[, 1:(K - 1L)] <- t(matrix(gA - gB, nrow = K)) %*% Bmat
+  if (q) {
+    st_tau <- (w * (mo$S - cumInd)) %*% Cmat
+    Gm[, (K - 1L + 1L):(K - 1L + q)] <- acc(st_tau, cidx, nc)
   }
+  if (pz) Gm[, (K - 1L + q + 1L):np] <- acc(Z * resE, cidx, nc)
   H <- gh$H
   Hi <- solve(H)
   covth <- Hi %*% crossprod(Gm) %*% Hi
@@ -790,7 +674,10 @@ plot_btl <- function(fit, band = 2.5) {
     dependence <- data.frame(
       effect = colnames(Z), estimate = dep, se = dse,
       z = dep / dse, p = 2 * pnorm(-abs(dep / dse)),
-      n_informative = colSums(Z != 0))
+      # count-weighted: the number of comparisons (not rows) that carry
+      # information about each effect
+      n_informative = vapply(seq_len(ncol(Z)), function(j)
+        sum(w[Z[, j] != 0]), 0))
     rownames(dependence) <- NULL
   }
   thresholds <- NULL; components <- NULL
@@ -830,12 +717,18 @@ plot_btl <- function(fit, band = 2.5) {
   f_cell <- (n_rows - np) / n_rows
   pool <- function(sel) {
     if (sum(w[sel]) < 3)
-      return(list(outfit_ms = NA_real_, fit_resid = NA_real_, df = NA_real_,
-                  n = sum(w[sel])))
+      return(list(infit_ms = NA_real_, outfit_ms = NA_real_,
+                  fit_resid = NA_real_, df = NA_real_, n = sum(w[sel])))
     y2 <- sum(w[sel] * z[sel]^2); f <- f_cell * sum(w[sel])
+    # information-weighted infit, as in the dichotomous path but over the
+    # graded response variance
+    wv <- sum(w[sel] * mo$V[sel])
+    infit <- if (wv > 1e-12)
+      sum(w[sel] * z[sel]^2 * mo$V[sel]) / (f_cell * wv) else NA_real_
     v <- sum(w[sel] * c4v[sel])
     fr <- if (v > 1e-8 && y2 > 0) f * (log(y2) - log(f)) / sqrt(v) else NA_real_
-    list(outfit_ms = y2 / f, fit_resid = fr, df = f, n = sum(w[sel]))
+    list(infit_ms = infit, outfit_ms = y2 / f, fit_resid = fr, df = f,
+         n = sum(w[sel]))
   }
   ofit <- lapply(seq_len(K), function(k) pool(ia == k | ib == k))
   score_of <- vapply(seq_len(K), function(k)
@@ -843,6 +736,7 @@ plot_btl <- function(fit, band = 2.5) {
   objects <- data.frame(object = objs, location = beta, se = se,
                         comparisons = vapply(ofit, `[[`, 0, "n"),
                         score = score_of,
+                        infit_ms = vapply(ofit, `[[`, 0, "infit_ms"),
                         outfit_ms = vapply(ofit, `[[`, 0, "outfit_ms"),
                         fit_resid = vapply(ofit, `[[`, 0, "fit_resid"),
                         df_fit = vapply(ofit, `[[`, 0, "df"))
@@ -854,6 +748,7 @@ plot_btl <- function(fit, band = 2.5) {
     jfit <- lapply(ju, function(j) pool(jd == j))
     judges <- data.frame(judge = ju,
                          n = vapply(jfit, `[[`, 0, "n"),
+                         infit_ms = vapply(jfit, `[[`, 0, "infit_ms"),
                          outfit_ms = vapply(jfit, `[[`, 0, "outfit_ms"),
                          fit_resid = vapply(jfit, `[[`, 0, "fit_resid"),
                          df_fit = vapply(jfit, `[[`, 0, "df"))
@@ -883,19 +778,50 @@ plot_btl <- function(fit, band = 2.5) {
   total_df <- max(sum(used) - (K - 1L) - q, 1L)
   osi <- .psi(objects$location, objects$se)
 
+  # two categories ARE the dichotomous conditional model, so an m == 1 fit is
+  # presented in dichotomous terms: the score is the win count and the mean
+  # graded responses are win proportions (one estimator serves both routes)
+  if (m == 1L) {
+    names(objects)[names(objects) == "score"] <- "wins"
+    names(pairs)[names(pairs) == "obs_mean"] <- "obs_prop"
+    names(pairs)[names(pairs) == "exp_mean"] <- "exp_prop"
+  }
+
+  # the per-comparison history covariates, so the dependence effects can be
+  # interrogated: a comparison is informative for an effect when its covariate
+  # is non-zero (the two objects' histories differ)
+  dependence_data <- if (is.null(Zfull)) NULL else {
+    dd <- data.frame(judge = if (is.null(jd)) NA_character_ else jd,
+                     order = if (is.null(ord)) NA_real_ else ord,
+                     object_a = a, object_b = b, response = x, weight = w,
+                     exposure = Zfull[, "exposure"],
+                     carry_over = Zfull[, "carry_over"],
+                     stringsAsFactors = FALSE)
+    dd <- dd[order(dd$judge, dd$order), ]; rownames(dd) <- NULL; dd
+  }
   out <- list(objects = objects, thresholds = thresholds,
               components = components, thr_structure = thr,
-              dependence = dependence, pairs = pairs,
+              dependence = dependence, dependence_data = dependence_data,
+              pairs = pairs,
               judges = judges, m = m, categories = cats,
               total_chisq = total_chisq, total_df = total_df,
               total_p = pchisq(total_chisq, total_df, lower.tail = FALSE),
               osi = osi, loglik = loglik, iterations = it,
               converged = converged, n_comparisons = n_rows,
               clustered = !is.null(jd), cov_beta = cov_beta,
-              comparisons = data.frame(object_a = a, object_b = b,
-                                       response = x, weight = w,
-                                       judge = if (is.null(jd))
-                                         NA_character_ else jd),
+              comparisons = {
+                cmp <- data.frame(object_a = a, object_b = b,
+                                  response = x, weight = w,
+                                  judge = if (is.null(jd))
+                                    NA_character_ else jd)
+                # row-aligned history covariates, so downstream analyses
+                # (btl_dif) can hold the fitted dependence effects fixed
+                if (!is.null(Zfull)) {
+                  cmp$exposure <- Zfull[, "exposure"]
+                  cmp$carry_over <- Zfull[, "carry_over"]
+                }
+                cmp
+              },
               notes = notes)
   class(out) <- "rmt_btl"
   out
@@ -958,9 +884,12 @@ plot_btl_categories <- function(fit, grid = seq(-4, 4, 0.05)) {
 #'   judge. Observed means are then drawn separately per group, as
 #'   \code{\link{plot_icc}} draws person groups.
 #' @param grid Opponent-location grid, in logits.
-#' @param min_n Opponents met fewer than this many times are drawn hollow
-#'   (ungrouped display only).
-#' @return Called for its plotting side effect; invisibly \code{NULL}.
+#' @param min_n An opponent's observed point is drawn only when the object
+#'   (or, in the grouped display, that judge group) met it at least this many
+#'   times; sparser pairs from incomplete or unbalanced designs are omitted.
+#' @return Called for its plotting side effect; invisibly the names of the
+#'   opponents drawn (the ungrouped display), or \code{NULL} for the grouped
+#'   display.
 #' @examples
 #' set.seed(1)
 #' beta <- c(A = -1, B = -0.3, C = 0.4, D = 0.9)
@@ -1014,30 +943,34 @@ plot_btl_icc <- function(fit, object, group = NULL, grid = NULL,
   lines(grid, Ecurve, lwd = 3, col = .rr$ink)
   abline(v = b_o, lty = 3, col = .rr$soft)
   if (is.null(gg)) {
-    solid <- obs$n >= min_n
-    points(obs$loc[solid], obs$mean[solid], pch = 21, bg = .rr$blue,
+    # a comparator is shown only when the object met it enough times for the
+    # observed proportion to be informative; sparser pairs (incomplete or
+    # unbalanced designs) are omitted rather than plotted as noise
+    shown <- obs[obs$n >= min_n, , drop = FALSE]
+    n_omit <- nrow(obs) - nrow(shown)
+    points(shown$loc, shown$mean, pch = 21, bg = .rr$blue,
            col = "white", cex = 1.5, lwd = 1.2)
-    if (any(!solid))
-      points(obs$loc[!solid], obs$mean[!solid], pch = 21, bg = "white",
-             col = .rr$blue, cex = 1.3, lwd = 1.4)
-    text(obs$loc, obs$mean, obs$opponent, pos = 3, offset = 0.45,
+    text(shown$loc, shown$mean, shown$opponent, pos = 3, offset = 0.45,
          cex = 0.72, col = .rr$soft)
     .rr_legend("topright",
                c("Model", "Observed (per opponent)",
-                 if (any(!solid)) sprintf("fewer than %d comparisons", min_n)),
-               lwd = c(3, NA, if (any(!solid)) NA),
-               pch = c(NA, 21, if (any(!solid)) 21),
-               pt.bg = c(NA, .rr$blue, if (any(!solid)) "white"),
-               col = c(.rr$ink, "white", if (any(!solid)) .rr$blue),
+                 if (n_omit)
+                   sprintf("%d omitted (< %d comparisons)", n_omit, min_n)),
+               lwd = c(3, NA, if (n_omit) NA),
+               pch = c(NA, 21, if (n_omit) NA),
+               pt.bg = c(NA, .rr$blue, if (n_omit) NA),
+               col = c(.rr$ink, "white", if (n_omit) .rr$soft),
                pt.cex = 1.3)
   } else {
     # the graphical DIF display: per-opponent means drawn separately for
-    # each judge group, as plot_icc draws person groups
+    # each judge group, as plot_icc draws person groups. A group's point for
+    # an opponent is shown only where that group met it enough times
     levs <- sort(unique(gg))
     for (li in seq_along(levs)) {
       sel <- gg == levs[li]
-      om <- tapply(wt[sel] * resp[sel], opp[sel], sum) /
-        tapply(wt[sel], opp[sel], sum)
+      nn <- tapply(wt[sel], opp[sel], sum)
+      om <- tapply(wt[sel] * resp[sel], opp[sel], sum) / nn
+      om <- om[nn >= min_n]
       ol <- ob$location[match(names(om), ob$object)]
       colr <- .rr$pal[(li - 1L) %% length(.rr$pal) + 1L]
       oo <- order(ol)
@@ -1051,7 +984,119 @@ plot_btl_icc <- function(fit, object, group = NULL, grid = NULL,
                pt.bg = c(NA, .rr$pal[seq_along(levs)]),
                col = c(.rr$ink, .rr$pal[seq_along(levs)]), pt.cex = 1.2)
   }
-  invisible(NULL)
+  # the opponents actually drawn (ungrouped display), for inspection and tests
+  invisible(if (is.null(gg)) obs[obs$n >= min_n, "opponent"] else NULL)
+}
+
+#' Plot a within-judge dependence effect
+#'
+#' The graphical display of a paired-comparison dependence effect, the
+#' counterpart of the DIF characteristic curve. For every comparison the
+#' departure of the observed response from what the object locations alone
+#' predict is taken, and the contribution of the \emph{other} dependence
+#' effect is removed (a partial-residual display); these departures are then
+#' averaged in bins of the effect's own history covariate and plotted against
+#' it, with the model's fitted contribution overlaid. Observed points that
+#' rise with the covariate along the fitted line are the effect the
+#' coefficient summarises; a flat, scattered cloud means the estimate rests on
+#' little. Only the informative comparisons (a non-zero covariate: the two
+#' objects' histories differ) carry the effect, and the count in each bin is
+#' printed so a thin exposure tail is visible.
+#'
+#' @param fit An object from \code{\link{btl}} fitted with an \code{order}
+#'   column, so \code{fit$dependence_data} is present.
+#' @param effect Which effect to display: \code{"exposure"} (the seen-before
+#'   advantage, the default) or \code{"carry_over"} (response dependence).
+#' @param bins Number of covariate bins for the continuous carry-over display;
+#'   exposure takes its three natural levels (-1, 0, +1).
+#' @return Called for its plotting side effect; invisibly a data frame of the
+#'   binned covariate value, observed and fitted departure, and bin count.
+#' @references Davidson, R. R., & Beaver, R. J. (1977). On extending the
+#'   Bradley-Terry model to incorporate within-pair order effects.
+#'   \emph{Biometrics}, 33(4), 693-702.
+#' @examples
+#' set.seed(1)
+#' beta <- c(A = -0.8, B = -0.2, C = 0.4, D = 0.9)
+#' pr <- t(combn(names(beta), 2))
+#' d <- data.frame(a = rep(pr[, 1], each = 40), b = rep(pr[, 2], each = 40))
+#' d$judge <- sample(sprintf("J%02d", 1:8), nrow(d), TRUE)
+#' d <- d[order(d$judge), ]; d$t <- ave(seq_len(nrow(d)), d$judge, FUN = seq_along)
+#' d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b]), d$a, d$b)
+#' f <- btl(d, "a", "b", winner = "win", judge = "judge", order = "t")
+#' plot_btl_dependence(f, "carry_over")
+#' @export
+plot_btl_dependence <- function(fit, effect = c("exposure", "carry_over"),
+                                bins = 6) {
+  effect <- match.arg(effect)
+  dd <- fit$dependence_data
+  if (is.null(dd))
+    stop("no dependence data: fit btl() with an `order` (and `judge`) column")
+  if (is.null(fit$dependence))
+    stop("no dependence effect was estimable (see fit$notes): ",
+         paste(fit$notes, collapse = "; "))
+  eff <- fit$dependence[fit$dependence$effect == effect, ]
+  if (!nrow(eff))
+    stop("effect not estimated (see fit$notes): ", effect)
+  bl <- setNames(fit$objects$location, fit$objects$object)
+  m <- if (is.null(fit$m)) 1L else fit$m
+  tau <- if (!is.null(fit$thresholds)) fit$thresholds$tau else numeric(1)
+  dep <- setNames(fit$dependence$estimate, fit$dependence$effect)
+  phi <- if ("exposure" %in% names(dep)) dep[["exposure"]] else 0
+  psi <- if ("carry_over" %in% names(dep)) dep[["carry_over"]] else 0
+  Emom <- function(v) vapply(v, function(t) item_moments(t, tau)$E, 0)
+
+  # partial-residual display: hold everything but this effect at its fitted
+  # value, so the plotted departure isolates this covariate's contribution
+  base <- unname(bl[dd$object_a] - bl[dd$object_b])
+  lin_full <- base + phi * dd$exposure + psi * dd$carry_over
+  cov <- dd[[effect]]
+  coef_e <- if (effect == "exposure") phi else psi
+  E_other <- Emom(lin_full - coef_e * cov)
+  obs <- dd$response - E_other                 # observed departure
+  fit_lift <- Emom(lin_full) - E_other         # model-fitted departure
+
+  wt <- if (is.null(dd$weight)) rep(1, nrow(dd)) else dd$weight
+  if (effect == "exposure") {
+    g <- factor(cov, levels = sort(unique(cov))); xb <- as.numeric(levels(g))
+  } else {
+    bins <- max(2L, as.integer(bins))
+    br <- unique(stats::quantile(cov, seq(0, 1, length.out = bins + 1L),
+                                 na.rm = TRUE))
+    # a heavy mass point (many unseen pairs at 0) can collapse the quantile
+    # breaks; fall back to equal-width bins rather than per-value singletons
+    if (length(br) <= 2L)
+      br <- unique(pretty(range(cov, na.rm = TRUE), bins))
+    g <- if (length(br) > 2L) cut(cov, br, include.lowest = TRUE) else
+      factor(cov)
+    xw <- tapply(wt * cov, g, sum); xb <- as.numeric(xw / tapply(wt, g, sum))
+  }
+  # count-weighted rows stand for several comparisons: weighted bin means,
+  # and the printed n is the number of comparisons, not rows
+  ob <- as.numeric(tapply(wt * obs, g, sum) / tapply(wt, g, sum))
+  fb <- as.numeric(tapply(wt * fit_lift, g, sum) / tapply(wt, g, sum))
+  nb <- as.numeric(tapply(wt, g, sum))
+  keep <- !is.na(xb) & !is.na(ob) & nb > 0
+  xb <- xb[keep]; ob <- ob[keep]; fb <- fb[keep]; nb <- nb[keep]
+  oo <- order(xb); xb <- xb[oo]; ob <- ob[oo]; fb <- fb[oo]; nb <- nb[oo]
+
+  lab <- gsub("_", "-", effect)
+  yl <- range(c(ob, fb, 0), na.rm = TRUE); yl <- yl + c(-1, 1) * 0.08 * (diff(yl) + 1e-6)
+  xr <- range(xb); xl <- xr + c(-1, 1) * (0.12 * diff(xr) + 0.05)
+  op <- .rr_canvas(xl, yl, sprintf("%s covariate", lab),
+                   if (m == 1L) "Observed - expected win probability"
+                   else "Observed - expected response",
+                   sprintf("%s dependence: %.3f logits (SE %.3f, p = %s)",
+                           lab, eff$estimate, eff$se, .fmt_p(eff$p)),
+                   grid_x = TRUE)
+  on.exit(par(op))
+  abline(h = 0, lty = 3, col = .rr$soft)
+  lines(xb, fb, lwd = 2.6, col = .rr$ink)
+  points(xb, ob, pch = 21, bg = .rr$blue, col = "white", cex = 1.7, lwd = 1.2)
+  text(xb, ob, nb, pos = 3, offset = 0.6, cex = 0.65, col = .rr$soft)
+  .rr_legend("topleft", c("Model", "Observed (n per bin)"),
+             lwd = c(2.6, NA), pch = c(NA, 21), pt.bg = c(NA, .rr$blue),
+             col = c(.rr$ink, "white"), pt.cex = 1.3)
+  invisible(data.frame(covariate = xb, observed = ob, fitted = fb, n = nb))
 }
 
 # ---------------------------------------------------------------------------
@@ -1068,35 +1113,60 @@ plot_btl_icc <- function(fit, object, group = NULL, grid = NULL,
 #' DIF analysis for paired comparisons
 #'
 #' Tests whether objects function differently for identifiable groups of
-#' judges. For each object: (i) the standardised residuals of its
-#' comparisons, oriented to the object, are analysed by judge group crossed
-#' with opponent-strength bands -- a group main effect is uniform DIF and a
-#' group-by-band interaction non-uniform DIF, mirroring
-#' \code{\link{dif_anova}}; and (ii) the object is resolved into one copy
-#' per judge group inside a joint refit and the differences between the
-#' resolved locations are reported in logits with judge-clustered Wald
-#' tests, familywise adjustment, and the practical-significance flag,
-#' mirroring \code{\link{dif_size}}.
+#' judges. One judge factor is analysed on its own; several factors are
+#' modelled jointly -- with main effects by default and factor-by-factor
+#' interactions optional -- exactly as \code{\link{dif_anova}} treats person
+#' factors. For each object the standardised residuals of its comparisons,
+#' oriented to the object, are analysed by the judge factor(s) crossed with
+#' opponent-strength bands: a term is uniform DIF, its crossing with the band
+#' non-uniform DIF, and a significant higher-order group term supersedes the
+#' lower-order group terms built from a subset of its factors. Each term
+#' flagged for uniform DIF and not superseded is then resolved -- the object
+#' split into one copy per cell of the term's factors inside a joint refit --
+#' and the differences between the resolved locations reported in logits with
+#' judge-clustered Wald tests and the practical-significance flag, mirroring
+#' \code{\link{dif_size}}. Fits with within-judge dependence effects
+#' (\code{order}) keep those effects in the residual moments and in the
+#' refits, so dependence is not mistaken for judge-group DIF; count-weighted
+#' comparisons enter all tests with their weights.
+#'
+#' Each object is resolved against the other objects' common locations. When
+#' several objects carry real DIF, resolving them one at a time can spread a
+#' large effect onto clean objects as compensating, opposite-signed artificial
+#' DIF (Andrich & Hagquist 2012, 2015); read large flags on several objects
+#' together with that hazard in mind, and prefer resolving the largest effect
+#' first and re-running.
 #'
 #' @param fit An object from \code{\link{btl}}.
-#' @param groups Judge grouping: one value per row of
-#'   \code{fit$comparisons}, or a vector named by judge.
+#' @param factors A judge factor, or a named list of them, each either one
+#'   value per row of \code{fit$comparisons} or a vector named by judge.
 #' @param objects Objects to test; all by default.
-#' @param p_adjust Familywise adjustment over all pairwise location
-#'   comparisons; the ANOVA probabilities are adjusted across objects by
-#'   Benjamini-Hochberg within each term, as in \code{\link{dif_anova}}.
+#' @param effects \code{"main"} (default) models several factors additively
+#'   (each factor's main effect and its band interaction); \code{"factorial"}
+#'   also crosses the factors with one another.
+#' @param p_adjust Multiplicity adjustment across objects within each term;
+#'   the resolved-size probabilities are adjusted in one pool over all
+#'   objects, terms, and cell pairs.
 #' @param alpha Significance level for adjusted probabilities.
 #' @param flag_logits Absolute resolved difference flagged as practically
 #'   significant.
-#' @param min_n Group levels with fewer comparisons involving the object
-#'   are dropped from its resolution, with a note.
+#' @param min_n Term cells with fewer comparisons involving the object are
+#'   dropped from its resolution, with a note.
 #' @param maxit,tol Newton controls for the resolution refits.
-#' @return A list of class \code{"rmt_btl_dif"}: \code{anova} (per object:
-#'   uniform and non-uniform F, raw and adjusted p, flags), \code{levels}
-#'   (resolved location and SE per object and group), \code{sizes} (per
-#'   object and group pair: difference in logits, SE, z, adjusted p,
-#'   significance and practical flags), and \code{notes}.
-#' @references Dittrich, R., Hatzinger, R., & Katzenbeisser, W. (1998).
+#' @return A list of class \code{"rmt_btl_dif"}: \code{summary} (one row per
+#'   object and group term with the uniform F, adjusted p and partial
+#'   eta-squared -- the term itself -- the non-uniform ones -- the term
+#'   crossed with the opponent band -- plus \code{uniform_DIF},
+#'   \code{nonuniform_DIF} and \code{superseded} flags); \code{terms} (the
+#'   full per-object analysis-of-variance table); \code{levels} (resolved
+#'   location and SE per object, term and cell); \code{sizes} (per object,
+#'   term and cell pair: difference in logits, SE, z, adjusted p, significance
+#'   and practical flags); \code{effects}, \code{factors}, and \code{notes}.
+#' @references Andrich, D., & Hagquist, C. (2012). Real and artificial
+#'   differential item functioning. \emph{Journal of Educational and
+#'   Behavioral Statistics}, 37(3), 387-416.
+#'
+#'   Dittrich, R., Hatzinger, R., & Katzenbeisser, W. (1998).
 #'   Modelling the effect of subject-specific covariates in paired
 #'   comparison studies with an application to university rankings.
 #'   \emph{Journal of the Royal Statistical Society C}, 47(4), 511-525.
@@ -1112,19 +1182,34 @@ plot_btl_icc <- function(fit, object, group = NULL, grid = NULL,
 #' d$win <- ifelse(runif(nrow(d)) < p, d$a, d$b)
 #' f <- btl(d, "a", "b", winner = "win", judge = "judge")
 #' grp <- setNames(rep(c("g1", "g2"), each = 6), sprintf("J%02d", 1:12))
-#' btl_dif(f, groups = grp, objects = "C")
+#' btl_dif(f, grp, objects = "C")
 #' @export
-btl_dif <- function(fit, groups, objects = NULL, p_adjust = "holm",
-                    alpha = 0.05, flag_logits = 0.5, min_n = 20,
-                    maxit = 60, tol = 1e-8) {
+btl_dif <- function(fit, factors, objects = NULL,
+                    effects = c("main", "factorial"),
+                    p_adjust = "BH", alpha = 0.05, flag_logits = 0.5,
+                    min_n = 20, maxit = 60, tol = 1e-8) {
+  effects <- match.arg(effects)
   cm <- fit$comparisons
   if (is.null(cm)) stop("the fit carries no comparisons")
-  gv <- if (length(groups) == nrow(cm)) as.character(groups) else {
-    if (is.null(names(groups)))
-      stop("`groups` must have one entry per comparison or be named by judge")
-    unname(as.character(groups)[match(cm$judge, names(groups))])
-  }
-  ok <- !is.na(gv)
+  # a single grouping is promoted to a one-factor list; several judge factors
+  # are modelled jointly (main effects by default, interactions if asked)
+  if (!is.list(factors)) factors <- list(group = factors)
+  if (is.null(names(factors)) || any(!nzchar(names(factors))))
+    names(factors) <- paste0("factor", seq_along(factors))
+  fnames <- names(factors)
+  gvs <- lapply(factors, function(g) {
+    if (length(g) == nrow(cm)) as.character(g)
+    else {
+      if (is.null(names(g)))
+        stop("each factor needs one value per comparison or names by judge")
+      unname(as.character(g)[match(cm$judge, names(g))])
+    }
+  })
+  ok <- Reduce(`&`, lapply(gvs, function(g) !is.na(g)))
+  safe <- paste0("f", seq_along(fnames))            # syntactic stand-ins
+  op <- if (effects == "factorial") " * " else " + "
+  tvars <- function(t) strsplit(t, ":", fixed = TRUE)[[1]]
+
   m <- if (is.null(fit$m)) 1L else fit$m
   cats <- if (!is.null(fit$categories)) fit$categories else c("0", "1")
   thr <- if (!is.null(fit$thr_structure)) fit$thr_structure else "free"
@@ -1133,8 +1218,18 @@ btl_dif <- function(fit, groups, objects = NULL, p_adjust = "holm",
   bl <- setNames(fit$objects$location, fit$objects$object)
   jd_all <- if (all(is.na(cm$judge))) NULL else cm$judge
 
-  # base-fit moments per comparison
+  # base-fit moments per comparison, including any fitted within-judge
+  # dependence effects: leaving them out would push the dependence structure
+  # into the residuals, where a judge-level factor would absorb it as
+  # spurious DIF (and the resolved locations would absorb it as spurious
+  # magnitude)
   d0 <- bl[cm$object_a] - bl[cm$object_b]
+  Zc <- NULL
+  if (!is.null(fit$dependence) &&
+      all(fit$dependence$effect %in% names(cm))) {
+    Zc <- as.matrix(cm[, fit$dependence$effect, drop = FALSE])
+    d0 <- d0 + drop(Zc %*% fit$dependence$estimate)
+  }
   sc <- 0:m
   eta <- outer(unname(d0), sc) -
     matrix(rep(c(0, cumsum(tau)), each = nrow(cm)), nrow(cm), m + 1L)
@@ -1142,100 +1237,189 @@ btl_dif <- function(fit, groups, objects = NULL, p_adjust = "holm",
   P <- exp(eta); P <- P / rowSums(P)
   E <- drop(P %*% sc); V <- pmax(drop(P %*% sc^2) - E^2, 1e-12)
 
-  notes <- character(0)
-  an_rows <- list(); lev_rows <- list(); sz_rows <- list()
+  # per object: the residual ANOVA z ~ (f1 [+/*] fk) * band, one row per term
+  notes <- character(0); term_rows <- list()
   for (o in its) {
     sel_a <- cm$object_a == o & ok
     sel_b <- cm$object_b == o & ok
     zo <- c((cm$response[sel_a] - E[sel_a]) / sqrt(V[sel_a]),
             -(cm$response[sel_b] - E[sel_b]) / sqrt(V[sel_b]))
     opp <- c(cm$object_b[sel_a], cm$object_a[sel_b])
-    go <- c(gv[sel_a], gv[sel_b])
+    wo <- c(cm$weight[sel_a], cm$weight[sel_b])
+    gcols <- lapply(gvs, function(g) c(g[sel_a], g[sel_b]))
     oloc <- bl[opp]
     keep <- !is.na(oloc)
-    zo <- zo[keep]; go <- factor(go[keep]); oloc <- oloc[keep]
-    n_o <- length(zo)
-    F_u <- p_u <- F_nu <- p_nu <- NA_real_
-    if (n_o >= 10 && nlevels(droplevels(go)) >= 2) {
-      nb <- if (n_o >= 90) 3L else if (n_o >= 40) 2L else 1L
-      if (nb > 1L) {
-        band <- factor(cut(rank(oloc, ties.method = "first"), nb,
+    zo <- zo[keep]; oloc <- oloc[keep]; wo <- wo[keep]
+    gcols <- lapply(gcols, function(g) g[keep])
+    # a count-weighted row stands for `weight` identical comparisons: the
+    # residual z then has variance 1/weight, so weighted least squares is
+    # exactly the expanded-rows analysis
+    n_o <- sum(wo)
+    d <- data.frame(z = zo, w = wo)
+    for (j in seq_along(fnames)) d[[safe[j]]] <- factor(gcols[[j]])
+    if (n_o < 10 || any(vapply(safe, function(s)
+      nlevels(droplevels(d[[s]])) < 2, TRUE))) next
+    nb <- if (n_o >= 90) 3L else if (n_o >= 40) 2L else 1L
+    if (nb > 1L) {
+      d$band <- factor(cut(rank(oloc, ties.method = "first"), nb,
                            labels = FALSE))
-        av <- tryCatch(stats::anova(stats::lm(zo ~ go * band)),
-                       error = function(e) NULL)
-        if (!is.null(av)) {
-          if ("go" %in% rownames(av)) {
-            F_u <- av["go", "F value"]; p_u <- av["go", "Pr(>F)"]
-          }
-          if ("go:band" %in% rownames(av)) {
-            F_nu <- av["go:band", "F value"]; p_nu <- av["go:band", "Pr(>F)"]
-          }
-        }
-      } else {
-        av <- tryCatch(stats::anova(stats::lm(zo ~ go)),
-                       error = function(e) NULL)
-        if (!is.null(av) && "go" %in% rownames(av)) {
-          F_u <- av["go", "F value"]; p_u <- av["go", "Pr(>F)"]
-        }
-      }
+      form <- stats::as.formula(
+        paste("z ~ (", paste(safe, collapse = op), ") * band"))
+    } else {
+      form <- stats::as.formula(
+        paste("z ~ (", paste(safe, collapse = op), ")"))
     }
-    an_rows[[length(an_rows) + 1L]] <- data.frame(
-      object = o, n = n_o, F_uniform = F_u, p_uniform = p_u,
-      F_nonuniform = F_nu, p_nonuniform = p_nu)
+    av <- tryCatch(stats::anova(stats::lm(form, data = d, weights = w)),
+                   error = function(e) NULL)
+    if (is.null(av)) next
+    rss <- av["Residuals", "Sum Sq"]
+    # weighted least squares reproduces the expanded-rows sums of squares
+    # exactly, but its residual df counts rows; the residual mean square must
+    # be taken over the comparisons the rows stand for
+    df_eff <- n_o - (sum(av$Df) - av["Residuals", "Df"]) - 1
+    if (df_eff <= 0) next
+    for (tt in setdiff(rownames(av), "Residuals")) {
+      Fv <- (av[tt, "Sum Sq"] / av[tt, "Df"]) / (rss / df_eff)
+      term_rows[[length(term_rows) + 1L]] <- data.frame(
+        object = o, term = tt, df = av[tt, "Df"], sum_sq = av[tt, "Sum Sq"],
+        F_value = Fv, p = stats::pf(Fv, av[tt, "Df"], df_eff,
+                                    lower.tail = FALSE), resid_ss = rss)
+    }
+  }
+  if (!length(term_rows)) stop("no object yielded an estimable DIF ANOVA")
+  terms <- do.call(rbind, term_rows); rownames(terms) <- NULL
+  terms$eta2_partial <- terms$sum_sq / (terms$sum_sq + terms$resid_ss)
+  terms$resid_ss <- NULL
+  # adjust across objects within each term
+  terms$p_adj <- NA_real_
+  for (tt in unique(terms$term)) {
+    sel <- terms$term == tt
+    terms$p_adj[sel] <- p.adjust(terms$p[sel], method = p_adjust)
+  }
+  terms$significant <- !is.na(terms$p_adj) & terms$p_adj < alpha
+  # a significant higher-order GROUP term supersedes lower-order group terms
+  # built from a subset of its factors, within the same object. Band-crossing
+  # terms are excluded from the pass: a term's own band interaction is
+  # reported WITH it (as non-uniform DIF), so it must not supersede it.
+  terms$superseded <- FALSE
+  is_group <- !vapply(terms$term, function(t) "band" %in% tvars(t), TRUE)
+  for (ob in unique(terms$object)) {
+    sel <- which(terms$object == ob & terms$significant & is_group)
+    for (i in sel) for (k in sel) if (i != k) {
+      vi <- tvars(terms$term[i]); vk <- tvars(terms$term[k])
+      if (length(vi) < length(vk) && all(vi %in% vk))
+        terms$superseded[i] <- TRUE
+    }
+  }
+  # map a term's syntactic stand-ins (f1..fk) back to the nominated factor
+  # names by exact whole-token match, so a factor named like a stand-in ("f1")
+  # or like the opponent band cannot be re-substituted or collide. Applied only
+  # for display, after all term classification is done on the stand-ins.
+  relab <- function(x) vapply(x, function(t) {
+    toks <- strsplit(t, ":", fixed = TRUE)[[1]]
+    i <- match(toks, safe); toks[!is.na(i)] <- fnames[i[!is.na(i)]]
+    # a user factor literally named "band" would otherwise be
+    # indistinguishable from the opponent-strength band in the display
+    if ("band" %in% fnames)
+      toks[is.na(i) & toks == "band"] <- "(opponent band)"
+    paste(toks, collapse = ":")
+  }, character(1), USE.NAMES = FALSE)
 
-    # resolution: one copy of the object per judge group, joint refit
-    inv <- sel_a | sel_b
-    lev_n <- table(gv[inv])
+  # compact reading: one row per object and group term (a term not crossing the
+  # opponent band), its own effect uniform DIF and its band crossing
+  # non-uniform DIF. Classified on the stand-in tokens, so a factor named
+  # "band" (held as f_j) is never confused with the band variable.
+  gterms <- unique(terms$term)   # Residuals never reaches term_rows
+  gterms <- gterms[!vapply(gterms, function(t) "band" %in% tvars(t), TRUE)]
+  srows <- list()
+  for (ob in unique(terms$object)) for (tt in gterms) {
+    u <- terms[terms$object == ob & terms$term == tt, , drop = FALSE]
+    if (!nrow(u)) next
+    nu <- terms[terms$object == ob & terms$term == paste0(tt, ":band"), ,
+                drop = FALSE]
+    srows[[length(srows) + 1L]] <- data.frame(
+      object = ob, term = tt,
+      F_uniform = u$F_value, p_uniform = u$p, p_uniform_adj = u$p_adj,
+      eta2_uniform = u$eta2_partial, uniform_DIF = isTRUE(u$significant),
+      F_nonuniform = if (nrow(nu)) nu$F_value else NA_real_,
+      p_nonuniform = if (nrow(nu)) nu$p else NA_real_,
+      p_nonuniform_adj = if (nrow(nu)) nu$p_adj else NA_real_,
+      eta2_nonuniform = if (nrow(nu)) nu$eta2_partial else NA_real_,
+      nonuniform_DIF = nrow(nu) > 0 && isTRUE(nu$significant),
+      superseded = isTRUE(u$superseded))
+  }
+  summary_tab <- if (length(srows)) do.call(rbind, srows) else NULL
+
+  # resolution: for each flagged, non-superseded group term, resolve the object
+  # into one copy per cell of the term's factors and report the location
+  # differences in logits (a main-effect term by its levels, an interaction by
+  # its factor-combination cells)
+  lev_rows <- list(); sz_rows <- list()
+  flagged <- if (is.null(summary_tab)) integer(0) else
+    which(summary_tab$uniform_DIF & !summary_tab$superseded)
+  for (r in flagged) {
+    ob <- summary_tab$object[r]; tt <- summary_tab$term[r]; ttd <- relab(tt)
+    jf <- match(tvars(tt), safe)
+    cell <- do.call(paste, c(lapply(jf, function(j) gvs[[j]]), sep = ":"))
+    inv <- ok & (cm$object_a == ob | cm$object_b == ob)
+    # cell sizes in comparisons (count-weighted), not rows
+    lev_n <- tapply(cm$weight[inv], cell[inv], sum)
     use_lev <- names(lev_n)[lev_n >= min_n]
     if (length(use_lev) < 2) {
       notes <- c(notes, sprintf(
-        "%s: fewer than two group levels with %d+ comparisons; not resolved",
-        o, min_n))
+        "%s [%s]: fewer than two cells with %d+ comparisons; not resolved",
+        ob, ttd, min_n))
       next
     }
     if (length(use_lev) < length(lev_n))
       notes <- c(notes, sprintf(
-        "%s: level(s) dropped with fewer than %d comparisons: %s",
-        o, min_n, paste(setdiff(names(lev_n), use_lev), collapse = ", ")))
-    rsel <- ok & (!inv | gv %in% use_lev)
-    a2 <- cm$object_a[rsel]; b2 <- cm$object_b[rsel]
-    g2 <- gv[rsel]
-    a2 <- ifelse(a2 == o, paste0(o, " (", g2, ")"), a2)
-    b2 <- ifelse(b2 == o, paste0(o, " (", g2, ")"), b2)
+        "%s [%s]: cell(s) dropped with fewer than %d comparisons: %s",
+        ob, ttd, min_n, paste(setdiff(names(lev_n), use_lev), collapse = ", ")))
+    rsel <- ok & (!(cm$object_a == ob | cm$object_b == ob) | cell %in% use_lev)
+    a2 <- cm$object_a[rsel]; b2 <- cm$object_b[rsel]; c2 <- cell[rsel]
+    a2 <- ifelse(a2 == ob, paste0(ob, " (", c2, ")"), a2)
+    b2 <- ifelse(b2 == ob, paste0(ob, " (", c2, ")"), b2)
+    # the refit keeps the fitted dependence structure: the history covariates
+    # are fixed by the original judgment sequence, so they pass through as-is
     rf <- tryCatch(.btl_graded(
       a2, b2, cm$response[rsel], if (is.null(jd_all)) NULL else jd_all[rsel],
-      cm$weight[rsel], cats, maxit, tol, character(0), thr = thr),
+      cm$weight[rsel], cats, maxit, tol, character(0), thr = thr,
+      Z = if (is.null(Zc)) NULL else Zc[rsel, , drop = FALSE]),
       error = function(e) NULL)
     if (is.null(rf)) {
-      notes <- c(notes, sprintf("%s: resolution failed (graph or extremes)", o))
+      notes <- c(notes, sprintf("%s [%s]: resolution failed", ob, ttd))
       next
     }
-    idx <- match(paste0(o, " (", use_lev, ")"), rf$objects$object)
+    idx <- match(paste0(ob, " (", use_lev, ")"), rf$objects$object)
     if (anyNA(idx)) {
-      notes <- c(notes, sprintf("%s: resolved copies missing after refit", o))
+      notes <- c(notes, sprintf("%s [%s]: resolved copies missing", ob, ttd))
       next
     }
     loc <- rf$objects$location[idx]
     vv <- rf$cov_beta[idx, idx, drop = FALSE]
     lev_rows[[length(lev_rows) + 1L]] <- data.frame(
-      object = o, level = use_lev, location = loc,
-      se = sqrt(pmax(diag(vv), 0)),
-      n = as.numeric(lev_n[use_lev]))
+      object = ob, term = tt, level = use_lev, location = loc,
+      se = sqrt(pmax(diag(vv), 0)), n = as.numeric(lev_n[use_lev]))
     pr <- t(utils::combn(seq_along(use_lev), 2))
     sz_rows[[length(sz_rows) + 1L]] <- data.frame(
-      object = o, level_a = use_lev[pr[, 1]], level_b = use_lev[pr[, 2]],
+      object = ob, term = tt,
+      level_a = use_lev[pr[, 1]], level_b = use_lev[pr[, 2]],
       difference = loc[pr[, 1]] - loc[pr[, 2]],
       se = sqrt(pmax(diag(vv)[pr[, 1]] + diag(vv)[pr[, 2]] -
                      2 * vv[pr], 1e-12)))
   }
-  anova <- do.call(rbind, an_rows)
-  anova$p_uniform_adj <- p.adjust(anova$p_uniform, method = "BH")
-  anova$p_nonuniform_adj <- p.adjust(anova$p_nonuniform, method = "BH")
-  anova$uniform_DIF <- !is.na(anova$p_uniform_adj) &
-    anova$p_uniform_adj < alpha
-  anova$nonuniform_DIF <- !is.na(anova$p_nonuniform_adj) &
-    anova$p_nonuniform_adj < alpha
-  rownames(anova) <- NULL
+  # a summary row can be flagged yet carry no magnitude row; say so rather
+  # than leave the omission silent
+  if (!is.null(summary_tab)) {
+    for (r in which(summary_tab$uniform_DIF & summary_tab$superseded))
+      notes <- c(notes, sprintf(
+        "%s [%s]: uniform DIF superseded by a higher-order term; not resolved separately",
+        summary_tab$object[r], relab(summary_tab$term[r])))
+    for (r in which(summary_tab$nonuniform_DIF & !summary_tab$uniform_DIF))
+      notes <- c(notes, sprintf(
+        "%s [%s]: non-uniform DIF only; no single location difference summarises it, so no magnitude row is reported",
+        summary_tab$object[r], relab(summary_tab$term[r])))
+  }
   levels_df <- if (length(lev_rows)) do.call(rbind, lev_rows) else NULL
   sizes <- if (length(sz_rows)) do.call(rbind, sz_rows) else NULL
   if (!is.null(sizes)) {
@@ -1247,27 +1431,37 @@ btl_dif <- function(fit, groups, objects = NULL, p_adjust = "holm",
     rownames(sizes) <- NULL
   }
   if (!is.null(levels_df)) rownames(levels_df) <- NULL
-  out <- list(anova = anova, levels = levels_df, sizes = sizes,
-              alpha = alpha, p_adjust = p_adjust,
-              flag_logits = flag_logits, notes = unique(notes))
+  # relabel stand-ins to the factor names for display, now that all term
+  # classification and resolution are done
+  terms$term <- relab(terms$term)
+  if (!is.null(summary_tab)) {
+    summary_tab$term <- relab(summary_tab$term); rownames(summary_tab) <- NULL
+  }
+  if (!is.null(sizes)) sizes$term <- relab(sizes$term)
+  if (!is.null(levels_df)) levels_df$term <- relab(levels_df$term)
+  out <- list(summary = summary_tab, terms = terms, levels = levels_df,
+              sizes = sizes, effects = effects, factors = fnames,
+              alpha = alpha, p_adjust = p_adjust, flag_logits = flag_logits,
+              notes = unique(notes))
   class(out) <- "rmt_btl_dif"
   out
 }
 
 #' @export
 print.rmt_btl_dif <- function(x, ...) {
-  cat(sprintf("DIF for paired comparisons: %d object(s) by judge group\n",
-              nrow(x$anova)))
-  cat("Residual ANOVA (uniform = group; non-uniform = group x opponent band; BH across objects)\n")
-  print(.fmt_df(x$anova[, c("object", "n", "F_uniform", "p_uniform_adj",
-                            "uniform_DIF", "F_nonuniform",
-                            "p_nonuniform_adj", "nonuniform_DIF")]),
+  nf <- length(x$factors)
+  cat(sprintf("DIF for paired comparisons: %d factor(s) [%s], %s effects\n",
+              nf, paste(x$factors, collapse = ", "), x$effects))
+  cat("Residual ANOVA per object and term (uniform = term; non-uniform = term x opponent band)\n")
+  print(.fmt_df(x$summary[, c("object", "term", "F_uniform", "p_uniform_adj",
+                              "uniform_DIF", "F_nonuniform",
+                              "p_nonuniform_adj", "nonuniform_DIF")]),
         row.names = FALSE)
   if (!is.null(x$sizes)) {
     cat(sprintf("\nResolved locations (logits; %s over %d comparison(s); practical %.2f)\n",
                 x$p_adjust, nrow(x$sizes), x$flag_logits))
-    print(.fmt_df(x$sizes[, c("object", "level_a", "level_b", "difference",
-                              "se", "z", "p_adj", "significant",
+    print(.fmt_df(x$sizes[, c("object", "term", "level_a", "level_b",
+                              "difference", "se", "z", "p_adj", "significant",
                               "practical")]), row.names = FALSE)
   }
   if (length(x$notes)) cat("Notes:", paste(x$notes, collapse = "; "), "\n")

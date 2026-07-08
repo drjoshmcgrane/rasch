@@ -18,11 +18,14 @@ judge. Observed means are then drawn separately per group, as
 
 \item{grid}{Opponent-location grid, in logits.}
 
-\item{min_n}{Opponents met fewer than this many times are drawn hollow
-(ungrouped display only).}
+\item{min_n}{An opponent's observed point is drawn only when the object
+(or, in the grouped display, that judge group) met it at least this many
+times; sparser pairs from incomplete or unbalanced designs are omitted.}
 }
 \value{
-Called for its plotting side effect; invisibly \code{NULL}.
+Called for its plotting side effect; invisibly the names of the
+  opponents drawn (the ungrouped display), or \code{NULL} for the grouped
+  display.
 }
 \description{
 The paired-comparison counterpart of the item characteristic curve: the

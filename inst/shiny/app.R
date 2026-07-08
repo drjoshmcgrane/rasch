@@ -73,37 +73,72 @@ if (requireNamespace("rmt", quietly = TRUE)) {
 # graded-response role can be pointed at it, and a `margin` column ("a
 # little" < "much") derived from the preference for the winner + margin
 # entry path.
-.demo_btl <- function(seed = 47, reps = 22) {
+.demo_btl <- function(seed = 47, reps = 26) {
   set.seed(seed)
-  beta <- setNames(seq(-1.4, 1.4, length.out = 8), sprintf("E%02d", 1:8))
+  # a moderate object spread: extreme objects have near-zero residual variance
+  # in paired comparisons, which would manufacture spurious DIF, so the range
+  # is kept modest and the planted DIF is put on the central objects
+  beta <- setNames(seq(-1.0, 1.0, length.out = 8), sprintf("E%02d", 1:8))
   pr <- t(utils::combn(names(beta), 2))
   d <- data.frame(object_a = rep(pr[, 1], each = reps),
-                  object_b = rep(pr[, 2], each = reps))
+                  object_b = rep(pr[, 2], each = reps),
+                  stringsAsFactors = FALSE)
   d$judge <- sprintf("J%02d", sample(1:10, nrow(d), replace = TRUE))
-  p <- plogis(beta[d$object_a] - beta[d$object_b])
-  p[d$judge == "J09"] <- 0.5
-  d$winner <- ifelse(runif(nrow(d)) < p, d$object_a, d$object_b)
-  # graded preference for object_a: adjacent-categories probabilities on the
-  # same locations with symmetric thresholds (J09 stays random)
+  # two judge factors (each constant within judge) so DIF can be modelled by
+  # one factor or several jointly: panel splits judges 1-5 / 6-10, experience
+  # splits the odd / even judges independently
+  d$panel <- ifelse(d$judge %in% sprintf("J%02d", 1:5), "panel A", "panel B")
+  d$experience <- ifelse(d$judge %in% sprintf("J%02d", c(1, 3, 5, 7, 9)),
+                         "expert", "novice")
+  # judgment order: process each judge's comparisons in sequence so the
+  # within-judge history (exposure) is well defined
+  d <- d[sample(nrow(d)), ]
+  d$t <- ave(seq_len(nrow(d)), d$judge, FUN = seq_along)
+  d <- d[order(d$judge, d$t), ]
+  rownames(d) <- NULL
+
+  # Several signals are built in so the diagnostics have something to find.
+  # (1) Exposure: an object already met by the judge gains `expo` logits (a
+  # seen-before advantage). (2) Panel DIF: panel A over-rewards E04, so its
+  # location differs by panel. (3) Experience DIF: experts over-reward E05, a
+  # second, independent judge factor. The two factors point at different
+  # objects so each is cleanly attributable. Judge J09 answers at random (a
+  # misfitting judge), as before.
+  expo <- 0.7
+  dif_panel <- "E04"; dif_exp_obj <- "E05"
+  dif <- 1.2         # panel effect
+  # larger than the panel effect: expert J09 answers at random (diluting it),
+  # and the dependence-adjusted DIF screen absorbs the share of a sequential
+  # effect that the carry-over covariate can carry
+  dif_exp <- 1.8
+  tau <- c(-1.1, 0, 1.1)
   lev <- c("much worse", "a little worse", "a little better", "much better")
-  P <- vapply(seq_len(nrow(d)), function(r)
-    item_moments(beta[d$object_a[r]] - beta[d$object_b[r]],
-                 c(-1.1, 0, 1.1))$P, numeric(4))
-  P[, d$judge == "J09"] <- 0.25
-  d$preference <- factor(lev[apply(P, 2, function(pp) sample(4, 1, prob = pp))],
-                         levels = lev, ordered = TRUE)
-  # margin of win as an ordered factor, derived from the graded preference
-  # (the extreme categories are "much" wins), for the winner + margin path
+  seen <- new.env(parent = emptyenv())
+  winner <- character(nrow(d)); pref <- integer(nrow(d))
+  for (r in seq_len(nrow(d))) {
+    j <- d$judge[r]; a <- d$object_a[r]; b <- d$object_b[r]
+    ba <- beta[[a]]; bb <- beta[[b]]
+    if (d$panel[r] == "panel A") {
+      ba <- ba + dif * (a == dif_panel); bb <- bb + dif * (b == dif_panel)
+    }
+    if (d$experience[r] == "expert") {
+      ba <- ba + dif_exp * (a == dif_exp_obj); bb <- bb + dif_exp * (b == dif_exp_obj)
+    }
+    ba <- ba + expo * isTRUE(get0(paste(j, a), seen, ifnotfound = FALSE))
+    bb <- bb + expo * isTRUE(get0(paste(j, b), seen, ifnotfound = FALSE))
+    if (j == "J09") { p <- 0.5; Pp <- rep(0.25, 4) }
+    else { p <- plogis(ba - bb); Pp <- item_moments(ba - bb, tau)$P }
+    winner[r] <- if (runif(1) < p) a else b
+    pref[r] <- sample.int(4, 1, prob = Pp)
+    assign(paste(j, a), TRUE, seen); assign(paste(j, b), TRUE, seen)
+  }
+  d$winner <- winner
+  d$preference <- factor(lev[pref], levels = lev, ordered = TRUE)
+  # margin of win as an ordered factor (extreme categories are "much" wins)
   d$margin <- factor(ifelse(d$preference %in% c("much worse", "much better"),
                             "much", "a little"),
                      levels = c("a little", "much"), ordered = TRUE)
-  d <- d[sample(nrow(d)), ]
-  # judgment order: each judge's sequence 1..n_j in presentation order, so
-  # the within-judge dependence analysis can be demonstrated
-  d$t <- ave(seq_len(nrow(d)), d$judge, FUN = seq_along)
-  # a judge factor (constant within judge) for DIF by judge group
-  d$panel <- ifelse(d$judge %in% sprintf("J%02d", 1:5),
-                    "panel A", "panel B")
+  d <- d[sample(nrow(d)), ]   # present in random row order (t keeps the order)
   rownames(d) <- NULL
   d
 }
@@ -678,7 +713,7 @@ panel_items <- nav_panel("Items", value = "p_items", icon = bs_icon("list-check"
       tableCard("items_tbl", "Item statistics",
         controls = cols_switch("items_full"),
                 "Click a row to explore that item on the right. Fit residual ~ N(0,1) under fit.",
-                info = "Cells are highlighted where a statistic indicates misfit: |fit residual| > 2.5, adjusted chi-square p < 0.05, mean squares outside 0.7-1.3 (Wright & Linacre 1994). No single flag column - read each statistic on its own terms.",
+                info = "Cells are highlighted where a statistic indicates misfit: |fit residual| > 2.5, adjusted chi-square p < 0.05, outfit mean square outside 0.7-1.3 and infit outside the tighter 0.8-1.2 (conventional working bands; infit is information-weighted, so it varies less). No single flag column - read each statistic on its own terms.",
                 footer = uiOutput("items_note")),
       navset_card_underline(
         id = "items_nav",
@@ -790,17 +825,15 @@ panel_items <- nav_panel("Items", value = "p_items", icon = bs_icon("list-check"
                rcode_details("rescore_tbl"))))))),
     # paired-comparison (BTL) fits: the object side of the analysis
     conditionalPanel("output.is_btl == true",
-      tableCard("btl_obj_tbl", "Object locations and fit",
-        controls = cols_switch("btl_full"),
-                "Conditional (person-free) estimation with sum-zero identification and sandwich standard errors; the fit residual is the log-of-mean-square statistic over each object's comparisons (Andrich & Marais 2019)."),
-      plotCard("btl_occ", "Object characteristic curve",
-        info = "The paired-comparison counterpart of the item characteristic curve: the model expected response for the object against opponent location (the win probability, or the expected graded response), with the observed mean response per opponent overlaid at that opponent's location. Points straying from the curve flag inconsistent quality, exactly as a misfitting item does.",
-        controls = div(class = "d-flex align-items-center gap-1 me-1",
-          span(class = "small text-secondary", "Object"),
-          div(class = "rmt-inline-select",
-              selectizeInput("btl_occ_obj", NULL, NULL, width = "120px"))),
-        extra = downloadButton("btl_occ_all_pdf", "PDF (all objects)",
-                               class = "btn-outline-secondary btn-xs")),
+      layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+        tableCard("btl_obj_tbl", "Object locations and fit",
+          controls = cols_switch("btl_full"),
+                  "Click a row to plot that object on the right. Conditional (person-free) estimation with sum-zero identification and sandwich standard errors; infit and outfit are the information-weighted and unweighted mean squares over each object's comparisons, and the fit residual is the log mean square (Andrich & Marais 2019).",
+          info = "Cells are flagged where a statistic indicates misfit: outfit mean square outside 0.7-1.3, infit outside the tighter 0.8-1.2, and |fit residual| > 2.5."),
+        plotCard("btl_occ", "Object characteristic curve",
+          info = "The paired-comparison counterpart of the item characteristic curve: the model expected response for the selected object against opponent location (the win probability, or the expected graded response), with the observed mean response per opponent overlaid at that opponent's location. Opponents met too few times (sparse designs) are omitted. Points straying from the curve flag inconsistent quality, exactly as a misfitting item does.",
+          extra = downloadButton("btl_occ_all_pdf", "PDF (all objects)",
+                                 class = "btn-outline-secondary btn-xs"))),
       accordion(id = "btl_items_acc", open = "btl_caterpillar",
                 class = "mt-3 mb-3",
         accordion_panel("Object caterpillar", value = "btl_caterpillar",
@@ -975,29 +1008,29 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
     conditionalPanel("output.is_btl == true",
     layout_sidebar(
       sidebar = sidebar(width = 280, open = "always",
-        selectizeInput("bdif_factor", "Judge factor", NULL,
+        selectizeInput("bdif_factors", "Judge factors", NULL, multiple = TRUE,
                        options = list(placeholder = "nominate judge factors on the Data page")),
+        conditionalPanel("output.bdif_multifactor == true",
+          radioButtons("bdif_effects", "Model",
+                       c("Main effects" = "main",
+                         "With interactions" = "factorial"))),
         numericInput("bdif_alpha", "Significance level (alpha)", value = 0.05,
                      min = 0.001, max = 0.5, step = 0.01),
         input_task_button("bdif_run", "Run DIF analysis",
                           type = "primary", class = "w-100"),
         p(class = "text-muted small mt-2",
-          "ANOVA of standardised residuals by judge group: a group effect indicates uniform DIF, a group-by-opponent-band interaction non-uniform DIF. Each object is then resolved into one copy per judge group inside a joint refit and the location differences reported in logits.")),
+          "ANOVA of standardised residuals by judge factor: a factor effect indicates uniform DIF, a factor-by-opponent-band interaction non-uniform DIF. One factor is analysed on its own; several are modelled jointly with main effects by default, interactions optional. Each term flagged for uniform DIF (and not superseded by a higher-order term) is then resolved into one copy per cell inside a joint refit and the location differences reported in logits; withheld terms are named in the notes.")),
       accordion(id = "bdif_acc", open = "bdif_anova",
         accordion_panel("DIF analysis of variance", value = "bdif_anova",
-          tableCard("bdif_anova_tbl",
-            info = "ANOVA of the standardised residuals of each object's comparisons, oriented to the object: a significant judge-group effect indicates uniform DIF, a significant group-by-opponent-band interaction non-uniform DIF; probabilities are adjusted across objects by Benjamini-Hochberg.")),
+          layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+            tableCard("bdif_anova_tbl",
+              info = "ANOVA of the standardised residuals of each object's comparisons, oriented to the object: a significant judge-group effect indicates uniform DIF, a significant group-by-opponent-band interaction non-uniform DIF; probabilities are adjusted across objects by Benjamini-Hochberg. Click a row to see that object's characteristic curves by judge group on the right.",
+              footer = uiOutput("bdif_notes")),
+            plotCard("bdif_occ", "Characteristic curves by group",
+              info = "The object characteristic curve with the observed mean response per opponent overlaid separately for each judge group: the graphical display of DIF for the object of the selected table row."))),
         accordion_panel("DIF magnitude in logits", value = "bdif_size_panel",
           tableCard("bdif_sizes_tbl",
-            note = "Pairwise differences between the resolved per-group locations, in logits, with Holm familywise adjustment; differences of at least 0.5 logits are flagged as practically significant.",
-            footer = uiOutput("bdif_notes"))),
-        accordion_panel("Characteristic curves by group", value = "bdif_occ_panel",
-          plotCard("bdif_occ",
-            info = "The object characteristic curve with the observed mean response per opponent overlaid separately for each judge group: the graphical display of DIF by judge group.",
-            controls = div(class = "d-flex align-items-center gap-1 me-1",
-              span(class = "small text-secondary", "Object"),
-              div(class = "rmt-inline-select",
-                  selectizeInput("bdif_obj", NULL, NULL, width = "120px"))))))
+            note = "Pairwise differences between the resolved per-group locations, in logits, with Benjamini-Hochberg adjustment across objects; differences of at least 0.5 logits are flagged as practically significant.")))
     ))
   )
 
@@ -1134,7 +1167,7 @@ panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
           full_screen = TRUE,
           card_body(
             p(class = "text-muted small",
-              "Compares reliability with all items treated as independent (run1) against the subtest analysis in which each subset becomes one polytomous super-item (Andrich 2016). c is the unique-variance loading, rho the latent correlation between the subsets, and A the proportion of common variance. Uses the manual subsets above if set, otherwise the current PC1 split; every item must belong to a subset."),
+              "Compares reliability with all items treated as independent (run1) against the subtest analysis in which each subset becomes one polytomous super-item (Andrich 2016). c is the unique-variance loading, rho the latent correlation between the subsets, and A the proportion of common variance. Uses the manual subsets above if set, otherwise the selected component's split; every item must belong to a subset."),
             div(input_task_button("dm_run", "Estimate from current subsets",
                                   type = "primary")),
             conditionalPanel("output.has_dm != true",
@@ -1157,21 +1190,27 @@ panel_ld <- nav_panel("Local", value = "p_ld", icon = bs_icon("link-45deg"),
     conditionalPanel("output.is_btl == true",
       p(class = "text-muted small",
         "Local (response) dependence threatens local independence (Marais & Andrich 2008): a judge's own history pulling their later judgments, over and above the object locations."),
-      card(
-        full_screen = TRUE,
-        card_header_bar("Within-judge dependence",
-          info = "Exposure is the seen-before advantage: the benefit, in logits, an object gains once the judge has already met it. Carry-over is response dependence in the Marais & Andrich sense: the judge's own earlier verdicts on an object pull the later one. Both effects are estimated jointly with the object locations.",
-          buttons = conditionalPanel("output.has_btl_dep == true",
-            div(class = "rmt-chips",
-                downloadButton("btl_dep_tbl_csv", "CSV",
-                               class = "btn-outline-secondary btn-xs")))),
-        card_body(
-          conditionalPanel("output.has_btl_dep != true",
-            p(class = "text-muted small mb-0",
-              "Nominate a judgment-order column in the Data roles to estimate within-judge dependence.")),
-          conditionalPanel("output.has_btl_dep == true",
-            DTOutput("btl_dep_tbl"), rcode_details("btl_dep_tbl")),
-          padding = 12, fillable = FALSE))),
+      conditionalPanel("output.has_btl_dep != true",
+        card(card_body(p(class = "text-muted small mb-0",
+          "Nominate a judgment-order column in the Data roles to estimate within-judge dependence.")))),
+      conditionalPanel("output.has_btl_dep == true",
+        layout_columns(col_widths = breakpoints(sm = 12, lg = c(5, 7)),
+          tableCard("btl_dep_tbl", "Within-judge dependence",
+            info = "Exposure is the seen-before advantage: the benefit, in logits, an object gains once the judge has already met it. Carry-over is response dependence (Marais & Andrich): the judge's own earlier verdicts on an object pull the later one. Both are estimated jointly with the object locations. Informative comparisons is how many comparisons carry information about each effect - those where the two objects' histories differ (a non-zero covariate).",
+            note = "An effect estimated on few informative comparisons carries a wide standard error; the plot and the comparison table below show which comparisons drive it."),
+          plotCard("btl_dep_plot", "Dependence effect",
+            info = "The counterpart of the DIF characteristic curve: the observed departure from the location-only prediction, binned by the effect's history covariate, with the model's fitted contribution overlaid and the count in each bin printed. Observed points rising with the covariate along the line are the effect; a flat, sparse cloud means the estimate rests on little.",
+            controls = div(class = "d-flex align-items-center gap-1 me-1",
+              span(class = "small text-secondary", "Effect"),
+              div(class = "rmt-inline-select",
+                  selectInput("btl_dep_effect", NULL,
+                              c("Exposure" = "exposure",
+                                "Carry-over" = "carry_over"),
+                              width = "130px"))))),
+        accordion(class = "mt-3",
+          accordion_panel("Comparison covariates", value = "btl_dep_comps_panel",
+            tableCard("btl_dep_comps",
+              note = "Every comparison in judgment order with its exposure and carry-over covariates; a comparison is informative for an effect when its covariate is non-zero."))))),
     conditionalPanel("output.is_btl != true",
     p(class = "text-muted small",
       "Local (response) dependence threatens local independence (Marais & Andrich 2008): responses depending on one another directly, over and above the trait."),
@@ -1476,6 +1515,17 @@ server <- function(input, output, session) {
     g_w <- nm[grepl("win|preferred|chosen|better", tolower(nm))][1]
     g_j <- nm[grepl("judge|rater|marker", tolower(nm))][1]
     g_c <- nm[grepl("^count$|^n$|freq", tolower(nm))][1]
+    g_o <- nm[grepl("^t$|order|seq|trial|round|^time$", tolower(nm))][1]
+    # judge factors are columns constant within each judge (and not another
+    # role) -- exactly the shape of a panel or rater-group variable, so they
+    # are offered for judge-group DIF by default
+    g_f <- character(0)
+    if (!is.na(g_j)) {
+      cand <- setdiff(nm, stats::na.omit(c(g_a, g_b, g_w, g_j, g_o, g_c)))
+      if (length(cand))
+        g_f <- cand[vapply(cand, function(cn) all(tapply(as.character(df[[cn]]),
+                     df[[g_j]], function(v) length(unique(v)) == 1L)), TRUE)]
+    }
     updateSelectInput(session, "bt_a", choices = c(NONE_CH, nm),
                       selected = if (!is.na(g_a)) g_a else NONE)
     updateSelectInput(session, "bt_b", choices = c(NONE_CH, nm),
@@ -1491,9 +1541,9 @@ server <- function(input, output, session) {
                       selected = if (!is.na(g_j)) g_j else NONE)
     # empty choice = the "none" placeholder (clearable)
     updateSelectizeInput(session, "bt_order", choices = c("", nm),
-                         selected = "")
+                         selected = if (!is.na(g_o)) g_o else "")
     updateSelectizeInput(session, "bt_jfactors", choices = nm,
-                         selected = character(0))
+                         selected = g_f)
     updateSelectInput(session, "bt_count", choices = c(NONE_CH, nm),
                       selected = if (!is.na(g_c)) g_c else NONE)
   })
@@ -2073,8 +2123,8 @@ server <- function(input, output, session) {
                          selected = if (length(fi)) fi[1] else character(0))
     updateSelectizeInput(session, "dim_pos", choices = its, selected = character(0))
     updateSelectizeInput(session, "dim_neg", choices = its, selected = character(0))
-    # residual principal components available for the loadings plot and the
-    # t-test default split: 1..min(10, n_items - 1)
+    # residual principal components available for the t-test default split:
+    # 1..min(10, n_items - 1)
     updateSelectInput(session, "pca_component",
                       choices = seq_len(max(1L, min(10L, length(its) - 1L))),
                       selected = 1)
@@ -2252,8 +2302,9 @@ server <- function(input, output, session) {
     })
   }
   # APA-leaning DT wrapper: Bootstrap 5 skin, right-aligned numerics, paging
-  # controls only when the table needs them. `fit_col` colours fit residuals
-  # beyond |2.5| with the theme danger colour; `p_bold` bolds p-values < .05.
+  # controls only when the table needs them. Any fit_resid / infit_ms /
+  # outfit_ms column is auto-flagged in the theme danger colour; `p_bold`
+  # bolds p-values < .05.
   # curated display columns: fit objects carry every statistic, but the
   # tables show a readable core; the per-table "detailed columns" switch
   # reveals the rest (CSV downloads always contain everything)
@@ -2265,8 +2316,8 @@ server <- function(input, output, session) {
                  "F_nonuniform", "p_nonuniform_adj", "eta2_nonuniform"),
     facet = c("level", "severity", "se", "n", "fit_resid"),
     btl_obj = c("object", "location", "se", "comparisons", "wins", "score",
-                "fit_resid"),
-    btl_judge = c("judge", "n", "fit_resid", "misfit"),
+                "infit_ms", "outfit_ms", "fit_resid"),
+    btl_judge = c("judge", "n", "infit_ms", "outfit_ms", "fit_resid", "misfit"),
     equate = c("item", "location_1", "location_2", "adj_difference", "t",
                "p_adj", "drift"),
     contrast = c("item", "contrast", "estimate", "se", "statistic", "p_adj"),
@@ -2320,7 +2371,25 @@ server <- function(input, output, session) {
   # still uses the raw value; detection runs on the ORIGINAL column names
   P_COL_RE <- "^p$|^p_|_p$|^prob$|p_tukey|p_anova|p_adj|p_bonf|p_uniform|p_nonuniform"
   P_RENDER <- DT::JS("function(data,type,row){ if(type==='display'){ if(data===null||data==='') return ''; var x=Number(data); return x<0.001 ? '&lt;0.001' : x.toFixed(3);} return data; }")
-  num_dt <- function(d, digits = 3, fit_col = NULL, p_bold = NULL,
+  # fit flags, consistent across every model table: a fit residual beyond
+  # |2.5|, an outfit mean square outside 0.7-1.3, and an infit mean square
+  # outside the tighter 0.8-1.2 (infit is information-weighted, so it varies
+  # less under fit; conventional working bands). `orig` is the ORIGINAL
+  # column-name vector of the displayed frame (positions match the widget).
+  flag_fit_cols <- function(dt, orig) {
+    redc <- "var(--bs-danger)"
+    for (fc in which(orig == "fit_resid"))
+      dt <- formatStyle(dt, fc, color = styleInterval(
+        c(-2.5, 2.5), c(redc, "inherit", redc)))
+    for (oc in which(orig == "outfit_ms"))
+      dt <- formatStyle(dt, oc, color = styleInterval(
+        c(0.7, 1.3), c(redc, "inherit", redc)))
+    for (ic in which(orig == "infit_ms"))
+      dt <- formatStyle(dt, ic, color = styleInterval(
+        c(0.8, 1.2), c(redc, "inherit", redc)))
+    dt
+  }
+  num_dt <- function(d, digits = 3, p_bold = NULL,
                      page_len = 15, paging = NULL, ...) {
     orig <- names(d)
     # unname: which() on named logicals yields named position vectors, and
@@ -2355,9 +2424,7 @@ server <- function(input, output, session) {
                     options = opts)
     rnd <- which(num & !intcol & !pcol)
     if (length(rnd)) dt <- formatRound(dt, rnd, digits)
-    for (fc in which(orig %in% fit_col))
-      dt <- formatStyle(dt, fc, color = styleInterval(
-        c(-2.5, 2.5), c("var(--bs-danger)", "inherit", "var(--bs-danger)")))
+    dt <- flag_fit_cols(dt, orig)
     for (pc in which(orig %in% p_bold))
       dt <- formatStyle(dt, pc,
                         fontWeight = styleInterval(0.05, c("bold", "normal")))
@@ -2369,6 +2436,8 @@ server <- function(input, output, session) {
   # pre-formatted, so the columns are right-aligned by column definition rather
   # than by numeric class.
   tri_dt <- function(M, digits = 2, flagged = NULL) {
+    # tiny magnitudes (including negative zero) print as a clean 0.00
+    M[!is.na(M) & abs(M) < 0.5 * 10^(-digits)] <- 0
     disp <- formatC(M, format = "f", digits = digits)
     dim(disp) <- dim(M); dimnames(disp) <- dimnames(M)
     # flagged pairs (Q3* above the threshold) are shown red in place of the
@@ -2385,7 +2454,9 @@ server <- function(input, output, session) {
     disp[is.na(M)] <- ""                     # empty diagonal / missing pairs
     df <- data.frame(item = rownames(M), disp, check.names = FALSE,
                      stringsAsFactors = FALSE)
-    dt <- datatable(df, rownames = FALSE, escape = FALSE, style = "bootstrap5",
+    # escape only the item column (user-controlled labels); the numeric cells
+    # intentionally carry the red-flag <span>, so they must not be escaped
+    dt <- datatable(df, rownames = FALSE, escape = "item", style = "bootstrap5",
               class = "table hover order-column",
               options = list(paging = FALSE, ordering = FALSE,
                              scrollX = TRUE, dom = "t",
@@ -2405,10 +2476,6 @@ server <- function(input, output, session) {
   style_lo_red <- function(dt, d, col, cut)     # red when value < cut (e.g. p)
     Reduce(function(x, j) formatStyle(x, j,
       color = styleInterval(cut, c(DANGER, "inherit"))),
-      which(names(d) == col), dt)
-  style_hi_red <- function(dt, d, col, cut)     # red when value > cut
-    Reduce(function(x, j) formatStyle(x, j,
-      color = styleInterval(cut, c("inherit", DANGER))),
       which(names(d) == col), dt)
   style_mag_red <- function(dt, d, col, mag)    # red when |value| >= mag
     Reduce(function(x, j) formatStyle(x, j,
@@ -2683,16 +2750,12 @@ server <- function(input, output, session) {
   register_table("items_tbl", function() fit()$items, function() {
     d <- curate(fit()$items, "items", full = isTRUE(input$items_full))
     dt <- num_dt(d, page_len = 25, selection = "single",
-                 fit_col = "fit_resid", p_bold = c("p_adj", "p_anova"))
-    # per-statistic misfit highlighting (no single flag column): adjusted
-    # chi-square p < .05, and mean squares outside 0.7-1.3 (Wright &
-    # Linacre 1994); |fit residual| > 2.5 is handled by fit_col above
+                 p_bold = c("p_adj", "p_anova"))
+    # fit residual, infit and outfit are flagged by num_dt; the adjusted
+    # chi-square probability turns red at .05 as well (no single flag column)
     for (j in which(names(d) == "p_adj"))
       dt <- formatStyle(dt, j, color = styleInterval(
         0.05, c("var(--bs-danger)", "inherit")))
-    for (j in which(names(d) %in% c("infit_ms", "outfit_ms")))
-      dt <- formatStyle(dt, j, color = styleInterval(
-        c(0.7, 1.3), c("var(--bs-danger)", "inherit", "var(--bs-danger)")))
     dt
   }, code = function() "fit$items")
 
@@ -2890,9 +2953,9 @@ server <- function(input, output, session) {
                     options = list(pageLength = 15, scrollX = TRUE, dom = "tip")) |>
       formatRound(names(d)[vapply(d, is.numeric, TRUE) &
                            !names(d) %in% c("raw", "max_raw", "n_items", "class_interval")], 3)
-    if ("fit_resid" %in% names(d))
-      dt <- formatStyle(dt, "fit_resid", color = styleInterval(
-        c(-2.5, 2.5), c("var(--bs-danger)", "inherit", "var(--bs-danger)")))
+    # the same fit flags as every other table (fit residual, and the infit /
+    # outfit mean squares revealed by the detailed-columns switch)
+    dt <- flag_fit_cols(dt, names(d))
     dt
   }, code = function() "fit$person")
   # the person drawn on the kidmap: the selected table row, defaulting to 1
@@ -3101,10 +3164,18 @@ server <- function(input, output, session) {
     dt <- style_mag_red(num_dt(d), d, "difference", ds$flag_logits)
     style_lo_red(dt, d, "p_adj", ds$alpha)
   })
-  register_code("dif_size_tbl", function()
-    sprintf('dif_size(fit, "%s", by = %s)', dif_sel_item() %||% "",
+  register_code("dif_size_tbl", function() {
+    # carry the panel's settings so the snippet reproduces the shown table
+    flg <- max(0.05, input$dif_size_flag %||% 0.5)
+    mn <- max(2, input$dif_size_minn %||% 20)
+    extra <- paste0(
+      if (flg != 0.5) sprintf(", flag_logits = %s", flg) else "",
+      if (mn != 20) sprintf(", min_n = %s", mn) else "",
+      if (dif_alpha() != 0.05) sprintf(", alpha = %s", dif_alpha()) else "")
+    sprintf('dif_size(fit, "%s", by = %s%s)', dif_sel_item() %||% "",
             if (length(dif_sel_vars()) == 1L) qstr(dif_sel_vars())
-            else qvec(dif_sel_vars())))
+            else qvec(dif_sel_vars()), extra)
+  })
   output$dl_dif_size <- downloadHandler(
     filename = function() "dif_sizes.csv",
     content = function(file) {
@@ -3262,10 +3333,17 @@ server <- function(input, output, session) {
     sprintf("Note. %s.", paste(f$notes, collapse = "; "))
   })
   register_table("btl_obj_tbl", function() bfit()$objects,
-                 function() num_dt(curate(bfit()$objects, "btl_obj",
-                                          full = isTRUE(input$btl_full)),
-                                   fit_col = "fit_resid"),
-                 code = function() "# bt from the Data page\nbt$objects")
+                 function() {
+    d <- curate(bfit()$objects, "btl_obj", full = isTRUE(input$btl_full))
+    # fit residual, infit and outfit are flagged by num_dt, as on every table
+    num_dt(d, selection = "single")
+  }, code = function() "# bt from the Data page\nbt$objects")
+  # the object selected by clicking a row of the table drives the object
+  # characteristic curve on the right (master-detail, as the item table does)
+  sel_object <- reactive({
+    b <- bfit(); i <- input$btl_obj_tbl_rows_selected
+    if (length(i)) b$objects$object[i] else b$objects$object[1]
+  })
   register_table("btl_pairs_tbl", function() bfit()$pairs,
                  function() {
     d <- bfit()$pairs
@@ -3279,8 +3357,7 @@ server <- function(input, output, session) {
     validate(need(!is.null(bfit()$judges), "No judge column was nominated."))
     d <- bfit()$judges
     d$misfit <- ifelse(!is.na(d$fit_resid) & abs(d$fit_resid) > 2.5, "*", "")
-    num_dt(curate(d, "btl_judge", full = isTRUE(input$btl_judges_full)),
-           fit_col = "fit_resid")
+    num_dt(curate(d, "btl_judge", full = isTRUE(input$btl_judges_full)))
   }, code = function() "bt$judges")
   register_plot("btl_plot", function() plot_btl(bfit()),
                 code = function() "# bt from the Data page\nplot_btl(bt)")
@@ -3289,25 +3366,19 @@ server <- function(input, output, session) {
   observeEvent(btl_fit(), {
     b <- btl_fit()
     if (!is.null(b)) {
-      updateSelectizeInput(session, "btl_occ_obj",
-                           choices = b$objects$object,
-                           selected = b$objects$object[1])
-      updateSelectizeInput(session, "bdif_obj",
-                           choices = b$objects$object,
-                           selected = b$objects$object[1])
       jf <- input$bt_jfactors
-      updateSelectizeInput(session, "bdif_factor",
+      updateSelectizeInput(session, "bdif_factors",
                            choices = if (length(jf)) jf else character(0),
-                           selected = if (length(jf)) jf[1] else character(0))
+                           selected = jf)
     }
     # judge-group DIF results belong to the fit they came from
     bdif_res(NULL)
   }, ignoreNULL = FALSE)
   register_plot("btl_occ", function() {
-    req(input$btl_occ_obj %in% bfit()$objects$object)
-    plot_btl_icc(bfit(), input$btl_occ_obj)
+    o <- sel_object(); req(o %in% bfit()$objects$object)
+    plot_btl_icc(bfit(), o)
   }, w = 8, h = 5.5, code = function()
-    paste0(sprintf('plot_btl_icc(bt, "%s")', input$btl_occ_obj %||% ""),
+    paste0(sprintf('plot_btl_icc(bt, "%s")', sel_object() %||% ""),
            "\n# all objects: one page each in the PDF download"))
   output$btl_occ_all_pdf <- downloadHandler(
     filename = function() "occ_all_objects.pdf",
@@ -3345,63 +3416,145 @@ server <- function(input, output, session) {
 
   # within-judge dependence (Independence > Local): exposure and carry-over
   # effects estimated when a judgment-order column was nominated
+  # keyed on the comparison-level data, not the effects table: when every
+  # effect is dropped (no informative comparisons, or separation) the panel
+  # must still show the audit table that explains why
   output$has_btl_dep <- reactive({
     b <- btl_fit()
-    !is.null(b) && !is.null(b$dependence)
+    !is.null(b) && !is.null(b$dependence_data)
   })
   outputOptions(output, "has_btl_dep", suspendWhenHidden = FALSE)
   register_table("btl_dep_tbl", function() {
-    validate(need(!is.null(bfit()$dependence),
+    validate(need(!is.null(bfit()$dependence_data),
                   "Nominate a judgment-order column in the Data roles to estimate within-judge dependence."))
     bfit()$dependence
   }, function() {
-    validate(need(!is.null(bfit()$dependence),
+    validate(need(!is.null(bfit()$dependence_data),
                   "Nominate a judgment-order column in the Data roles to estimate within-judge dependence."))
+    validate(need(!is.null(bfit()$dependence),
+                  paste("No dependence effect was estimable:",
+                        paste(bfit()$notes, collapse = "; "))))
     num_dt(bfit()$dependence, p_bold = "p")
   }, code = function() "bt$dependence")
+  # the graphical display of the selected dependence effect
+  register_plot("btl_dep_plot", function() {
+    b <- bfit(); req(!is.null(b$dependence_data))
+    validate(need(!is.null(b$dependence),
+                  paste("No dependence effect was estimable:",
+                        paste(b$notes, collapse = "; "))))
+    e <- input$btl_dep_effect %||% "exposure"
+    validate(need(e %in% b$dependence$effect,
+                  "This effect had no informative comparisons (or separated) and was dropped; see the notes."))
+    plot_btl_dependence(b, e)
+  }, w = 8, h = 5.5, code = function()
+    sprintf('plot_btl_dependence(bt, "%s")', input$btl_dep_effect %||% "exposure"))
+  # every comparison with its history covariates, for deep interrogation
+  register_table("btl_dep_comps", function() bfit()$dependence_data,
+                 function() {
+    validate(need(!is.null(bfit()$dependence_data),
+                  "Nominate a judgment-order column in the Data roles."))
+    num_dt(bfit()$dependence_data, page_len = 20)
+  }, code = function() "bt$dependence_data")
 
   # -------------------------------------------- BTL DIF by judge group --
   # the judge grouping handed to btl_dif() / plot_btl_icc(): the nominated
   # factor's value on each judge's first row, named by judge
-  bdif_groups_build <- function() {
+  # the nominated judge factors as a named list of judge -> level maps (each
+  # factor is constant within judge, so the map is well defined); btl_dif
+  # models several factors jointly
+  bdif_factor_maps <- function() {
     if (is.null(btl_fit()))
       stop("run a paired-comparisons (BTL) analysis first")
-    fc <- input$bdif_factor
-    if (is.null(fc) || !nzchar(fc))
-      stop("choose a judge factor in the sidebar")
+    fcs <- input$bdif_factors
+    if (is.null(fcs) || !length(fcs))
+      stop("choose one or more judge factors in the sidebar")
     df <- raw_data()
     jc <- input$bt_judge
     if (is.null(jc) || identical(jc, NONE) || !jc %in% names(df))
       stop("judge-group DIF needs the judge column nominated on the Data page")
-    if (!fc %in% names(df)) stop("column not found: ", fc)
-    jd <- as.character(df[[jc]])
-    first <- !duplicated(jd)
-    setNames(as.character(df[[fc]])[first], jd[first])
+    jd <- as.character(df[[jc]]); first <- !duplicated(jd)
+    setNames(lapply(fcs, function(fc) {
+      if (!fc %in% names(df)) stop("column not found: ", fc)
+      setNames(as.character(df[[fc]])[first], jd[first])
+    }), fcs)
   }
-  # the reproducible-code line building the same grouping from the data
-  bdif_code_grp <- function()
-    sprintf("grp <- setNames(as.character(dat$%s), dat$%s)[!duplicated(dat$%s)]",
-            input$bdif_factor %||% "factor", input$bt_judge %||% "judge",
-            input$bt_judge %||% "judge")
+  # the factors of one displayed ANOVA term, matched against a run's factor
+  # maps: a factor name that itself contains ":" must match the whole term
+  # before the term is split into pieces
+  bdif_term_vars <- function(term, maps) {
+    if (term %in% names(maps)) return(term)
+    intersect(strsplit(term, ":", fixed = TRUE)[[1]], names(maps))
+  }
+  # the judge -> cell map for one ANOVA term of the DISPLAYED run (frozen at
+  # run time, so later sidebar edits cannot silently regroup the overlay)
+  bdif_term_group <- function(term) {
+    r <- bdif_res()
+    if (is.null(r) || is.null(r$run_maps))
+      stop("run the DIF analysis first")
+    maps <- r$run_maps
+    vars <- bdif_term_vars(term, maps)
+    if (!length(vars))
+      stop("the selected term no longer matches the run's factors; re-run")
+    js <- names(maps[[1]])
+    setNames(do.call(paste, c(lapply(vars, function(v) maps[[v]][js]),
+                              sep = ":")), js)
+  }
+  # backtick nonsyntactic column names in emitted code
+  bq <- function(s) ifelse(grepl("^[a-zA-Z.][a-zA-Z0-9._]*$", s),
+                           s, sprintf("`%s`", s))
+  # the reproducible-code lines building the DISPLAYED run's factor list
+  bdif_code_grp <- function() {
+    r <- bdif_res()
+    fcs <- if (!is.null(r)) r$factors else (input$bdif_factors %||% "factor")
+    jc <- (if (!is.null(r)) r$run_judge_col else input$bt_judge) %||% "judge"
+    one <- function(fc) sprintf(
+      "%s = setNames(as.character(dat$%s), dat$%s)[!duplicated(dat$%s)]",
+      bq(fc), bq(fc), bq(jc), bq(jc))
+    paste0("factors <- list(\n  ",
+           paste(vapply(fcs, one, ""), collapse = ",\n  "), ")")
+  }
   bdif_alpha <- reactive(clamp01(input$bdif_alpha, 0.05))
-  # judge factors nominated (or changed) after the run still reach the
-  # factor select; the results themselves are computed on request only
+  bdif_effects <- reactive(input$bdif_effects %||% "main")
+  # the displayed run's own settings, for styling and snippets (falling back
+  # to the live sidebar before any run)
+  bdif_shown_alpha <- function() {
+    r <- bdif_res(); if (!is.null(r)) r$alpha else bdif_alpha()
+  }
+  bdif_shown_effects <- function() {
+    r <- bdif_res(); if (!is.null(r)) r$effects else bdif_effects()
+  }
+  output$bdif_multifactor <- reactive(length(input$bdif_factors) > 1L)
+  outputOptions(output, "bdif_multifactor", suspendWhenHidden = FALSE)
+  # judge factors nominated (or changed) after the run still reach the factor
+  # select; the results themselves are computed on request only
   observeEvent(input$bt_jfactors, {
     jf <- input$bt_jfactors
-    sel <- if (!is.null(input$bdif_factor) && input$bdif_factor %in% jf)
-      input$bdif_factor else if (length(jf)) jf[1] else character(0)
-    updateSelectizeInput(session, "bdif_factor",
+    keep <- intersect(input$bdif_factors, jf)
+    updateSelectizeInput(session, "bdif_factors",
                          choices = if (length(jf)) jf else character(0),
-                         selected = sel)
+                         selected = if (length(keep)) keep else jf)
   }, ignoreNULL = FALSE)
   bdif_res <- reactiveVal(NULL)
   observeEvent(input$bdif_run, {
+    maps <- tryCatch(bdif_factor_maps(), error = function(e) e)
+    if (inherits(maps, "error")) {
+      showNotification(conditionMessage(maps), type = "error", duration = 10)
+      bdif_res(NULL); return()
+    }
     r <- withProgress(message = "Resolving objects by judge group…",
                       value = 0.4,
                       tryCatch(btl_dif(btl_fit(),
-                                       groups = bdif_groups_build(),
+                                       factors = maps,
+                                       effects = bdif_effects(),
                                        alpha = bdif_alpha()),
                                error = function(e) e))
+    # freeze the run's configuration alongside its results, so the overlay
+    # grouping and the reproducible snippets keep describing THIS table even
+    # if the sidebar changes before the next run
+    if (!inherits(r, "error")) {
+      r$run_maps <- maps
+      r$run_judge_col <- input$bt_judge
+    }
     if (inherits(r, "error")) {
       showNotification(paste("DIF analysis failed:", conditionMessage(r)),
                        type = "error", duration = 10)
@@ -3409,59 +3562,80 @@ server <- function(input, output, session) {
     } else bdif_res(r)
   })
   register_table("bdif_anova_tbl", function() {
-    r <- bdif_res(); req(!is.null(r)); r$anova
+    r <- bdif_res(); req(!is.null(r)); r$summary
   }, function() {
     r <- bdif_res()
     validate(need(!is.null(r),
-                  "Choose a judge factor in the sidebar and run the DIF analysis."))
-    d <- r$anova[, intersect(c("object", "n", "F_uniform", "p_uniform_adj",
-                               "F_nonuniform", "p_nonuniform_adj"),
-                             names(r$anova)), drop = FALSE]
-    # no boolean DIF flags: the adjusted probabilities turn red at alpha
-    dt <- style_lo_red(num_dt(d), d, "p_uniform_adj", bdif_alpha())
-    style_lo_red(dt, d, "p_nonuniform_adj", bdif_alpha())
+                  "Choose one or more judge factors in the sidebar and run the DIF analysis."))
+    d <- r$summary[, intersect(c("object", "term", "F_uniform",
+                                 "p_uniform_adj", "F_nonuniform",
+                                 "p_nonuniform_adj", "superseded"),
+                               names(r$summary)), drop = FALSE]
+    # a superseded row's flags are read on its higher-order term instead
+    d$superseded <- ifelse(d$superseded, "(superseded)", "")
+    # no boolean DIF flags: the adjusted probabilities turn red at the RUN's
+    # alpha (frozen with the result, not the live sidebar)
+    dt <- style_lo_red(num_dt(d, selection = "single"), d,
+                       "p_uniform_adj", bdif_shown_alpha())
+    style_lo_red(dt, d, "p_nonuniform_adj", bdif_shown_alpha())
   }, code = function()
     paste0("# dat: the comparison data; bt: the fit from the Data page\n",
            bdif_code_grp(), "\n",
-           sprintf("btl_dif(bt, groups = grp, alpha = %s)$anova",
-                   bdif_alpha())))
+           sprintf('btl_dif(bt, factors, effects = "%s", alpha = %s)$summary',
+                   bdif_shown_effects(), bdif_shown_alpha())))
   register_table("bdif_sizes_tbl", function() {
     r <- bdif_res(); req(!is.null(r), !is.null(r$sizes)); r$sizes
   }, function() {
     r <- bdif_res()
     validate(need(!is.null(r),
-                  "Choose a judge factor in the sidebar and run the DIF analysis."))
+                  "Choose one or more judge factors in the sidebar and run the DIF analysis."))
     validate(need(!is.null(r$sizes),
-                  "No object could be resolved by this grouping (see the notes on the analysis-of-variance panel)."))
-    d <- r$sizes[, intersect(c("object", "level_a", "level_b", "difference",
-                               "se", "z", "p_adj"),
+                  "No object could be resolved (see the notes on the analysis-of-variance panel)."))
+    d <- r$sizes[, intersect(c("object", "term", "level_a", "level_b",
+                               "difference", "se", "z", "p_adj"),
                              names(r$sizes)), drop = FALSE]
     # no significant/practical flags: the difference turns red at 0.5 logits,
-    # the adjusted p at alpha
+    # the adjusted p at the run's alpha
     dt <- style_mag_red(num_dt(d), d, "difference", 0.5)
-    style_lo_red(dt, d, "p_adj", bdif_alpha())
+    style_lo_red(dt, d, "p_adj", bdif_shown_alpha())
   }, code = function()
     paste0(bdif_code_grp(), "\n",
-           sprintf("btl_dif(bt, groups = grp, alpha = %s)$sizes",
-                   bdif_alpha())))
+           sprintf('btl_dif(bt, factors, effects = "%s", alpha = %s)$sizes',
+                   bdif_shown_effects(), bdif_shown_alpha())))
   output$bdif_notes <- renderUI({
     r <- bdif_res()
     if (is.null(r) || !length(r$notes)) return(NULL)
     sprintf("Note. %s.", paste(r$notes, collapse = "; "))
   })
+  # the (object, term) whose by-group curve is shown: the selected
+  # analysis-of-variance row (master-detail, as the Rasch DIF page drives its
+  # ICC); the overlay groups judges by that term's factors
+  sel_bdif <- reactive({
+    r <- bdif_res(); req(!is.null(r))
+    i <- input$bdif_anova_tbl_rows_selected
+    row <- if (length(i)) r$summary[i, ] else r$summary[1, ]
+    list(object = row$object, term = row$term)
+  })
   register_plot("bdif_occ", function() {
-    b <- bfit()
-    req(input$bdif_obj %in% b$objects$object)
+    b <- bfit(); sb <- sel_bdif(); req(sb$object %in% b$objects$object)
     # surface the builder's own message (missing judge column, unchosen
     # factor, …) instead of one generic hint
-    grp <- tryCatch(bdif_groups_build(), error = function(e) e)
+    grp <- tryCatch(bdif_term_group(sb$term), error = function(e) e)
     if (inherits(grp, "error"))
       validate(need(FALSE, conditionMessage(grp)))
-    plot_btl_icc(b, input$bdif_obj, group = grp)
-  }, w = 8, h = 5.5, code = function()
+    plot_btl_icc(b, sb$object, group = grp)
+  }, w = 8, h = 5.5, code = function() {
+    sb <- sel_bdif(); r <- bdif_res()
+    vars <- if (!is.null(r) && !is.null(r$run_maps))
+      bdif_term_vars(sb$term, r$run_maps) else
+      strsplit(sb$term, ":", fixed = TRUE)[[1]]
+    # setNames keeps the judge names, so the emitted grp is a judge -> cell map
+    # (as bdif_term_group builds it) rather than an unnamed vector
     paste0(bdif_code_grp(), "\n",
-           sprintf('plot_btl_icc(bt, "%s", group = grp)',
-                   input$bdif_obj %||% "")))
+           sprintf('grp <- setNames(do.call(paste, c(factors[c(%s)], sep = ":")), names(factors[[1]]))\n',
+                   paste(sprintf('"%s"', vars), collapse = ", ")),
+           sprintf('plot_btl_icc(bt, "%s", group = grp)', sb$object %||% ""))
+  })
 
   # ---------------------------------------------------------------- facets --
   facet_dat <- reactive({
@@ -3478,14 +3652,10 @@ server <- function(input, output, session) {
     if (!inherits(f, "rasch_mfrm") || !is.null(f$interaction)) return(NULL)
     "Additive structure: no item-by-facet terms estimated (choose Interactive in the data roles to test them)."
   })
-  register_table("facet_tbl", function() facet_dat(), function() {
-    d <- curate(facet_dat(), "facet", full = isTRUE(input$facets_full))
-    datatable(d, rownames = FALSE, style = "bootstrap5",
-              class = "table-sm compact hover order-column",
-              options = list(pageLength = 15, scrollX = TRUE,
-                             dom = if (nrow(d) > 15) "tip" else "t")) |>
-      formatRound(setdiff(names(d)[vapply(d, is.numeric, TRUE)], "n"), 3)
-  }, code = function()
+  register_table("facet_tbl", function() facet_dat(), function()
+    # num_dt flags the facet fit residual beyond |2.5|, as on every model table
+    num_dt(curate(facet_dat(), "facet", full = isTRUE(input$facets_full))),
+    code = function()
     sprintf('fit$facet_effects[["%s"]]', input$facet_sel %||% ""))
   register_plot("facet_plot", function() {
     f <- fit()
@@ -3628,9 +3798,13 @@ server <- function(input, output, session) {
       showNotification("Nominate at least two items in each subset (or leave both empty).",
                        type = "warning")
     }
+    # the magnitude table is computed from the subsets in force at ITS run;
+    # a changed split makes it stale
+    dm_res(NULL)
   })
-  # the residual principal component chosen for the loadings plot and, when no
-  # manual subsets are named, the t-test default split
+  observeEvent(input$pca_component, dm_res(NULL), ignoreInit = TRUE)
+  # the residual principal component that, when no manual subsets are named,
+  # defines the t-test default split
   pca_k <- reactive({
     k <- suppressWarnings(as.integer(input$pca_component %||% 1))
     if (is.na(k) || k < 1L) 1L else k
@@ -3671,7 +3845,7 @@ server <- function(input, output, session) {
   })
 
   # magnitude of multidimensionality (Andrich 2016): needs every item in a
-  # subset; the PC1 split satisfies this by construction, manual subsets may not
+  # subset; the component split satisfies this by construction, manual subsets may not
   dm_res <- reactiveVal(NULL)
   observeEvent(input$dm_run, {
     f <- fit()
@@ -3690,7 +3864,7 @@ server <- function(input, output, session) {
       showNotification(paste0(
         "The magnitude estimate needs every item assigned to exactly one subset. ",
         if (length(left)) paste0("Unassigned: ", paste(left, collapse = ", "), ". ") else "",
-        "Adjust subsets A and B (or leave both empty for the PC1 split) and re-run the t-test first."),
+        "Adjust subsets A and B (or leave both empty for the selected component's split) and re-run the t-test first."),
         type = "warning", duration = 10)
       return()
     }
@@ -3705,7 +3879,7 @@ server <- function(input, output, session) {
   output$dm_tbl <- renderDT({
     r <- dm_res()
     validate(need(!is.null(r),
-                  "Press the button; the current subsets (manual, or the PC1 split) are combined into super-items and the two reliability calculations compared."))
+                  "Press the button; the current subsets (manual, or the selected component's split) are combined into super-items and the two reliability calculations compared."))
     num_dt(r$table)
   })
   output$dm_tbl_csv <- downloadHandler(
@@ -3739,10 +3913,11 @@ server <- function(input, output, session) {
   # biplot of the first two residual components; its card grows with the item
   # count so it stays level with the loadings table beside it (as on the local
   # dependence page)
-  biplot_px <- function() {
-    n <- tryCatch(nrow(fit()$items), error = function(e) 10L)
-    as.integer(max(400L, min(820L, 260L + 26L * n)))
-  }
+  # an item-panel height that grows with the item count so a table and its
+  # plot stay level, clamped so it never runs tiny or huge (~520px at 10 items)
+  item_panel_px <- function(n) as.integer(max(400L, min(820L, 260L + 26L * n)))
+  biplot_px <- function()
+    item_panel_px(tryCatch(nrow(fit()$items), error = function(e) 10L))
   register_plot("pca_biplot", function() plot_pca_biplot(fit()),
                 w = 7, h = 7, px = biplot_px,
                 code = function() "plot_pca_biplot(fit)")
@@ -3771,13 +3946,10 @@ server <- function(input, output, session) {
                                        check.names = FALSE),
                  function() tri_dt(q3s_mat(), flagged = q3s_flag()),
                  code = function() "residual_correlations(fit)$star_matrix")
-  # on-screen height grows with the item count, so the triangle keeps readable
-  # cells and stays level with the table beside it instead of shrinking into a
-  # fixed box; ~520px at 10 items, clamped so it never runs tiny or huge
-  cormat_px <- function() {
-    n <- tryCatch(ncol(q3_mat()), error = function(e) 10L)
-    as.integer(max(400L, min(820L, 260L + 26L * n)))
-  }
+  # on-screen height grows with the item count (item_panel_px), so the triangle
+  # keeps readable cells and stays level with the table beside it
+  cormat_px <- function()
+    item_panel_px(tryCatch(ncol(q3_mat()), error = function(e) 10L))
   register_plot("rcor_q3", function() plot_resid_cor(fit(), stat = "q3"),
                 w = 8, h = 7, px = cormat_px,
                 code = function() 'plot_resid_cor(fit, stat = "q3")')

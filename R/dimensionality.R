@@ -106,18 +106,105 @@ residual_pca <- function(fit, n_components = 10) {
        first_eigen = ev$values[1])
 }
 
+# Model-simulated eigenvalue reference for the scree plot. Standardised
+# Rasch residuals are not independent noise: each person's estimated
+# location is a function of their own responses, which couples the residuals
+# within a person (off-diagonal correlations near -1/(L-1)), so a random
+# normal reference sits systematically BELOW the null first eigenvalue and
+# would call structure on model-true data. The reference therefore simulates
+# responses from the calibrated model (fixed thresholds, the estimated person
+# locations, the observed missingness), re-estimates every person, and
+# recomputes the residual eigenvalues - the same estimation chain the
+# observed eigenvalues went through (the parametric-bootstrap logic of
+# Raiche 2005 and Chou & Wang 2010).
+.scree_reference <- function(fit, k, reps) {
+  tau_list <- fit$tau_list
+  L <- length(tau_list)
+  disc_v <- if (is.null(fit$disc)) rep(1, L) else fit$disc
+  if (length(disc_v) == 1L) disc_v <- rep(disc_v, L)
+  keep <- !is.na(fit$person$theta)
+  X <- fit$X[keep, , drop = FALSE]
+  th0 <- fit$person$theta[keep]
+  obs <- !is.na(X); N <- nrow(X)
+  ctau <- lapply(tau_list, function(t) c(0, cumsum(t)))
+  # per-item model probabilities at locations th, as an N x (m+1) matrix
+  probs <- function(i, th) {
+    m <- length(tau_list[[i]]); xc <- 0:m
+    eta <- disc_v[i] * (outer(th, xc) -
+                          matrix(rep(ctau[[i]], each = N), N, m + 1L))
+    eta <- eta - apply(eta, 1, max)
+    P <- exp(eta); P / rowSums(P)
+  }
+  # cumulative tables at the calibrated locations, for the simulation draws
+  cumP <- lapply(seq_len(L), function(i) {
+    P <- probs(i, th0); m <- ncol(P) - 1L
+    t(apply(P, 1, cumsum))[, seq_len(m), drop = FALSE]
+  })
+  # vectorised Warm estimation over all persons at once (damped Newton on
+  # the weighted-likelihood score, as person_wle solves per raw score)
+  wle_all <- function(Xr) {
+    th <- th0
+    for (iter in 1:8) {
+      g <- info <- m3s <- numeric(N)
+      for (i in seq_len(L)) {
+        P <- probs(i, th); m <- ncol(P) - 1L; xc <- 0:m
+        E <- drop(P %*% xc); V <- pmax(drop(P %*% xc^2) - E^2, 1e-12)
+        m3 <- drop(P %*% xc^3) - 3 * E * drop(P %*% xc^2) + 2 * E^3
+        oi <- obs[, i]
+        g[oi] <- g[oi] + disc_v[i] * (Xr[oi, i] - E[oi])
+        info[oi] <- info[oi] + disc_v[i]^2 * V[oi]
+        m3s[oi] <- m3s[oi] + disc_v[i]^3 * m3[oi]
+      }
+      info <- pmax(info, 1e-12)
+      th <- th + pmin(pmax((g + m3s / (2 * info)) / info, -1), 1)
+    }
+    th
+  }
+  sim <- replicate(reps, {
+    Xr <- X
+    for (i in seq_len(L)) {
+      u <- stats::runif(N)
+      Xr[, i] <- rowSums(u > cumP[[i]])
+    }
+    Xr[!obs] <- NA
+    th <- wle_all(Xr)
+    Zr <- X * NA_real_
+    for (i in seq_len(L)) {
+      P <- probs(i, th); m <- ncol(P) - 1L; xc <- 0:m
+      E <- drop(P %*% xc); V <- pmax(drop(P %*% xc^2) - E^2, 1e-12)
+      Zr[, i] <- (Xr[, i] - E) / sqrt(V)
+    }
+    Rr <- stats::cor(Zr, use = "pairwise.complete.obs")
+    Rr[is.na(Rr)] <- 0; diag(Rr) <- 1
+    eigen(Rr, symmetric = TRUE, only.values = TRUE)$values[seq_len(k)]
+  })
+  rowMeans(sim)
+}
+
 #' Scree plot of the residual components with parallel analysis
 #'
 #' Eigenvalues of the residual correlation matrix for the leading components,
-#' with a parallel-analysis reference: the mean eigenvalues of residual-sized
-#' random normal matrices sharing the data's missingness pattern. Observed
-#' eigenvalues above the reference suggest structure beyond chance.
+#' with a model-simulated parallel-analysis reference: responses are simulated
+#' from the calibrated model (observed missingness kept), every person is
+#' re-estimated, and the residual eigenvalues recomputed. Because estimating
+#' the person locations couples the residuals within a person, this reference
+#' sits above the classical random-normal one and is calibrated under the
+#' fitted model (Raiche 2005; Chou & Wang 2010). Observed eigenvalues above
+#' the reference suggest structure beyond what the model itself produces.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param n_components Number of leading components to display.
 #' @param parallel Draw the parallel-analysis reference line.
-#' @param reps Random replicates for the reference.
+#' @param reps Model-simulated replicates for the reference.
 #' @return Called for its plotting side effect; invisibly the eigen table.
+#' @references Raiche, G. (2005). Critical eigenvalue sizes in standardized
+#'   residual principal components analysis. \emph{Rasch Measurement
+#'   Transactions}, 19(1), 1012.
+#'
+#'   Chou, Y.-T., & Wang, W.-C. (2010). Checking dimensionality in item
+#'   response models with principal component analysis on standardized
+#'   residuals. \emph{Educational and Psychological Measurement}, 70(5),
+#'   717-731.
 #' @examples
 #' set.seed(1)
 #' d <- seq(-2, 2, length.out = 8)
@@ -129,18 +216,7 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 20) {
   pc <- residual_pca(fit, n_components)
   k <- nrow(pc$eigen_table)
   obs <- pc$eigen_table$eigenvalue
-  pa <- NULL
-  if (parallel) {
-    Z <- fit$residuals
-    sim <- replicate(reps, {
-      Zr <- matrix(rnorm(length(Z)), nrow(Z))
-      Zr[is.na(Z)] <- NA
-      Rr <- cor(Zr, use = "pairwise.complete.obs")
-      Rr[is.na(Rr)] <- 0; diag(Rr) <- 1
-      eigen(Rr, symmetric = TRUE, only.values = TRUE)$values[seq_len(k)]
-    })
-    pa <- rowMeans(sim)
-  }
+  pa <- if (parallel) .scree_reference(fit, k, reps) else NULL
   ylim <- c(0, max(c(obs, pa, 1)) * 1.12)
   op <- .rr_canvas(c(0.5, k + 0.5), ylim, "Component", "Eigenvalue",
                    grid_x = FALSE)
@@ -161,7 +237,7 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 20) {
 #'
 #' Estimates each person separately on two item subsets and compares the two
 #' estimates with a per-person t-test (Smith 2002). By default the subsets
-#' are defined by the sign of a residual-contrast loading (the first by
+#' are defined by the sign of a residual-component loading (the first by
 #' default; any leading component may be chosen); they can also be nominated
 #' manually (for example, by content). Under
 #' unidimensionality and local independence the two subset estimates are
@@ -181,7 +257,7 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 20) {
 #'   each), otherwise the sign of a residual component defines the split.
 #' @param component Which residual principal component's loading sign defines
 #'   the default split (ignored when subsets are named). Default the first
-#'   contrast.
+#'   component.
 #' @return A list with the proportion of significant tests, its exact
 #'   confidence interval, the sample sizes (\code{n} used,
 #'   \code{n_excluded_extreme}), the item split and its source, a

@@ -120,3 +120,32 @@ test_that("save_outputs writes the full set of tables and plots", {
   expect_gte(length(files), 8 + 8 + 4 * L)
   unlink(out, recursive = TRUE)
 })
+
+test_that("the scree reference is model-simulated and calibrated", {
+  # null Rasch data: the observed first eigenvalue must sit AT the reference,
+  # not systematically above it (an independent-normal reference would put
+  # every null data set 'beyond chance'); planted 2D structure must clear it
+  set.seed(1); Np <- 600; L <- 10
+  d <- scale(seq(-2, 2, length.out = L), scale = FALSE)[, 1]
+  X <- matrix(rbinom(Np * L, 1, plogis(outer(rnorm(Np, 0, 1.3), d, "-"))), Np, L)
+  colnames(X) <- sprintf("I%02d", 1:L)
+  f1 <- rasch(X)
+  pc1 <- residual_pca(f1, 10)
+  set.seed(101)
+  ref1 <- rmt:::.scree_reference(f1, nrow(pc1$eigen_table), 20)
+  expect_lt(abs(pc1$eigen_table$eigenvalue[1] / ref1[1] - 1), 0.10)
+
+  set.seed(2); thA <- rnorm(Np, 0, 1.4)
+  thB <- 0.3 * thA + sqrt(1 - 0.09) * rnorm(Np, 0, 1.4)
+  d2 <- scale(seq(-2, 2, length.out = 16), scale = FALSE)[, 1]
+  XA <- matrix(rbinom(Np * 8, 1, plogis(outer(thA, d2[1:8], "-"))), Np, 8)
+  XB <- matrix(rbinom(Np * 8, 1, plogis(outer(thB, d2[9:16], "-"))), Np, 8)
+  X2 <- cbind(XA, XB); colnames(X2) <- sprintf("D%02d", 1:16)
+  f2 <- rasch(X2)
+  pc2 <- residual_pca(f2, 10)
+  set.seed(102)
+  ref2 <- rmt:::.scree_reference(f2, nrow(pc2$eigen_table), 20)
+  expect_gt(pc2$eigen_table$eigenvalue[1], 1.3 * ref2[1])
+  pdf(NULL); on.exit(dev.off())
+  expect_no_error(plot_scree(f2, reps = 5))
+})

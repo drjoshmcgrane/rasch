@@ -82,16 +82,20 @@ response. Both modes report the component decomposition.}
 }
 \value{
 A list of class \code{"rmt_btl"}: \code{objects} (location, se,
-  comparisons, wins -- or the graded \code{score} -- outfit mean
-  square, fit residual and its df),
+  comparisons, wins -- or the graded \code{score} -- infit and outfit
+  mean squares, fit residual and its df),
   \code{pairs} (per pair: n, observed and expected win proportions --
   or mean graded responses --
   standardised residual, chi-square component), \code{judges} (when
-  given: per judge n, outfit, fit residual, df), \code{total_chisq},
+  given: per judge n, infit, outfit, fit residual, df), \code{total_chisq},
   \code{total_df}, \code{total_p}, the object separation index
   \code{osi}, \code{loglik}, convergence details, and \code{notes}.
   Graded fits add \code{thresholds} (the symmetric threshold estimates
-  with standard errors), \code{m}, and \code{categories}.
+  with standard errors), \code{m}, and \code{categories}. With an
+  \code{order} column the within-judge \code{dependence} effects table
+  carries an \code{n_informative} count, and \code{dependence_data} holds
+  every comparison with its per-comparison exposure and carry-over
+  covariates (see \code{\link{plot_btl_dependence}}).
 }
 \description{
 Estimates object locations from paired-comparison data by conditional

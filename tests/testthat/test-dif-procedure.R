@@ -222,18 +222,20 @@ test_that("DIF class intervals adapt to the cells each analysis uses", {
   X <- matrix(rbinom(n * 8, 1, plogis(outer(rnorm(n), d, "-"))), n, 8)
   colnames(X) <- paste0("I", 1:8)
   f <- rasch(data.frame(X, sex = g1, age = g2), factors = c("sex", "age"))
-  # the joint model sets one interval count from the smallest cell used:
-  # a single factor from that factor's smallest group
+  # the joint model requests one interval count from the smallest cell used
+  # (a single factor from that factor's smallest group); the returned
+  # n_groups is the count actually FORMED, which quantile ties can reduce
   ds <- dif_anova(f, factors = "sex")
-  expect_equal(ds$n_groups,
-               max(2L, min(10L, min(table(g1[!is.na(f$person$theta)])) %/% 30L)))
+  req1 <- max(2L, min(10L, min(table(g1[!is.na(f$person$theta)])) %/% 30L))
+  expect_lte(ds$n_groups, req1)
+  expect_gte(ds$n_groups, 2L)
   # several factors from the smallest factor-combination cell
   da <- dif_anova(f)
   cells <- interaction(g1, g2, drop = TRUE)
-  expect_equal(da$n_groups,
-               max(2L, min(10L, min(table(cells[!is.na(f$person$theta)])) %/% 30L)))
+  req2 <- max(2L, min(10L, min(table(cells[!is.na(f$person$theta)])) %/% 30L))
+  expect_lte(da$n_groups, req2)
   expect_gt(ds$n_groups, da$n_groups)   # combination cells are smaller
-  # explicit n_groups still overrides
+  # explicit n_groups still overrides (and is achievable here)
   expect_equal(dif_anova(f, n_groups = 5)$n_groups, 5)
 })
 
@@ -336,4 +338,67 @@ test_that("resolve_dif splits DIF items by effect size and protects anchors", {
   rp <- resolve_dif(fp, min_anchors = 3)
   # never fewer than min_anchors original items left unsplit
   expect_gte(10L - length(unique(rp$splits$item)), 3L)
+})
+
+test_that("mixed-design DIF survives missing data (strata dedup)", {
+  # missing responses unbalance the design and aov then projects the within
+  # terms onto the between-person stratum as well as their own; the flatten
+  # step must keep each term once (its own stratum) or the planted DIF is
+  # silently un-flagged and the summary duplicates rows
+  set.seed(4); Np <- 400; L <- 6
+  d0 <- scale(seq(-1.5, 1.5, length.out = L), scale = FALSE)[, 1]
+  th <- rnorm(Np, 0, 1.3)
+  sh <- matrix(0, Np, L); sh[, 3] <- 0.8
+  X1 <- matrix(rbinom(Np * L, 1, plogis(outer(th, d0, "-"))), Np, L)
+  X2 <- matrix(rbinom(Np * L, 1, plogis(outer(th, d0, "-") - sh)), Np, L)
+  colnames(X1) <- colnames(X2) <- sprintf("W%02d", 1:L)
+  stk <- rbind(data.frame(pid = sprintf("P%03d", 1:Np), X1, time = "t1"),
+               data.frame(pid = sprintf("P%03d", 1:Np), X2, time = "t2"))
+  set.seed(9)
+  for (j in 1:L) stk[runif(nrow(stk)) < 0.08, 1 + j] <- NA
+  fit <- rasch(stk, id = "pid", factors = "time")
+  # aov warns "Error() model is singular" for some unbalanced items; the
+  # flatten step is what is under test here
+  r <- suppressWarnings(dif_anova(fit))
+  # one row per item-term, and the planted within DIF is flagged
+  expect_equal(nrow(r$summary),
+               length(unique(r$summary$item)) * length(unique(r$summary$term)))
+  expect_true(r$summary$uniform_DIF[r$summary$item == "W03"])
+})
+
+test_that("dif_anova tolerates factors named like its internals (ci, f1)", {
+  set.seed(2); Np <- 600; L <- 6
+  d0 <- scale(seq(-1.5, 1.5, length.out = L), scale = FALSE)[, 1]
+  th <- rnorm(Np)
+  X <- matrix(rbinom(Np * L, 1, plogis(outer(th, d0, "-"))), Np, L)
+  colnames(X) <- sprintf("I%02d", 1:L)
+  g <- rep(c("u", "v"), each = Np / 2)
+  X[, 4] <- rbinom(Np, 1, plogis(th - d0[4] - ifelse(g == "v", 0.9, 0)))
+  fit <- rasch(data.frame(X, ci = g, f1 = sample(c("p", "q"), Np, TRUE)),
+               factors = c("ci", "f1"))
+  r <- dif_anova(fit)
+  expect_setequal(unique(r$summary$term), c("ci", "f1"))
+  expect_true(r$summary$uniform_DIF[r$summary$item == "I04" &
+                                    r$summary$term == "ci"])
+  expect_equal(sum(r$summary$uniform_DIF[r$summary$term == "f1"]), 0L)
+})
+
+test_that("an item's own ci-crossing does not supersede it", {
+  # uniform AND non-uniform DIF on the same item: both are reported on one
+  # row, so the ci interaction must not knock the group term out of the
+  # follow-ups (it used to, silently excluding the most DIF-affected item
+  # from resolve_dif)
+  set.seed(6); Np <- 800; L <- 6
+  d0 <- scale(seq(-1.5, 1.5, length.out = L), scale = FALSE)[, 1]
+  th <- rnorm(Np, 0, 1.4); g <- rep(c("r", "f"), each = Np / 2)
+  X <- matrix(rbinom(Np * L, 1, plogis(outer(th, d0, "-"))), Np, L)
+  colnames(X) <- sprintf("H%02d", 1:L)
+  X[, 5] <- rbinom(Np, 1, plogis(th - d0[5] -
+                                 ifelse(g == "f", 0.9 + 0.5 * th, 0)))
+  fit <- rasch(data.frame(X, grp = g), factors = "grp")
+  r <- dif_anova(fit)
+  s5 <- r$summary[r$summary$item == "H05", ]
+  expect_true(s5$uniform_DIF)
+  expect_true(s5$nonuniform_DIF)
+  expect_false(s5$superseded)
 })

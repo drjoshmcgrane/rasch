@@ -48,10 +48,15 @@ model is refitted, and the distance between the resolved locations is
 the DIF size in logits (Andrich & Marais 2019, ch. 16: a simulated
 shift of 0.71 was recovered as 0.75 by exactly this method). Every
 pair of levels is compared with a Wald test using the full sandwich
-covariance of the resolved locations (the persons behind different
-levels are disjoint, but the shared calibration of the other items
-still couples the estimates, so the covariance is used rather than
-assumed zero), with familywise adjustment over the pairs. Differences
+covariance of the resolved locations (for a between-person factor the
+persons behind different levels are disjoint, but the shared calibration
+of the other items still couples the estimates, so the covariance is
+used rather than assumed zero), with familywise adjustment over the
+pairs. For a within-person factor -- the same persons behind several
+levels, as in a stacked repeated-measures design -- the sandwich carries
+no person clustering, so the standard errors are conservative; a note
+says so, and \code{\link{dif_contrasts}} handles that case with
+person-level differencing. Differences
 at least \code{flag_logits} in absolute size are flagged as practically
 significant; half a logit is a common working criterion, to be weighed
 against the test's targeting and purpose.

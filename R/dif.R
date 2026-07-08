@@ -74,7 +74,14 @@
         p = if ("Pr(>F)" %in% nm) tab[["Pr(>F)"]][k] else NA_real_,
         resid_ss = rss, stringsAsFactors = FALSE)
   }
-  do.call(rbind, rows)
+  out <- do.call(rbind, rows)
+  # missing responses unbalance a mixed design, and aov then projects a
+  # within term onto an earlier (between-person) error stratum as well as
+  # its own; only the deepest stratum tests the term against its proper
+  # error, so keep each term's last occurrence (Residuals rows stay
+  # per-stratum for the partial eta-squared)
+  dup <- out$term != "Residuals" & duplicated(out$term, fromLast = TRUE)
+  out[!dup, , drop = FALSE]
 }
 
 #' Differential item functioning by residual analysis of variance
@@ -225,11 +232,17 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
   }
   terms$significant <- !is.na(terms$p_adj) & terms$p_adj < alpha
 
-  # a significant higher-order interaction supersedes the lower-order terms
-  # built from a subset of its variables (within the same item)
+  # a significant higher-order GROUP interaction supersedes the lower-order
+  # group terms built from a subset of its factors (within the same item).
+  # Terms crossing the class interval are excluded from the pass: a term's
+  # own ci interaction is reported WITH it as non-uniform DIF, so it must
+  # not supersede it (an item significant on both would otherwise drop out
+  # of the follow-ups entirely).
   terms$superseded <- FALSE
+  is_group_t <- !vapply(terms$term, function(t)
+    "ci" %in% .term_vars(t), TRUE)
   for (it in unique(terms$item)) {
-    sel <- which(terms$item == it & terms$significant)
+    sel <- which(terms$item == it & terms$significant & is_group_t)
     if (length(sel) < 2) next
     vlist <- lapply(terms$term[sel], .term_vars)
     for (a_i in seq_along(sel)) for (b_i in seq_along(sel)) {
@@ -242,7 +255,7 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
 
   # Tukey HSD for significant, non-superseded terms that do not involve the
   # class interval (the group structure itself)
-  tk <- list()
+  tk <- list(); tukey_note <- NULL
   for (i in seq_len(L)) {
     a <- fits[[i]]; if (is.null(a)) next
     it <- colnames(Z)[i]
@@ -253,6 +266,14 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
       !(cand$df == 1L & !grepl(":", cand$term, fixed = TRUE))
     cand <- cand$term[keep_t]
     if (!length(cand)) next
+    # TukeyHSD has no method for the multi-stratum aov of a mixed design;
+    # say so rather than return an empty table silently
+    if (inherits(a, "aovlist")) {
+      tukey_note <- paste("Tukey comparisons are unavailable for",
+                          "within-subject (mixed) designs; use the",
+                          "resolved DIF magnitudes (sizes) instead")
+      next
+    }
     th <- tryCatch(stats::TukeyHSD(a, which = cand), error = function(e) NULL)
     if (is.null(th)) next
     for (tt in names(th)) {
@@ -268,14 +289,18 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
                comparison = character(), difference = numeric(),
                lower = numeric(), upper = numeric(), p_tukey = numeric())
 
-  # map the syntactic stand-ins back to the nominated factor names
-  relabel <- function(x) {
-    for (j in rev(seq_along(fnames)))
-      x <- gsub(paste0("\\bf", j, "\\b"), fnames[j], x)
-    x
-  }
-  terms$term <- relabel(terms$term)
-  tukey$term <- relabel(tukey$term)
+  # map a term's syntactic stand-ins (f1..fk) back to the nominated factor
+  # names by exact whole-token match, so a factor named like a stand-in
+  # ("f1") or like the class interval ("ci") cannot be re-substituted or
+  # collide. Applied only for display, after all classification is done on
+  # the stand-ins.
+  relabel <- function(x) vapply(x, function(t) {
+    toks <- strsplit(t, ":", fixed = TRUE)[[1]]
+    i <- match(toks, safe); toks[!is.na(i)] <- fnames[i[!is.na(i)]]
+    if ("ci" %in% fnames)
+      toks[is.na(i) & toks == "ci"] <- "(class interval)"
+    paste(toks, collapse = ":")
+  }, character(1), USE.NAMES = FALSE)
 
   # DIF magnitudes in logits for the significant, non-superseded group
   # terms (interaction terms resolved by their cells)
@@ -287,7 +312,9 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
                     "ci" %in% .term_vars(tt), TRUE), , drop = FALSE]
     for (r in seq_len(nrow(cand))) {
       it <- cand$item[r]; tt <- cand$term[r]
-      ds <- tryCatch(dif_size(fit, it, by = .term_vars(tt)),
+      # dif_size takes the nominated factor names, not the stand-ins
+      by_user <- fnames[match(.term_vars(tt), safe)]
+      ds <- tryCatch(dif_size(fit, it, by = by_user),
                      error = function(e) NULL)
       if (is.null(ds)) next
       p <- ds$pairs
@@ -309,6 +336,10 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     nu <- terms[terms$item == it & terms$term == paste0(tt, ":ci"), ,
                 drop = FALSE]
     if (!nrow(u)) next
+    # .aov_terms_flat deduplicates strata-split terms; a term reaching here
+    # twice would silently break every isTRUE() below, so fail loudly
+    if (nrow(u) > 1 || nrow(nu) > 1)
+      stop("internal error: term '", tt, "' appears in several error strata")
     srows[[length(srows) + 1L]] <- data.frame(
       item = it, term = tt,
       F_uniform = u$F_value, p_uniform = u$p,
@@ -324,9 +355,18 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
   summary_tab <- do.call(rbind, srows)
   rownames(summary_tab) <- NULL
 
+  # relabel the stand-ins to the nominated names for display, now that all
+  # classification is done
+  terms$term <- relabel(terms$term)
+  tukey$term <- relabel(tukey$term)
+  summary_tab$term <- relabel(summary_tab$term)
+  if (!is.null(size_tab) && nrow(size_tab))
+    size_tab$term <- relabel(size_tab$term)
+
   out <- list(summary = summary_tab, terms = terms, tukey = tukey,
-              n_groups = n_groups, within = within, effects = effects,
-              alpha = alpha, p_adjust = p_adjust)
+              n_groups = nlevels(as.factor(ci)), within = within,
+              effects = effects, alpha = alpha, p_adjust = p_adjust)
+  if (!is.null(tukey_note)) out$tukey_note <- tukey_note
   if (isTRUE(sizes)) out$sizes <- size_tab
   class(out) <- "rmt_dif"
   out
@@ -335,8 +375,6 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
 #' @export
 print.rmt_dif <- function(x, ...) {
   s <- x$summary
-  nf <- length(unique(vapply(s$term, function(t)
-    .term_vars(t)[1], "")))
   cat(sprintf("DIF by residual analysis of variance (%s; %d class intervals%s)\n",
               if (length(unique(s$term)) > length(unique(s$item)) ||
                   x$effects == "factorial")
@@ -364,10 +402,15 @@ print.rmt_dif <- function(x, ...) {
 #' the DIF size in logits (Andrich & Marais 2019, ch. 16: a simulated
 #' shift of 0.71 was recovered as 0.75 by exactly this method). Every
 #' pair of levels is compared with a Wald test using the full sandwich
-#' covariance of the resolved locations (the persons behind different
-#' levels are disjoint, but the shared calibration of the other items
-#' still couples the estimates, so the covariance is used rather than
-#' assumed zero), with familywise adjustment over the pairs. Differences
+#' covariance of the resolved locations (for a between-person factor the
+#' persons behind different levels are disjoint, but the shared calibration
+#' of the other items still couples the estimates, so the covariance is
+#' used rather than assumed zero), with familywise adjustment over the
+#' pairs. For a within-person factor -- the same persons behind several
+#' levels, as in a stacked repeated-measures design -- the sandwich carries
+#' no person clustering, so the standard errors are conservative; a note
+#' says so, and \code{\link{dif_contrasts}} handles that case with
+#' person-level differencing. Differences
 #' at least \code{flag_logits} in absolute size are flagged as practically
 #' significant; half a logit is a common working criterion, to be weighed
 #' against the test's targeting and purpose.
@@ -416,6 +459,20 @@ dif_size <- function(fit, item, by, p_adjust = "holm", alpha = 0.05,
   grp <- if (ncol(factors) == 1L) factor(factors[[1]])
          else interaction(factors, sep = ":", drop = TRUE)
   notes <- character(0)
+  # the same person appearing behind several levels (a stacked
+  # repeated-measures factor) couples the resolved locations within person;
+  # the sandwich carries no person clustering, so the Wald tests are
+  # conservative there
+  if (!is.null(fit$person$id)) {
+    idv <- as.character(fit$person$id)
+    seen <- !is.na(grp)
+    if (anyDuplicated(unique(data.frame(id = idv[seen],
+                                        g = as.character(grp[seen])))$id))
+      notes <- c(notes, paste(
+        "the same persons appear at several levels (within-person factor):",
+        "standard errors are conservative; see dif_contrasts for",
+        "person-level differencing"))
+  }
 
   # drop levels too thin on this item to resolve
   n_lev <- table(grp[!is.na(fit$X[, i]) & !is.na(grp)])
