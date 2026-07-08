@@ -1,12 +1,58 @@
 url: https://drjoshmcgrane.github.io/rmt/
+
 template:
   bootstrap: 5
+  light-switch: true
   bslib:
-    preset: shiny
+    preset: bootstrap
+    primary: "#1d3557"
+    bg: "#ffffff"
+    fg: "#1e293b"
+    base_font: {google: "Source Sans 3"}
+    heading_font: {google: "Source Sans 3"}
+    code_font: {google: "JetBrains Mono"}
+    pkgdown-nav-height: 72px
+
+home:
+  title: rmt — Rasch Measurement Theory in R
+  description: >
+    Pairwise conditional estimation of the Rasch model family — partial
+    credit, rating scale, many-facet, extended frame of reference, and
+    Bradley-Terry-Luce paired comparisons — with the complete diagnostic
+    apparatus of published Rasch Measurement Theory and a Shiny interface
+    that attaches reproducing R code to every output.
+  sidebar:
+    structure: [links, license, citation, authors, dev]
+    components:
+      # custom links: this package is not on CRAN, and pkgdown's automatic
+      # "View on CRAN" would point at an unrelated package of the same name
+      links:
+        title: Links
+        text: |
+          [Browse source code](https://github.com/drjoshmcgrane/rmt)
+
+          [Report a bug](https://github.com/drjoshmcgrane/rmt/issues)
+
+navbar:
+  structure:
+    left: [intro, reference, articles, news]
+    right: [search, github, lightswitch]
+  components:
+    reference:
+      text: Reference
+      href: reference/index.html
+    news:
+      text: Changelog
+      href: news/index.html
+
+news:
+  cran_dates: false
 
 reference:
 - title: Estimation
-  desc: Pairwise conditional estimation of the Rasch model family.
+  desc: >
+    Pairwise conditional estimation of the Rasch model family, with Godambe
+    sandwich standard errors and Warm person measures.
   contents:
   - rasch
   - rasch_mfrm
@@ -15,7 +61,11 @@ reference:
   - pcml_pc
   - threshold_index
   - item_moments
+
 - title: Test of fit and comparison
+  desc: >
+    The fit-residual and chi-square apparatus, targeting and reliability,
+    and model comparison.
   contents:
   - fit_summary_table
   - targeting_table
@@ -24,12 +74,17 @@ reference:
   - lr_test
   - compare_fits
   - guttman_table
+
 - title: Persons
   contents:
   - person_wle
   - person_extrapolated
   - score_table
+
 - title: Invariance and DIF
+  desc: >
+    Differential item functioning over any number of person factors, DIF
+    magnitudes in logits, resolution by item splitting, and equating.
   contents:
   - dif_anova
   - dif_contrasts
@@ -38,7 +93,11 @@ reference:
   - resolve_dif
   - equate_tests
   - tailored_analysis
+
 - title: Independence and dimensionality
+  desc: >
+    Residual principal components, the Smith t-test with magnitude
+    estimation, Q3 local dependence, and the structural remedies.
   contents:
   - residual_correlations
   - residual_pca
@@ -49,22 +108,32 @@ reference:
   - combine_items
   - rack_data
   - stack_data
+
 - title: Multiple choice and traditional statistics
   contents:
   - distractor_analysis
   - distractor_rescore
   - ctt_table
+
 - title: Paired comparisons
+  desc: >
+    The Bradley-Terry-Luce model as the conditional form of the dichotomous
+    Rasch model, with judge diagnostics, within-judge dependence, and
+    judge-group DIF.
   contents:
   - btl
   - btl_dif
   - plot_btl
   - plot_btl_categories
   - plot_btl_icc
+  - plot_btl_dependence
+
 - title: Plots
+  desc: One plotting function per display, all base graphics.
   contents:
   - starts_with("plot_")
   - -starts_with("plot_btl")
+
 - title: Export and interface
   contents:
   - save_outputs
