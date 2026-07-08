@@ -1,4 +1,4 @@
-# rmt :: traditional (classical test theory) statistics
+# rasch :: traditional (classical test theory) statistics
 # ===========================================================================
 # Classical test theory companion statistics, computed on complete cases
 # only (alpha and its relatives have no missing-data form): item facility,
@@ -20,7 +20,7 @@
 #' unlike the Rasch SE is one value for all persons.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
-#' @return A list of class \code{"rmt_ctt"}: the per-item \code{table}
+#' @return A list of class \code{"rasch_ctt"}: the per-item \code{table}
 #'   (\code{item}, \code{n}, \code{min}, \code{max}, \code{facility},
 #'   \code{item_total}, \code{item_rest}, \code{di}, \code{alpha_drop}), and
 #'   the scalars
@@ -84,12 +84,12 @@ ctt_table <- function(fit) {
               sd = if (sum(cc) >= 3) stats::sd(tot_cc) else NA_real_,
               sem = if (is.finite(alpha) && sum(cc) >= 3)
                 stats::sd(tot_cc) * sqrt(1 - alpha) else NA_real_)
-  class(out) <- "rmt_ctt"
+  class(out) <- "rasch_ctt"
   out
 }
 
 #' @export
-print.rmt_ctt <- function(x, ...) {
+print.rasch_ctt <- function(x, ...) {
   cat(sprintf("Traditional statistics (available cases; item n %d-%d; %d complete)\n",
               x$n_range[1], x$n_range[2], x$n))
   if (is.finite(x$mean))

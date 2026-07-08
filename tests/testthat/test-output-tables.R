@@ -115,7 +115,7 @@ test_that("report_html writes a complete self-contained report", {
   X <- matrix(rbinom(250 * 6, 1, plogis(outer(rnorm(250), d, "-"))), 250, 6)
   colnames(X) <- paste0("I", 1:6)
   fit <- rasch(data.frame(X, g = rep(c("a", "b"), each = 125)), factors = "g")
-  out <- file.path(tempdir(), "rmt_report_test.html")
+  out <- file.path(tempdir(), "rasch_report_test.html")
   on.exit(unlink(out), add = TRUE)
   report_html(fit, out, title = "Test report")
   expect_true(file.exists(out))

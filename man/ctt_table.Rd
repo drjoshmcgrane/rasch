@@ -10,7 +10,7 @@ ctt_table(fit)
 \item{fit}{A fitted object from \code{\link{rasch}}.}
 }
 \value{
-A list of class \code{"rmt_ctt"}: the per-item \code{table}
+A list of class \code{"rasch_ctt"}: the per-item \code{table}
   (\code{item}, \code{n}, \code{min}, \code{max}, \code{facility},
   \code{item_total}, \code{item_rest}, \code{di}, \code{alpha_drop}), and
   the scalars

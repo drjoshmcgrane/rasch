@@ -1,4 +1,4 @@
-# rmt :: tailored analysis for guessing
+# rasch :: tailored analysis for guessing
 # ===========================================================================
 # The tailored test-of-fit procedure for detecting and correcting
 # guessing on multiple-choice proficiency items (Waller 1989 ARRG; Andrich,
@@ -38,7 +38,7 @@
 #'   least affected by tailoring -- fewest responses removed, ties broken
 #'   towards the easier tailored location -- which are the easy items the
 #'   procedure trusts.
-#' @return A list of class \code{"rmt_tailored"}: \code{tailored},
+#' @return A list of class \code{"rasch_tailored"}: \code{tailored},
 #'   \code{origin_equated}, and \code{anchored} fits, the comparison
 #'   \code{table} (initial, tailored, origin-equated locations, the
 #'   tailored-minus-equated \code{shift}, and its \code{z}), the number of
@@ -126,12 +126,12 @@ tailored_analysis <- function(fit, chance = 0.25, anchor_items = NULL) {
               anchored = anchored, table = tab,
               n_removed = sum(cut_cells), chance = chance,
               anchor_items = anchor_items)
-  class(out) <- "rmt_tailored"
+  class(out) <- "rasch_tailored"
   out
 }
 
 #' @export
-print.rmt_tailored <- function(x, ...) {
+print.rasch_tailored <- function(x, ...) {
   cat(sprintf("Tailored analysis: %d response(s) below chance %.2f set to missing\n",
               x$n_removed, x$chance))
   cat(sprintf("Origin from average-anchored items: %s\n",

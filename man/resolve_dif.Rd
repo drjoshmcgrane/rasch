@@ -32,7 +32,7 @@ not artificial DIF). Default \code{max(3, items / 4)}.}
 of items.}
 }
 \value{
-A list of class \code{"rmt_resolve_dif"}: the final resolved
+A list of class \code{"rasch_resolve_dif"}: the final resolved
   \code{fit}, the \code{splits} performed (order, item, factor, partial
   eta-squared, DIF magnitude in logits), the \code{stopped} reason, and
   the residual \code{dif} table for the final fit.

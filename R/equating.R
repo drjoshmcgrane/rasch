@@ -1,4 +1,4 @@
-# rmt :: test equating
+# rasch :: test equating
 # ===========================================================================
 # Comparison of common-item locations across two separately analysed
 # datasets. Because each analysis fixes its own origin, the comparison
@@ -75,7 +75,7 @@ equate_tests <- function(fit, reference, shift = c("mean", "none")) {
                     t = t, p = p, p_adj = p_adj,
                     drift = p_adj < 0.05)
   rownames(tab) <- NULL
-  structure(class = "rmt_equate", list(table = tab, shift = c0,
+  structure(class = "rasch_equate", list(table = tab, shift = c0,
        correlation = cor(a$location, b$location),
        rmsd = sqrt(mean((d - c0)^2)), n = n))
 }
@@ -127,7 +127,7 @@ plot_equate <- function(fit, reference, shift = c("mean", "none")) {
 
 
 #' @export
-print.rmt_equate <- function(x, ...) {
+print.rasch_equate <- function(x, ...) {
   cat(sprintf("Common-item equating over %d item(s): shift %.3f, correlation %.3f, RMSD %.3f\n",
               x$n, x$shift, x$correlation, x$rmsd))
   core <- c("item", "location_1", "location_2", "adj_difference", "t",

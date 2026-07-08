@@ -81,7 +81,7 @@ response. Both modes report the component decomposition.}
 \item{maxit, tol}{Newton-Raphson iteration cap and convergence tolerance.}
 }
 \value{
-A list of class \code{"rmt_btl"}: \code{objects} (location, se,
+A list of class \code{"rasch_btl"}: \code{objects} (location, se,
   comparisons, wins -- or the graded \code{score} -- infit and outfit
   mean squares, fit residual and its df),
   \code{pairs} (per pair: n, observed and expected win proportions --

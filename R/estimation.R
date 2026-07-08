@@ -1,4 +1,4 @@
-# rmt :: estimation
+# rasch :: estimation
 # ===========================================================================
 # Pairwise conditional maximum likelihood after Andrich & Luo (2003) and
 # Zwinderman (1995). For items i, j with maximum scores m_i,

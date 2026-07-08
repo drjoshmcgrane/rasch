@@ -1,4 +1,4 @@
-# rmt :: many-facet Rasch model
+# rasch :: many-facet Rasch model
 # ===========================================================================
 # The many-facet Rasch model (Linacre 1989) estimated by the same pairwise
 # conditional likelihood as the rest of the package. Each combination of an
@@ -340,7 +340,7 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
 
 #' @export
 print.rasch_mfrm <- function(x, ...) {
-  cat(sprintf("rmt many-facet analysis: %d items x %s = %d virtual items, %d persons\n",
+  cat(sprintf("rasch many-facet analysis: %d items x %s = %d virtual items, %d persons\n",
               nrow(x$item_effects),
               paste(vapply(x$facet_spec, function(f)
                 sprintf("%d %s level(s)", nrow(x$facet_effects[[f]]), f), ""),

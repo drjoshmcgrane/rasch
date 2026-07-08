@@ -1,4 +1,4 @@
-# rmt :: dimensionality and local dependence
+# rasch :: dimensionality and local dependence
 # ===========================================================================
 # Residual correlations for local dependence, principal components of the
 # residuals, and the Smith (2002) paired t-test of unidimensionality on the
@@ -351,7 +351,7 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
 #' @param subtests A list of character vectors assigning \emph{every} item
 #'   of the fit to one subscale (at least two subscales of two or more
 #'   items). Unequal subscale sizes use their mean as \eqn{K}.
-#' @return A list of class \code{"rmt_dim_magnitude"}: the comparison
+#' @return A list of class \code{"rasch_dim_magnitude"}: the comparison
 #'   \code{table} (rows PSI and alpha; columns \code{run1}, \code{subtest},
 #'   \code{c2}, \code{c}, \code{rho}, \code{A}), the subtest \code{refit},
 #'   and the design constants \code{S} and \code{K}.
@@ -396,12 +396,12 @@ dimensionality_magnitude <- function(fit, subtests) {
                     A = c(psi_row[4], alp_row[4]))
   out <- list(table = tab, refit = refit, S = S, K = K,
               alpha_applicable = fit$alpha$applicable)
-  class(out) <- "rmt_dim_magnitude"
+  class(out) <- "rasch_dim_magnitude"
   out
 }
 
 #' @export
-print.rmt_dim_magnitude <- function(x, ...) {
+print.rasch_dim_magnitude <- function(x, ...) {
   cat(sprintf("Magnitude of multidimensionality (Andrich 2016): %d subscales, mean %.1f items\n",
               x$S, x$K))
   tab <- x$table

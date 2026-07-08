@@ -19,7 +19,7 @@ towards the easier tailored location -- which are the easy items the
 procedure trusts.}
 }
 \value{
-A list of class \code{"rmt_tailored"}: \code{tailored},
+A list of class \code{"rasch_tailored"}: \code{tailored},
   \code{origin_equated}, and \code{anchored} fits, the comparison
   \code{table} (initial, tailored, origin-equated locations, the
   tailored-minus-equated \code{shift}, and its \code{z}), the number of

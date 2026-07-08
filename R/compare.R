@@ -1,4 +1,4 @@
-# rmt :: model comparison
+# rasch :: model comparison
 # ===========================================================================
 # Side-by-side comparison of fitted models. Two kinds of evidence are
 # reported. (1) The pairwise conditional log-likelihood with the number of
@@ -138,7 +138,7 @@ print.rasch_compare <- function(x, ...) {
 #' @param fit A \code{"PCM"} fit from \code{\link{rasch}} with equal maximum
 #'   scores across items (the rating parameterisation requires them).
 #' @param maxit,tol Passed to the rating-scale refit.
-#' @return A list of class \code{"rmt_lr"}: raw \code{chisq}, \code{df},
+#' @return A list of class \code{"rasch_lr"}: raw \code{chisq}, \code{df},
 #'   \code{p} (the conventional display); adjusted \code{chisq_adj}, \code{p_adj},
 #'   and the eigenvalues \code{lambda}; the two log-likelihoods; and the
 #'   rating-scale refit (\code{fit_rsm}).
@@ -194,12 +194,12 @@ lr_test <- function(fit, maxit = 60, tol = 1e-8) {
               chisq_adj = chisq_adj, p_adj = p_adj, lambda = lambda,
               loglik_pcm = fit$est$loglik, loglik_rsm = rsm$est$loglik,
               fit_rsm = rsm)
-  class(out) <- "rmt_lr"
+  class(out) <- "rasch_lr"
   out
 }
 
 #' @export
-print.rmt_lr <- function(x, ...) {
+print.rasch_lr <- function(x, ...) {
   cat("Likelihood-ratio test: partial credit vs rating parameterisation\n")
   cat(sprintf("  Raw composite chi-square %.3f on %d df, p = %s (conventional display; anticonservative)\n",
               x$chisq, x$df, .fmt_p(x$p)))

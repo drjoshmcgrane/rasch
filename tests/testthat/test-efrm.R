@@ -181,7 +181,7 @@ test_that("the error-variance correction beats the naive SD ratio", {
     cols <- which(fit$set_of[fit$virtual_map$item] == as.character(s))
     tl <- lapply(fit$virtual_map$item[cols], function(it)
       dtl$delta[dtl$item == it] * fit$alpha_table$alpha[s])
-    pe <- rmt:::.person_estimates(fit$X[, cols, drop = FALSE], tl, disc = 1)
+    pe <- rasch:::.person_estimates(fit$X[, cols, drop = FALSE], tl, disc = 1)
     pe
   })
   ok <- !u[[1]]$extreme & !u[[2]]$extreme &

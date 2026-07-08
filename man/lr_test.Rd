@@ -13,7 +13,7 @@ scores across items (the rating parameterisation requires them).}
 \item{maxit, tol}{Passed to the rating-scale refit.}
 }
 \value{
-A list of class \code{"rmt_lr"}: raw \code{chisq}, \code{df},
+A list of class \code{"rasch_lr"}: raw \code{chisq}, \code{df},
   \code{p} (the conventional display); adjusted \code{chisq_adj}, \code{p_adj},
   and the eigenvalues \code{lambda}; the two log-likelihoods; and the
   rating-scale refit (\code{fit_rsm}).

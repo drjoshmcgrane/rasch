@@ -321,7 +321,7 @@ test_that("resolve_dif splits DIF items by effect size and protects anchors", {
   colnames(X) <- sprintf("I%02d", 1:10)
   fit <- rasch(data.frame(X, grp = g), factors = "grp")
   rr <- resolve_dif(fit)
-  expect_s3_class(rr, "rmt_resolve_dif")
+  expect_s3_class(rr, "rasch_resolve_dif")
   expect_true("I03" %in% rr$splits$item)          # the planted item is resolved
   expect_equal(rr$n_remaining_dif, 0L)            # nothing left
   expect_gt(ncol(rr$fit$X), ncol(fit$X))          # the fit gained resolved copies

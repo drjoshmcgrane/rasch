@@ -44,7 +44,7 @@ dropped from its resolution, with a note.}
 \item{maxit, tol}{Newton controls for the resolution refits.}
 }
 \value{
-A list of class \code{"rmt_btl_dif"}: \code{summary} (one row per
+A list of class \code{"rasch_btl_dif"}: \code{summary} (one row per
   object and group term with the uniform F, adjusted p and partial
   eta-squared -- the term itself -- the non-uniform ones -- the term
   crossed with the opponent band -- plus \code{uniform_DIF},

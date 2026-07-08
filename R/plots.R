@@ -1,4 +1,4 @@
-# rmt :: plots
+# rasch :: plots
 # ===========================================================================
 # The Rasch diagnostic plot suite in base graphics with a modern flat style:
 # item characteristic curves (with group overlay for DIF), category

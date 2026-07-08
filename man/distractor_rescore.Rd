@@ -17,7 +17,7 @@ distractor_rescore(fit, items = NULL, min_n = 20, z = 1.96)
 distractor and the uncredited ones.}
 }
 \value{
-A list of class \code{"rmt_rescore"}: \code{option_scores}, a
+A list of class \code{"rasch_rescore"}: \code{option_scores}, a
   data frame (\code{item}, \code{option}, \code{score}) ready for
   \code{rasch(key = )} and covering every observed option of the
   examined items, and \code{evidence}, the distractor analysis with the

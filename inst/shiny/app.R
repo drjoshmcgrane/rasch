@@ -1,11 +1,11 @@
-# rmt Shiny GUI
+# rasch Shiny GUI
 # ---------------------------------------------------------------------------
-# A modern bslib interface to the full rmt analysis: data upload with ID,
+# A modern bslib interface to the full rasch analysis: data upload with ID,
 # person-factor, and item column nomination; pairwise conditional ML
 # estimation (Andrich & Luo 2003); the complete test-of-fit suite;
 # every diagnostic plot with per-plot PNG and PDF downloads; and one-click
 # export of all tables and plots as a ZIP archive.
-# Launch with rmt::run_app(), or shiny::runApp() from this folder.
+# Launch with rasch::run_app(), or shiny::runApp() from this folder.
 # ---------------------------------------------------------------------------
 suppressPackageStartupMessages({
   library(shiny)
@@ -14,13 +14,13 @@ suppressPackageStartupMessages({
   library(bsicons)
 })
 
-if (requireNamespace("rmt", quietly = TRUE)) {
-  library(rmt)
+if (requireNamespace("rasch", quietly = TRUE)) {
+  library(rasch)
 } else {
   rdir <- normalizePath(file.path("..", "..", "R"), mustWork = FALSE)
   if (dir.exists(rdir)) {
     for (f in list.files(rdir, "\\.R$", full.names = TRUE)) source(f)
-  } else stop("Install rmt, or run the app from inst/shiny in the source tree")
+  } else stop("Install rasch, or run the app from inst/shiny in the source tree")
 }
 
 # --- demo data: 10 polytomous items, one disordered, DIF on Q05 -------------
@@ -331,19 +331,19 @@ css <- HTML("
   /* card headers: title left, action chips right, with a small gap
      between chips (the chips row right-aligns even when there is no
      title, via margin-left:auto) */
-  .rmt-card-header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-  .rmt-chips { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; margin-left: auto; }
+  .rasch-card-header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+  .rasch-chips { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; margin-left: auto; }
   /* inline form controls that sit on a flex row with buttons: strip the
      bottom margin Shiny's containers carry */
-  .rmt-inline-check .form-group, .rmt-inline-check .shiny-input-container,
-  .rmt-inline-check .checkbox,
-  .rmt-inline-select .form-group, .rmt-inline-select .shiny-input-container {
+  .rasch-inline-check .form-group, .rasch-inline-check .shiny-input-container,
+  .rasch-inline-check .checkbox,
+  .rasch-inline-select .form-group, .rasch-inline-select .shiny-input-container {
     margin-bottom: 0; width: auto;
   }
-  .rmt-inline-select select.form-select { padding: .15rem 1.6rem .15rem .5rem; font-size: .78rem; }
+  .rasch-inline-select select.form-select { padding: .15rem 1.6rem .15rem .5rem; font-size: .78rem; }
   /* collapsed advanced-settings disclosure inside the sidebar accordion */
-  .rmt-advanced { margin-top: .5rem; }
-  .rmt-advanced summary { cursor: pointer; font-size: .8rem; font-weight: 600; color: var(--bs-secondary-color); margin-bottom: .35rem; }
+  .rasch-advanced { margin-top: .5rem; }
+  .rasch-advanced summary { cursor: pointer; font-size: .8rem; font-weight: 600; color: var(--bs-secondary-color); margin-bottom: .35rem; }
   .empty-state { text-align: center; padding: 3rem 1rem; color: var(--bs-secondary-color); }
   .shiny-output-error-validation {
     text-align: center; padding: 2rem 1rem; color: var(--bs-secondary-color);
@@ -361,7 +361,7 @@ css <- HTML("
 ")
 
 # collapsed per-output "R code" footer (jamovi-style syntax mode): shows the
-# exact rmt call reproducing the output, updating with the current selections;
+# exact rasch call reproducing the output, updating with the current selections;
 # the server registers a matching `<id>_code` renderText for every output
 rcode_details <- function(id)
   tags$details(class = "rcode",
@@ -383,9 +383,9 @@ info_icon <- function(info)
 # inside an accordion panel that already names them pass title = NULL: the
 # header then renders buttons-only (the info icon stays in the chips row).
 card_header_bar <- function(title = NULL, buttons = NULL, info = NULL)
-  card_header(class = "rmt-card-header",
+  card_header(class = "rasch-card-header",
     if (!is.null(title)) span(title, if (!is.null(info)) info_icon(info)),
-    div(class = "rmt-chips",
+    div(class = "rasch-chips",
         if (is.null(title) && !is.null(info)) info_icon(info),
         buttons))
 
@@ -605,7 +605,7 @@ panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
                             "Full person bootstrap (slow, exact)" = "bootstrap")),
               numericInput("ef_reps", "Bootstrap replicates", value = 200,
                            min = 50, step = 50)),
-            tags$details(class = "rmt-advanced",
+            tags$details(class = "rasch-advanced",
               tags$summary("Advanced"),
               numericInput("run_adjN",
                            span("Adjust chi-square to N",
@@ -703,7 +703,7 @@ panel_items <- nav_panel("Items", value = "p_items", icon = bs_icon("list-check"
     conditionalPanel("output.is_btl != true",
     uiOutput("items_vboxes"),
     div(class = "mb-2 d-flex align-items-center gap-3 flex-wrap",
-        div(class = "rmt-inline-check",
+        div(class = "rasch-inline-check",
             tooltip(checkboxInput("show_obs", "Observed points", TRUE,
                                   width = "auto"),
                     "Show the observed class-interval points on the category and threshold curves.")),
@@ -738,7 +738,7 @@ panel_items <- nav_panel("Items", value = "p_items", icon = bs_icon("list-check"
           # tab has no plot, so the buttons hide there
           conditionalPanel("input.items_nav != 'Chi-square'",
             class = "ms-auto",
-            div(class = "rmt-chips",
+            div(class = "rasch-chips",
                 downloadButton("items_all_pdf", "PDF (all items)",
                                class = "btn-outline-secondary btn-xs"),
                 downloadButton("items_all_zip", "ZIP (all items)",
@@ -867,7 +867,7 @@ panel_persons <- nav_panel("Persons", value = "p_persons", icon = bs_icon("peopl
         info = "The person diagnostic map (Wright, Mead & Ludlow 1980): thresholds the person achieved print to the right of the logit axis, thresholds not achieved to the left; the dashed line inside its confidence band is the person location. Achieved thresholds above the band and unachieved thresholds below it are unexpected responses.",
         controls = div(class = "d-flex align-items-center gap-1 me-1",
           span(class = "small text-secondary", "Confidence"),
-          div(class = "rmt-inline-select",
+          div(class = "rasch-inline-select",
               selectInput("kid_level", NULL,
                           c("90%" = "0.9", "95%" = "0.95", "99%" = "0.99"),
                           selected = "0.95", width = "85px"))),
@@ -1076,7 +1076,7 @@ panel_equating <- nav_panel("Equating", value = "p_equating", icon = bs_icon("ar
         full_screen = TRUE,
         card_header_bar("Common-item comparison",
           buttons = conditionalPanel("output.has_eq == true",
-            div(class = "rmt-chips",
+            div(class = "rasch-chips",
                 cols_switch("eq_full"),
                 downloadButton("eq_tbl_csv", "CSV",
                                class = "btn-outline-secondary btn-xs")))),
@@ -1092,7 +1092,7 @@ panel_equating <- nav_panel("Equating", value = "p_equating", icon = bs_icon("ar
         `data-bs-theme` = "light",
         card_header_bar("Equating plot",
           buttons = conditionalPanel("output.has_eq == true",
-            div(class = "rmt-chips",
+            div(class = "rasch-chips",
                 downloadButton("eq_plot_png", "PNG", class = "btn-outline-secondary btn-xs"),
                 downloadButton("eq_plot_pdf", "PDF", class = "btn-outline-secondary btn-xs")))),
         card_body(
@@ -1150,7 +1150,7 @@ panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
             h6("t-test item subsets"),
             div(class = "mb-2 d-flex align-items-center gap-2",
               span(class = "small text-secondary", "Automatic split component"),
-              div(class = "rmt-inline-select",
+              div(class = "rasch-inline-select",
                   selectInput("pca_component", NULL, choices = 1, selected = 1,
                               width = "80px"))),
             selectizeInput("dim_pos", "Subset A", NULL, multiple = TRUE,
@@ -1202,7 +1202,7 @@ panel_ld <- nav_panel("Local", value = "p_ld", icon = bs_icon("link-45deg"),
             info = "The counterpart of the DIF characteristic curve: the observed departure from the location-only prediction, binned by the effect's history covariate, with the model's fitted contribution overlaid and the count in each bin printed. Observed points rising with the covariate along the line are the effect; a flat, sparse cloud means the estimate rests on little.",
             controls = div(class = "d-flex align-items-center gap-1 me-1",
               span(class = "small text-secondary", "Effect"),
-              div(class = "rmt-inline-select",
+              div(class = "rasch-inline-select",
                   selectInput("btl_dep_effect", NULL,
                               c("Exposure" = "exposure",
                                 "Carry-over" = "carry_over"),
@@ -1326,7 +1326,7 @@ panel_compare <- nav_panel("Compare", value = "p_compare", icon = bs_icon("colum
         full_screen = TRUE,
         card_header_bar("Model comparison",
           buttons = conditionalPanel("output.has_cmp == true",
-            div(class = "rmt-chips",
+            div(class = "rasch-chips",
                 cols_switch("cmp_full"),
                 downloadButton("cmp_tbl_csv", "CSV",
                                class = "btn-outline-secondary btn-xs")))),
@@ -1386,7 +1386,7 @@ panel_export <- nav_panel("Export", value = "p_export", icon = bs_icon("download
 # the navbar.
 ui <- page_navbar(
   id = "nav",
-  title = span("rmt"),
+  title = span("rasch"),
   theme = theme,
   # normal scrolling pages: never compress content to fit the viewport
   fillable = FALSE,
@@ -1397,7 +1397,7 @@ ui <- page_navbar(
       # dropdown, so the server toggles entries itself through this handler;
       # it covers top-level links, dropdown items, and menu toggles alike
       tags$script(HTML("
-        Shiny.addCustomMessageHandler('rmt-nav-vis', function(msg) {
+        Shiny.addCustomMessageHandler('rasch-nav-vis', function(msg) {
           document.querySelectorAll('.navbar a[data-value]').forEach(function(a) {
             if (a.getAttribute('data-value') !== msg.value) return;
             var li = a.closest('li');
@@ -1625,7 +1625,7 @@ server <- function(input, output, session) {
         card(
           card_body(class = "empty-state",
             bs_icon("clipboard-data", size = "3rem", class = "text-primary mb-2"),
-            h2("Welcome to rmt"),
+            h2("Welcome to rasch"),
             p(class = "lead mb-4",
               "Rasch measurement: pairwise conditional estimation, the complete test-of-fit suite, and every diagnostic table and plot — with one-click export."),
             div(class = "d-flex justify-content-center gap-2 flex-wrap mb-4",
@@ -1648,7 +1648,7 @@ server <- function(input, output, session) {
         accordion(id = "rcode_acc", open = FALSE, class = "mt-3",
           accordion_panel("R code for this analysis", icon = bs_icon("code-slash"),
             p(class = "text-muted small mb-2",
-              "The exact rmt call reproducing the current run; updates on every estimation."),
+              "The exact rasch call reproducing the current run; updates on every estimation."),
             verbatimTextOutput("rcode_fit"))))
     }
   })
@@ -1693,7 +1693,7 @@ server <- function(input, output, session) {
   # ----------------------------------------------------------------- fit --
   override_fit <- reactiveVal(NULL)
   override_desc <- reactiveVal(NULL)
-  # the exact rmt call reproducing the current run (built alongside the fit)
+  # the exact rasch call reproducing the current run (built alongside the fit)
   rcode_str <- reactiveVal(NULL)
   # clear any subtest/split override as soon as a fresh run is requested;
   # fit() short-circuits on the override, so analysis() cannot clear it itself
@@ -1970,7 +1970,7 @@ server <- function(input, output, session) {
       return(invisible(NULL))
     }
     if (!is.null(code_call))
-      rcode_str(paste(c("library(rmt)", "", src_line,
+      rcode_str(paste(c("library(rasch)", "", src_line,
                         if (length(code_notes)) c("", code_notes), "",
                         code_call), collapse = "\n"))
     # routine handling notes are informational; only real problems warn
@@ -1985,7 +1985,7 @@ server <- function(input, output, session) {
     # paired-comparison results render on the Summary / Items / Persons
     # pages (each page's Rasch variant hides while a BTL fit is current,
     # and vice versa); the Rasch outputs suspend meanwhile
-    if (inherits(fit, "rmt_btl")) {
+    if (inherits(fit, "rasch_btl")) {
       btl_fit(fit)
       fit_val(NULL)
       try(nav_select("nav", "p_summary", session = session), silent = TRUE)
@@ -2027,13 +2027,13 @@ server <- function(input, output, session) {
   # (BTL) fits alike (each page shows the matching variant); Persons needs
   # person estimates (Rasch) or a judge column (BTL). Everything else stays.
   # Every nav_panel and nav_menu carries an explicit value, and visibility is
-  # driven by those values through the rmt-nav-vis handler (shiny::hideTab,
+  # driven by those values through the rasch-nav-vis handler (shiny::hideTab,
   # which backs bslib::nav_hide, cannot reach entries inside a nav_menu).
   observe({
     f <- tryCatch(fit(), error = function(e) NULL)
     bf <- btl_fit()
     show <- function(value, on)
-      session$sendCustomMessage("rmt-nav-vis",
+      session$sendCustomMessage("rasch-nav-vis",
                                 list(value = value, show = isTRUE(on)))
     show("p_facets", inherits(f, "rasch_mfrm"))
     show("p_frames", inherits(f, "rasch_efrm"))
@@ -2243,7 +2243,7 @@ server <- function(input, output, session) {
 
   # ------------------------------------------------------- plot plumbing --
   # per-output "R code" disclosure: `code` is a function returning the exact
-  # rmt call reproducing the output (it may read reactives, so the snippet
+  # rasch call reproducing the output (it may read reactives, so the snippet
   # follows the current selections). Rendering is never suspended: the text
   # must be ready when the collapsed <details> footer is opened.
   register_code <- function(id, code) {
@@ -2261,7 +2261,7 @@ server <- function(input, output, session) {
     for (fmt in c("png", "pdf")) local({
       fmt_ <- fmt
       output[[paste0(id, "_", fmt_)]] <- downloadHandler(
-        filename = function() paste0("rmt_", id, ".", fmt_),
+        filename = function() paste0("rasch_", id, ".", fmt_),
         content = function(file) {
           # 300 dpi PNG (and vector PDF) for publication
           if (fmt_ == "png") png(file, width = w, height = h, units = "in", res = 300)
@@ -2270,14 +2270,14 @@ server <- function(input, output, session) {
         })
     })
   }
-  # `csv_name` overrides the conventional rmt_<id>.csv download filename;
+  # `csv_name` overrides the conventional rasch_<id>.csv download filename;
   # the CSV content is always the full table from `fun` (never the curated
   # on-screen display)
   register_table <- function(id, fun, dt_fun, code = NULL, csv_name = NULL) {
     output[[id]] <- renderDT(dt_fun())
     if (!is.null(code)) register_code(id, code)
     output[[paste0(id, "_csv")]] <- downloadHandler(
-      filename = function() csv_name %||% paste0("rmt_", id, ".csv"),
+      filename = function() csv_name %||% paste0("rasch_", id, ".csv"),
       content = function(file) write.csv(fun(), file, row.names = FALSE))
   }
   # the curated stat boxes (test of fit, targeting, BTL test of fit) share
@@ -2678,7 +2678,7 @@ server <- function(input, output, session) {
     num_dt(ct$table)
   })
   output$ctt_tbl_csv <- downloadHandler(
-    filename = function() "rmt_ctt_tbl.csv",
+    filename = function() "rasch_ctt_tbl.csv",
     content = function(file) {
       ct <- ctt_res(); req(!inherits(ct, "error"))
       write.csv(ct$table, file, row.names = FALSE)
@@ -2776,11 +2776,11 @@ server <- function(input, output, session) {
   })
   output$chisq_cat_tbl <- renderDT(num_dt(chisq_res()$categories))
   output$chisq_int_csv <- downloadHandler(
-    filename = function() paste0("rmt_chisq_intervals_", sel_item(), ".csv"),
+    filename = function() paste0("rasch_chisq_intervals_", sel_item(), ".csv"),
     content = function(file)
       write.csv(chisq_res()$intervals, file, row.names = FALSE))
   output$chisq_cat_csv <- downloadHandler(
-    filename = function() paste0("rmt_chisq_categories_", sel_item(), ".csv"),
+    filename = function() paste0("rasch_chisq_categories_", sel_item(), ".csv"),
     content = function(file)
       write.csv(chisq_res()$categories, file, row.names = FALSE))
   register_code("chisq", function()
@@ -3281,7 +3281,7 @@ server <- function(input, output, session) {
   })
   # test-of-fit stat box (Summary page): the paired-comparison headline set
   # read off the fit; the CSV chip downloads the COMPLETE table from
-  # fit_summary_table()'s rmt_btl method
+  # fit_summary_table()'s rasch_btl method
   register_stat_box("btl_fitsum_tbl",
     csv_fun = function() fit_summary_table(bfit()),
     csv_name = "fit_summary.csv",
@@ -3715,7 +3715,7 @@ server <- function(input, output, session) {
       sprintf('plot_equate(fit, reference, shift = "%s")',
               input$eq_shift %||% "mean"))
   output$dl_anchors <- downloadHandler(
-    filename = function() format(Sys.time(), "rmt_anchors_%Y%m%d_%H%M.csv"),
+    filename = function() format(Sys.time(), "rasch_anchors_%Y%m%d_%H%M.csv"),
     content = function(file) {
       f <- fit()
       thr <- f$thresholds
@@ -3724,7 +3724,7 @@ server <- function(input, output, session) {
     })
 
   output$dl_calib <- downloadHandler(
-    filename = function() format(Sys.time(), "rmt_calibration_%Y%m%d_%H%M.csv"),
+    filename = function() format(Sys.time(), "rasch_calibration_%Y%m%d_%H%M.csv"),
     content = function(file) {
       f <- fit()
       write.csv(data.frame(item = f$items$item, location = f$items$location,
@@ -3883,7 +3883,7 @@ server <- function(input, output, session) {
     num_dt(r$table)
   })
   output$dm_tbl_csv <- downloadHandler(
-    filename = function() "rmt_dimensionality_magnitude.csv",
+    filename = function() "rasch_dimensionality_magnitude.csv",
     content = function(file) {
       r <- dm_res(); req(!is.null(r))
       write.csv(r$table, file, row.names = FALSE)
@@ -3994,7 +3994,7 @@ server <- function(input, output, session) {
     sprintf('dependence_magnitude(fit, dependent = "%s", independent = "%s")',
             input$dep_item %||% "", input$ind_item %||% ""))
   output$dep_tbl_csv <- downloadHandler(
-    filename = function() "rmt_dependence_thresholds.csv",
+    filename = function() "rasch_dependence_thresholds.csv",
     content = function(file) {
       r <- dep_res(); req(!is.null(r))
       write.csv(r$thresholds, file, row.names = FALSE)
@@ -4020,7 +4020,7 @@ server <- function(input, output, session) {
   })
   register_code("spread_tbl", function() "spread_test(fit)")
   output$spread_tbl_csv <- downloadHandler(
-    filename = function() "rmt_spread_test.csv",
+    filename = function() "rasch_spread_test.csv",
     content = function(file) {
       r <- spread_res(); req(!is.null(r))
       write.csv(r, file, row.names = FALSE)
@@ -4145,15 +4145,15 @@ server <- function(input, output, session) {
                  report_html(f, file))
   }
   output$dl_report <- downloadHandler(
-    filename = function() "rmt_report.html", content = report_content)
+    filename = function() "rasch_report.html", content = report_content)
   output$dl_report_nav <- downloadHandler(
-    filename = function() "rmt_report.html", content = report_content)
+    filename = function() "rasch_report.html", content = report_content)
 
   output$dl_zip <- downloadHandler(
-    filename = function() format(Sys.time(), "rmt_results_%Y%m%d_%H%M.zip"),
+    filename = function() format(Sys.time(), "rasch_results_%Y%m%d_%H%M.zip"),
     content = function(file) {
       f <- fit()
-      tmp <- file.path(tempdir(), paste0("rmt_", as.integer(Sys.time())))
+      tmp <- file.path(tempdir(), paste0("rasch_", as.integer(Sys.time())))
       withProgress(message = "Writing all tables and plots…", value = 0.4, {
         save_outputs(f, tmp,
                      formats = if (length(input$exp_formats)) input$exp_formats else "png",

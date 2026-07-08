@@ -1,4 +1,4 @@
-#' rmt: Pairwise Conditional Rasch Measurement Analysis and Diagnostics
+#' rasch: Pairwise Conditional Rasch Measurement Analysis and Diagnostics
 #'
 #' Pairwise conditional maximum likelihood estimation of dichotomous and
 #' polytomous Rasch models (partial credit and rating scale) after Andrich

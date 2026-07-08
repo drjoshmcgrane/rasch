@@ -1,4 +1,4 @@
-# rmt :: fit statistics
+# rasch :: fit statistics
 # ===========================================================================
 # Test-of-fit statistics for the pairwise analysis: standardised residuals;
 # the log-of-mean-square fit residual of Andrich & Marais (2019, ch. 23)

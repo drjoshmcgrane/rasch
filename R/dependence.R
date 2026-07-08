@@ -1,4 +1,4 @@
-# rmt :: quantifying response dependence
+# rasch :: quantifying response dependence
 # ===========================================================================
 # Two magnitude estimators for local (response) dependence beyond the
 # residual-correlation screen. (1) The magnitude estimate d of Andrich and
@@ -36,7 +36,7 @@
 #' @param dependent,independent Item names or indices: the item hypothesised
 #'   to depend, and the item it depends on. Both must share the same maximum
 #'   score (the formalisation requires it).
-#' @return A list of class \code{"rmt_dependence"}: the estimate \code{d},
+#' @return A list of class \code{"rasch_dependence"}: the estimate \code{d},
 #'   its \code{se}, \code{z} and \code{p} for the hypothesis \eqn{d = 0},
 #'   the per-threshold table \code{thresholds} (columns \code{k},
 #'   \code{delta_lo}, \code{delta_hi}, \code{d_k}, \code{se_k}), and the
@@ -105,12 +105,12 @@ dependence_magnitude <- function(fit, dependent, independent) {
   out <- list(d = d, se = se, z = z, p = 2 * pnorm(-abs(z)),
               thresholds = tab, dependent = nm_j, independent = nm_i,
               refit = refit)
-  class(out) <- "rmt_dependence"
+  class(out) <- "rasch_dependence"
   out
 }
 
 #' @export
-print.rmt_dependence <- function(x, ...) {
+print.rasch_dependence <- function(x, ...) {
   cat(sprintf("Response dependence of %s on %s (Andrich & Kreiner resolution)\n",
               x$dependent, x$independent))
   cat(sprintf("  d = %.3f logits (se %.3f), z = %.2f, p = %s\n",
@@ -169,12 +169,12 @@ spread_test <- function(fit, maxit = 60, tol = 1e-8) {
   out$z <- (out$spread - out$lub) / out$se
   out$dependent <- !is.na(out$lub) & !is.na(out$spread) & out$spread < out$lub
   rownames(out) <- NULL
-  class(out) <- c("rmt_spread", "data.frame")
+  class(out) <- c("rasch_spread", "data.frame")
   out
 }
 
 #' @export
-print.rmt_spread <- function(x, ...) {
+print.rasch_spread <- function(x, ...) {
   cat("Spread-parameter screen (Andrich 1985): spread below the binomial bound indicates dependence\n")
   d <- as.data.frame(x)
   names(d)[names(d) == "lub"] <- "bound"

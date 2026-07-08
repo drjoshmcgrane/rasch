@@ -1,4 +1,4 @@
-# rmt :: summary tables
+# rasch :: summary tables
 # ===========================================================================
 # The test-of-fit and targeting/reliability summaries as tidy two-column
 # tables, so the headline statistics of an analysis can be saved and
@@ -25,7 +25,7 @@
 #' fit_summary_table(rasch(X))
 #' @export
 fit_summary_table <- function(fit) {
-  if (inherits(fit, "rmt_btl")) return(.btl_summary_table(fit))
+  if (inherits(fit, "rasch_btl")) return(.btl_summary_table(fit))
   ss <- fit$summary_stats
   dis <- names(which(vapply(fit$thresholds_diag, function(d)
     !d$ordered && length(d$thresholds) > 1, TRUE)))

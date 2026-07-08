@@ -35,7 +35,7 @@ significant.}
 resolved locations would be too unstable to compare), with a note.}
 }
 \value{
-A list of class \code{"rmt_dif_size"}: \code{levels} (resolved
+A list of class \code{"rasch_dif_size"}: \code{levels} (resolved
   location and SE per level, with its n), \code{pairs} (per comparison:
   difference in logits, SE, z, raw and adjusted p, 95 per cent interval,
   \code{significant}, \code{practical}), the settings, and any notes.

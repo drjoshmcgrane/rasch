@@ -1,4 +1,4 @@
 library(testthat)
-library(rmt)
+library(rasch)
 
-test_check("rmt")
+test_check("rasch")

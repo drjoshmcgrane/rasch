@@ -51,7 +51,7 @@ contrasts); default \code{"holm"}.}
 item's resolution, with a note.}
 }
 \value{
-A list of class \code{"rmt_dif_contrasts"}: \code{table} (one row
+A list of class \code{"rasch_dif_contrasts"}: \code{table} (one row
   per item and contrast: estimate in logits, SE, statistic, df where a t
   test was used, raw and adjusted p, 95 per cent interval,
   \code{significant}, \code{practical}, \code{within}), \code{family}

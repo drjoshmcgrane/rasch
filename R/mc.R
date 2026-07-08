@@ -1,4 +1,4 @@
-# rmt :: multiple choice
+# rasch :: multiple choice
 # ===========================================================================
 # Scoring of raw multiple-choice responses against a key, with the raw
 # responses retained for distractor analysis: per option, the count,
@@ -231,7 +231,7 @@ plot_distractors <- function(fit, item, n_groups = fit$n_groups) {
 #' @param min_n Minimum takers for a distractor to be considered.
 #' @param z Required separation, in standard errors, between a credited
 #'   distractor and the uncredited ones.
-#' @return A list of class \code{"rmt_rescore"}: \code{option_scores}, a
+#' @return A list of class \code{"rasch_rescore"}: \code{option_scores}, a
 #'   data frame (\code{item}, \code{option}, \code{score}) ready for
 #'   \code{rasch(key = )} and covering every observed option of the
 #'   examined items, and \code{evidence}, the distractor analysis with the
@@ -293,12 +293,12 @@ distractor_rescore <- function(fit, items = NULL, min_n = 20, z = 1.96) {
   out <- list(option_scores = do.call(rbind, os),
               evidence = do.call(rbind, ev))
   rownames(out$option_scores) <- rownames(out$evidence) <- NULL
-  class(out) <- "rmt_rescore"
+  class(out) <- "rasch_rescore"
   out
 }
 
 #' @export
-print.rmt_rescore <- function(x, ...) {
+print.rasch_rescore <- function(x, ...) {
   n_credit <- sum(x$option_scores$score > 0 &
                   x$option_scores$score < ave(x$option_scores$score,
                                               x$option_scores$item,

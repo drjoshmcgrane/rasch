@@ -1,4 +1,4 @@
-# rmt :: extended frame of reference model
+# rasch :: extended frame of reference model
 # ===========================================================================
 # Humphry's extended frame of reference model (Humphry 2005; Humphry &
 # Andrich 2008). A frame F_sg is one item-set by person-group cell, with
@@ -802,7 +802,7 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
 
 #' @export
 print.rasch_efrm <- function(x, ...) {
-  cat(sprintf("rmt extended frame of reference analysis: %d items in %d set(s) x %d group(s) = %d frames, %d persons\n",
+  cat(sprintf("rasch extended frame of reference analysis: %d items in %d set(s) x %d group(s) = %d frames, %d persons\n",
               length(x$set_of), nrow(x$alpha_table), nrow(x$phi_table),
               nrow(x$frames), nrow(x$X)))
   cat(sprintf("Within-frame pairwise conditional ML: %s in %d iterations\n",

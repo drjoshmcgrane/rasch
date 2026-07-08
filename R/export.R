@@ -1,4 +1,4 @@
-# rmt :: export
+# rasch :: export
 # ===========================================================================
 # save_outputs() writes the complete analysis to disk: every table as CSV,
 # every plot as PNG (and optionally PDF), and a plain-text summary. The
@@ -34,7 +34,7 @@
     on.exit(dev.off(), add = TRUE)
     for (f in thunks) tryCatch(f(), error = function(e) invisible())
   } else if (ext == "zip") {
-    dir <- tempfile("rmt_plots_"); dir.create(dir)
+    dir <- tempfile("rasch_plots_"); dir.create(dir)
     on.exit(unlink(dir, recursive = TRUE), add = TRUE)
     paths <- character(0)
     for (j in seq_along(thunks)) {
@@ -452,7 +452,7 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
     "<div class='wrap'>",
     "<h1>", title, "</h1>",
     "<p class='meta'>", format(Sys.time(), "%Y-%m-%d %H:%M"),
-    " &middot; rmt ", as.character(utils::packageVersion("rmt")), "</p>",
+    " &middot; rasch ", as.character(utils::packageVersion("rasch")), "</p>",
     "<p>", chips, "</p>",
     "<h2>Summary</h2>", summ,
     "<h2>Targeting</h2>",

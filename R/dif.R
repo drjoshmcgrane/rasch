@@ -1,4 +1,4 @@
-# rmt :: differential item functioning
+# rasch :: differential item functioning
 # ===========================================================================
 # DIF by analysis of variance of the standardised residuals (Hagquist &
 # Andrich 2017). For each item, residuals are analysed by person factor and
@@ -368,12 +368,12 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
               effects = effects, alpha = alpha, p_adjust = p_adjust)
   if (!is.null(tukey_note)) out$tukey_note <- tukey_note
   if (isTRUE(sizes)) out$sizes <- size_tab
-  class(out) <- "rmt_dif"
+  class(out) <- "rasch_dif"
   out
 }
 
 #' @export
-print.rmt_dif <- function(x, ...) {
+print.rasch_dif <- function(x, ...) {
   s <- x$summary
   cat(sprintf("DIF by residual analysis of variance (%s; %d class intervals%s)\n",
               if (length(unique(s$term)) > length(unique(s$item)) ||
@@ -431,7 +431,7 @@ print.rmt_dif <- function(x, ...) {
 #'   significant.
 #' @param min_n Levels with fewer responders to the item are dropped (their
 #'   resolved locations would be too unstable to compare), with a note.
-#' @return A list of class \code{"rmt_dif_size"}: \code{levels} (resolved
+#' @return A list of class \code{"rasch_dif_size"}: \code{levels} (resolved
 #'   location and SE per level, with its n), \code{pairs} (per comparison:
 #'   difference in logits, SE, z, raw and adjusted p, 95 per cent interval,
 #'   \code{significant}, \code{practical}), the settings, and any notes.
@@ -523,12 +523,12 @@ dif_size <- function(fit, item, by, p_adjust = "holm", alpha = 0.05,
   out <- list(item = item, by = paste(names(factors), collapse = ":"),
               levels = levels_df, pairs = pairs, alpha = alpha,
               p_adjust = p_adjust, flag_logits = flag_logits, notes = notes)
-  class(out) <- "rmt_dif_size"
+  class(out) <- "rasch_dif_size"
   out
 }
 
 #' @export
-print.rmt_dif_size <- function(x, ...) {
+print.rasch_dif_size <- function(x, ...) {
   cat(sprintf("DIF size for %s by %s (resolved locations, logits)\n",
               x$item, x$by))
   lv <- x$levels; lv[-1] <- lapply(lv[-1], round, 3)
@@ -761,7 +761,7 @@ print.rmt_dif_size <- function(x, ...) {
 #' @param flag_logits Absolute estimate flagged as practically significant.
 #' @param min_n Cells with fewer responders to an item are dropped from that
 #'   item's resolution, with a note.
-#' @return A list of class \code{"rmt_dif_contrasts"}: \code{table} (one row
+#' @return A list of class \code{"rasch_dif_contrasts"}: \code{table} (one row
 #'   per item and contrast: estimate in logits, SE, statistic, df where a t
 #'   test was used, raw and adjusted p, 95 per cent interval,
 #'   \code{significant}, \code{practical}, \code{within}), \code{family}
@@ -937,12 +937,12 @@ dif_contrasts <- function(fit, factors = NULL, items = NULL, within = NULL,
   out <- list(table = tab, family = fam_df, within = within,
               paired = paired, alpha = alpha, p_adjust = p_adjust,
               flag_logits = flag_logits, notes = unique(notes))
-  class(out) <- "rmt_dif_contrasts"
+  class(out) <- "rasch_dif_contrasts"
   out
 }
 
 #' @export
-print.rmt_dif_contrasts <- function(x, ...) {
+print.rasch_dif_contrasts <- function(x, ...) {
   cat("Planned DIF contrasts (", nrow(x$family), " questions x ",
       length(unique(x$table$item)), " items; ", x$p_adjust,
       " over the family)\n", sep = "")

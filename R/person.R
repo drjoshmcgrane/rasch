@@ -1,4 +1,4 @@
-# rmt :: person estimation
+# rasch :: person estimation
 # ===========================================================================
 # Warm (1989) weighted likelihood person estimates. The WLE is finite at the
 # extreme (zero and maximum) raw scores, so extreme persons receive usable

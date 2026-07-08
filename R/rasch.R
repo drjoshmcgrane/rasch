@@ -1,4 +1,4 @@
-# rmt :: top-level analysis
+# rasch :: top-level analysis
 # ===========================================================================
 # rasch() ties the engine together: data preparation (with category
 # collapsing and constant-item removal, recorded as notes), pairwise
@@ -361,7 +361,7 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
 
 #' @export
 print.rasch <- function(x, ...) {
-  cat(sprintf("rmt %s analysis: %d items, %d persons\n",
+  cat(sprintf("rasch %s analysis: %d items, %d persons\n",
               x$model, ncol(x$X), nrow(x$X)))
   cat(sprintf("Pairwise conditional ML (Andrich & Luo): %s in %d iterations\n",
               if (x$est$converged) "converged" else "NOT converged",

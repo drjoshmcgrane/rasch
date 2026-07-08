@@ -14,7 +14,7 @@ to depend, and the item it depends on. Both must share the same maximum
 score (the formalisation requires it).}
 }
 \value{
-A list of class \code{"rmt_dependence"}: the estimate \code{d},
+A list of class \code{"rasch_dependence"}: the estimate \code{d},
   its \code{se}, \code{z} and \code{p} for the hypothesis \eqn{d = 0},
   the per-threshold table \code{thresholds} (columns \code{k},
   \code{delta_lo}, \code{delta_hi}, \code{d_k}, \code{se_k}), and the

@@ -1,4 +1,4 @@
-url: https://drjoshmcgrane.github.io/rmt/
+url: https://drjoshmcgrane.github.io/rasch/
 
 template:
   bootstrap: 5
@@ -14,7 +14,7 @@ template:
     pkgdown-nav-height: 72px
 
 home:
-  title: rmt — Rasch Measurement Theory in R
+  title: rasch — Rasch Measurement Theory in R
   description: >
     Pairwise conditional estimation of the Rasch model family — partial
     credit, rating scale, many-facet, extended frame of reference, and
@@ -29,9 +29,9 @@ home:
       links:
         title: Links
         text: |
-          [Browse source code](https://github.com/drjoshmcgrane/rmt)
+          [Browse source code](https://github.com/drjoshmcgrane/rasch)
 
-          [Report a bug](https://github.com/drjoshmcgrane/rmt/issues)
+          [Report a bug](https://github.com/drjoshmcgrane/rasch/issues)
 
 navbar:
   structure:

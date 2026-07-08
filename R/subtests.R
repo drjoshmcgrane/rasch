@@ -1,4 +1,4 @@
-# rmt :: structure amendments (subtests and item splitting)
+# rasch :: structure amendments (subtests and item splitting)
 # ===========================================================================
 # Two standard remedies applied by re-analysis. Local dependence: combine the
 # dependent items into a single polytomous super-item (the subtest) whose
@@ -154,7 +154,7 @@ split_items <- function(fit, items, by) {
 #'   not artificial DIF). Default \code{max(3, items / 4)}.
 #' @param max_splits Hard cap on the number of splits. Default: the number
 #'   of items.
-#' @return A list of class \code{"rmt_resolve_dif"}: the final resolved
+#' @return A list of class \code{"rasch_resolve_dif"}: the final resolved
 #'   \code{fit}, the \code{splits} performed (order, item, factor, partial
 #'   eta-squared, DIF magnitude in logits), the \code{stopped} reason, and
 #'   the residual \code{dif} table for the final fit.
@@ -243,12 +243,12 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "BH",
   out <- list(fit = cur, splits = split_df, n_splits = nrow(split_df),
               stopped = stopped,
               n_remaining_dif = if (is.null(final_dif)) 0L else nrow(final_dif))
-  class(out) <- "rmt_resolve_dif"
+  class(out) <- "rasch_resolve_dif"
   out
 }
 
 #' @export
-print.rmt_resolve_dif <- function(x, ...) {
+print.rasch_resolve_dif <- function(x, ...) {
   cat(sprintf("Iterative DIF resolution: %d split(s); %s\n",
               x$n_splits, x$stopped))
   if (x$n_splits) {

@@ -1,4 +1,4 @@
-# rmt :: Bradley-Terry-Luce paired comparisons
+# rasch :: Bradley-Terry-Luce paired comparisons
 # ===========================================================================
 # The Bradley-Terry-Luce model (Bradley & Terry 1952; Luce 1959) for paired
 # comparisons: Pr{a beats b} = exp(beta_a - beta_b) / (1 + exp(...)). This
@@ -132,7 +132,7 @@
 #'   \code{"error"}. With graded responses, code ties as a middle
 #'   category instead.
 #' @param maxit,tol Newton-Raphson iteration cap and convergence tolerance.
-#' @return A list of class \code{"rmt_btl"}: \code{objects} (location, se,
+#' @return A list of class \code{"rasch_btl"}: \code{objects} (location, se,
 #'   comparisons, wins -- or the graded \code{score} -- infit and outfit
 #'   mean squares, fit residual and its df),
 #'   \code{pairs} (per pair: n, observed and expected win proportions --
@@ -338,7 +338,7 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
 }
 
 #' @export
-print.rmt_btl <- function(x, ...) {
+print.rasch_btl <- function(x, ...) {
   cat(sprintf("Bradley-Terry-Luce analysis: %d objects, %.0f comparisons%s\n",
               nrow(x$objects), x$n_comparisons,
               if (!is.null(x$judges)) sprintf(", %d judges", nrow(x$judges)) else ""))
@@ -823,7 +823,7 @@ plot_btl <- function(fit, band = 2.5) {
                 cmp
               },
               notes = notes)
-  class(out) <- "rmt_btl"
+  class(out) <- "rasch_btl"
   out
 }
 
@@ -1153,7 +1153,7 @@ plot_btl_dependence <- function(fit, effect = c("exposure", "carry_over"),
 #' @param min_n Term cells with fewer comparisons involving the object are
 #'   dropped from its resolution, with a note.
 #' @param maxit,tol Newton controls for the resolution refits.
-#' @return A list of class \code{"rmt_btl_dif"}: \code{summary} (one row per
+#' @return A list of class \code{"rasch_btl_dif"}: \code{summary} (one row per
 #'   object and group term with the uniform F, adjusted p and partial
 #'   eta-squared -- the term itself -- the non-uniform ones -- the term
 #'   crossed with the opponent band -- plus \code{uniform_DIF},
@@ -1269,7 +1269,8 @@ btl_dif <- function(fit, factors, objects = NULL,
       form <- stats::as.formula(
         paste("z ~ (", paste(safe, collapse = op), ")"))
     }
-    av <- tryCatch(stats::anova(stats::lm(form, data = d, weights = w)),
+    # weights referenced as d$w (not bare w) so static checks see the binding
+    av <- tryCatch(stats::anova(stats::lm(form, data = d, weights = d$w)),
                    error = function(e) NULL)
     if (is.null(av)) next
     rss <- av["Residuals", "Sum Sq"]
@@ -1443,12 +1444,12 @@ btl_dif <- function(fit, factors, objects = NULL,
               sizes = sizes, effects = effects, factors = fnames,
               alpha = alpha, p_adjust = p_adjust, flag_logits = flag_logits,
               notes = unique(notes))
-  class(out) <- "rmt_btl_dif"
+  class(out) <- "rasch_btl_dif"
   out
 }
 
 #' @export
-print.rmt_btl_dif <- function(x, ...) {
+print.rasch_btl_dif <- function(x, ...) {
   nf <- length(x$factors)
   cat(sprintf("DIF for paired comparisons: %d factor(s) [%s], %s effects\n",
               nf, paste(x$factors, collapse = ", "), x$effects))

@@ -1,4 +1,4 @@
-# rmt :: shared display formatting
+# rasch :: shared display formatting
 # ===========================================================================
 # One formatting vocabulary for every surface that prints results (console
 # methods, the HTML report, and the app): probabilities below the display

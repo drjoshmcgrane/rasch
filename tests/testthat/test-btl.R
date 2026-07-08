@@ -343,7 +343,7 @@ test_that("btl_dif finds a planted judge-group effect on the right object only",
                   d$a, d$b)
   f <- btl(d, "a", "b", winner = "win", judge = "judge")
   dif <- btl_dif(f, grp)
-  expect_s3_class(dif, "rmt_btl_dif")
+  expect_s3_class(dif, "rasch_btl_dif")
   # summary route: a single factor gives one "group" term, only S06 flagged
   expect_true(dif$summary$uniform_DIF[dif$summary$object == "S06"])
   expect_equal(sum(dif$summary$uniform_DIF), 1L)
@@ -654,7 +654,7 @@ test_that("NA judges are dropped with a note, not a crash (M2)", {
   d$judge <- sample(c("J1", "J2", "J3", NA), nrow(d), TRUE)
   d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b]), d$a, d$b)
   f <- btl(d, "a", "b", winner = "win", judge = "judge")
-  expect_s3_class(f, "rmt_btl")
+  expect_s3_class(f, "rasch_btl")
   expect_true(any(grepl("dropped", f$notes)))
   expect_false(anyNA(f$comparisons$judge))
 })

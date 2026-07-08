@@ -1,4 +1,14 @@
-# rmt 1.3.0
+# rasch 1.3.1
+
+* The package is now called **rasch** (it was developed under the working
+  title `rmt`). The name `rmt` belongs to an unrelated package on CRAN, and
+  `rasch` says plainly what this is -- and mirrors `mirt::mirt()` with
+  `rasch::rasch()`. No functions, arguments, or results change; only the
+  package and library name. The auxiliary result classes were unified under
+  the `rasch_` prefix (`rasch_btl`, `rasch_dif`, ...) to match the fit
+  classes.
+
+# rasch 1.3.0
 
 A full statistical audit of the independence, invariance, and paired-
 comparison procedures, with fixes throughout.
@@ -35,7 +45,7 @@ comparison procedures, with fixes throughout.
   dependence panel explains dropped effects, and fit flags are consistent
   on every table (fit residual |2.5|; outfit 0.7-1.3; infit 0.8-1.2).
 
-# rmt 1.2.0
+# rasch 1.2.0
 
 * `plot_pca_biplot()` draws the item loadings on the first two residual
   principal components -- the pair that usually carries any interpretable
@@ -61,7 +71,7 @@ comparison procedures, with fixes throughout.
 * `resolve_dif()` resolves DIF iteratively by item splitting, largest
   effect first, to clear artificial DIF.
 
-# rmt 1.0.0
+# rasch 1.0.0
 
 First stable release. The package delivers a complete Rasch Measurement
 Theory workflow built entirely from published measurement theory, with a

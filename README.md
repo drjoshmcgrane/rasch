@@ -1,11 +1,11 @@
-# rmt — Rasch Measurement Theory in R
+# rasch — Rasch Measurement Theory in R
 
 <!-- badges: start -->
-[![R-CMD-check](https://github.com/drjoshmcgrane/rmt/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/drjoshmcgrane/rmt/actions/workflows/R-CMD-check.yaml)
-[![pkgdown](https://github.com/drjoshmcgrane/rmt/actions/workflows/pkgdown.yaml/badge.svg)](https://drjoshmcgrane.github.io/rmt/)
+[![R-CMD-check](https://github.com/drjoshmcgrane/rasch/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/drjoshmcgrane/rasch/actions/workflows/R-CMD-check.yaml)
+[![pkgdown](https://github.com/drjoshmcgrane/rasch/actions/workflows/pkgdown.yaml/badge.svg)](https://drjoshmcgrane.github.io/rasch/)
 <!-- badges: end -->
 
-**rmt** is a Rasch Measurement Theory engine for R, built entirely from
+**rasch** is a Rasch Measurement Theory engine for R, built entirely from
 published measurement theory. Items are estimated by pairwise conditional
 maximum likelihood (Andrich & Luo 2003; Zwinderman 1995) with Godambe
 sandwich standard errors, persons by Warm's (1989) weighted likelihood, and
@@ -13,10 +13,10 @@ the complete diagnostic apparatus follows the conventions of Andrich &
 Marais (2019). A modern Shiny interface exposes every analysis with the
 reproducing R code attached to every output.
 
-**Documentation:** <https://drjoshmcgrane.github.io/rmt/>
+**Documentation:** <https://drjoshmcgrane.github.io/rasch/>
 
 <p align="center">
-  <img src="man/figures/app-trait.png" alt="The rmt Shiny interface: residual principal components with loadings table and biplot" width="90%" />
+  <img src="man/figures/app-trait.png" alt="The rasch Shiny interface: residual principal components with loadings table and biplot" width="90%" />
 </p>
 
 ## Highlights
@@ -56,7 +56,7 @@ reproducing R code attached to every output.
 
 ```r
 # install.packages("remotes")
-remotes::install_github("drjoshmcgrane/rmt")
+remotes::install_github("drjoshmcgrane/rasch")
 ```
 
 The analysis engine is base R only (`stats`, `graphics`, `grDevices`,
@@ -65,7 +65,7 @@ The analysis engine is base R only (`stats`, `graphics`, `grDevices`,
 ## Quick start
 
 ```r
-library(rmt)
+library(rasch)
 
 # a persons-by-items data frame; item names, an ID column, and person
 # factors carry through the whole analysis
@@ -95,7 +95,7 @@ and constant items dropped, with notes recorded on the fit.
 ## The Shiny interface
 
 ```r
-rmt::run_app()
+rasch::run_app()
 ```
 
 A guided bslib (Bootstrap 5) workflow: one-tap example datasets, grouped
@@ -103,7 +103,7 @@ run settings, status badges once a fit exists, and dark mode. Every plot
 and table lives in a full-screen-capable card with downloads; master–detail
 explorers drive the item, person, and DIF pages; dynamic notes summarise
 each table's verdict in words; and an "R code for this analysis" panel
-shows the exact `rmt` call reproducing the current run. Wide, long (rated),
+shows the exact `rasch` call reproducing the current run. Wide, long (rated),
 frame-of-reference, and paired-comparison data layouts are all supported,
 including anchor upload for equating and one-click structural remedies
 (subtests, item splitting, automatic DIF resolution) with in-place reset.

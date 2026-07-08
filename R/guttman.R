@@ -1,4 +1,4 @@
-# rmt :: Guttman display
+# rasch :: Guttman display
 # ===========================================================================
 # The Guttman (1944) scalogram: persons and items are sorted by location, so
 # under a perfectly deterministic (Guttman) response pattern the matrix splits
@@ -51,7 +51,7 @@ guttman_table <- function(fit) {
     errors <- errors + sum(abs(obs[ok] - pred))
     total  <- total + sum(cap)
   }
-  structure(class = "rmt_guttman", list(matrix = G, person_order = porder, item_order = iorder,
+  structure(class = "rasch_guttman", list(matrix = G, person_order = porder, item_order = iorder,
        CR = 1 - errors / total, errors = errors, responses = total))
 }
 
@@ -99,7 +99,7 @@ plot_guttman <- function(fit, max_persons = 80) {
 
 
 #' @export
-print.rmt_guttman <- function(x, ...) {
+print.rasch_guttman <- function(x, ...) {
   cat(sprintf("Guttman scalogram: %d persons x %d items (difficulty-ordered)\n",
               nrow(x$matrix), ncol(x$matrix)))
   cat(sprintf("Coefficient of reproducibility %.3f (%d error(s) in %d responses)\n",

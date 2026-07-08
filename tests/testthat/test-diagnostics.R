@@ -132,7 +132,7 @@ test_that("the scree reference is model-simulated and calibrated", {
   f1 <- rasch(X)
   pc1 <- residual_pca(f1, 10)
   set.seed(101)
-  ref1 <- rmt:::.scree_reference(f1, nrow(pc1$eigen_table), 20)
+  ref1 <- rasch:::.scree_reference(f1, nrow(pc1$eigen_table), 20)
   expect_lt(abs(pc1$eigen_table$eigenvalue[1] / ref1[1] - 1), 0.10)
 
   set.seed(2); thA <- rnorm(Np, 0, 1.4)
@@ -144,7 +144,7 @@ test_that("the scree reference is model-simulated and calibrated", {
   f2 <- rasch(X2)
   pc2 <- residual_pca(f2, 10)
   set.seed(102)
-  ref2 <- rmt:::.scree_reference(f2, nrow(pc2$eigen_table), 20)
+  ref2 <- rasch:::.scree_reference(f2, nrow(pc2$eigen_table), 20)
   expect_gt(pc2$eigen_table$eigenvalue[1], 1.3 * ref2[1])
   pdf(NULL); on.exit(dev.off())
   expect_no_error(plot_scree(f2, reps = 5))
