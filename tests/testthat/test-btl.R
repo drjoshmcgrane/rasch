@@ -714,3 +714,35 @@ test_that("btl_transitivity and btl_dimensionality read one-D vs a swirl", {
   expect_gt(t3$summary$circular_rate, 0.25)   # worse than chance
   expect_lt(t3$summary$consistency, 0)
 })
+
+test_that("judge_surprise flags a judge's systematic contrary judgements", {
+  set.seed(1); K <- 8; objs <- sprintf("O%d", 1:K)
+  beta <- setNames(seq(-1.5, 1.5, length.out = K), objs)
+  jids <- sprintf("J%d", 1:8); pr <- t(combn(objs, 2))
+  d <- data.frame(a = rep(pr[, 1], each = 12), b = rep(pr[, 2], each = 12))
+  d$judge <- sample(jids, nrow(d), TRUE)
+  d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b]), d$a, d$b)
+  # J1 is contrarian on the extremes: always backs the weakest (O1), always
+  # sinks the strongest (O8)
+  b <- d$judge == "J1"
+  d$win[b & (d$a == "O1" | d$b == "O1")] <- "O1"
+  d$win[b & d$a == "O8"] <- d$b[b & d$a == "O8"]
+  d$win[b & d$b == "O8"] <- d$a[b & d$b == "O8"]
+  f <- btl(d, "a", "b", "win", judge = "judge")
+
+  js <- judge_surprise(f, "J1")
+  expect_s3_class(js, "rasch_btl_judge")
+  s <- js$objects[js$objects$surprise, ]
+  expect_true(all(c("O1", "O8") %in% s$object))          # both extremes flagged
+  # correct direction: O8 strong under-rated (z<0), O1 weak over-rated (z>0)
+  expect_lt(js$objects$z[js$objects$object == "O8"], 0)
+  expect_gt(js$objects$z[js$objects$object == "O1"], 0)
+  expect_equal(js$objects$type[js$objects$object == "O8"],
+               "strong object under-rated")
+  # a model-conforming judge shows no systematic surprise
+  expect_equal(sum(judge_surprise(f, "J3")$objects$surprise), 0L)
+
+  pdf(NULL); on.exit(dev.off())
+  expect_no_error(plot_btl_judge_map(f, "J1"))
+  expect_error(judge_surprise(f, "nobody"), "no comparisons")
+})

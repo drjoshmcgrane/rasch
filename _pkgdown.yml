@@ -126,6 +126,7 @@ reference:
   - btl_dif
   - btl_transitivity
   - btl_dimensionality
+  - judge_surprise
   - plot_btl
   - plot_btl_categories
   - plot_btl_icc
@@ -133,6 +134,7 @@ reference:
   - plot_btl_transitivity
   - plot_btl_scree
   - plot_btl_dim_map
+  - plot_btl_judge_map
 
 - title: Plots
   desc: One plotting function per display, all base graphics.

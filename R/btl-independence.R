@@ -412,3 +412,135 @@ plot_btl_dim_map <- function(x, ...) {
   points(d$x, d$y, pch = 21, bg = .rr$blue, col = "white", cex = cex)
   text(d$x, d$y, d$object, pos = 3, cex = 0.8, col = .rr$ink, offset = 0.5)
 }
+
+#' Unexpected judgements of one judge
+#'
+#' The paired-comparison counterpart of the kidmap. A judge has no ability to
+#' condition on, so the reference is the consensus object scale (the pooled
+#' locations). For the nominated judge, each object it met is given a
+#' standardised residual oriented to the object -- how much more (\code{z > 0},
+#' over-rated) or less (\code{z < 0}, under-rated) that judge favoured it than
+#' its consensus location predicts. A surprise is an object the judge treated
+#' against its standing: a strong object under-rated, or a weak object
+#' over-rated (residual opposite in sign to the location), beyond
+#' \code{flag_z} and seen at least \code{min_n} times.
+#'
+#' @param fit A paired-comparison fit from \code{\link{btl}} with judges.
+#' @param judge The judge to profile (a value of the fit's judge column).
+#' @param min_n Objects met fewer times are shown but never flagged.
+#' @param flag_z Absolute residual at or beyond which a contrary judgement is
+#'   flagged unexpected.
+#' @return A list of class \code{"rasch_btl_judge"}: \code{objects} (per object
+#'   met: location, times met \code{n}, residual \code{z}, \code{surprise} flag
+#'   and its \code{type}); \code{all_locations} (every object, for orientation);
+#'   the \code{judge} and settings.
+#' @examples
+#' set.seed(1); objs <- LETTERS[1:6]; beta <- setNames(seq(-1.5, 1.5, len = 6), objs)
+#' pr <- t(utils::combn(objs, 2))
+#' d <- data.frame(a = rep(pr[, 1], each = 12), b = rep(pr[, 2], each = 12))
+#' d$judge <- sample(paste0("J", 1:5), nrow(d), TRUE)
+#' d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b]), d$a, d$b)
+#' judge_surprise(btl(d, "a", "b", "win", judge = "judge"), "J1")
+#' @export
+judge_surprise <- function(fit, judge, min_n = 2L, flag_z = 1.96) {
+  if (!inherits(fit, "rasch_btl")) stop("not a paired-comparison (btl) fit")
+  cmp <- fit$comparisons
+  if (all(is.na(cmp$judge))) stop("no judges in this fit")
+  judge <- as.character(judge)
+  sel <- which(!is.na(cmp$judge) & as.character(cmp$judge) == judge)
+  if (!length(sel)) stop("no comparisons for judge ", judge)
+  objs <- fit$objects$object; K <- length(objs); m <- fit$m
+  beta <- setNames(fit$objects$location, objs)
+  tau <- if (m > 1L) fit$thresholds$tau else NULL
+  moments <- function(dd) if (m == 1L) {
+    p <- stats::plogis(dd); list(E = p, V = p * (1 - p))
+  } else { mo <- item_moments(dd, tau); list(E = mo$E, V = mo$V) }
+
+  d <- cmp[sel, , drop = FALSE]
+  ia <- match(d$object_a, objs); ib <- match(d$object_b, objs)
+  obs <- exq <- vr <- nn <- numeric(K)
+  for (r in seq_len(nrow(d))) {
+    a <- ia[r]; b <- ib[r]; w <- d$weight[r]; x <- d$response[r]
+    ma <- moments(beta[a] - beta[b])
+    obs[a] <- obs[a] + w * x;         exq[a] <- exq[a] + w * ma$E
+    vr[a]  <- vr[a]  + w * ma$V;      nn[a]  <- nn[a]  + w
+    mb <- moments(beta[b] - beta[a])
+    obs[b] <- obs[b] + w * (m - x);   exq[b] <- exq[b] + w * mb$E
+    vr[b]  <- vr[b]  + w * mb$V;      nn[b]  <- nn[b]  + w
+  }
+  keep <- nn > 0
+  z <- (obs - exq) / sqrt(pmax(vr, 1e-9))
+  o <- data.frame(object = objs, location = unname(beta), n = nn,
+                  z = z)[keep, , drop = FALSE]
+  # a surprise: residual opposite in sign to the location (the judge pushed
+  # the object against its consensus standing), large enough, and seen enough
+  o$surprise <- abs(o$z) >= flag_z & o$n >= min_n & o$z * o$location < 0
+  o$type <- ifelse(!o$surprise, "",
+                   ifelse(o$location > 0, "strong object under-rated",
+                          "weak object over-rated"))
+  o <- o[order(-abs(o$z)), ]; rownames(o) <- NULL
+  structure(list(judge = judge, objects = o, all_locations = beta,
+                 n_comparisons = length(sel), flag_z = flag_z, min_n = min_n),
+            class = "rasch_btl_judge")
+}
+
+#' @export
+print.rasch_btl_judge <- function(x, ...) {
+  cat(sprintf("Judge %s: %d comparisons over %d objects\n",
+              x$judge, x$n_comparisons, nrow(x$objects)))
+  s <- x$objects[x$objects$surprise, , drop = FALSE]
+  if (nrow(s)) {
+    cat("Unexpected judgements:\n")
+    for (i in seq_len(nrow(s)))
+      cat(sprintf("  %-6s (loc %+.2f): z = %+.2f  [%s]\n",
+                  s$object[i], s$location[i], s$z[i], s$type[i]))
+  } else cat("No object judged against its consensus standing.\n")
+  invisible(x)
+}
+
+#' Unexpected-judgement map for one judge
+#'
+#' The judge counterpart of \code{\link{plot_icc}}'s kidmap. Each object the
+#' judge met is placed by its consensus location (vertical, strong at top) and
+#' by the judge's residual for it (horizontal; zero, the dashed line, is
+#' judged as the scale predicts). The shaded strip is the expected zone; the
+#' rug on the axis marks every object's location. Objects the judge treated
+#' against their standing -- a strong object under-rated (upper left) or a
+#' weak object over-rated (lower right) -- are drawn in red and labelled; dot
+#' size grows with how often the judge met the object.
+#'
+#' @param fit A paired-comparison fit from \code{\link{btl}} with judges.
+#' @param judge The judge to map.
+#' @param min_n,flag_z Passed to \code{\link{judge_surprise}}.
+#' @param ... Unused.
+#' @return Called for its plotting side effect; invisibly the
+#'   \code{rasch_btl_judge} object.
+#' @export
+plot_btl_judge_map <- function(fit, judge, min_n = 2L, flag_z = 1.96, ...) {
+  js <- judge_surprise(fit, judge, min_n = min_n, flag_z = flag_z)
+  o <- js$objects
+  if (!nrow(o)) stop("this judge made no usable comparisons")
+  xr <- max(abs(o$z), flag_z * 1.3)
+  yr <- range(js$all_locations)
+  op <- .rr_canvas(c(-xr, xr) * 1.08,
+                   yr + c(-1, 1) * (0.12 * diff(yr) + 0.2),
+                   "Judge residual   (under-rated  <-  0  ->  over-rated)",
+                   "Object location (logits)",
+                   main = sprintf("Judge %s  ·  %d comparisons",
+                                  js$judge, js$n_comparisons))
+  on.exit(par(op))
+  u <- par("usr")
+  rect(-flag_z, u[3], flag_z, u[4], col = "#94a3b81f", border = NA)  # expected
+  abline(v = 0, col = .rr$soft, lwd = 1.2, lty = 2)
+  rug(js$all_locations, side = 2, col = .rr$grid, lwd = 1.4)          # all objs
+  col <- ifelse(o$surprise, .rr$red, .rr$blue)
+  rng <- diff(range(o$n))
+  cex <- 1.1 + 1.9 * (o$n - min(o$n)) / (if (rng > 0) rng else 1)
+  points(o$z, o$location, pch = 21, bg = col, col = "white", cex = cex)
+  lab <- o$surprise | nrow(o) <= 12
+  text(o$z[lab], o$location[lab], o$object[lab], pos = 4, offset = 0.5,
+       cex = 0.75, col = ifelse(o$surprise[lab], .rr$red, .rr$ink))
+  .rr_legend("bottomright", c("unexpected", "as expected"), pch = 21,
+             pt.bg = c(.rr$red, .rr$blue), col = "white")
+  invisible(js)
+}

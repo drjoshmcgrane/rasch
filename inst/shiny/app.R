@@ -896,8 +896,13 @@ panel_persons <- nav_panel("Persons", value = "p_persons", icon = bs_icon("peopl
           title = span("Judge fit",
             info_icon("An erratic judge carries a large positive fit residual, exactly as an erratic person does; the log-of-mean-square residual and infit/outfit are pooled over the judge's comparisons.")),
           value = "btl_judge_fit",
-          tableCard("btl_judges_tbl",
-                    controls = cols_switch("btl_judges_full"))),
+          layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+            tableCard("btl_judges_tbl",
+                      note = "Click a row to map that judge's unexpected judgements.",
+                      controls = cols_switch("btl_judges_full")),
+            plotCard("btl_judge_map", title = "Unexpected judgements",
+                     info = "The judge counterpart of the kidmap. Each object the judge met is placed by its consensus location (vertical) and by the judge's residual for it (horizontal; 0 = judged as the scale predicts). A strong object the judge under-rated (upper left) or a weak object over-rated (lower right) is an unexpected judgement, drawn red; dot size grows with how often the judge met the object.",
+                     height = "460px"))),
         accordion_panel(
           title = span("Judge consistency",
             info_icon("The paired-comparison counterpart of person fit. A judge whose choices form many preference loops (prefers A over B, B over C, then C over A) is internally inconsistent - not measuring on a single scale. Consistency is 1 minus the judge's circular-triad rate over the chance rate; 1 is one clean order, 0 is guessing.")),
@@ -1171,7 +1176,7 @@ panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
                     note = "Strength, share of the total residual, and the noise reference (mean and 95th percentile) for the leading bimension.")),
         accordion_panel(
           title = span("Preference loops",
-            info_icon("The single-dimension check. If one attribute drives the contests, preferences stack into one order: A beats B and B beats C implies A beats C. A loop (A beats B, B beats C, C beats A) is a contradiction, like rock-paper-scissors. The loop rate is set against pure guessing (a quarter of triples); consistency is 1 minus loop-rate over chance. Each judge's own consistency is on the Persons tab.")),
+            info_icon("The single-dimension check. If one attribute drives the contests, preferences stack into one order: A beats B and B beats C implies A beats C. A loop (A beats B, B beats C, C beats A) is a contradiction, like rock-paper-scissors. The loop rate is set against pure guessing (a quarter of triples); consistency is 1 minus loop-rate over chance.")),
           value = "btl_dim_loops",
           layout_columns(col_widths = breakpoints(sm = 12, lg = c(7, 5)),
             tableCard("btl_trans_tbl", title = "Transitivity summary",
@@ -3414,8 +3419,20 @@ server <- function(input, output, session) {
     validate(need(!is.null(bfit()$judges), "No judge column was nominated."))
     d <- bfit()$judges
     d$misfit <- ifelse(!is.na(d$fit_resid) & abs(d$fit_resid) > 2.5, "*", "")
-    num_dt(curate(d, "btl_judge", full = isTRUE(input$btl_judges_full)))
+    num_dt(curate(d, "btl_judge", full = isTRUE(input$btl_judges_full)),
+           selection = "single")
   }, code = function() "bt$judges")
+  # the judge whose surprise map is drawn: the selected row, defaulting to 1
+  # (master-detail, exactly as the person table drives the kidmap)
+  sel_judge <- reactive({
+    j <- bfit()$judges; req(!is.null(j))
+    n <- input$btl_judges_tbl_rows_selected
+    as.character(j$judge[if (length(n)) n[1] else 1L])
+  })
+  register_plot("btl_judge_map",
+                function() plot_btl_judge_map(bfit(), sel_judge()),
+                w = 7, h = 5.5, code = function()
+                  sprintf('plot_btl_judge_map(bt, "%s")', sel_judge()))
   register_plot("btl_plot", function() plot_btl(bfit()),
                 code = function() "# bt from the Data page\nplot_btl(bt)")
   # object characteristic curve: model expected response against opponent

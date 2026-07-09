@@ -1,3 +1,16 @@
+# rasch 1.5.0
+
+* `judge_surprise()` and `plot_btl_judge_map()`: the paired-comparison
+  counterpart of the kidmap. A judge has no ability to condition on, so the
+  reference is the consensus object scale; each object a judge met gets a
+  standardised residual saying how much more or less that judge favoured it
+  than its location predicts. A strong object the judge under-rated, or a
+  weak object over-rated, is an unexpected judgement. It catches systematic
+  bias -- a distinct failure mode from the noise that judge fit and judge
+  consistency flag. In the Shiny app the Persons > Judge fit panel is now a
+  master-detail: the judges table drives the selected judge's map, mirroring
+  person -> kidmap.
+
 # rasch 1.4.0
 
 * Paired comparisons gain the pair-structure analogues of the Rasch
