@@ -185,6 +185,9 @@ bt <- btl(comparisons, object_a = "left", object_b = "right",
 bt$objects; bt$judges        # locations + fit; erratic judges flag
 bt$dependence                # within-judge exposure and carry-over, in logits
 plot_btl_dependence(bt, "carry_over")   # interrogate a dependence effect
+btl_transitivity(bt)         # preference loops: is one scale enough?
+btl_dimensionality(bt)       # residual "swirl" (bimensions) = a 2nd attribute?
+plot_btl_scree(btl_dimensionality(bt))  # bimension scree vs a noise reference
 btl_dif(bt, list(panel = panel_map, experience = exp_map))
                              # judge-group DIF, factors modelled jointly
 plot_btl_icc(bt, "E04", group = panel_map)   # curves by judge group

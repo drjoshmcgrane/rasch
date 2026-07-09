@@ -106,13 +106,18 @@ estimation, Q3 local dependence, and the structural remedies.
 ## Paired comparisons
 
 The Bradley-Terry-Luce model as the conditional form of the dichotomous
-Rasch model, with judge diagnostics, within-judge dependence, and
-judge-group DIF.
+Rasch model, with judge diagnostics, within-judge dependence,
+judge-group DIF, and the pair-structure analogues of the independence
+diagnostics (transitivity and the residual bimension decomposition).
 
 - [`btl()`](https://drjoshmcgrane.github.io/rasch/reference/btl.md) :
   Fit the Bradley-Terry-Luce model to paired comparisons
 - [`btl_dif()`](https://drjoshmcgrane.github.io/rasch/reference/btl_dif.md)
   : DIF analysis for paired comparisons
+- [`btl_transitivity()`](https://drjoshmcgrane.github.io/rasch/reference/btl_transitivity.md)
+  : Transitivity of paired comparisons
+- [`btl_dimensionality()`](https://drjoshmcgrane.github.io/rasch/reference/btl_dimensionality.md)
+  : Residual dimensionality of paired comparisons
 - [`plot_btl()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl.md)
   : Plot Bradley-Terry-Luce object locations
 - [`plot_btl_categories()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_categories.md)
@@ -121,6 +126,12 @@ judge-group DIF.
   : Plot an object characteristic curve
 - [`plot_btl_dependence()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_dependence.md)
   : Plot a within-judge dependence effect
+- [`plot_btl_transitivity()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_transitivity.md)
+  : Consistency plot for paired-comparison transitivity
+- [`plot_btl_scree()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_scree.md)
+  : Scree of paired-comparison residual bimensions
+- [`plot_btl_dim_map()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_dim_map.md)
+  : Residual map of the leading paired-comparison bimension
 
 ## Plots
 

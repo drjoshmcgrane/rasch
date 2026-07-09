@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -199,6 +199,9 @@
 <span><span class="va">bt</span><span class="op">$</span><span class="va">objects</span>; <span class="va">bt</span><span class="op">$</span><span class="va">judges</span>        <span class="co"># locations + fit; erratic judges flag</span></span>
 <span><span class="va">bt</span><span class="op">$</span><span class="va">dependence</span>                <span class="co"># within-judge exposure and carry-over, in logits</span></span>
 <span><span class="fu"><a href="reference/plot_btl_dependence.html">plot_btl_dependence</a></span><span class="op">(</span><span class="va">bt</span>, <span class="st">"carry_over"</span><span class="op">)</span>   <span class="co"># interrogate a dependence effect</span></span>
+<span><span class="fu"><a href="reference/btl_transitivity.html">btl_transitivity</a></span><span class="op">(</span><span class="va">bt</span><span class="op">)</span>         <span class="co"># preference loops: is one scale enough?</span></span>
+<span><span class="fu"><a href="reference/btl_dimensionality.html">btl_dimensionality</a></span><span class="op">(</span><span class="va">bt</span><span class="op">)</span>       <span class="co"># residual "swirl" (bimensions) = a 2nd attribute?</span></span>
+<span><span class="fu"><a href="reference/plot_btl_scree.html">plot_btl_scree</a></span><span class="op">(</span><span class="fu"><a href="reference/btl_dimensionality.html">btl_dimensionality</a></span><span class="op">(</span><span class="va">bt</span><span class="op">)</span><span class="op">)</span>  <span class="co"># bimension scree vs a noise reference</span></span>
 <span><span class="fu"><a href="reference/btl_dif.html">btl_dif</a></span><span class="op">(</span><span class="va">bt</span>, <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>panel <span class="op">=</span> <span class="va">panel_map</span>, experience <span class="op">=</span> <span class="va">exp_map</span><span class="op">)</span><span class="op">)</span></span>
 <span>                             <span class="co"># judge-group DIF, factors modelled jointly</span></span>
 <span><span class="fu"><a href="reference/plot_btl_icc.html">plot_btl_icc</a></span><span class="op">(</span><span class="va">bt</span>, <span class="st">"E04"</span>, group <span class="op">=</span> <span class="va">panel_map</span><span class="op">)</span>   <span class="co"># curves by judge group</span></span>

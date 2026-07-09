@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,17 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.4.0" id="rasch-140">rasch 1.4.0<a class="anchor" aria-label="anchor" href="#rasch-140"></a></h2>
+<ul><li>Paired comparisons gain the pair-structure analogues of the Rasch independence diagnostics – the tools that a persons-by-items residual matrix would give but paired-comparison data cannot.
+<ul><li>
+<code><a href="../reference/btl_transitivity.html">btl_transitivity()</a></code> counts circular triads (preference loops: A beats B, B beats C, C beats A) against the chance rate, reports Kendall’s coefficient of consistency for complete designs, and gives each judge’s own consistency (Kendall &amp; Babington Smith 1940) – the single-dimension check, and a judge-fit analogue.</li>
+<li>
+<code><a href="../reference/btl_dimensionality.html">btl_dimensionality()</a></code> decomposes the skew-symmetric object-by-object residual preference matrix into Gower (1977) bimensions – the paired-comparison counterpart of residual PCA – and judges the leading bimension against a model-simulated noise reference, so a coherent residual “swirl” (a second attribute steering some contests) is distinguished from noise.</li>
+<li>
+<code><a href="../reference/plot_btl_scree.html">plot_btl_scree()</a></code>, <code><a href="../reference/plot_btl_dim_map.html">plot_btl_dim_map()</a></code>, and <code><a href="../reference/plot_btl_transitivity.html">plot_btl_transitivity()</a></code> display them; the Shiny app’s Independence &gt; Trait tab now carries these for a BTL fit (it previously hid for paired comparisons).</li>
+</ul></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.3.1" id="rasch-131">rasch 1.3.1<a class="anchor" aria-label="anchor" href="#rasch-131"></a></h2>
 <ul><li>The package is now called <strong>rasch</strong> (it was developed under the working title <code>rmt</code>). The name <code>rmt</code> belongs to an unrelated package on CRAN, and <code>rasch</code> says plainly what this is – and mirrors <code>mirt::mirt()</code> with <code><a href="../reference/rasch.html">rasch::rasch()</a></code>. No functions, arguments, or results change; only the package and library name. The auxiliary result classes were unified under the <code>rasch_</code> prefix (<code>rasch_btl</code>, <code>rasch_dif</code>, …) to match the fit classes.</li>
