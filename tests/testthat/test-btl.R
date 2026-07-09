@@ -746,3 +746,36 @@ test_that("judge_surprise flags a judge's systematic contrary judgements", {
   expect_no_error(plot_btl_judge_map(f, "J1"))
   expect_error(judge_surprise(f, "nobody"), "no comparisons")
 })
+
+test_that("judge_pair_surprise flags the matchups a judge got against the grain", {
+  set.seed(1); K <- 8; objs <- sprintf("O%d", 1:K)
+  beta <- setNames(seq(-1.5, 1.5, length.out = K), objs)
+  jids <- sprintf("J%d", 1:8); pr <- t(combn(objs, 2))
+  d <- data.frame(a = rep(pr[, 1], each = 12), b = rep(pr[, 2], each = 12))
+  d$judge <- sample(jids, nrow(d), TRUE)
+  d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b]), d$a, d$b)
+  b <- d$judge == "J1"
+  d$win[b & (d$a == "O1" | d$b == "O1")] <- "O1"
+  d$win[b & d$a == "O8"] <- d$b[b & d$a == "O8"]
+  d$win[b & d$b == "O8"] <- d$a[b & d$b == "O8"]
+  f <- btl(d, "a", "b", "win", judge = "judge")
+
+  jp <- judge_pair_surprise(f, "J1")
+  expect_s3_class(jp, "rasch_btl_judge_pairs")
+  s <- jp$pairs[jp$pairs$surprise, ]
+  expect_gt(nrow(s), 3L)
+  # a flagged matchup is one where the stronger object under-performed
+  expect_true(all(s$z < 0))
+  expect_true(all(s$loc_hi >= s$loc_lo))          # orientation to the stronger
+  # the large majority of surprises involve an extreme J1 distorted (a
+  # stray noise flag on another pair is allowed at the ~5% rate)
+  involves <- vapply(seq_len(nrow(s)), function(i)
+    any(c("O1", "O8") %in% c(s$object_hi[i], s$object_lo[i])), TRUE)
+  expect_gte(sum(involves), 6L)
+  # a model-conforming judge trips at most the ~5% noise rate
+  expect_lte(sum(judge_pair_surprise(f, "J3")$pairs$surprise), 2L)
+
+  pdf(NULL); on.exit(dev.off())
+  expect_no_error(plot_btl_judge_map(f, "J1"))
+  expect_error(judge_pair_surprise(f, "nobody"), "no comparisons")
+})

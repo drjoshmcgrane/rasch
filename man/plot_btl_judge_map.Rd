@@ -2,30 +2,30 @@
 % Please edit documentation in R/btl-independence.R
 \name{plot_btl_judge_map}
 \alias{plot_btl_judge_map}
-\title{Unexpected-judgement map for one judge}
+\title{Unexpected-judgement map for one judge (pair level)}
 \usage{
-plot_btl_judge_map(fit, judge, min_n = 2L, flag_z = 1.96, ...)
+plot_btl_judge_map(fit, judge, min_n = 1L, flag_z = 1.96, ...)
 }
 \arguments{
 \item{fit}{A paired-comparison fit from \code{\link{btl}} with judges.}
 
 \item{judge}{The judge to map.}
 
-\item{min_n, flag_z}{Passed to \code{\link{judge_surprise}}.}
+\item{min_n, flag_z}{Passed to \code{\link{judge_pair_surprise}}.}
 
 \item{...}{Unused.}
 }
 \value{
 Called for its plotting side effect; invisibly the
-  \code{rasch_btl_judge} object.
+  \code{rasch_btl_judge_pairs} object.
 }
 \description{
-The judge counterpart of \code{\link{plot_icc}}'s kidmap. Each object the
-judge met is placed by its consensus location (vertical, strong at top) and
-by the judge's residual for it (horizontal; zero, the dashed line, is
-judged as the scale predicts). The shaded strip is the expected zone; the
-rug on the axis marks every object's location. Objects the judge treated
-against their standing -- a strong object under-rated (upper left) or a
-weak object over-rated (lower right) -- are drawn in red and labelled; dot
-size grows with how often the judge met the object.
+The judge counterpart of the kidmap, drawn matchup by matchup. Each pair the
+judge met is a segment on the consensus location axis, spanning its two
+objects, positioned horizontally by how surprising the verdict was: at zero
+(the dashed line, inside the shaded band) the stronger object won as its
+lead predicts; to the left the judge backed the underdog. A filled dot marks
+the object the judge's verdict favoured, hollow the other -- so an upset is a
+red segment on the left with its filled dot at the lower end. The rug marks
+every object's location.
 }

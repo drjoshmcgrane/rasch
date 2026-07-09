@@ -901,7 +901,7 @@ panel_persons <- nav_panel("Persons", value = "p_persons", icon = bs_icon("peopl
                       note = "Click a row to map that judge's unexpected judgements.",
                       controls = cols_switch("btl_judges_full")),
             plotCard("btl_judge_map", title = "Unexpected judgements",
-                     info = "The judge counterpart of the kidmap. Each object the judge met is placed by its consensus location (vertical) and by the judge's residual for it (horizontal; 0 = judged as the scale predicts). A strong object the judge under-rated (upper left) or a weak object over-rated (lower right) is an unexpected judgement, drawn red; dot size grows with how often the judge met the object.",
+                     info = "The judge counterpart of the kidmap, matchup by matchup. Each pair the judge met is a segment spanning its two objects on the location axis, placed horizontally by how surprising the verdict was: at 0 (dashed line, inside the shaded band) the stronger object won as its lead predicts; to the left the judge favoured the underdog beyond noise. The filled dot marks the object the judge's verdict backed - so an upset is a red segment on the left with its filled dot at the lower end.",
                      height = "460px"))),
         accordion_panel(
           title = span("Judge consistency",

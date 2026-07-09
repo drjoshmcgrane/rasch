@@ -498,49 +498,136 @@ print.rasch_btl_judge <- function(x, ...) {
   invisible(x)
 }
 
-#' Unexpected-judgement map for one judge
+#' Unexpected judgements of one judge, pair by pair
 #'
-#' The judge counterpart of \code{\link{plot_icc}}'s kidmap. Each object the
-#' judge met is placed by its consensus location (vertical, strong at top) and
-#' by the judge's residual for it (horizontal; zero, the dashed line, is
-#' judged as the scale predicts). The shaded strip is the expected zone; the
-#' rug on the axis marks every object's location. Objects the judge treated
-#' against their standing -- a strong object under-rated (upper left) or a
-#' weak object over-rated (lower right) -- are drawn in red and labelled; dot
-#' size grows with how often the judge met the object.
+#' The comparison-level companion of \code{\link{judge_surprise}}. Each pair
+#' the judge met is oriented to its stronger object (higher consensus
+#' location) and given a standardised residual: \code{z < 0} means the
+#' stronger object won less than its lead predicts -- the judge backed the
+#' underdog. A matchup is an unexpected judgement when \code{z} falls at or
+#' below \code{-flag_z} and the pair was seen at least \code{min_n} times, i.e.
+#' the judge favoured the weaker object further than sampling noise explains.
+#'
+#' @param fit A paired-comparison fit from \code{\link{btl}} with judges.
+#' @param judge The judge to profile.
+#' @param min_n Pairs met fewer times are shown but never flagged.
+#' @param flag_z Absolute residual at or beyond which an upset is flagged.
+#' @return A list of class \code{"rasch_btl_judge_pairs"}: \code{pairs} (per
+#'   matchup: the stronger and weaker object and their locations, the location
+#'   \code{gap}, times met \code{n}, residual \code{z}, the \code{net_winner},
+#'   and the \code{surprise} flag); \code{all_locations}; the \code{judge} and
+#'   settings.
+#' @examples
+#' set.seed(1); objs <- LETTERS[1:6]; beta <- setNames(seq(-1.5, 1.5, len = 6), objs)
+#' pr <- t(utils::combn(objs, 2))
+#' d <- data.frame(a = rep(pr[, 1], each = 12), b = rep(pr[, 2], each = 12))
+#' d$judge <- sample(paste0("J", 1:5), nrow(d), TRUE)
+#' d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b]), d$a, d$b)
+#' judge_pair_surprise(btl(d, "a", "b", "win", judge = "judge"), "J1")
+#' @export
+judge_pair_surprise <- function(fit, judge, min_n = 1L, flag_z = 1.96) {
+  if (!inherits(fit, "rasch_btl")) stop("not a paired-comparison (btl) fit")
+  cmp <- fit$comparisons
+  if (all(is.na(cmp$judge))) stop("no judges in this fit")
+  judge <- as.character(judge)
+  sel <- which(!is.na(cmp$judge) & as.character(cmp$judge) == judge)
+  if (!length(sel)) stop("no comparisons for judge ", judge)
+  objs <- fit$objects$object; K <- length(objs); m <- fit$m
+  beta <- setNames(fit$objects$location, objs)
+  tau <- if (m > 1L) fit$thresholds$tau else NULL
+  d <- cmp[sel, , drop = FALSE]
+  ia <- match(d$object_a, objs); ib <- match(d$object_b, objs)
+  S <- .btl_scores(ia, ib, d$response, d$weight, m, K)   # points i scored on j
+  N <- (S + t(S)) / m                                     # comparisons per pair
+  rows <- list()
+  for (i in seq_len(K - 1L)) for (j in (i + 1L):K) {
+    if (N[i, j] <= 0) next
+    hi <- if (beta[i] >= beta[j]) i else j; lo <- if (hi == i) j else i
+    n <- N[hi, lo]; obs <- S[hi, lo]; dd <- beta[hi] - beta[lo]
+    mo <- if (m == 1L) { p <- stats::plogis(dd); list(E = p, V = p * (1 - p)) }
+          else { z <- item_moments(dd, tau); list(E = z$E, V = z$V) }
+    zed <- (obs - n * mo$E) / sqrt(max(n * mo$V, 1e-9))
+    rows[[length(rows) + 1L]] <- data.frame(
+      object_hi = objs[hi], object_lo = objs[lo],
+      loc_hi = unname(beta[hi]), loc_lo = unname(beta[lo]),
+      gap = dd, n = n, z = zed,
+      net_winner = if (obs >= n * m / 2) objs[hi] else objs[lo],
+      surprise = zed <= -flag_z & n >= min_n)
+  }
+  p <- do.call(rbind, rows)
+  p <- p[order(p$z), ]; rownames(p) <- NULL
+  structure(list(judge = judge, pairs = p, all_locations = beta,
+                 n_comparisons = length(sel), flag_z = flag_z, min_n = min_n),
+            class = "rasch_btl_judge_pairs")
+}
+
+#' @export
+print.rasch_btl_judge_pairs <- function(x, ...) {
+  cat(sprintf("Judge %s: %d comparisons over %d matchups\n",
+              x$judge, x$n_comparisons, nrow(x$pairs)))
+  s <- x$pairs[x$pairs$surprise, , drop = FALSE]
+  if (nrow(s)) {
+    cat("Unexpected judgements (weaker object favoured beyond its lead):\n")
+    for (i in seq_len(nrow(s)))
+      cat(sprintf("  %s vs %s  (gap %.2f, z = %+.2f, %s)\n",
+                  s$object_hi[i], s$object_lo[i], s$gap[i], s$z[i],
+                  if (s$net_winner[i] == s$object_lo[i]) "upset"
+                  else "favourite under-performed"))
+  } else cat("No matchup went against the consensus beyond noise.\n")
+  invisible(x)
+}
+
+#' Unexpected-judgement map for one judge (pair level)
+#'
+#' The judge counterpart of the kidmap, drawn matchup by matchup. Each pair the
+#' judge met is a segment on the consensus location axis, spanning its two
+#' objects, positioned horizontally by how surprising the verdict was: at zero
+#' (the dashed line, inside the shaded band) the stronger object won as its
+#' lead predicts; to the left the judge backed the underdog. A filled dot marks
+#' the object the judge's verdict favoured, hollow the other -- so an upset is a
+#' red segment on the left with its filled dot at the lower end. The rug marks
+#' every object's location.
 #'
 #' @param fit A paired-comparison fit from \code{\link{btl}} with judges.
 #' @param judge The judge to map.
-#' @param min_n,flag_z Passed to \code{\link{judge_surprise}}.
+#' @param min_n,flag_z Passed to \code{\link{judge_pair_surprise}}.
 #' @param ... Unused.
 #' @return Called for its plotting side effect; invisibly the
-#'   \code{rasch_btl_judge} object.
+#'   \code{rasch_btl_judge_pairs} object.
 #' @export
-plot_btl_judge_map <- function(fit, judge, min_n = 2L, flag_z = 1.96, ...) {
-  js <- judge_surprise(fit, judge, min_n = min_n, flag_z = flag_z)
-  o <- js$objects
-  if (!nrow(o)) stop("this judge made no usable comparisons")
-  xr <- max(abs(o$z), flag_z * 1.3)
-  yr <- range(js$all_locations)
+plot_btl_judge_map <- function(fit, judge, min_n = 1L, flag_z = 1.96, ...) {
+  jp <- judge_pair_surprise(fit, judge, min_n = min_n, flag_z = flag_z)
+  p <- jp$pairs
+  if (!nrow(p)) stop("this judge made no usable comparisons")
+  xr <- max(abs(p$z), flag_z * 1.3)
+  yr <- range(jp$all_locations)
   op <- .rr_canvas(c(-xr, xr) * 1.08,
                    yr + c(-1, 1) * (0.12 * diff(yr) + 0.2),
-                   "Judge residual   (under-rated  <-  0  ->  over-rated)",
+                   "Matchup residual   (backed the underdog  <-  0  ->  as expected)",
                    "Object location (logits)",
-                   main = sprintf("Judge %s  ·  %d comparisons",
-                                  js$judge, js$n_comparisons))
+                   main = sprintf("Judge %s  ·  %d matchups",
+                                  jp$judge, nrow(p)))
   on.exit(par(op))
   u <- par("usr")
   rect(-flag_z, u[3], flag_z, u[4], col = "#94a3b81f", border = NA)  # expected
   abline(v = 0, col = .rr$soft, lwd = 1.2, lty = 2)
-  rug(js$all_locations, side = 2, col = .rr$grid, lwd = 1.4)          # all objs
-  col <- ifelse(o$surprise, .rr$red, .rr$blue)
-  rng <- diff(range(o$n))
-  cex <- 1.1 + 1.9 * (o$n - min(o$n)) / (if (rng > 0) rng else 1)
-  points(o$z, o$location, pch = 21, bg = col, col = "white", cex = cex)
-  lab <- o$surprise | nrow(o) <= 12
-  text(o$z[lab], o$location[lab], o$object[lab], pos = 4, offset = 0.5,
-       cex = 0.75, col = ifelse(o$surprise[lab], .rr$red, .rr$ink))
-  .rr_legend("bottomright", c("unexpected", "as expected"), pch = 21,
-             pt.bg = c(.rr$red, .rr$blue), col = "white")
-  invisible(js)
+  rug(jp$all_locations, side = 2, col = .rr$grid, lwd = 1.4)
+  # each matchup: a segment spanning its two objects at x = its residual, faint
+  # when expected and bold red when the judge backed the underdog
+  col <- ifelse(p$surprise, .rr$red, .rr$soft)
+  lwd <- ifelse(p$surprise, 2.4, 1)
+  segments(p$z, p$loc_lo, p$z, p$loc_hi, col = col, lwd = lwd)
+  win_y <- ifelse(p$net_winner == p$object_hi, p$loc_hi, p$loc_lo)
+  los_y <- ifelse(p$net_winner == p$object_hi, p$loc_lo, p$loc_hi)
+  points(p$z, los_y, pch = 21, bg = "white", col = col, cex = 0.7)  # loser end
+  points(p$z, win_y, pch = 21, bg = col, col = "white", cex = 1.2)  # winner end
+  if (any(p$surprise)) {
+    s <- p[p$surprise, ]
+    text(s$z, (s$loc_hi + s$loc_lo) / 2,
+         sprintf("%s-%s", s$object_hi, s$object_lo), pos = 2, offset = 0.4,
+         cex = 0.7, col = .rr$red)
+  }
+  .rr_legend("bottomright", c("backed the underdog", "as expected"),
+             lwd = c(2.4, 1), col = c(.rr$red, .rr$soft))
+  invisible(jp)
 }

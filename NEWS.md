@@ -1,3 +1,12 @@
+# rasch 1.5.1
+
+* The judge unexpected-judgements map (\code{plot_btl_judge_map}) is now
+  drawn at the matchup level: each pair the judge met is a segment spanning
+  its two objects on the consensus location axis, placed by how surprising
+  the verdict was, with the judge's backed object filled. \code{judge_pair_surprise()}
+  returns the per-matchup residuals behind it. The object-level
+  \code{judge_surprise()} is retained for per-object residuals.
+
 # rasch 1.5.0
 
 * `judge_surprise()` and `plot_btl_judge_map()`: the paired-comparison

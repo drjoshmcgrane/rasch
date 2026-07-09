@@ -127,6 +127,7 @@ reference:
   - btl_transitivity
   - btl_dimensionality
   - judge_surprise
+  - judge_pair_surprise
   - plot_btl
   - plot_btl_categories
   - plot_btl_icc
