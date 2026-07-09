@@ -1134,6 +1134,40 @@ panel_frames <- nav_panel("Frames", value = "p_frames", icon = bs_icon("grid-3x3
 
 # -------------------------------------------------- INDEPENDENCE: TRAIT --
 panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
+    # paired-comparison (BTL) fits: the Rasch residual-PCA suite needs a
+    # persons x items residual matrix that paired comparisons do not produce,
+    # so it hides and the pair-structure analogues take its place
+    conditionalPanel("output.is_btl == true",
+      p(class = "text-muted small",
+        "Dimensionality for paired comparisons: is one scale enough to explain the contests? Two reads - a decomposition of the leftover (residual) preferences, and the rate of preference loops (Kendall & Babington Smith 1940)."),
+      accordion(id = "btl_dim_acc", open = "btl_dim_swirl",
+        accordion_panel(
+          title = span("Residual dimensions",
+            info_icon("The paired-comparison counterpart of residual PCA. The model predicts how often each object should beat each other; the object-by-object table of departures is skew-symmetric, so it decomposes into rotational planes (bimensions; Gower 1977), not ordinary components. A leading bimension clearing the model-simulated noise band is a coherent swirl in the leftovers - A over-beats B, B over-beats C, C over-beats A - a second attribute steering some contests.")),
+          value = "btl_dim_swirl",
+          layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
+            plotCard("btl_scree", title = "Bimension strengths",
+                     info = "Each bimension's strength against the mean and 95th-percentile band of data simulated from the fitted one-scale model. A bar clearing the band is structure the single scale does not explain.",
+                     height = "460px"),
+            plotCard("btl_dim_map", title = "Leading residual map",
+                     info = "Objects in the leading bimension plane. A rotational arrangement is the second attribute; a formless cloud at the centre is noise. Point size grows with the object's location on the main scale.",
+                     height = "460px")),
+          tableCard("btl_bimensions_tbl", title = "Bimensions",
+                    note = "Strength, share of the total residual, and the noise reference (mean and 95th percentile) for the leading bimension.")),
+        accordion_panel(
+          title = span("Preference loops",
+            info_icon("The single-dimension check. If one attribute drives the contests, preferences stack into one order: A beats B and B beats C implies A beats C. A loop (A beats B, B beats C, C beats A) is a contradiction, like rock-paper-scissors. The loop rate is set against pure guessing (a quarter of triples); consistency is 1 minus loop-rate over chance. With judges, each judge's own consistency flags those drifting toward chance.")),
+          value = "btl_dim_loops",
+          layout_columns(col_widths = breakpoints(sm = 12, lg = c(7, 5)),
+            tableCard("btl_trans_tbl", title = "Transitivity summary",
+                      note = "Circular triads out of the complete triples, the loop rate against the 25% chance rate, and Kendall's coefficient of consistency when every pair was compared."),
+            plotCard("btl_trans_plot", title = "Consistency by judge",
+                     info = "Each judge's consistency (1 = one clean order, 0 = guessing). Judges near or below the chance line contribute little signal.",
+                     height = "460px")),
+          conditionalPanel("output.has_judges == true",
+            tableCard("btl_trans_judges_tbl", title = "Judge consistency",
+                      note = "Judges sorted least consistent first."))))),
+    conditionalPanel("output.is_btl != true",
     p(class = "text-muted small",
       "Trait dependence (dimensionality) threatens local independence: more than one trait driving the responses (Marais & Andrich 2008)."),
     accordion(id = "dim_acc", open = "dim_components",
@@ -1186,7 +1220,7 @@ panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
               DTOutput("dm_tbl"), rcode_details("dm_tbl")),
             padding = 12, fillable = FALSE))),
       accordion_panel("Eigenvalues", value = "dim_eigen",
-        tableCard("eigen_tbl", note = "First 10 eigenvalues shown.")))
+        tableCard("eigen_tbl", note = "First 10 eigenvalues shown."))))
   )
 
 # -------------------------------------------------- INDEPENDENCE: LOCAL --
@@ -2055,8 +2089,11 @@ server <- function(input, output, session) {
     show("p_summary", rasch_on || btl_on)
     show("p_items", rasch_on || btl_on)
     show("p_persons", rasch_on || (btl_on && !is.null(bf$judges)))
-    for (tgt in c("p_targeting", "p_dim", "p_equating"))
+    for (tgt in c("p_targeting", "p_equating"))
       show(tgt, rasch_on)
+    # the Trait tab now carries paired-comparison dimensionality too
+    # (transitivity loops + the residual bimension swirl)
+    show("p_dim", rasch_on || btl_on)
     # Local dependence: the Rasch Q3 suite, or the within-judge dependence
     # analysis of a paired-comparison fit
     show("p_ld", rasch_on || btl_on)
@@ -3463,6 +3500,35 @@ server <- function(input, output, session) {
                   "Nominate a judgment-order column in the Data roles."))
     num_dt(bfit()$dependence_data, page_len = 20)
   }, code = function() "bt$dependence_data")
+
+  # ---------------------- BTL trait dimensionality (loops + swirl) --------
+  # the pair-structure analogues of transitivity (one order?) and residual
+  # PCA (a second attribute steering contests?); both cached per fit
+  btl_trans <- reactive({ b <- bfit(); req(!is.null(b)); btl_transitivity(b) })
+  btl_dim   <- reactive({ b <- bfit(); req(!is.null(b)); btl_dimensionality(b) })
+  register_plot("btl_scree", function() plot_btl_scree(btl_dim()),
+                w = 7, h = 5, code = function()
+                  "plot_btl_scree(btl_dimensionality(bt))")
+  register_plot("btl_dim_map", function() plot_btl_dim_map(btl_dim()),
+                w = 7, h = 5.5, code = function()
+                  "plot_btl_dim_map(btl_dimensionality(bt))")
+  register_table("btl_bimensions_tbl", function() btl_dim()$bimensions,
+                 function() num_dt(btl_dim()$bimensions),
+                 code = function() "btl_dimensionality(bt)$bimensions")
+  register_table("btl_trans_tbl", function() btl_trans()$summary,
+                 function() num_dt(btl_trans()$summary),
+                 code = function() "btl_transitivity(bt)$summary")
+  register_plot("btl_trans_plot", function() plot_btl_transitivity(btl_trans()),
+                w = 7, h = 5, code = function()
+                  "plot_btl_transitivity(btl_transitivity(bt))")
+  register_table("btl_trans_judges_tbl",
+                 function() btl_trans()$judges,
+                 function() {
+                   j <- btl_trans()$judges
+                   validate(need(!is.null(j),
+                     "Per-judge consistency needs judges with enough compared triples."))
+                   num_dt(j)
+                 }, code = function() "btl_transitivity(bt)$judges")
 
   # -------------------------------------------- BTL DIF by judge group --
   # the judge grouping handed to btl_dif() / plot_btl_icc(): the nominated

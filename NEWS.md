@@ -1,3 +1,23 @@
+# rasch 1.4.0
+
+* Paired comparisons gain the pair-structure analogues of the Rasch
+  independence diagnostics -- the tools that a persons-by-items residual
+  matrix would give but paired-comparison data cannot.
+  - `btl_transitivity()` counts circular triads (preference loops: A beats B,
+    B beats C, C beats A) against the chance rate, reports Kendall's
+    coefficient of consistency for complete designs, and gives each judge's
+    own consistency (Kendall & Babington Smith 1940) -- the single-dimension
+    check, and a judge-fit analogue.
+  - `btl_dimensionality()` decomposes the skew-symmetric object-by-object
+    residual preference matrix into Gower (1977) bimensions -- the
+    paired-comparison counterpart of residual PCA -- and judges the leading
+    bimension against a model-simulated noise reference, so a coherent
+    residual "swirl" (a second attribute steering some contests) is
+    distinguished from noise.
+  - `plot_btl_scree()`, `plot_btl_dim_map()`, and `plot_btl_transitivity()`
+    display them; the Shiny app's Independence > Trait tab now carries these
+    for a BTL fit (it previously hid for paired comparisons).
+
 # rasch 1.3.1
 
 * The package is now called **rasch** (it was developed under the working

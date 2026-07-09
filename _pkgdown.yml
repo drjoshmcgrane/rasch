@@ -118,15 +118,21 @@ reference:
 - title: Paired comparisons
   desc: >
     The Bradley-Terry-Luce model as the conditional form of the dichotomous
-    Rasch model, with judge diagnostics, within-judge dependence, and
-    judge-group DIF.
+    Rasch model, with judge diagnostics, within-judge dependence, judge-group
+    DIF, and the pair-structure analogues of the independence diagnostics
+    (transitivity and the residual bimension decomposition).
   contents:
   - btl
   - btl_dif
+  - btl_transitivity
+  - btl_dimensionality
   - plot_btl
   - plot_btl_categories
   - plot_btl_icc
   - plot_btl_dependence
+  - plot_btl_transitivity
+  - plot_btl_scree
+  - plot_btl_dim_map
 
 - title: Plots
   desc: One plotting function per display, all base graphics.

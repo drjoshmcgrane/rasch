@@ -675,3 +675,42 @@ test_that("a separated dependence effect is dropped with a note", {
   if (!is.null(f$dependence))
     expect_true(all(abs(f$dependence$estimate) < 10))
 })
+
+test_that("btl_transitivity and btl_dimensionality read one-D vs a swirl", {
+  mk <- function(cyc, seed) {
+    set.seed(seed); K <- 8; objs <- sprintf("O%d", 1:K)
+    beta <- setNames(seq(-1.5, 1.5, length.out = K), objs)
+    th <- setNames(2 * pi * (0:(K - 1)) / K, objs)
+    pr <- t(combn(objs, 2))
+    d <- data.frame(a = rep(pr[, 1], each = 25), b = rep(pr[, 2], each = 25))
+    d$judge <- sample(sprintf("J%d", 1:10), nrow(d), TRUE)
+    lp <- beta[d$a] - beta[d$b] + cyc * sin(th[d$a] - th[d$b])
+    d$win <- ifelse(runif(nrow(d)) < plogis(lp), d$a, d$b)
+    btl(d, "a", "b", "win", judge = "judge")
+  }
+  # one-dimensional: consistent, leading bimension within the noise band
+  f1 <- mk(0, 2)
+  t1 <- btl_transitivity(f1); d1 <- btl_dimensionality(f1, reps = 40)
+  expect_lt(t1$summary$circular_rate, 0.1)
+  expect_gt(t1$summary$consistency, 0.6)
+  expect_false(d1$leading_structured)
+  expect_true(all(abs(d1$residual_matrix + t(d1$residual_matrix)) < 1e-8)) # skew
+  expect_s3_class(t1, "rasch_btl_transitivity")
+  expect_s3_class(d1, "rasch_btl_dim")
+  expect_false(is.null(t1$judges))    # judges present -> per-judge table
+
+  # a cyclic swirl: leading bimension clears the reference, most of residual
+  f2 <- mk(1.6, 2); d2 <- btl_dimensionality(f2, reps = 40)
+  expect_true(d2$leading_structured)
+  expect_gt(d2$bimensions$strength[1], d2$reference$p95)
+  expect_gt(d2$bimensions$prop_residual[1], 0.5)
+
+  # genuine intransitivity (flat locations, strong cycle) -> loops above chance
+  set.seed(3); K <- 7; objs <- sprintf("O%d", 1:K)
+  th <- setNames(2 * pi * (0:(K - 1)) / K, objs); pr <- t(combn(objs, 2))
+  d <- data.frame(a = rep(pr[, 1], each = 40), b = rep(pr[, 2], each = 40))
+  d$win <- ifelse(runif(nrow(d)) < plogis(1.4 * sin(th[d$a] - th[d$b])), d$a, d$b)
+  t3 <- btl_transitivity(btl(d, "a", "b", "win"))
+  expect_gt(t3$summary$circular_rate, 0.25)   # worse than chance
+  expect_lt(t3$summary$consistency, 0)
+})
