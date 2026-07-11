@@ -1,5 +1,23 @@
 # Changelog
 
+## rasch 1.6.0
+
+- Data simulation across all four model families, each with dial-in
+  departures from the model – so a known pathology can be planted and
+  the matching diagnostic watched as it fires. Every result carries the
+  true parameters () and prints what was planted.
+  - : dichotomous/PCM/RSM with discrimination misfit, guessing, a second
+    dimension, local dependence, DIF (uniform and non-uniform), careless
+    responders, disordered thresholds, and missing data.
+  - : paired comparisons with erratic judges, a second object attribute
+    (two judge camps), and within-judge exposure/carry-over dependence;
+    dichotomous or graded.
+  - : rated data with rater-severity spread, erratic raters, and a
+    rater-by-item interaction.
+  - : frames with differing set and group units. Verified end to end:
+    each planted departure is recovered or flagged by the corresponding
+    fit / diagnostic (an app panel follows).
+
 ## rasch 1.5.1
 
 - The judge unexpected-judgements map () is now drawn at the matchup

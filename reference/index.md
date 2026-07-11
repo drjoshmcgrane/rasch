@@ -192,6 +192,21 @@ One plotting function per display, all base graphics.
 - [`plot_wright()`](https://drjoshmcgrane.github.io/rasch/reference/plot_wright.md)
   : Plot a Wright map
 
+## Data simulation
+
+Generate data from each model family with dial-in departures from it, so
+a known pathology can be planted and the matching diagnostic watched as
+it fires. The true parameters are attached to every result.
+
+- [`simulate_rasch()`](https://drjoshmcgrane.github.io/rasch/reference/simulate_rasch.md)
+  : Simulate person-by-item Rasch data with dial-in misfit
+- [`simulate_btl()`](https://drjoshmcgrane.github.io/rasch/reference/simulate_btl.md)
+  : Simulate paired-comparison (BTL) data with dial-in misfit
+- [`simulate_mfrm()`](https://drjoshmcgrane.github.io/rasch/reference/simulate_mfrm.md)
+  : Simulate many-facet (rated) data with dial-in misfit
+- [`simulate_efrm()`](https://drjoshmcgrane.github.io/rasch/reference/simulate_efrm.md)
+  : Simulate extended frame-of-reference data with differing units
+
 ## Export and interface
 
 - [`save_outputs()`](https://drjoshmcgrane.github.io/rasch/reference/save_outputs.md)
