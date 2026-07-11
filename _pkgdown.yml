@@ -153,6 +153,9 @@ reference:
   - simulate_btl
   - simulate_mfrm
   - simulate_efrm
+  - sim_replicate
+  - sim_recovery
+  - plot_recovery
 
 - title: Export and interface
   contents:

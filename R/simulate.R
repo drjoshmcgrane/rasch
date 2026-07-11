@@ -86,6 +86,13 @@
 #'   \code{n_groups >= 2}. Feeds \code{\link{dif_anova}} / \code{\link{dif_size}}.
 #' @param careless Proportion of persons who answer at random (person misfit;
 #'   feeds person infit/outfit).
+#' @param response_style \code{NULL}, or \code{list(type=, prop=)} with
+#'   \code{type} \code{"extreme"} or \code{"middle"}: a proportion of persons
+#'   favour the end (or middle) categories regardless of the trait
+#'   (polytomous; feeds the category diagnostics and person fit).
+#' @param speeded Proportion not-reached at the last item: a growing tail of
+#'   missing responses over the final items, as under time pressure (feeds the
+#'   item statistics and the missingness pattern).
 #' @param disordered \code{NULL} or item names/indices given disordered
 #'   thresholds (polytomous; feeds the threshold diagnostics).
 #' @param n_groups Number of equal person groups (a \code{group} factor column
@@ -111,7 +118,8 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
                            theta_dist = "normal", difficulty = c(-2.5, 2.5),
                            threshold_spread = 1.2, discrimination = 1,
                            guessing = 0, second_dim = NULL, dependence = NULL,
-                           dif = NULL, careless = 0, disordered = NULL,
+                           dif = NULL, careless = 0, response_style = NULL,
+                           speeded = 0, disordered = NULL,
                            n_groups = 1, missing = 0, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   model <- match.arg(model)
@@ -121,8 +129,8 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
   as_idx <- function(x) if (is.character(x)) match(x, inm) else as.integer(x)
 
   # item locations, thresholds, slopes, guessing (with per-item overrides)
-  delta <- if (length(difficulty) == I) difficulty
-           else seq(difficulty[1], difficulty[2], length.out = I)
+  delta <- setNames(if (length(difficulty) == I) difficulty
+                    else seq(difficulty[1], difficulty[2], length.out = I), inm)
   disc <- if (length(discrimination) == I) discrimination else rep(discrimination[1], I)
   guess <- if (length(guessing) == I) guessing else rep(guessing[1], I)
   dis_items <- as_idx(disordered)
@@ -176,12 +184,39 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
     }
   }
 
+  # response styles (polytomous): a proportion of persons distort toward the
+  # end or the middle categories regardless of the trait
+  style_idx <- integer(0)
+  if (!is.null(response_style) && m >= 2L) {
+    style_idx <- sample(N, round((response_style$prop %||% 0.15) * N))
+    ss <- response_style$strength %||% 1.6; mid <- m / 2
+    dev2 <- ((0:m - mid) / mid)^2
+    w <- if ((response_style$type %||% "extreme") == "extreme") exp(ss * dev2)
+         else exp(-ss * dev2)
+    for (p in style_idx) for (i in seq_len(I)) {
+      if (is.na(X[p, i])) next
+      pr <- .p_item(theta[p], tau[[i]], disc[i]) * w
+      X[p, i] <- sample.int(m + 1L, 1L, prob = pr) - 1L
+    }
+  }
+
   # careless responders: answer uniformly at random
   careless_idx <- integer(0)
   if (careless > 0) {
     careless_idx <- sample(N, round(careless * N))
     X[careless_idx, ] <- matrix(sample(0:m, length(careless_idx) * I, TRUE),
                                 length(careless_idx), I)
+  }
+
+  # speededness: a contiguous not-reached tail over the last items. `speeded`
+  # persons drop out somewhere in the final zone, so the missing rate grows
+  # linearly to `speeded` at the last item
+  if (speeded > 0 && I >= 3L) {
+    k <- max(1L, round(0.4 * I)); z0 <- I - k
+    for (p in which(stats::runif(N) < speeded)) {
+      stop_at <- z0 + sample.int(k, 1L) - 1L              # drop point in zone
+      if (stop_at < I) X[p, (stop_at + 1L):I] <- NA
+    }
   }
   if (missing > 0) X[sample(length(X), round(missing * length(X)))] <- NA
 
@@ -206,6 +241,11 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
     dif$nonuniform %||% 0))
   if (length(careless_idx)) planted <- c(planted, sprintf(
     "%d careless responder(s)", length(careless_idx)))
+  if (length(style_idx)) planted <- c(planted, sprintf(
+    "%s response style on %d person(s)",
+    response_style$type %||% "extreme", length(style_idx)))
+  if (speeded > 0) planted <- c(planted, sprintf(
+    "speededness (%.0f%% not-reached at the last item)", 100 * speeded))
   if (length(dis_items)) planted <- c(planted, sprintf(
     "disordered thresholds on %s", paste(inm[dis_items], collapse = ", ")))
   if (missing > 0) planted <- c(planted, sprintf("%.0f%% missing", 100 * missing))
@@ -218,7 +258,7 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
     theta = theta, difficulty = delta, thresholds = tau,
     discrimination = disc, guessing = guess,
     groups = group, dim_items = inm[dim_items], dif_items = inm[dif_items],
-    careless_idx = careless_idx, planted = planted)
+    careless_idx = careless_idx, style_idx = style_idx, planted = planted)
   class(out) <- c("rasch_sim", "data.frame")
   out
 }
@@ -386,6 +426,9 @@ simulate_btl <- function(n_objects = 8, n_judges = 12, reps_per_pair = 25,
 #' @param interaction \code{NULL}, or \code{list(rater=, item=, bias=)}: one
 #'   rater is unusually harsh (positive) or lenient (negative) on one item.
 #'   Feeds the item-by-rater interaction (fit with \code{interaction = }).
+#' @param halo Proportion of raters showing a halo effect: they rate by the
+#'   person's overall level and barely differentiate items (feeds the rater
+#'   fit residual and the item-by-rater interaction).
 #' @param seed Optional RNG seed.
 #' @return A long data frame of class \code{"rasch_sim"} (\code{person},
 #'   \code{item}, \code{rater}, \code{score}) ready for
@@ -399,7 +442,7 @@ simulate_btl <- function(n_objects = 8, n_judges = 12, reps_per_pair = 25,
 simulate_mfrm <- function(n_persons = 80, n_items = 5, n_raters = 6,
                           n_categories = 4, theta_sd = 1.2, item_sd = 1,
                           rater_severity_sd = 0.6, erratic_raters = 0,
-                          interaction = NULL, seed = NULL) {
+                          interaction = NULL, halo = 0, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   m <- as.integer(n_categories) - 1L
   N <- as.integer(n_persons); I <- as.integer(n_items); R <- as.integer(n_raters)
@@ -410,6 +453,10 @@ simulate_mfrm <- function(n_persons = 80, n_items = 5, n_raters = 6,
   lambda <- setNames(as.numeric(scale(stats::rnorm(R))) * rater_severity_sd, rids)
   base_tau <- .sim_thresholds(0, m, 1.2)
   erratic <- if (erratic_raters > 0) rids[seq_len(round(erratic_raters * R))] else character(0)
+  # halo raters (drawn from the end, disjoint from the erratic ones): they
+  # rate by the person's overall level, barely differentiating the items
+  halo_r <- if (halo > 0)
+    setdiff(rev(rids), erratic)[seq_len(min(R, round(halo * R)))] else character(0)
   int_bias <- matrix(0, I, R, dimnames = list(iids, rids))
   if (!is.null(interaction))
     int_bias[interaction$item, interaction$rater] <- interaction$bias
@@ -418,8 +465,10 @@ simulate_mfrm <- function(n_persons = 80, n_items = 5, n_raters = 6,
   score <- integer(nrow(grid))
   for (i in seq_len(I)) for (r in seq_len(R)) {
     rows <- grid$i == i & grid$r == r
-    # item difficulty and rater severity shift the person's thresholds
-    tau_ir <- base_tau + delta[i] + lambda[r] + int_bias[i, r]
+    # item difficulty and rater severity shift the person's thresholds; a halo
+    # rater ignores the item's own difficulty (uses the mean instead)
+    di <- if (rids[r] %in% halo_r) mean(delta) else delta[i]
+    tau_ir <- base_tau + di + lambda[r] + int_bias[i, r]
     score[rows] <- if (rids[r] %in% erratic) sample(0:m, sum(rows), TRUE)
                    else .sim_item(theta[grid$p[rows]], tau_ir)
   }
@@ -429,6 +478,8 @@ simulate_mfrm <- function(n_persons = 80, n_items = 5, n_raters = 6,
   planted <- character(0)
   if (length(erratic)) planted <- c(planted,
     sprintf("%d erratic rater(s): %s", length(erratic), paste(erratic, collapse = ", ")))
+  if (length(halo_r)) planted <- c(planted,
+    sprintf("%d halo rater(s): %s", length(halo_r), paste(halo_r, collapse = ", ")))
   if (!is.null(interaction)) planted <- c(planted, sprintf(
     "rater-by-item bias: %s on %s (%.2f)", interaction$rater,
     interaction$item, interaction$bias))
@@ -439,7 +490,7 @@ simulate_mfrm <- function(n_persons = 80, n_items = 5, n_raters = 6,
     description = sprintf("%d persons x %d items x %d raters (%d ratings)",
                           N, I, R, nrow(d)),
     theta = theta, difficulty = delta, severity = lambda,
-    erratic = erratic, planted = planted)
+    erratic = erratic, halo = halo_r, planted = planted)
   class(d) <- c("rasch_sim", "data.frame")
   d
 }
@@ -506,4 +557,152 @@ simulate_efrm <- function(n_per_group = 300, items_per_set = 8, n_sets = 2,
     groups = grp, planted = planted)
   class(out) <- c("rasch_sim", "data.frame")
   out
+}
+
+#' Replicate a simulation for Monte Carlo studies
+#'
+#' Calls one of the \code{simulate_*} functions \code{n} times with successive
+#' seeds, returning the datasets as a list -- for power, Type-I, or
+#' parameter-recovery studies.
+#'
+#' @param FUN A simulator, e.g. \code{\link{simulate_rasch}}.
+#' @param n Number of datasets.
+#' @param ... Arguments passed to \code{FUN} (the same each replicate).
+#' @param seed Seed of the first replicate (each subsequent one increments it).
+#' @return A list of class \code{"rasch_sim_batch"}, one simulated dataset per
+#'   element.
+#' @examples
+#' # 20 datasets with a planted DIF item; how often is it flagged?
+#' batch <- sim_replicate(simulate_rasch, 20, n_persons = 400, n_items = 10,
+#'                        dif = list(items = "I05", uniform = 0.8), n_groups = 2,
+#'                        seed = 1)
+#' mean(vapply(batch, function(d)
+#'   dif_anova(rasch(d, factors = "group"))$summary$uniform_DIF[5], TRUE))
+#' @export
+sim_replicate <- function(FUN, n, ..., seed = NULL) {
+  base <- if (is.null(seed)) sample.int(1e6, 1L) else as.integer(seed)
+  reps <- lapply(seq_len(n), function(k) FUN(..., seed = base + k - 1L))
+  structure(reps, class = "rasch_sim_batch", n = as.integer(n),
+            layout = attr(reps[[1]], "truth")$layout)
+}
+
+#' @export
+print.rasch_sim_batch <- function(x, ...) {
+  cat(sprintf("%d simulated %s datasets (Monte Carlo batch)\n",
+              attr(x, "n"), attr(x, "layout")))
+  cat("Each element is a simulated dataset; fit and summarise across them, e.g.\n")
+  cat("  vapply(batch, function(d) <statistic of fit>, 0)\n")
+  invisible(x)
+}
+
+#' Parameter recovery of a fit against the simulation truth
+#'
+#' Compares the parameters recovered by a fit with the ones a
+#' \code{simulate_*} function planted (carried on the data as
+#' \code{attr(sim, "truth")}): item difficulties and person abilities for a
+#' Rasch fit, object locations for a paired-comparison fit, rater severities
+#' (with item and person measures) for a many-facet fit, and the set units for
+#' a frames fit. Locations are mean-centred before comparison, since the model
+#' identifies them only up to an origin.
+#'
+#' @param fit A fit of the simulated data (\code{\link{rasch}},
+#'   \code{\link{btl}}, \code{\link{rasch_mfrm}}, or \code{\link{rasch_efrm}}).
+#' @param sim The simulated data (from a \code{simulate_*} function).
+#' @return A list of class \code{"rasch_recovery"}: \code{summary} (per
+#'   parameter type: n, correlation, RMSE, bias) and \code{pieces} (the true
+#'   and estimated values behind each).
+#' @examples
+#' d <- simulate_rasch(500, 12, seed = 1)
+#' sim_recovery(rasch(d), d)$summary
+#' @export
+sim_recovery <- function(fit, sim) {
+  tr <- attr(sim, "truth")
+  if (is.null(tr)) stop("`sim` carries no simulation truth")
+  pieces <- list()
+  add <- function(name, true, est, label = NULL) {
+    true <- as.numeric(true); est <- as.numeric(est)
+    keep <- is.finite(true) & is.finite(est)
+    if (!any(keep)) return(invisible())
+    pieces[[name]] <<- data.frame(
+      parameter = name,
+      label = if (is.null(label)) NA_character_ else as.character(label)[keep],
+      true = true[keep], estimated = est[keep], stringsAsFactors = FALSE)
+  }
+  ctr <- function(v) v - mean(v)
+  lay <- tr$layout
+  if (lay == "rasch") {
+    ei <- setNames(fit$items$location, fit$items$item)
+    cm <- intersect(names(tr$difficulty), names(ei))
+    add("item difficulty", ctr(tr$difficulty[cm]), ctr(ei[cm]), cm)
+    add("person ability", tr$theta, fit$person$theta)
+  } else if (lay == "btl") {
+    eo <- setNames(fit$objects$location, fit$objects$object)
+    cm <- intersect(names(tr$location), names(eo))
+    add("object location", ctr(tr$location[cm]), ctr(eo[cm]), cm)
+  } else if (lay == "mfrm") {
+    fe <- fit$facet_effects[[1]]
+    es <- setNames(fe$severity, fe$level)
+    cm <- intersect(names(tr$severity), names(es))
+    add("rater severity", ctr(tr$severity[cm]), ctr(es[cm]), cm)
+    ei <- setNames(fit$items$location, fit$items$item)
+    ci <- intersect(names(tr$difficulty), names(ei))
+    add("item difficulty", ctr(tr$difficulty[ci]), ctr(ei[ci]), ci)
+    add("person ability", tr$theta, fit$person$theta)
+  } else if (lay == "efrm") {
+    at <- fit$alpha_table
+    # units are identified up to a common scale, so compare on the centred
+    # log scale (a ratio); the planted alpha is normalised the same way
+    add("set unit (log)", log(tr$alpha), log(at$alpha[match(
+      sprintf("set%d", seq_along(tr$alpha)), at$set)]),
+      sprintf("set%d", seq_along(tr$alpha)))
+  } else stop("unsupported layout: ", lay)
+
+  summ <- do.call(rbind, lapply(pieces, function(d) data.frame(
+    parameter = d$parameter[1], n = nrow(d),
+    correlation = if (nrow(d) > 2) stats::cor(d$true, d$estimated) else NA_real_,
+    rmse = sqrt(mean((d$estimated - d$true)^2)),
+    bias = mean(d$estimated - d$true), stringsAsFactors = FALSE)))
+  rownames(summ) <- NULL
+  structure(list(summary = summ, pieces = pieces, layout = lay),
+            class = "rasch_recovery")
+}
+
+#' @export
+print.rasch_recovery <- function(x, ...) {
+  cat("Parameter recovery (planted vs recovered):\n")
+  s <- x$summary
+  for (i in seq_len(nrow(s)))
+    cat(sprintf("  %-16s n=%-4d r=%.3f  RMSE=%.3f  bias=%+.3f\n",
+                s$parameter[i], s$n[i], s$correlation[i], s$rmse[i], s$bias[i]))
+  invisible(x)
+}
+
+#' Recovery scatter of planted against recovered parameters
+#'
+#' One true-versus-estimated panel per parameter type, with the identity line
+#' and the correlation and RMSE.
+#'
+#' @param x A \code{"rasch_recovery"} object.
+#' @param ... Unused.
+#' @return Called for its plotting side effect.
+#' @export
+plot_recovery <- function(x, ...) {
+  stopifnot(inherits(x, "rasch_recovery"))
+  np <- length(x$pieces)
+  op <- par(mfrow = c(1, np), mar = c(4.2, 4.2, 2.4, 1), mgp = c(2.4, 0.7, 0),
+            las = 1, col.axis = .rr$ink, col.lab = .rr$ink, col.main = .rr$ink,
+            cex.main = 1.0, font.main = 2)
+  on.exit(par(op))
+  for (i in seq_len(np)) {
+    d <- x$pieces[[i]]; s <- x$summary[i, ]
+    rng <- range(c(d$true, d$estimated))
+    plot(d$true, d$estimated, xlim = rng, ylim = rng, xlab = "planted",
+         ylab = "recovered", main = d$parameter[1], axes = FALSE,
+         pch = 21, bg = .rr$blue, col = "white", cex = 1.1)
+    abline(0, 1, col = .rr$red, lty = 2, lwd = 1.5)
+    axis(1, col = .rr$grid, col.ticks = .rr$soft)
+    axis(2, col = .rr$grid, col.ticks = .rr$soft)
+    mtext(sprintf("r = %.3f   RMSE = %.2f", s$correlation, s$rmse), 3,
+          line = 0.2, cex = 0.8, col = .rr$soft)
+  }
 }

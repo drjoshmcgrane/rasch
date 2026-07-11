@@ -20,6 +20,8 @@ simulate_rasch(
   dependence = NULL,
   dif = NULL,
   careless = 0,
+  response_style = NULL,
+  speeded = 0,
   disordered = NULL,
   n_groups = 1,
   missing = 0,
@@ -66,6 +68,15 @@ shift (\code{uniform}) and/or a slope change (\code{nonuniform}). Needs
 
 \item{careless}{Proportion of persons who answer at random (person misfit;
 feeds person infit/outfit).}
+
+\item{response_style}{\code{NULL}, or \code{list(type=, prop=)} with
+\code{type} \code{"extreme"} or \code{"middle"}: a proportion of persons
+favour the end (or middle) categories regardless of the trait
+(polytomous; feeds the category diagnostics and person fit).}
+
+\item{speeded}{Proportion not-reached at the last item: a growing tail of
+missing responses over the final items, as under time pressure (feeds the
+item statistics and the missingness pattern).}
 
 \item{disordered}{\code{NULL} or item names/indices given disordered
 thresholds (polytomous; feeds the threshold diagnostics).}

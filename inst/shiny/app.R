@@ -1443,11 +1443,11 @@ panel_simulate <- nav_panel("Simulate", value = "p_simulate", icon = bs_icon("di
   layout_sidebar(
     sidebar = sidebar(width = 400, open = "always",
       radioButtons("sim_layout", "Data type", c(
-        "Wide (person x item)" = "rasch",
+        "Rasch" = "rasch",
         "Paired comparisons (BTL)" = "btl",
         "Rated / many-facet (MFRM)" = "mfrm",
         "Frames (EFRM)" = "efrm")),
-      # ---------------------------------------------------------- wide ----
+      # ---------------------------------------------------------- Rasch ----
       conditionalPanel("input.sim_layout == 'rasch'",
         sliderInput("sr_persons", "Persons", 100, 2000, 600, 50),
         sliderInput("sr_items", "Items", 5, 40, 15, 1),
@@ -1456,6 +1456,15 @@ panel_simulate <- nav_panel("Simulate", value = "p_simulate", icon = bs_icon("di
             "Rating scale" = "RSM")),
         conditionalPanel("input.sr_model != 'dichotomous'",
           sliderInput("sr_cats", "Categories", 3, 6, 4, 1)),
+        accordion(open = FALSE, accordion_panel(
+          title = "Population", value = "sr_pop",
+          sliderInput("sr_mean", "Person mean (logits)", -2, 2, 0, 0.25),
+          sliderInput("sr_sd", "Person SD (logits)", 0.4, 2.5, 1, 0.1),
+          selectInput("sr_dist", "Person distribution", c(
+            "Normal" = "normal", "Uniform" = "uniform",
+            "Skewed" = "skew", "Bimodal" = "bimodal")),
+          sliderInput("sr_diff", "Item difficulty range", -4, 4,
+                      c(-2.5, 2.5), 0.25))),
         accordion(open = FALSE, accordion_panel(
           title = span(bs_icon("bug"), " Misfit to plant"), value = "misfit",
           sliderInput("sr_over", "Over-discriminating items", 0, 5, 0, 1),
@@ -1469,6 +1478,13 @@ panel_simulate <- nav_panel("Simulate", value = "p_simulate", icon = bs_icon("di
           checkboxInput("sr_dif", "DIF between two groups", FALSE),
           conditionalPanel("input.sr_dif",
             sliderInput("sr_difmag", "DIF magnitude (logits)", 0.3, 2, 1, 0.1)),
+          conditionalPanel("input.sr_model != 'dichotomous'",
+            checkboxInput("sr_style", "Response style", FALSE),
+            conditionalPanel("input.sr_style",
+              selectInput("sr_styletype", "style",
+                c("Extreme categories" = "extreme",
+                  "Middle categories" = "middle")))),
+          sliderInput("sr_speeded", "Speededness (not-reached)", 0, 0.6, 0, 0.05),
           sliderInput("sr_careless", "Careless responders", 0, 0.3, 0, 0.02),
           sliderInput("sr_missing", "Missing data", 0, 0.3, 0, 0.02)))),
       # ---------------------------------------------------------- BTL ----
@@ -1480,6 +1496,7 @@ panel_simulate <- nav_panel("Simulate", value = "p_simulate", icon = bs_icon("di
           c("Winner" = "dichotomous", "Graded margin" = "graded")),
         conditionalPanel("input.sb_model == 'graded'",
           sliderInput("sb_cats", "Categories", 3, 6, 4, 1)),
+        sliderInput("sb_objsd", "Object-location spread", 0.5, 2.5, 1, 0.1),
         accordion(open = FALSE, accordion_panel(
           title = span(bs_icon("bug"), " Misfit to plant"), value = "misfit",
           sliderInput("sb_erratic", "Erratic judges", 0, 0.4, 0, 0.05),
@@ -1493,10 +1510,13 @@ panel_simulate <- nav_panel("Simulate", value = "p_simulate", icon = bs_icon("di
         sliderInput("sm_items", "Items", 3, 12, 5, 1),
         sliderInput("sm_raters", "Raters", 3, 15, 6, 1),
         sliderInput("sm_cats", "Categories", 3, 6, 4, 1),
+        sliderInput("sm_thsd", "Person SD (logits)", 0.5, 2.5, 1.2, 0.1),
+        sliderInput("sm_itemsd", "Item-difficulty spread", 0.3, 2, 1, 0.1),
         accordion(open = FALSE, accordion_panel(
           title = span(bs_icon("bug"), " Misfit to plant"), value = "misfit",
           sliderInput("sm_sev", "Rater-severity spread", 0, 1.5, 0.6, 0.1),
           sliderInput("sm_erratic", "Erratic raters", 0, 0.4, 0, 0.05),
+          sliderInput("sm_halo", "Halo raters", 0, 0.4, 0, 0.05),
           checkboxInput("sm_int", "Rater-by-item interaction", FALSE)))),
       # ---------------------------------------------------------- EFRM ----
       conditionalPanel("input.sim_layout == 'efrm'",
@@ -1504,6 +1524,7 @@ panel_simulate <- nav_panel("Simulate", value = "p_simulate", icon = bs_icon("di
         sliderInput("se_items", "Items per set", 5, 15, 8, 1),
         sliderInput("se_sets", "Item sets", 2, 4, 2, 1),
         sliderInput("se_groups", "Person groups", 2, 4, 2, 1),
+        sliderInput("se_thsd", "Person SD (logits)", 0.8, 2.5, 1.3, 0.1),
         sliderInput("se_setratio", "Set-unit ratio", 1, 2, 1.3, 0.05),
         sliderInput("se_grpratio", "Group-unit ratio", 1, 2, 1, 0.05)),
       hr(),
@@ -1516,8 +1537,19 @@ panel_simulate <- nav_panel("Simulate", value = "p_simulate", icon = bs_icon("di
       p(class = "text-muted small mb-0",
         "Pick a data type, dial in the size and any misfit, and press Simulate. The data loads as the current dataset with its roles set; go to Data and press Run to watch the matching diagnostic fire. Everything you plant is listed below, and the true parameters are attached to the data.")),
     uiOutput("sim_truth"),
+    conditionalPanel("output.sim_has_recovery == 'yes'",
+      card(class = "mt-3", full_screen = TRUE,
+        card_header(span(bs_icon("bullseye"), " Parameter recovery")),
+        card_body(
+          p(class = "text-muted small mb-2",
+            "Planted vs recovered, once you Run. Locations are mean-centred (the model fixes only the origin)."),
+          DTOutput("sim_recovery_tbl"),
+          plotOutput("sim_recovery_plot", height = "300px"), padding = 10))),
     conditionalPanel("output.sim_ready == 'yes'",
-      card(full_screen = TRUE,
+      card(class = "mt-3",
+        card_header(span(bs_icon("code-slash"), " Reproducible code")),
+        card_body(verbatimTextOutput("sim_code"), padding = 10)),
+      card(class = "mt-3", full_screen = TRUE,
         card_header("Preview of the loaded data (first rows)"),
         card_body(DTOutput("sim_preview"), padding = 8))))
   ))
@@ -1585,12 +1617,13 @@ server <- function(input, output, session) {
   # an upload until one of those replaces it
   sim_data <- reactiveVal(NULL)
   sim_truth_val <- reactiveVal(NULL)
+  sim_code_val <- reactiveVal(NULL)
   # picking an example dataset also selects the matching model; uploading a
   # file clears the example selection
   observeEvent(input$demo_choice, {
     dc <- input$demo_choice
     if (!identical(dc, "none")) {
-      sim_data(NULL); sim_truth_val(NULL)
+      sim_data(NULL); sim_truth_val(NULL); sim_code_val(NULL)
       updateRadioButtons(session, "model_type",
                          selected = if (dc %in% c("dich", "pcm", "rsm"))
                            "rasch" else dc)
@@ -1600,7 +1633,7 @@ server <- function(input, output, session) {
     }
   }, ignoreInit = TRUE)
   observeEvent(input$file, {
-    sim_data(NULL); sim_truth_val(NULL)
+    sim_data(NULL); sim_truth_val(NULL); sim_code_val(NULL)
     updateSelectInput(session, "demo_choice", selected = "none")
   })
 
@@ -1637,30 +1670,40 @@ server <- function(input, output, session) {
         dif <- if (isTRUE(input$sr_dif))
           list(items = sprintf("I%02d", max(1L, round(I / 2))),
                uniform = input$sr_difmag) else NULL
+        rstyle <- if (isTRUE(input$sr_style) && input$sr_model != "dichotomous")
+          list(type = input$sr_styletype %||% "extreme", prop = 0.25) else NULL
         simulate_rasch(input$sr_persons, I, model = input$sr_model,
-          n_categories = input$sr_cats %||% 4L, discrimination = disc,
+          n_categories = input$sr_cats %||% 4L,
+          theta_mean = input$sr_mean %||% 0, theta_sd = input$sr_sd %||% 1,
+          theta_dist = input$sr_dist %||% "normal",
+          difficulty = input$sr_diff %||% c(-2.5, 2.5),
+          discrimination = disc,
           guessing = guess, second_dim = s2, dependence = dep, dif = dif,
           n_groups = if (!is.null(dif)) 2L else 1L,
-          careless = input$sr_careless, missing = input$sr_missing,
+          careless = input$sr_careless, response_style = rstyle,
+          speeded = input$sr_speeded %||% 0, missing = input$sr_missing,
           seed = input$sim_seed)
       } else if (lay == "btl") {
         s2 <- if (isTRUE(input$sb_2a)) list(rho = input$sb_rho) else NULL
         dep <- if (isTRUE(input$sb_dep)) list(exposure = 0.6, carry_over = 1) else NULL
         simulate_btl(input$sb_objects, input$sb_judges, input$sb_reps,
           model = input$sb_model, n_categories = input$sb_cats %||% 4L,
+          object_sd = input$sb_objsd %||% 1,
           second_attribute = s2, erratic_judges = input$sb_erratic,
           dependence = dep, seed = input$sim_seed)
       } else if (lay == "mfrm") {
         intr <- if (isTRUE(input$sm_int))
           list(rater = "R2", item = "I2", bias = 1.8) else NULL
         simulate_mfrm(input$sm_persons, input$sm_items, input$sm_raters,
-          n_categories = input$sm_cats, rater_severity_sd = input$sm_sev,
-          erratic_raters = input$sm_erratic, interaction = intr,
-          seed = input$sim_seed)
+          n_categories = input$sm_cats, theta_sd = input$sm_thsd %||% 1.2,
+          item_sd = input$sm_itemsd %||% 1, rater_severity_sd = input$sm_sev,
+          erratic_raters = input$sm_erratic, halo = input$sm_halo %||% 0,
+          interaction = intr, seed = input$sim_seed)
       } else {
         simulate_efrm(input$se_pergroup, input$se_items, input$se_sets,
           input$se_groups, set_unit_ratio = input$se_setratio,
-          group_unit_ratio = input$se_grpratio, seed = input$sim_seed)
+          group_unit_ratio = input$se_grpratio,
+          theta_sd = input$se_thsd %||% 1.3, seed = input$sim_seed)
       }
     }), error = function(e) e)
     if (inherits(d, "error")) {
@@ -1668,6 +1711,45 @@ server <- function(input, output, session) {
                        type = "error", duration = 10); return()
     }
     sim_truth_val(attr(d, "truth"))
+    # a reproducible simulate_*() call reflecting the current settings
+    sim_code_val(switch(lay,
+      rasch = {
+        a <- c(sprintf("n_persons = %d, n_items = %d", input$sr_persons, I),
+          sprintf('model = "%s"', input$sr_model),
+          sprintf("theta_mean = %s, theta_sd = %s", input$sr_mean, input$sr_sd),
+          if (input$sr_dist != "normal") sprintf('theta_dist = "%s"', input$sr_dist),
+          sprintf("difficulty = c(%s, %s)", input$sr_diff[1], input$sr_diff[2]),
+          if (input$sr_model != "dichotomous") sprintf("n_categories = %d", input$sr_cats %||% 4L),
+          if (input$sr_over > 0 || input$sr_under > 0)
+            sprintf("discrimination = c(%s)", paste(round(disc, 1), collapse = ", ")),
+          if (any(guess != 0)) sprintf("guessing = c(%s)", paste(round(guess, 2), collapse = ", ")),
+          if (!is.null(s2)) sprintf('second_dim = list(items = c(%s), rho = %s)',
+            paste0('"', s2$items, '"', collapse = ", "), s2$rho),
+          if (!is.null(dep)) 'dependence = list(pairs = list(c("I01", "I02")), strength = 2.2)',
+          if (!is.null(dif)) sprintf('dif = list(items = "%s", uniform = %s), n_groups = 2',
+            dif$items, dif$uniform),
+          if (!is.null(rstyle)) sprintf('response_style = list(type = "%s", prop = 0.25)', rstyle$type),
+          if (input$sr_speeded > 0) sprintf("speeded = %s", input$sr_speeded),
+          if (input$sr_careless > 0) sprintf("careless = %s", input$sr_careless),
+          if (input$sr_missing > 0) sprintf("missing = %s", input$sr_missing))
+        sprintf("simulate_rasch(\n  %s,\n  seed = %d)",
+                paste(Filter(nzchar, a), collapse = ",\n  "), input$sim_seed)
+      },
+      btl = sprintf('simulate_btl(%d, %d, %d, model = "%s", object_sd = %s%s%s%s,\n  seed = %d)',
+        input$sb_objects, input$sb_judges, input$sb_reps, input$sb_model, input$sb_objsd,
+        if (input$sb_erratic > 0) sprintf(", erratic_judges = %s", input$sb_erratic) else "",
+        if (isTRUE(input$sb_2a)) sprintf(", second_attribute = list(rho = %s)", input$sb_rho) else "",
+        if (isTRUE(input$sb_dep)) ", dependence = list(exposure = 0.6, carry_over = 1)" else "",
+        input$sim_seed),
+      mfrm = sprintf('simulate_mfrm(%d, %d, %d, n_categories = %d, rater_severity_sd = %s%s%s%s,\n  seed = %d)',
+        input$sm_persons, input$sm_items, input$sm_raters, input$sm_cats, input$sm_sev,
+        if (input$sm_erratic > 0) sprintf(", erratic_raters = %s", input$sm_erratic) else "",
+        if (input$sm_halo > 0) sprintf(", halo = %s", input$sm_halo) else "",
+        if (isTRUE(input$sm_int)) ', interaction = list(rater = "R2", item = "I2", bias = 1.8)' else "",
+        input$sim_seed),
+      efrm = sprintf('simulate_efrm(%d, %d, %d, %d, set_unit_ratio = %s, group_unit_ratio = %s,\n  seed = %d)',
+        input$se_pergroup, input$se_items, input$se_sets, input$se_groups,
+        input$se_setratio, input$se_grpratio, input$sim_seed)))
     updateSelectInput(session, "demo_choice", selected = "none")
     updateRadioButtons(session, "model_type",
                        selected = if (lay == "rasch") "rasch" else lay)
@@ -1702,6 +1784,24 @@ server <- function(input, output, session) {
     datatable(head(sim_data(), 12), rownames = FALSE, style = "bootstrap5",
               class = "table-sm compact", options = list(dom = "t", scrollX = TRUE))
   })
+  output$sim_code <- renderText(sim_code_val() %||% "")
+  # parameter recovery: the fit matching the simulated layout, compared to the
+  # attached truth (re-attached, since sim_data() is stored as a plain frame)
+  sim_recovery_val <- reactive({
+    tr <- sim_truth_val(); req(!is.null(tr))
+    f <- if (identical(tr$layout, "btl")) btl_fit() else fit_or_null()
+    req(!is.null(f))
+    obj <- sim_data(); attr(obj, "truth") <- tr
+    tryCatch(sim_recovery(f, obj), error = function(e) NULL)
+  })
+  output$sim_has_recovery <- reactive(if (!is.null(sim_recovery_val())) "yes" else "no")
+  outputOptions(output, "sim_has_recovery", suspendWhenHidden = FALSE)
+  output$sim_recovery_tbl <- renderDT({
+    r <- sim_recovery_val(); req(!is.null(r)); num_dt(r$summary)
+  })
+  output$sim_recovery_plot <- renderPlot({
+    r <- sim_recovery_val(); req(!is.null(r)); plot_recovery(r)
+  }, res = 96)
 
   anchors_in <- reactive({
     if (is.null(input$anchor_file)) return(NULL)

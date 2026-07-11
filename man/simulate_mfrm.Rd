@@ -14,6 +14,7 @@ simulate_mfrm(
   rater_severity_sd = 0.6,
   erratic_raters = 0,
   interaction = NULL,
+  halo = 0,
   seed = NULL
 )
 }
@@ -33,6 +34,10 @@ rater fit residual).}
 \item{interaction}{\code{NULL}, or \code{list(rater=, item=, bias=)}: one
 rater is unusually harsh (positive) or lenient (negative) on one item.
 Feeds the item-by-rater interaction (fit with \code{interaction = }).}
+
+\item{halo}{Proportion of raters showing a halo effect: they rate by the
+person's overall level and barely differentiate items (feeds the rater
+fit residual and the item-by-rater interaction).}
 
 \item{seed}{Optional RNG seed.}
 }

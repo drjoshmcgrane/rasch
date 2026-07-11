@@ -83,3 +83,51 @@ test_that("simulate_efrm plants a frame-unit ratio rasch_efrm recovers", {
   expect_gt(ratio, 1.2); expect_lt(ratio, 1.55)          # ~1.35 recovered
   expect_output(print(d), "set-unit ratio")
 })
+
+test_that("the extra misfit types plant detectable signals", {
+  # extreme response style: style persons over-use the end categories
+  d <- simulate_rasch(600, 12, model = "PCM", n_categories = 4,
+                      response_style = list(type = "extreme", prop = 0.3), seed = 1)
+  si <- attr(d, "truth")$style_idx; cats <- as.matrix(d[, grep("^I", names(d))])
+  expect_gt(mean(cats[si, ] %in% c(0, 3)), mean(cats[-si, ] %in% c(0, 3)) + 0.1)
+
+  # speededness: a missing tail growing toward the last item
+  d <- simulate_rasch(800, 15, speeded = 0.5, seed = 2)
+  miss <- colMeans(is.na(as.matrix(d[, grep("^I", names(d))])))
+  expect_lt(miss[8], 0.02)
+  expect_gt(miss[15], 0.3)
+  expect_true(miss[15] > miss[13] && miss[13] > miss[11])   # monotone gradient
+
+  # MFRM halo: halo raters barely differentiate items -> large interaction
+  d <- simulate_mfrm(140, 6, 6, rater_severity_sd = 0.5, item_sd = 1.3,
+                     halo = 0.17, seed = 5)
+  mf <- rasch_mfrm(d, person = "person", item = "item", score = "score",
+                   facets = "rater", interaction = "rater")
+  hr <- attr(d, "truth")$halo; ie <- mf$interaction_effects
+  expect_gt(mean(abs(ie$gamma[ie$level %in% hr])),
+            2 * mean(abs(ie$gamma[!ie$level %in% hr])))
+})
+
+test_that("sim_replicate and sim_recovery support Monte Carlo and recovery", {
+  b <- sim_replicate(simulate_rasch, 6, n_persons = 300, n_items = 8, seed = 1)
+  expect_s3_class(b, "rasch_sim_batch")
+  expect_length(b, 6)
+  expect_false(identical(b[[1]]$I01, b[[2]]$I01))          # different datasets
+
+  # recovery: a clean fit gets its planted parameters back
+  d <- simulate_rasch(600, 12, seed = 1)
+  rec <- sim_recovery(rasch(d), d)
+  expect_s3_class(rec, "rasch_recovery")
+  s <- rec$summary
+  expect_gt(s$correlation[s$parameter == "item difficulty"], 0.95)
+  # person ability is noisier (WLE precision from only 12 items limits it)
+  expect_gt(s$correlation[s$parameter == "person ability"], 0.75)
+  expect_lt(abs(s$bias[s$parameter == "item difficulty"]), 0.1)
+  pdf(NULL); on.exit(dev.off()); expect_no_error(plot_recovery(rec))
+
+  # recovery across the other layouts
+  d <- simulate_btl(8, 12, seed = 2)
+  rb <- sim_recovery(btl(d, "object_a", "object_b", winner = "winner",
+                         judge = "judge"), d)
+  expect_gt(rb$summary$correlation[1], 0.9)
+})

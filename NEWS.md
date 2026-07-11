@@ -1,3 +1,21 @@
+# rasch 1.7.0
+
+* Simulation gains the standard controls of a proper simulation tool.
+  - Population parameters: the person distribution (mean, SD, shape) and the
+    item-difficulty range are now set directly (in the package and the app).
+  - More misfit: response styles (extreme / midpoint categories) and
+    speededness (a not-reached tail) for \code{simulate_rasch()}, and a halo
+    effect for \code{simulate_mfrm()}.
+  - \code{sim_replicate()} generates a batch of datasets for Monte Carlo
+    power, Type-I, or recovery studies.
+  - \code{sim_recovery()} and \code{plot_recovery()} compare the parameters a
+    fit recovers with the ones that were planted (correlation, RMSE, bias, and
+    a true-vs-estimated scatter) for every layout.
+* Shiny app: the Simulate page renames the wide layout to "Rasch", exposes
+  the population parameters, shows a parameter-recovery report and the
+  true-vs-estimated scatter after Run, and prints the reproducible
+  \code{simulate_*()} call.
+
 # rasch 1.6.1
 
 * Shiny app: a Simulate page (under More) exposes all four simulators with a
