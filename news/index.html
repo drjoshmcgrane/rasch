@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.7.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.8.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,19 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.8.0" id="rasch-180">rasch 1.8.0<a class="anchor" aria-label="anchor" href="#rasch-180"></a></h2>
+<p>Three further paired-comparison analogues of the Rasch tool set, and CRAN housekeeping.</p>
+<ul><li>Anchored estimation for paired comparisons: <code>btl(anchors = c(Object = value, ...))</code> holds the named objects at fixed locations and estimates the rest on that scale (no sum-zero constraint; anchored objects report se 0) – the equating workflow’s second half, mirroring <code>rasch(anchors=)</code>. An anchored object at a response boundary is an error rather than a silent removal.</li>
+<li>First-position advantage: <code>btl(position = TRUE)</code> estimates the pure positional (first/left-presented) advantage of the Davidson &amp; Beaver
+<ol start="1977" style="list-style-type: decimal"><li>order-effect device as a constant covariate alongside any exposure and carry-over effects; it is identified by triangle closure even under fixed presentation orders (more weakly, with honest SEs). The dimensionality reference simulation carries the fitted coefficient.</li>
+</ol></li>
+<li>Common-object equating: <code><a href="../reference/btl_equate.html">btl_equate()</a></code> compares two paired-comparison calibrations (or a calibration against a bank) through their common objects – precision-weighted origin shift, per-object drift t-tests with multiplicity adjustment, equated locations – with <code><a href="../reference/plot_btl_equate.html">plot_btl_equate()</a></code>; the standards-maintenance workflow of comparative judgement across panels or years.</li>
+<li>Targeting and adaptive pairing: <code><a href="../reference/btl_information.html">btl_information()</a></code> (per-comparison Fisher information and per-object design information, with the naive 1/sqrt(information) SE beside the judge-clustered sandwich), <code><a href="../reference/plot_btl_targeting.html">plot_btl_targeting()</a></code>, and <code><a href="../reference/btl_next_pairs.html">btl_next_pairs()</a></code> – the greedy most-informative-next-pair step of adaptive comparative judgement (Pollitt 2012), with the Bramley (2015) reliability-inflation caution documented.</li>
+<li>CRAN housekeeping: pure-ASCII sources, quoted ‘shiny’ in DESCRIPTION, heavy Monte-Carlo recovery tests wrapped in <code>skip_on_cran()</code> (they run locally and on CI), and <code>cran-comments.md</code> drafted from a full <code>--as-cran</code> check (about 3 minutes; slowest example 1.4s).</li>
+<li>An adversarial verification round over the new features also caught and fixed a PRE-EXISTING inference bug: <code>btl(count=)</code> inflated every sandwich standard error by about the square root of the count (the meat weighted aggregated rows twice; point estimates were always correct). Count- weighted fits now reproduce the expanded-data standard errors exactly; OSI and all z/p values follow. Additionally from that round: <code><a href="../reference/btl_equate.html">btl_equate()</a></code>’s shift standard error now uses the stored covariance of each calibration (it treated the common-object differences as independent, overstating the SE several-fold; 95 per cent coverage verified) and documents the majority-drift limitation of single-shift equating; <code><a href="../reference/btl_next_pairs.html">btl_next_pairs()</a></code> ranks by the exact one-step reduction in total location variance (a Sherman-Morrison update on the fit’s covariance), verified to beat low-priority pairs empirically; and <code><a href="../reference/btl_information.html">btl_information()</a></code>’s <code>se_naive</code> is documented honestly as a single-parameter lower bound rather than an independence benchmark.</li>
+<li>Shiny app: the Targeting and Equating tabs gain paired-comparison variants (design information + targeting plot + adaptive next-pair recommendations; reference-calibration upload with drift table and plot), and the Data roles gain a first-position-advantage switch and an object-anchors upload.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.7.1" id="rasch-171">rasch 1.7.1<a class="anchor" aria-label="anchor" href="#rasch-171"></a></h2>
 <p>A statistical audit of the new simulation and paired-comparison independence code (23 findings across two adversarial rounds, all fixed), plus a vignette and a logo.</p>

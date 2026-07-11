@@ -9,6 +9,9 @@
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/btl.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/btl_dif.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/btl_dimensionality.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/btl_equate.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/btl_information.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/btl_next_pairs.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/btl_transitivity.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/chisq_detail.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/combine_items.html</loc></url>
@@ -38,9 +41,11 @@
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl_categories.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl_dependence.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl_dim_map.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl_equate.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl_icc.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl_judge_map.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl_scree.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl_targeting.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl_transitivity.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_catfreq.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_ccc.html</loc></url>

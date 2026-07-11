@@ -467,6 +467,13 @@ diagnostics (transitivity and the residual bimension decomposition).
   : Transitivity of paired comparisons
 - [`btl_dimensionality()`](https://drjoshmcgrane.github.io/rasch/reference/btl_dimensionality.md)
   : Residual dimensionality of paired comparisons
+- [`btl_equate()`](https://drjoshmcgrane.github.io/rasch/reference/btl_equate.md)
+  : Equate two paired-comparison calibrations through their common
+  objects
+- [`btl_information()`](https://drjoshmcgrane.github.io/rasch/reference/btl_information.md)
+  : Information and targeting of a paired-comparison design
+- [`btl_next_pairs()`](https://drjoshmcgrane.github.io/rasch/reference/btl_next_pairs.md)
+  : Recommend the next informative comparisons (adaptive step)
 - [`judge_surprise()`](https://drjoshmcgrane.github.io/rasch/reference/judge_surprise.md)
   : Unexpected judgements of one judge
 - [`judge_pair_surprise()`](https://drjoshmcgrane.github.io/rasch/reference/judge_pair_surprise.md)
@@ -487,6 +494,10 @@ diagnostics (transitivity and the residual bimension decomposition).
   : Residual map of the leading paired-comparison bimension
 - [`plot_btl_judge_map()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_judge_map.md)
   : Unexpected-judgement map for one judge (pair level)
+- [`plot_btl_equate()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_equate.md)
+  : Plot a paired-comparison equating comparison
+- [`plot_btl_targeting()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_targeting.md)
+  : Targeting plot for a paired-comparison design
 
 ## Plots
 

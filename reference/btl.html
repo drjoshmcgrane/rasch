@@ -31,7 +31,7 @@ graph must remain connected."><meta property="og:image" content="https://drjoshm
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.7.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.8.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -91,6 +91,8 @@ graph must remain connected.</p>
 <span>  judge <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  count <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  order <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  position <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  anchors <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  ties <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"drop"</span>, <span class="st">"half"</span>, <span class="st">"error"</span><span class="op">)</span>,</span>
 <span>  thresholds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"free"</span>, <span class="st">"pc"</span><span class="op">)</span>,</span>
 <span>  maxit <span class="op">=</span> <span class="fl">60</span>,</span>
@@ -161,6 +163,33 @@ reported in <code>dependence</code>. Incompatible with
 <code>ties = "half"</code>.</p></dd>
 
 
+<dt id="arg-position">position<a class="anchor" aria-label="anchor" href="#arg-position"></a></dt>
+<dd><p>Logical: when <code>TRUE</code>, <code>object_a</code> is taken as the
+first-presented (left) object of every comparison and a first-position
+advantage is estimated – a single coefficient, in logits, added to
+every comparison's location difference, the pure positional form of the
+Davidson and Beaver (1977) within-pair order-effect device. It is
+reported in <code>dependence</code> with <code>effect = "position"</code> (every
+comparison is informative, so <code>n_informative</code> is the total weighted
+comparison count) and estimated jointly with the locations, alongside the
+exposure and carry-over effects when <code>order</code> is also given.
+Identification comes from triangle closure (K &gt;= 3), so the constant
+oriented covariate is estimable even when each pair has a fixed
+orientation, though weakly. Note that <code>ties = "half"</code> duplicates
+rows in the same orientation, so the first position stays well defined.</p></dd>
+
+
+<dt id="arg-anchors">anchors<a class="anchor" aria-label="anchor" href="#arg-anchors"></a></dt>
+<dd><p>Optional named numeric vector for equating: names are object
+names, values are fixed locations in logits. The named objects are held
+exactly at those locations and the remaining objects are estimated freely
+with no sum-zero constraint – the origin and scale come from the anchors,
+exactly as an anchored <code><a href="rasch.html">rasch</a></code> calibration works. Anchored
+objects report a standard error of zero (their location is a constant, not
+an estimate). An anchored object that is undefeated or winless is an error,
+not silently removed as a free boundary object would be.</p></dd>
+
+
 <dt id="arg-ties">ties<a class="anchor" aria-label="anchor" href="#arg-ties"></a></dt>
 <dd><p>How to treat ties in the dichotomous analysis:
 <code>"drop"</code> (default, removed with a note), <code>"half"</code> (half a
@@ -228,6 +257,9 @@ the proportion of observed location variance not due to error.</p>
   On extending the Bradley-Terry model to accommodate ties in paired
   comparison experiments. Journal of the American Statistical
   Association, 65(329), 317-328.</p>
+<p>Davidson, R. R., &amp; Beaver, R. J. (1977). On extending the Bradley-Terry
+  model to incorporate within-pair order effects. Biometrics, 33(4),
+  693-702.</p>
     </div>
 
     <div class="section level2">
