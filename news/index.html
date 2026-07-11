@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,10 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.6.1" id="rasch-161">rasch 1.6.1<a class="anchor" aria-label="anchor" href="#rasch-161"></a></h2>
+<ul><li>Shiny app: a Simulate page (under More) exposes all four simulators with a data-type selector and per-layout misfit controls. Pressing Simulate generates the data, loads it as the current dataset with its roles set, and lists what was planted; pressing Run then analyses it so the matching diagnostic can be watched firing. Verified end to end for every layout (e.g. a planted DIF item is flagged by dif_anova, a many-facet fit recovers its rater severities).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.6.0" id="rasch-160">rasch 1.6.0<a class="anchor" aria-label="anchor" href="#rasch-160"></a></h2>
 <ul><li>Data simulation across all four model families, each with dial-in departures from the model – so a known pathology can be planted and the matching diagnostic watched as it fires. Every result carries the true parameters () and prints what was planted.

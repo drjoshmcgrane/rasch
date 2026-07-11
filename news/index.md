@@ -1,5 +1,15 @@
 # Changelog
 
+## rasch 1.6.1
+
+- Shiny app: a Simulate page (under More) exposes all four simulators
+  with a data-type selector and per-layout misfit controls. Pressing
+  Simulate generates the data, loads it as the current dataset with its
+  roles set, and lists what was planted; pressing Run then analyses it
+  so the matching diagnostic can be watched firing. Verified end to end
+  for every layout (e.g. a planted DIF item is flagged by dif_anova, a
+  many-facet fit recovers its rater severities).
+
 ## rasch 1.6.0
 
 - Data simulation across all four model families, each with dial-in
