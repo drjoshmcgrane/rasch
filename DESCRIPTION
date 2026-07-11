@@ -1,7 +1,7 @@
 Package: rasch
 Type: Package
 Title: Pairwise Conditional Rasch Measurement Analysis and Diagnostics
-Version: 1.7.0
+Version: 1.7.1
 Authors@R: person("Josh", "McGrane", role = c("aut", "cre"),
     email = "drjoshmcgrane@gmail.com")
 Description: Pairwise conditional maximum likelihood estimation of dichotomous
@@ -74,6 +74,7 @@ BugReports: https://github.com/drjoshmcgrane/rasch/issues
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports: stats, graphics, grDevices, utils
-Suggests: testthat (>= 3.0.0), shiny, bslib, DT, bsicons
+Suggests: testthat (>= 3.0.0), shiny, bslib, DT, bsicons, knitr, rmarkdown
+VignetteBuilder: knitr
 RoxygenNote: 7.3.3
 Config/testthat/edition: 3

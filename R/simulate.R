@@ -40,13 +40,21 @@
   as.integer(rowSums(stats::runif(length(theta)) > cs))     # category 0..m
 }
 
-# even thresholds around an item location with a given spread (ordered), or
-# deliberately disordered (a middle threshold moved below the one before it)
-.sim_thresholds <- function(delta, m, spread, disordered = FALSE) {
+# thresholds around an item location: evenly spread (rating-scale pattern),
+# or with a supplied relative pattern (partial-credit: pattern varies by
+# item); optionally deliberately disordered (one threshold dropped below its
+# predecessor, re-centred so the item's mean location is preserved)
+.sim_thresholds <- function(delta, m, spread, disordered = FALSE,
+                            pattern = NULL) {
   if (m == 1L) return(delta)
-  step <- seq(-1, 1, length.out = m) * spread
+  step <- if (is.null(pattern)) seq(-1, 1, length.out = m) * spread
+          else pattern
   tau <- delta + step - mean(step)
-  if (disordered && m >= 2L) { i <- ceiling(m / 2); tau[i] <- tau[i] - 2.2 * spread }
+  if (disordered && m >= 2L) {
+    i <- max(2L, ceiling(m / 2))           # always has a predecessor to undercut
+    tau[i] <- tau[i] - 2.2 * spread
+    tau <- tau - mean(tau) + delta         # keep the item's location honest
+  }
   tau
 }
 
@@ -59,7 +67,10 @@
 #' true parameters attached as \code{attr(x, "truth")}.
 #'
 #' @param n_persons,n_items Sample size and test length.
-#' @param model \code{"dichotomous"}, \code{"PCM"}, or \code{"RSM"}.
+#' @param model \code{"dichotomous"}, \code{"PCM"}, or \code{"RSM"}. Under
+#'   \code{"RSM"} every item shares one category-threshold pattern (items
+#'   differ by location only); under \code{"PCM"} each item's threshold
+#'   spacings and span are drawn afresh, as the partial credit model allows.
 #' @param n_categories Response categories for polytomous models (>= 3).
 #' @param theta_mean,theta_sd,theta_dist Person distribution: mean, SD, and
 #'   shape (\code{"normal"}, \code{"uniform"}, \code{"skew"}, \code{"bimodal"}).
@@ -86,10 +97,12 @@
 #'   \code{n_groups >= 2}. Feeds \code{\link{dif_anova}} / \code{\link{dif_size}}.
 #' @param careless Proportion of persons who answer at random (person misfit;
 #'   feeds person infit/outfit).
-#' @param response_style \code{NULL}, or \code{list(type=, prop=)} with
-#'   \code{type} \code{"extreme"} or \code{"middle"}: a proportion of persons
-#'   favour the end (or middle) categories regardless of the trait
-#'   (polytomous; feeds the category diagnostics and person fit).
+#' @param response_style \code{NULL}, or \code{list(type=, prop=, strength=)}
+#'   with \code{type} \code{"extreme"} or \code{"middle"}: a proportion
+#'   \code{prop} of persons favour the end (or middle) categories regardless
+#'   of the trait, with distortion \code{strength} (default 1.6) on the
+#'   log-probability scale (polytomous; feeds the category diagnostics and
+#'   person fit).
 #' @param speeded Proportion not-reached at the last item: a growing tail of
 #'   missing responses over the final items, as under time pressure (feeds the
 #'   item statistics and the missingness pattern).
@@ -108,7 +121,7 @@
 #' d <- simulate_rasch(400, 12, discrimination = c(3, rep(1, 11)),
 #'                     dif = list(items = "I06", uniform = 1), n_groups = 2,
 #'                     seed = 1)
-#' fit <- rasch(d, factors = "group")
+#' fit <- rasch(d, id = "id", factors = "group")
 #' fit$items[c("item", "infit_ms", "outfit_ms")]   # item 1 misfits
 #' dif_anova(fit)$summary                           # item 6 flags
 #' @export
@@ -133,9 +146,26 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
                     else seq(difficulty[1], difficulty[2], length.out = I), inm)
   disc <- if (length(discrimination) == I) discrimination else rep(discrimination[1], I)
   guess <- if (length(guessing) == I) guessing else rep(guessing[1], I)
+  if (m > 1L && any(guess > 0)) {
+    warning("guessing applies to dichotomous items only; ignored for ", model)
+    guess[] <- 0
+  }
   dis_items <- as_idx(disordered)
+  # RSM: one common threshold pattern (per-item location only). PCM: the
+  # pattern itself varies across items, as the model allows -- each item's
+  # spacings are drawn afresh (gated so the RNG stream of the other models
+  # is untouched)
+  patterns <- vector("list", I)
+  if (model == "PCM" && m > 1L) patterns <- lapply(seq_len(I), function(i) {
+    # ordered spacings with varied gaps and a varied overall span per item
+    p <- cumsum(stats::runif(m, 0.5, 1.5))
+    p <- (p - mean(p)) / (max(p) - min(p)) * 2 * threshold_spread *
+      stats::runif(1, 0.85, 1.15)
+    p
+  })
   tau <- lapply(seq_len(I), function(i)
-    .sim_thresholds(delta[i], m, threshold_spread, i %in% dis_items))
+    .sim_thresholds(delta[i], m, threshold_spread, i %in% dis_items,
+                    pattern = patterns[[i]]))
 
   # person locations (primary) and groups
   theta <- .sim_theta(N, theta_mean, theta_sd, theta_dist)
@@ -153,39 +183,64 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
 
   X <- matrix(NA_integer_, N, I, dimnames = list(NULL, inm))
   dif_items <- as_idx(if (is.null(dif)) NULL else dif$items)
+  if (length(dif_items) && n_groups < 2L)
+    stop("dif needs n_groups >= 2 (the last group carries the DIF)")
   dif_grp <- if (n_groups > 1L) levels(group)[n_groups] else NA
 
-  for (i in seq_len(I)) {
-    th <- if (i %in% dim_items) theta2 else theta
+  # every regeneration of an item must honour that item's OWN generating
+  # structure -- its trait (second dimension), its group-shifted thresholds
+  # and slope (DIF), its guessing -- or a later misfit layer would silently
+  # erase an earlier planted one
+  item_pars <- function(i, p) {
+    dif_here <- i %in% dif_items && !is.na(dif_grp) && group[p] == dif_grp
+    list(tau = tau[[i]] + if (dif_here) dif$uniform %||% 0 else 0,
+         disc = disc[i] + if (dif_here) dif$nonuniform %||% 0 else 0)
+  }
+  gen_item <- function(i, shift = rep(0, N)) {
+    th <- (if (i %in% dim_items) theta2 else theta) + shift
     if (i %in% dif_items && !is.na(dif_grp)) {
-      # differential functioning for the last group: location shift and/or
-      # slope change on this item
       g2 <- group == dif_grp
-      X[!g2, i] <- .sim_item(th[!g2], tau[[i]], disc[i], guess[i])
-      X[g2, i]  <- .sim_item(th[g2], tau[[i]] + (dif$uniform %||% 0),
-                             disc[i] + (dif$nonuniform %||% 0), guess[i])
-    } else {
-      X[, i] <- .sim_item(th, tau[[i]], disc[i], guess[i])
-    }
+      out <- integer(N)
+      out[!g2] <- .sim_item(th[!g2], tau[[i]], disc[i], guess[i])
+      out[g2]  <- .sim_item(th[g2], tau[[i]] + (dif$uniform %||% 0),
+                            disc[i] + (dif$nonuniform %||% 0), guess[i])
+      out
+    } else .sim_item(th, tau[[i]], disc[i], guess[i])
+  }
+  # the model expectation of item i for every person, under the same
+  # generating structure (trait, DIF shift, guessing) the responses used
+  exp_item <- function(i) {
+    th <- if (i %in% dim_items) theta2 else theta
+    E <- vapply(seq_len(N), function(p) {
+      pp <- item_pars(i, p)
+      sum((0:m) * .p_item(th[p], pp$tau, pp$disc))
+    }, 0)
+    if (m == 1L && guess[i] > 0) E <- guess[i] + (1 - guess[i]) * E
+    E
   }
 
+  for (i in seq_len(I)) X[, i] <- gen_item(i)
+
   # response dependence: the second item of each pair partly follows the
-  # first (adds d*(x1 - E1) to its exponent, inducing residual correlation)
+  # first (adds d*(x1 - E1) to its exponent, inducing residual correlation);
+  # the regeneration keeps i2's own DIF / second-dimension structure
   dep_pairs <- list()
   if (!is.null(dependence)) {
     d_str <- dependence$strength %||% 1
     for (pp in dependence$pairs) {
       ij <- as_idx(pp); i1 <- ij[1]; i2 <- ij[2]
-      e1 <- vapply(theta, function(t)
-        sum((0:m) * .p_item(t, tau[[i1]], disc[i1])), 0)
-      shift <- d_str * (X[, i1] - e1) / m           # per-person carry-over
-      X[, i2] <- .sim_item(theta + shift, tau[[i2]], disc[i2], guess[i2])
+      # the expectation must match X1's actual generating structure
+      # (guessing, DIF, second dimension), or the "residual" x1 - E1 has a
+      # systematic mean and leaks an unplanted shift into the second item
+      shift <- d_str * (X[, i1] - exp_item(i1)) / m   # per-person carry-over
+      X[, i2] <- gen_item(i2, shift = shift)
       dep_pairs[[length(dep_pairs) + 1L]] <- inm[ij]
     }
   }
 
   # response styles (polytomous): a proportion of persons distort toward the
-  # end or the middle categories regardless of the trait
+  # end or the middle categories regardless of the trait; the base
+  # probabilities keep each item's own structure (trait, DIF) per person
   style_idx <- integer(0)
   if (!is.null(response_style) && m >= 2L) {
     style_idx <- sample(N, round((response_style$prop %||% 0.15) * N))
@@ -195,7 +250,9 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
          else exp(-ss * dev2)
     for (p in style_idx) for (i in seq_len(I)) {
       if (is.na(X[p, i])) next
-      pr <- .p_item(theta[p], tau[[i]], disc[i]) * w
+      th_p <- if (i %in% dim_items) theta2[p] else theta[p]
+      pp <- item_pars(i, p)
+      pr <- .p_item(th_p, pp$tau, pp$disc) * w
       X[p, i] <- sample.int(m + 1L, 1L, prob = pr) - 1L
     }
   }
@@ -206,6 +263,8 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
     careless_idx <- sample(N, round(careless * N))
     X[careless_idx, ] <- matrix(sample(0:m, length(careless_idx) * I, TRUE),
                                 length(careless_idx), I)
+    # careless overwrites any response style; the truth must not double-count
+    style_idx <- setdiff(style_idx, careless_idx)
   }
 
   # speededness: a contiguous not-reached tail over the last items. `speeded`
@@ -437,7 +496,7 @@ simulate_btl <- function(n_objects = 8, n_judges = 12, reps_per_pair = 25,
 #' d <- simulate_mfrm(60, 5, 6, rater_severity_sd = 0.8, seed = 1)
 #' mf <- rasch_mfrm(d, person = "person", item = "item", score = "score",
 #'                  facets = "rater")
-#' cor(mf$facet_effects$rater$measure, attr(d, "truth")$severity)  # recovered
+#' cor(mf$facet_effects$rater$severity, attr(d, "truth")$severity)  # recovered
 #' @export
 simulate_mfrm <- function(n_persons = 80, n_items = 5, n_raters = 6,
                           n_categories = 4, theta_sd = 1.2, item_sd = 1,
@@ -454,9 +513,12 @@ simulate_mfrm <- function(n_persons = 80, n_items = 5, n_raters = 6,
   base_tau <- .sim_thresholds(0, m, 1.2)
   erratic <- if (erratic_raters > 0) rids[seq_len(round(erratic_raters * R))] else character(0)
   # halo raters (drawn from the end, disjoint from the erratic ones): they
-  # rate by the person's overall level, barely differentiating the items
-  halo_r <- if (halo > 0)
-    setdiff(rev(rids), erratic)[seq_len(min(R, round(halo * R)))] else character(0)
+  # rate by the person's overall level, barely differentiating the items;
+  # capped at the eligible pool so the truth never records NA raters
+  halo_r <- if (halo > 0) {
+    pool <- setdiff(rev(rids), erratic)
+    pool[seq_len(min(length(pool), round(halo * R)))]
+  } else character(0)
   int_bias <- matrix(0, I, R, dimnames = list(iids, rids))
   if (!is.null(interaction))
     int_bias[interaction$item, interaction$rater] <- interaction$bias
@@ -577,7 +639,7 @@ simulate_efrm <- function(n_per_group = 300, items_per_set = 8, n_sets = 2,
 #'                        dif = list(items = "I05", uniform = 0.8), n_groups = 2,
 #'                        seed = 1)
 #' mean(vapply(batch, function(d)
-#'   dif_anova(rasch(d, factors = "group"))$summary$uniform_DIF[5], TRUE))
+#'   dif_anova(rasch(d, id = "id", factors = "group"))$summary$uniform_DIF[5], TRUE))
 #' @export
 sim_replicate <- function(FUN, n, ..., seed = NULL) {
   base <- if (is.null(seed)) sample.int(1e6, 1L) else as.integer(seed)
@@ -613,41 +675,48 @@ print.rasch_sim_batch <- function(x, ...) {
 #'   and estimated values behind each).
 #' @examples
 #' d <- simulate_rasch(500, 12, seed = 1)
-#' sim_recovery(rasch(d), d)$summary
+#' sim_recovery(rasch(d, id = "id"), d)$summary
 #' @export
 sim_recovery <- function(fit, sim) {
   tr <- attr(sim, "truth")
   if (is.null(tr)) stop("`sim` carries no simulation truth")
   pieces <- list()
-  add <- function(name, true, est, label = NULL) {
+  add <- function(name, true, est, label = NULL, centre = FALSE) {
     true <- as.numeric(true); est <- as.numeric(est)
     keep <- is.finite(true) & is.finite(est)
     if (!any(keep)) return(invisible())
+    if (centre) {                       # location-type: identified up to origin
+      true <- true - mean(true[keep]); est <- est - mean(est[keep])
+    }
     pieces[[name]] <<- data.frame(
       parameter = name,
       label = if (is.null(label)) NA_character_ else as.character(label)[keep],
       true = true[keep], estimated = est[keep], stringsAsFactors = FALSE)
   }
-  ctr <- function(v) v - mean(v)
   lay <- tr$layout
   if (lay == "rasch") {
     ei <- setNames(fit$items$location, fit$items$item)
     cm <- intersect(names(tr$difficulty), names(ei))
-    add("item difficulty", ctr(tr$difficulty[cm]), ctr(ei[cm]), cm)
-    add("person ability", tr$theta, fit$person$theta)
+    add("item difficulty", tr$difficulty[cm], ei[cm], cm, centre = TRUE)
+    add("person ability", tr$theta, fit$person$theta, centre = TRUE)
   } else if (lay == "btl") {
     eo <- setNames(fit$objects$location, fit$objects$object)
     cm <- intersect(names(tr$location), names(eo))
-    add("object location", ctr(tr$location[cm]), ctr(eo[cm]), cm)
+    add("object location", tr$location[cm], eo[cm], cm, centre = TRUE)
   } else if (lay == "mfrm") {
     fe <- fit$facet_effects[[1]]
     es <- setNames(fe$severity, fe$level)
     cm <- intersect(names(tr$severity), names(es))
-    add("rater severity", ctr(tr$severity[cm]), ctr(es[cm]), cm)
-    ei <- setNames(fit$items$location, fit$items$item)
-    ci <- intersect(names(tr$difficulty), names(ei))
-    add("item difficulty", ctr(tr$difficulty[ci]), ctr(ei[ci]), ci)
-    add("person ability", tr$theta, fit$person$theta)
+    add("rater severity", tr$severity[cm], es[cm], cm, centre = TRUE)
+    # per-item margins live in item_effects (fit$items holds the virtual
+    # item-by-facet combinations, whose names never match)
+    ie <- fit$item_effects
+    if (!is.null(ie)) {
+      ei <- setNames(ie$location, ie$item)
+      ci <- intersect(names(tr$difficulty), names(ei))
+      add("item difficulty", tr$difficulty[ci], ei[ci], ci, centre = TRUE)
+    }
+    add("person ability", tr$theta, fit$person$theta, centre = TRUE)
   } else if (lay == "efrm") {
     at <- fit$alpha_table
     # units are identified up to a common scale, so compare on the centred

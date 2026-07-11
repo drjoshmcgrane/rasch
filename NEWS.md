@@ -1,3 +1,57 @@
+# rasch 1.7.1
+
+A statistical audit of the new simulation and paired-comparison
+independence code (23 findings across two adversarial rounds, all fixed),
+plus a vignette and a logo.
+
+* Misfit layers now compose correctly in `simulate_rasch()`: the
+  response-dependence and response-style regeneration steps previously
+  rebuilt their target items from the base structure, silently erasing any
+  DIF or second-dimension loading planted on those items (and leaking a
+  DIF-like signal from a DIF-carrying source item into its dependent
+  partner). Every regeneration now honours the item's own generating
+  structure -- trait, group-shifted thresholds and slope, guessing.
+* `btl_dimensionality()` now simulates its noise reference sequentially
+  WITH the fitted within-judge dependence effects when the fit carries
+  them: real order effects previously inflated the false-positive rate to
+  ~36 per cent on one-dimensional data (now ~0-5 per cent). The documented
+  price is conservatism, since carry-over and a judge-camp second
+  attribute are partially confounded.
+* Doc examples pass `id = "id"` so they no longer emit spurious
+  dropped-column notes.
+
+* `simulate_rasch()`: `model = "PCM"` now draws each item's threshold
+  spacings and span afresh, as the partial credit model allows (previously
+  PCM and RSM generated identical rating-scale-structured data);
+  `dif` without `n_groups >= 2` is an error instead of a silent no-op;
+  polytomous `guessing` warns and is ignored rather than falsely recorded
+  as planted; the response-dependence term now carries the guessing
+  asymptote of the pair's first item (no more spurious easiness on the
+  dependent item); disordered thresholds work with 3 categories and no
+  longer shift the item's location; careless responders are no longer
+  double-counted as response-style persons in the recorded truth.
+* `simulate_mfrm()`: halo raters are capped at the eligible pool (no NA
+  raters when erratic raters shrink it); the example runs.
+* `sim_recovery()`: person abilities are mean-centred as documented (an
+  asymmetric difficulty range no longer masquerades as person bias); the
+  many-facet branch reads the item margins (`item_effects`), restoring the
+  documented item-difficulty recovery for MFRM fits.
+* `btl_dimensionality()`: null calibration verified for graded fits
+  (mildly conservative, never anticonservative) and documented; docs also
+  clarify the leading-bimension reference columns and the no-ties
+  precondition of Kendall's zeta.
+* Shiny app (Simulate page): the parameter-recovery card only renders when
+  the current fit was estimated on the currently loaded simulation (a
+  stale fit can no longer be compared against new truth); the reproducible
+  call now carries every argument the generator received (MFRM person/item
+  SDs, EFRM person SD, graded categories); non-integer seeds are rounded
+  safely.
+* New vignette: "Planting misfit and watching the diagnostics fire" — the
+  plant-to-detect loop end to end, closing with a small Monte Carlo power
+  estimate via `sim_replicate()`.
+* A hex logo (an item characteristic curve at its location), reproducible
+  from `tools/logo.R`.
+
 # rasch 1.7.0
 
 * Simulation gains the standard controls of a proper simulation tool.

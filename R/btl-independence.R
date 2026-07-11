@@ -69,7 +69,8 @@
 #'   row: objects, pairs compared, complete triples, circular triads, the
 #'   circular rate, the chance rate 0.25, the consistency index
 #'   \code{1 - rate/0.25}, and Kendall's \code{zeta} when the design is a
-#'   complete round-robin); \code{objects} (each object's circular-triad
+#'   complete round-robin with no exactly-tied pair -- \code{NA} otherwise);
+#'   \code{objects} (each object's circular-triad
 #'   involvement); \code{judges} (per-judge consistency, when judges exist);
 #'   and \code{notes}.
 #' @references Kendall, M. G., & Babington Smith, B. (1940). On the method of
@@ -215,13 +216,27 @@ print.rasch_btl_transitivity <- function(x, ...) {
 #' judged against a reference built by simulating unidimensional data from the
 #' fitted model with the observed pair counts (a parametric bootstrap, as in
 #' \code{\link{plot_scree}}); an observed strength above the reference is
-#' structure the one-dimensional model does not explain.
+#' structure the one-dimensional model does not explain. For graded fits the
+#' residual log-odds are taken on the points-proportion scale, whose model
+#' mean is not exactly \code{plogis(beta_i - beta_j)}; the simulated reference
+#' carries the same construction, so the test stays calibrated (verified
+#' mildly conservative on model-true graded data) rather than anticonservative.
+#' Likewise, when the fit carries within-judge dependence effects
+#' (\code{order}), the reference is simulated sequentially through each
+#' judge's comparisons WITH the fitted exposure and carry-over coefficients:
+#' order effects push the marginal pair rates around in a structured way, and
+#' a reference without them would read that structure as a second attribute.
+#' The price is power: carry-over and a judge-camp second attribute are
+#' partially confounded (both appear as consistent within-judge deviation),
+#' so with \code{order} modelled the test is conservative about attributing
+#' the ambiguous share to a second dimension.
 #'
 #' @param fit A paired-comparison fit from \code{\link{btl}}.
 #' @param reps Model-simulated replicates for the noise reference.
 #' @return A list of class \code{"rasch_btl_dim"}: \code{bimensions} (per
-#'   bimension: strength, share of residual size, the reference mean and 95th
-#'   percentile, and whether the observed strength clears the reference);
+#'   bimension: strength and share of residual size; the reference mean, 95th
+#'   percentile, and the clears-the-reference flag are reported for the
+#'   leading bimension and \code{NA} for the rest);
 #'   \code{coords} (each object's position in the leading bimension plane, for
 #'   the residual map); \code{leading_structured} (whether bimension 1 clears
 #'   its reference); \code{residual_matrix}; and \code{notes}.
@@ -250,16 +265,60 @@ btl_dimensionality <- function(fit, reps = 50L) {
   if (!length(bm$strength)) stop("no residual structure to decompose")
 
   # parametric-bootstrap reference: simulate unidimensional data from the
-  # fitted model at the observed pair counts and recompute the leading strength
+  # fitted model at the observed pair counts and recompute the leading
+  # strength. When the fit carries within-judge dependence effects the null
+  # must carry them too -- order effects push the marginal pair rates away
+  # from plogis(beta_i - beta_j) in a structured way, and a reference without
+  # them reads that structure as a second attribute (false positives)
   d_lp <- beta[ia] - beta[ib]
-  Pcat <- if (m == 1L) NULL else {
-    tau <- fit$thresholds$tau
-    vapply(d_lp, function(dd) item_moments(dd, tau)$P, numeric(m + 1L))
+  tau <- if (m > 1L) fit$thresholds$tau else NULL
+  dep <- fit$dependence
+  seq_sim <- NULL
+  if (!is.null(dep)) {
+    dd <- fit$dependence_data                       # sorted by judge, order
+    sa <- match(dd$object_a, objs); sb <- match(dd$object_b, objs)
+    sw <- dd$weight; sjd <- dd$judge
+    coef_exp <- dep$estimate[match("exposure", dep$effect)]
+    coef_cry <- dep$estimate[match("carry_over", dep$effect)]
+    if (is.na(coef_exp)) coef_exp <- 0
+    if (is.na(coef_cry)) coef_cry <- 0
+    # sequential simulation mirroring .btl_exposure's history rules, with
+    # the FITTED coefficients: seen-before indicator and running mean verdict
+    seq_sim <- function() {
+      cnt <- new.env(hash = TRUE, parent = emptyenv())
+      tot <- new.env(hash = TRUE, parent = emptyenv())
+      gets <- function(e, k) if (is.null(v <- e[[k]])) 0 else v
+      resp <- integer(length(sa))
+      for (r in seq_along(sa)) {
+        ka <- paste0(sjd[r], "\r", sa[r]); kb <- paste0(sjd[r], "\r", sb[r])
+        na_ <- gets(cnt, ka); nb_ <- gets(cnt, kb)
+        z_exp <- as.numeric(na_ > 0) - as.numeric(nb_ > 0)
+        z_cry <- (if (na_ > 0) gets(tot, ka) / na_ else 0) -
+                 (if (nb_ > 0) gets(tot, kb) / nb_ else 0)
+        lp <- beta[sa[r]] - beta[sb[r]] + coef_exp * z_exp + coef_cry * z_cry
+        x <- if (m == 1L) as.integer(stats::runif(1) < stats::plogis(lp))
+             else sample.int(m + 1L, 1L, prob = item_moments(lp, tau)$P) - 1L
+        resp[r] <- x
+        cnt[[ka]] <- na_ + sw[r]; cnt[[kb]] <- nb_ + sw[r]
+        tot[[ka]] <- gets(tot, ka) + sw[r] * (2 * x / m - 1)
+        tot[[kb]] <- gets(tot, kb) + sw[r] * (2 * (m - x) / m - 1)
+      }
+      resp
+    }
   }
+  Pcat <- if (m == 1L || !is.null(seq_sim)) NULL else
+    vapply(d_lp, function(dd) item_moments(dd, tau)$P, numeric(m + 1L))
   lead_ref <- vapply(seq_len(reps), function(r) {
-    resp <- if (m == 1L) stats::rbinom(length(d_lp), 1L, stats::plogis(d_lp))
-            else apply(Pcat, 2, function(p) sample.int(m + 1L, 1L, prob = p) - 1L)
-    Rr <- .btl_resid_matrix(ia, ib, resp, w, m, K, beta)
+    if (is.null(seq_sim)) {
+      resp <- if (m == 1L) stats::rbinom(length(d_lp), 1L, stats::plogis(d_lp))
+              else apply(Pcat, 2, function(p) sample.int(m + 1L, 1L, prob = p) - 1L)
+      Rr <- .btl_resid_matrix(ia, ib, resp, w, m, K, beta)
+    } else {
+      resp <- seq_sim()
+      Rr <- .btl_resid_matrix(match(fit$dependence_data$object_a, objs),
+                              match(fit$dependence_data$object_b, objs),
+                              resp, fit$dependence_data$weight, m, K, beta)
+    }
     s <- .btl_bimensions(Rr)$strength
     if (length(s)) s[1] else 0
   }, 0)
@@ -276,9 +335,8 @@ btl_dimensionality <- function(fit, reps = 50L) {
 
   coords <- data.frame(object = objs, location = unname(beta),
                        x = bm$coord[, "x"], y = bm$coord[, "y"])
-  n_seen <- sum((.btl_scores(ia, ib, cmp$response, w, m, K) +
-                 t(.btl_scores(ia, ib, cmp$response, w, m, K)) > 0)[
-                   upper.tri(diag(K))])
+  S <- .btl_scores(ia, ib, cmp$response, w, m, K)
+  n_seen <- sum(((S + t(S)) > 0)[upper.tri(diag(K))])
   if (n_seen < choose(K, 2))
     notes <- c(notes, sprintf(
       "%d of %d pairs compared; unseen pairs contribute no residual",

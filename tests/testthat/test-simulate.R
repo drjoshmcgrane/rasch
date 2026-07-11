@@ -131,3 +131,88 @@ test_that("sim_replicate and sim_recovery support Monte Carlo and recovery", {
                          judge = "judge"), d)
   expect_gt(rb$summary$correlation[1], 0.9)
 })
+
+test_that("audit fixes hold: PCM structure, truth honesty, recovery centring", {
+  # PCM and RSM now genuinely differ: per-item threshold patterns for PCM,
+  # one common pattern for RSM; PCM thresholds stay ordered
+  d1 <- simulate_rasch(200, 8, model = "PCM", n_categories = 4, seed = 42)
+  d2 <- simulate_rasch(200, 8, model = "RSM", n_categories = 4, seed = 42)
+  expect_false(identical(as.matrix(d1[, 2:9]), as.matrix(d2[, 2:9])))
+  rel1 <- lapply(attr(d1, "truth")$thresholds, function(t) round(t - mean(t), 3))
+  expect_gt(length(unique(rel1)), 1)                       # PCM varies
+  rel2 <- lapply(attr(d2, "truth")$thresholds, function(t) round(t - mean(t), 3))
+  expect_length(unique(rel2), 1)                           # RSM common
+  expect_true(all(vapply(attr(d1, "truth")$thresholds,
+                         function(t) !is.unsorted(t), TRUE)))
+
+  # dif without groups is an error, not a silent no-op with a false truth
+  expect_error(simulate_rasch(50, 6, dif = list(items = "I03", uniform = 1)),
+               "n_groups")
+  # polytomous guessing warns and is not recorded as planted
+  expect_warning(d <- simulate_rasch(50, 4, model = "PCM", n_categories = 4,
+                                     guessing = 0.3, seed = 1), "dichotomous")
+  expect_false(any(grepl("guessing", attr(d, "truth")$planted)))
+  # disordered thresholds work at 3 categories and preserve the location
+  t2 <- rasch:::.sim_thresholds(0.5, 2, 1.2, disordered = TRUE)
+  expect_true(is.unsorted(t2)); expect_equal(mean(t2), 0.5)
+  # careless overwrite is not double-counted in the truth
+  d <- simulate_rasch(300, 10, model = "PCM", n_categories = 4, careless = 0.5,
+                      response_style = list(type = "extreme", prop = 0.5),
+                      seed = 3)
+  tr <- attr(d, "truth")
+  expect_length(intersect(tr$style_idx, tr$careless_idx), 0)
+  # halo raters never overflow into NA when erratic raters shrink the pool
+  d <- simulate_mfrm(30, 4, 5, erratic_raters = 0.4, halo = 0.8, seed = 1)
+  expect_false(anyNA(attr(d, "truth")$halo))
+
+  # person ability is centred in recovery: an asymmetric difficulty range
+  # must not masquerade as person-ability bias
+  d <- simulate_rasch(400, 10, difficulty = c(0, 3), seed = 2)
+  r <- sim_recovery(rasch(d), d)
+  expect_lt(abs(r$summary$bias[r$summary$parameter == "person ability"]), 0.1)
+  # MFRM recovery reports item difficulties from the item margins
+  d <- simulate_mfrm(60, 5, 5, seed = 1)
+  mf <- rasch_mfrm(d, person = "person", item = "item", score = "score",
+                   facets = "rater")
+  r <- sim_recovery(mf, d)
+  expect_true("item difficulty" %in% r$summary$parameter)
+  expect_gt(r$summary$correlation[r$summary$parameter == "item difficulty"], 0.9)
+})
+
+test_that("misfit layers compose: dependence and style respect DIF / 2nd dim", {
+  # dependence regeneration keeps the target item's DIF
+  d <- simulate_rasch(2000, 6, dif = list(items = "I02", uniform = 1.5),
+                      n_groups = 2,
+                      dependence = list(pairs = list(c("I01", "I02")),
+                                        strength = 1), seed = 7)
+  g <- attr(d, "truth")$groups
+  expect_gt(mean(d$I02[g != "g2"]) - mean(d$I02[g == "g2"]), 0.12)
+  # ...and the target item's second dimension
+  d <- simulate_rasch(2000, 6, second_dim = list(items = "I02", rho = 0.2),
+                      dependence = list(pairs = list(c("I01", "I02")),
+                                        strength = 1), seed = 8)
+  expect_lt(cor(d$I02, attr(d, "truth")$theta), 0.2)
+  # response style keeps DIF for style-affected persons
+  d <- simulate_rasch(3000, 6, model = "PCM", n_categories = 4,
+                      dif = list(items = "I02", uniform = 2.5), n_groups = 2,
+                      response_style = list(type = "extreme", prop = 0.5),
+                      seed = 10)
+  tr <- attr(d, "truth"); g <- tr$groups
+  sty <- seq_len(nrow(d)) %in% tr$style_idx
+  expect_gt(mean(d$I02[sty & g != "g2"]) - mean(d$I02[sty & g == "g2"]), 0.8)
+})
+
+test_that("btl_dimensionality reference honours fitted dependence effects", {
+  # one-dimensional data whose only structure is within-judge order effects,
+  # fitted WITH order: the dependence-aware reference must not read the
+  # order structure as a second attribute
+  flags <- vapply(1:4, function(s) {
+    d <- simulate_btl(8, 12, reps_per_pair = 30,
+                      dependence = list(exposure = 1, carry_over = 0.8),
+                      seed = 300 + s)
+    bt <- btl(d, "object_a", "object_b", winner = "winner", judge = "judge",
+              order = "order")
+    isTRUE(btl_dimensionality(bt, reps = 50)$leading_structured)
+  }, TRUE)
+  expect_lte(sum(flags), 1L)   # was ~36% false-positive before the fix
+})

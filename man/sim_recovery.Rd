@@ -28,5 +28,5 @@ identifies them only up to an origin.
 }
 \examples{
 d <- simulate_rasch(500, 12, seed = 1)
-sim_recovery(rasch(d), d)$summary
+sim_recovery(rasch(d, id = "id"), d)$summary
 }

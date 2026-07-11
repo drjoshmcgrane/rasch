@@ -48,6 +48,11 @@ navbar:
 news:
   cran_dates: false
 
+articles:
+- title: Articles
+  contents:
+  - plant-and-detect
+
 reference:
 - title: Estimation
   desc: >

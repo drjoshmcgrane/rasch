@@ -30,5 +30,5 @@ batch <- sim_replicate(simulate_rasch, 20, n_persons = 400, n_items = 10,
                        dif = list(items = "I05", uniform = 0.8), n_groups = 2,
                        seed = 1)
 mean(vapply(batch, function(d)
-  dif_anova(rasch(d, factors = "group"))$summary$uniform_DIF[5], TRUE))
+  dif_anova(rasch(d, id = "id", factors = "group"))$summary$uniform_DIF[5], TRUE))
 }

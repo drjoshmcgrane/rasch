@@ -55,5 +55,5 @@ difficulty, and rater severity. Departures each feed an MFRM diagnostic.
 d <- simulate_mfrm(60, 5, 6, rater_severity_sd = 0.8, seed = 1)
 mf <- rasch_mfrm(d, person = "person", item = "item", score = "score",
                  facets = "rater")
-cor(mf$facet_effects$rater$measure, attr(d, "truth")$severity)  # recovered
+cor(mf$facet_effects$rater$severity, attr(d, "truth")$severity)  # recovered
 }

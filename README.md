@@ -1,4 +1,4 @@
-# rasch — Rasch Measurement Theory in R
+# rasch — Rasch Measurement Theory in R <img src="man/figures/logo.png" align="right" height="139" alt="rasch hex logo" />
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/drjoshmcgrane/rasch/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/drjoshmcgrane/rasch/actions/workflows/R-CMD-check.yaml)

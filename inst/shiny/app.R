@@ -1618,6 +1618,10 @@ server <- function(input, output, session) {
   sim_data <- reactiveVal(NULL)
   sim_truth_val <- reactiveVal(NULL)
   sim_code_val <- reactiveVal(NULL)
+  # generation stamps: which simulation is loaded, and which one the current
+  # fit was estimated on (recovery only renders when they agree)
+  sim_gen <- reactiveVal(0L)
+  fitted_sim_gen <- reactiveVal(NULL)
   # picking an example dataset also selects the matching model; uploading a
   # file clears the example selection
   observeEvent(input$demo_choice, {
@@ -1654,6 +1658,10 @@ server <- function(input, output, session) {
   # ---- Simulate page: build the call, generate, and load as current data --
   observeEvent(input$sim_go, {
     lay <- input$sim_layout
+    # numericInput permits NA / non-integers; set.seed() would take them but
+    # the reproducible-code sprintf("%d") would not
+    seed <- suppressWarnings(as.integer(round(input$sim_seed %||% 1)))
+    if (is.na(seed)) seed <- 1L
     d <- tryCatch(withProgress(message = "Simulating…", value = 0.5, {
       if (lay == "rasch") {
         I <- input$sr_items; disc <- rep(1, I)
@@ -1682,7 +1690,7 @@ server <- function(input, output, session) {
           n_groups = if (!is.null(dif)) 2L else 1L,
           careless = input$sr_careless, response_style = rstyle,
           speeded = input$sr_speeded %||% 0, missing = input$sr_missing,
-          seed = input$sim_seed)
+          seed = seed)
       } else if (lay == "btl") {
         s2 <- if (isTRUE(input$sb_2a)) list(rho = input$sb_rho) else NULL
         dep <- if (isTRUE(input$sb_dep)) list(exposure = 0.6, carry_over = 1) else NULL
@@ -1690,7 +1698,7 @@ server <- function(input, output, session) {
           model = input$sb_model, n_categories = input$sb_cats %||% 4L,
           object_sd = input$sb_objsd %||% 1,
           second_attribute = s2, erratic_judges = input$sb_erratic,
-          dependence = dep, seed = input$sim_seed)
+          dependence = dep, seed = seed)
       } else if (lay == "mfrm") {
         intr <- if (isTRUE(input$sm_int))
           list(rater = "R2", item = "I2", bias = 1.8) else NULL
@@ -1698,12 +1706,12 @@ server <- function(input, output, session) {
           n_categories = input$sm_cats, theta_sd = input$sm_thsd %||% 1.2,
           item_sd = input$sm_itemsd %||% 1, rater_severity_sd = input$sm_sev,
           erratic_raters = input$sm_erratic, halo = input$sm_halo %||% 0,
-          interaction = intr, seed = input$sim_seed)
+          interaction = intr, seed = seed)
       } else {
         simulate_efrm(input$se_pergroup, input$se_items, input$se_sets,
           input$se_groups, set_unit_ratio = input$se_setratio,
           group_unit_ratio = input$se_grpratio,
-          theta_sd = input$se_thsd %||% 1.3, seed = input$sim_seed)
+          theta_sd = input$se_thsd %||% 1.3, seed = seed)
       }
     }), error = function(e) e)
     if (inherits(d, "error")) {
@@ -1733,23 +1741,27 @@ server <- function(input, output, session) {
           if (input$sr_careless > 0) sprintf("careless = %s", input$sr_careless),
           if (input$sr_missing > 0) sprintf("missing = %s", input$sr_missing))
         sprintf("simulate_rasch(\n  %s,\n  seed = %d)",
-                paste(Filter(nzchar, a), collapse = ",\n  "), input$sim_seed)
+                paste(Filter(nzchar, a), collapse = ",\n  "), seed)
       },
-      btl = sprintf('simulate_btl(%d, %d, %d, model = "%s", object_sd = %s%s%s%s,\n  seed = %d)',
-        input$sb_objects, input$sb_judges, input$sb_reps, input$sb_model, input$sb_objsd,
+      btl = sprintf('simulate_btl(%d, %d, %d, model = "%s"%s, object_sd = %s%s%s%s,\n  seed = %d)',
+        input$sb_objects, input$sb_judges, input$sb_reps, input$sb_model,
+        if (identical(input$sb_model, "graded"))
+          sprintf(", n_categories = %d", input$sb_cats %||% 4L) else "",
+        input$sb_objsd,
         if (input$sb_erratic > 0) sprintf(", erratic_judges = %s", input$sb_erratic) else "",
         if (isTRUE(input$sb_2a)) sprintf(", second_attribute = list(rho = %s)", input$sb_rho) else "",
         if (isTRUE(input$sb_dep)) ", dependence = list(exposure = 0.6, carry_over = 1)" else "",
-        input$sim_seed),
-      mfrm = sprintf('simulate_mfrm(%d, %d, %d, n_categories = %d, rater_severity_sd = %s%s%s%s,\n  seed = %d)',
-        input$sm_persons, input$sm_items, input$sm_raters, input$sm_cats, input$sm_sev,
+        seed),
+      mfrm = sprintf('simulate_mfrm(%d, %d, %d, n_categories = %d, theta_sd = %s, item_sd = %s, rater_severity_sd = %s%s%s%s,\n  seed = %d)',
+        input$sm_persons, input$sm_items, input$sm_raters, input$sm_cats,
+        input$sm_thsd %||% 1.2, input$sm_itemsd %||% 1, input$sm_sev,
         if (input$sm_erratic > 0) sprintf(", erratic_raters = %s", input$sm_erratic) else "",
         if (input$sm_halo > 0) sprintf(", halo = %s", input$sm_halo) else "",
         if (isTRUE(input$sm_int)) ', interaction = list(rater = "R2", item = "I2", bias = 1.8)' else "",
-        input$sim_seed),
-      efrm = sprintf('simulate_efrm(%d, %d, %d, %d, set_unit_ratio = %s, group_unit_ratio = %s,\n  seed = %d)',
+        seed),
+      efrm = sprintf('simulate_efrm(%d, %d, %d, %d, set_unit_ratio = %s, group_unit_ratio = %s, theta_sd = %s,\n  seed = %d)',
         input$se_pergroup, input$se_items, input$se_sets, input$se_groups,
-        input$se_setratio, input$se_grpratio, input$sim_seed)))
+        input$se_setratio, input$se_grpratio, input$se_thsd %||% 1.3, seed)))
     updateSelectInput(session, "demo_choice", selected = "none")
     updateRadioButtons(session, "model_type",
                        selected = if (lay == "rasch") "rasch" else lay)
@@ -1759,6 +1771,7 @@ server <- function(input, output, session) {
     # simulated many-facet data is long (person, item, rater, score)
     if (lay == "mfrm")
       updateRadioButtons(session, "lp_layout", selected = "long")
+    sim_gen(sim_gen() + 1L)      # new simulation: any existing fit is stale
     sim_data(as.data.frame(d))   # plain frame -> raw_data() -> role guessing
     showNotification("Simulated data loaded. Go to Data and press Run to analyse.",
                      type = "message", duration = 8)
@@ -1789,12 +1802,18 @@ server <- function(input, output, session) {
   # attached truth (re-attached, since sim_data() is stored as a plain frame)
   sim_recovery_val <- reactive({
     tr <- sim_truth_val(); req(!is.null(tr))
+    # only compare a fit estimated on THIS simulation; a fit left over from
+    # an earlier one would render misleading recovery numbers
+    req(identical(fitted_sim_gen(), sim_gen()))
     f <- if (identical(tr$layout, "btl")) btl_fit() else fit_or_null()
     req(!is.null(f))
     obj <- sim_data(); attr(obj, "truth") <- tr
     tryCatch(sim_recovery(f, obj), error = function(e) NULL)
   })
-  output$sim_has_recovery <- reactive(if (!is.null(sim_recovery_val())) "yes" else "no")
+  output$sim_has_recovery <- reactive({
+    ok <- tryCatch(!is.null(sim_recovery_val()), error = function(e) FALSE)
+    if (ok) "yes" else "no"
+  })
   outputOptions(output, "sim_has_recovery", suspendWhenHidden = FALSE)
   output$sim_recovery_tbl <- renderDT({
     r <- sim_recovery_val(); req(!is.null(r)); num_dt(r$summary)
@@ -2326,6 +2345,9 @@ server <- function(input, output, session) {
       showNotification("Estimation did not converge; consider raising the maximum iterations or loosening the convergence criterion.",
                        type = "warning", duration = 10)
     override_fit(NULL); override_desc(NULL)
+    # stamp which simulation (if any) this fit was estimated on, so the
+    # recovery card can refuse to compare a stale fit against new truth
+    fitted_sim_gen(if (!is.null(sim_data())) sim_gen() else NULL)
     # paired-comparison results render on the Summary / Items / Persons
     # pages (each page's Rasch variant hides while a BTL fit is current,
     # and vice versa); the Rasch outputs suspend meanwhile
