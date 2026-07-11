@@ -1436,7 +1436,94 @@ panel_export <- nav_panel("Export", value = "p_export", icon = bs_icon("download
     ))
   )
 
+# --------------------------------------------------------------- SIMULATE --
+# Generate data from any model family with dial-in departures, load it as the
+# current dataset, and run the analysis to watch the matching diagnostic fire.
+panel_simulate <- nav_panel("Simulate", value = "p_simulate", icon = bs_icon("dice-5"),
+  layout_sidebar(
+    sidebar = sidebar(width = 400, open = "always",
+      radioButtons("sim_layout", "Data type", c(
+        "Wide (person x item)" = "rasch",
+        "Paired comparisons (BTL)" = "btl",
+        "Rated / many-facet (MFRM)" = "mfrm",
+        "Frames (EFRM)" = "efrm")),
+      # ---------------------------------------------------------- wide ----
+      conditionalPanel("input.sim_layout == 'rasch'",
+        sliderInput("sr_persons", "Persons", 100, 2000, 600, 50),
+        sliderInput("sr_items", "Items", 5, 40, 15, 1),
+        radioButtons("sr_model", "Model", inline = TRUE,
+          c("Dichotomous" = "dichotomous", "Partial credit" = "PCM",
+            "Rating scale" = "RSM")),
+        conditionalPanel("input.sr_model != 'dichotomous'",
+          sliderInput("sr_cats", "Categories", 3, 6, 4, 1)),
+        accordion(open = FALSE, accordion_panel(
+          title = span(bs_icon("bug"), " Misfit to plant"), value = "misfit",
+          sliderInput("sr_over", "Over-discriminating items", 0, 5, 0, 1),
+          sliderInput("sr_under", "Under-discriminating items", 0, 5, 0, 1),
+          conditionalPanel("input.sr_model == 'dichotomous'",
+            checkboxInput("sr_guess", "Guessing (lower asymptote)", FALSE)),
+          checkboxInput("sr_2d", "Second dimension", FALSE),
+          conditionalPanel("input.sr_2d",
+            sliderInput("sr_rho", "correlation between dimensions", 0, 0.9, 0.3, 0.1)),
+          checkboxInput("sr_dep", "Local dependence (item pair)", FALSE),
+          checkboxInput("sr_dif", "DIF between two groups", FALSE),
+          conditionalPanel("input.sr_dif",
+            sliderInput("sr_difmag", "DIF magnitude (logits)", 0.3, 2, 1, 0.1)),
+          sliderInput("sr_careless", "Careless responders", 0, 0.3, 0, 0.02),
+          sliderInput("sr_missing", "Missing data", 0, 0.3, 0, 0.02)))),
+      # ---------------------------------------------------------- BTL ----
+      conditionalPanel("input.sim_layout == 'btl'",
+        sliderInput("sb_objects", "Objects", 4, 20, 8, 1),
+        sliderInput("sb_judges", "Judges", 3, 30, 12, 1),
+        sliderInput("sb_reps", "Comparisons per pair", 5, 60, 25, 5),
+        radioButtons("sb_model", "Verdict", inline = TRUE,
+          c("Winner" = "dichotomous", "Graded margin" = "graded")),
+        conditionalPanel("input.sb_model == 'graded'",
+          sliderInput("sb_cats", "Categories", 3, 6, 4, 1)),
+        accordion(open = FALSE, accordion_panel(
+          title = span(bs_icon("bug"), " Misfit to plant"), value = "misfit",
+          sliderInput("sb_erratic", "Erratic judges", 0, 0.4, 0, 0.05),
+          checkboxInput("sb_2a", "Second object attribute (two judge camps)", FALSE),
+          conditionalPanel("input.sb_2a",
+            sliderInput("sb_rho", "attribute correlation", 0, 0.9, 0.2, 0.1)),
+          checkboxInput("sb_dep", "Within-judge dependence (order effects)", FALSE)))),
+      # ---------------------------------------------------------- MFRM ----
+      conditionalPanel("input.sim_layout == 'mfrm'",
+        sliderInput("sm_persons", "Persons", 30, 300, 80, 10),
+        sliderInput("sm_items", "Items", 3, 12, 5, 1),
+        sliderInput("sm_raters", "Raters", 3, 15, 6, 1),
+        sliderInput("sm_cats", "Categories", 3, 6, 4, 1),
+        accordion(open = FALSE, accordion_panel(
+          title = span(bs_icon("bug"), " Misfit to plant"), value = "misfit",
+          sliderInput("sm_sev", "Rater-severity spread", 0, 1.5, 0.6, 0.1),
+          sliderInput("sm_erratic", "Erratic raters", 0, 0.4, 0, 0.05),
+          checkboxInput("sm_int", "Rater-by-item interaction", FALSE)))),
+      # ---------------------------------------------------------- EFRM ----
+      conditionalPanel("input.sim_layout == 'efrm'",
+        sliderInput("se_pergroup", "Persons per group", 100, 800, 300, 50),
+        sliderInput("se_items", "Items per set", 5, 15, 8, 1),
+        sliderInput("se_sets", "Item sets", 2, 4, 2, 1),
+        sliderInput("se_groups", "Person groups", 2, 4, 2, 1),
+        sliderInput("se_setratio", "Set-unit ratio", 1, 2, 1.3, 0.05),
+        sliderInput("se_grpratio", "Group-unit ratio", 1, 2, 1, 0.05)),
+      hr(),
+      numericInput("sim_seed", "Random seed", 1, min = 1),
+      input_task_button("sim_go", "Simulate & load", type = "primary",
+                        class = "w-100")),
+    # ----------------------------------------------------------- main ----
+    card(card_body(
+      p(class = "lead mb-1", "Generate data with known departures from the model."),
+      p(class = "text-muted small mb-0",
+        "Pick a data type, dial in the size and any misfit, and press Simulate. The data loads as the current dataset with its roles set; go to Data and press Run to watch the matching diagnostic fire. Everything you plant is listed below, and the true parameters are attached to the data.")),
+    uiOutput("sim_truth"),
+    conditionalPanel("output.sim_ready == 'yes'",
+      card(full_screen = TRUE,
+        card_header("Preview of the loaded data (first rows)"),
+        card_body(DTOutput("sim_preview"), padding = 8))))
+  ))
+
 # ------------------------------------------------------------ ASSEMBLY --
+
 # Workflow order: data -> summary -> items -> persons -> test, then the
 # independence, invariance, and utility menus (the two requirements of
 # measurement); status chips and the dark-mode toggle sit at the right of
@@ -1480,6 +1567,7 @@ ui <- page_navbar(
     panel_facets,
     panel_frames),
   nav_menu("More", value = "menu_more",
+    panel_simulate,
     panel_compare,
     panel_export),
   nav_spacer(),
@@ -1493,11 +1581,16 @@ ui <- page_navbar(
 server <- function(input, output, session) {
 
   # ------------------------------------------------------------- data in --
+  # simulated data (from the Simulate page) takes precedence over a demo or
+  # an upload until one of those replaces it
+  sim_data <- reactiveVal(NULL)
+  sim_truth_val <- reactiveVal(NULL)
   # picking an example dataset also selects the matching model; uploading a
   # file clears the example selection
   observeEvent(input$demo_choice, {
     dc <- input$demo_choice
     if (!identical(dc, "none")) {
+      sim_data(NULL); sim_truth_val(NULL)
       updateRadioButtons(session, "model_type",
                          selected = if (dc %in% c("dich", "pcm", "rsm"))
                            "rasch" else dc)
@@ -1506,10 +1599,13 @@ server <- function(input, output, session) {
                            selected = if (identical(dc, "rsm")) "rsm" else "pcm")
     }
   }, ignoreInit = TRUE)
-  observeEvent(input$file,
-    updateSelectInput(session, "demo_choice", selected = "none"))
+  observeEvent(input$file, {
+    sim_data(NULL); sim_truth_val(NULL)
+    updateSelectInput(session, "demo_choice", selected = "none")
+  })
 
   raw_data <- reactive({
+    if (!is.null(sim_data())) return(sim_data())
     if (!identical(input$demo_choice %||% "none", "none"))
       return(switch(input$demo_choice,
                     dich = .demo_dich(), rsm = .demo_rsm(),
@@ -1520,6 +1616,91 @@ server <- function(input, output, session) {
     sep <- if (ext %in% c("tsv", "txt")) "\t" else ","
     read.csv(input$file$datapath, sep = sep, check.names = FALSE,
              stringsAsFactors = FALSE)
+  })
+
+  # ---- Simulate page: build the call, generate, and load as current data --
+  observeEvent(input$sim_go, {
+    lay <- input$sim_layout
+    d <- tryCatch(withProgress(message = "Simulating…", value = 0.5, {
+      if (lay == "rasch") {
+        I <- input$sr_items; disc <- rep(1, I)
+        no <- min(input$sr_over, I); nu <- min(input$sr_under, I - no)
+        if (no > 0) disc[seq_len(no)] <- 2.8
+        if (nu > 0) disc[no + seq_len(nu)] <- 0.4
+        guess <- if (isTRUE(input$sr_guess) && input$sr_model == "dichotomous") {
+          g <- rep(0, I); g[seq_len(max(1L, round(0.4 * I)))] <- 0.25; g } else 0
+        k2 <- max(2L, round(0.4 * I))
+        s2 <- if (isTRUE(input$sr_2d))
+          list(items = sprintf("I%02d", (I - k2 + 1L):I), rho = input$sr_rho) else NULL
+        dep <- if (isTRUE(input$sr_dep) && I >= 2)
+          list(pairs = list(c("I01", "I02")), strength = 2.2) else NULL
+        dif <- if (isTRUE(input$sr_dif))
+          list(items = sprintf("I%02d", max(1L, round(I / 2))),
+               uniform = input$sr_difmag) else NULL
+        simulate_rasch(input$sr_persons, I, model = input$sr_model,
+          n_categories = input$sr_cats %||% 4L, discrimination = disc,
+          guessing = guess, second_dim = s2, dependence = dep, dif = dif,
+          n_groups = if (!is.null(dif)) 2L else 1L,
+          careless = input$sr_careless, missing = input$sr_missing,
+          seed = input$sim_seed)
+      } else if (lay == "btl") {
+        s2 <- if (isTRUE(input$sb_2a)) list(rho = input$sb_rho) else NULL
+        dep <- if (isTRUE(input$sb_dep)) list(exposure = 0.6, carry_over = 1) else NULL
+        simulate_btl(input$sb_objects, input$sb_judges, input$sb_reps,
+          model = input$sb_model, n_categories = input$sb_cats %||% 4L,
+          second_attribute = s2, erratic_judges = input$sb_erratic,
+          dependence = dep, seed = input$sim_seed)
+      } else if (lay == "mfrm") {
+        intr <- if (isTRUE(input$sm_int))
+          list(rater = "R2", item = "I2", bias = 1.8) else NULL
+        simulate_mfrm(input$sm_persons, input$sm_items, input$sm_raters,
+          n_categories = input$sm_cats, rater_severity_sd = input$sm_sev,
+          erratic_raters = input$sm_erratic, interaction = intr,
+          seed = input$sim_seed)
+      } else {
+        simulate_efrm(input$se_pergroup, input$se_items, input$se_sets,
+          input$se_groups, set_unit_ratio = input$se_setratio,
+          group_unit_ratio = input$se_grpratio, seed = input$sim_seed)
+      }
+    }), error = function(e) e)
+    if (inherits(d, "error")) {
+      showNotification(paste("Simulation failed:", conditionMessage(d)),
+                       type = "error", duration = 10); return()
+    }
+    sim_truth_val(attr(d, "truth"))
+    updateSelectInput(session, "demo_choice", selected = "none")
+    updateRadioButtons(session, "model_type",
+                       selected = if (lay == "rasch") "rasch" else lay)
+    if (lay == "rasch")
+      updateRadioButtons(session, "thr_structure",
+        selected = if (input$sr_model == "RSM") "rsm" else "pcm")
+    # simulated many-facet data is long (person, item, rater, score)
+    if (lay == "mfrm")
+      updateRadioButtons(session, "lp_layout", selected = "long")
+    sim_data(as.data.frame(d))   # plain frame -> raw_data() -> role guessing
+    showNotification("Simulated data loaded. Go to Data and press Run to analyse.",
+                     type = "message", duration = 8)
+  })
+  output$sim_ready <- reactive(if (!is.null(sim_truth_val())) "yes" else "no")
+  outputOptions(output, "sim_ready", suspendWhenHidden = FALSE)
+  output$sim_truth <- renderUI({
+    tr <- sim_truth_val(); if (is.null(tr)) return(NULL)
+    card(class = "mt-3",
+      card_header(span(bs_icon("check-circle-fill", class = "text-success"),
+                       " Loaded")),
+      card_body(
+        p(class = "mb-1", strong(tr$description)),
+        if (length(tr$planted)) tagList(
+          p(class = "mb-1 small text-muted", "Planted departures:"),
+          tags$ul(class = "small mb-1", lapply(tr$planted, tags$li)))
+        else p(class = "small text-muted", "Model-conforming (no departures)."),
+        p(class = "small mb-0", bs_icon("arrow-right-circle"),
+          " Go to the Data page and press Run — the matching diagnostic should fire.")))
+  })
+  output$sim_preview <- renderDT({
+    req(!is.null(sim_data()))
+    datatable(head(sim_data(), 12), rownames = FALSE, style = "bootstrap5",
+              class = "table-sm compact", options = list(dom = "t", scrollX = TRUE))
   })
 
   anchors_in <- reactive({
@@ -1591,9 +1772,11 @@ server <- function(input, output, session) {
                       selected = if (!is.na(g_b)) g_b else NONE)
     updateSelectInput(session, "bt_win", choices = c(NONE_CH, nm),
                       selected = if (!is.na(g_w)) g_w else NONE)
-    # empty choice = the "none — …" placeholder (clearable)
+    # graded margin column, if present (a winner and a response are mutually
+    # exclusive; auto-detecting the response keeps graded data one-click)
+    g_resp <- nm[grepl("^response$|^grade$|^rating$", tolower(nm))][1]
     updateSelectizeInput(session, "bt_response", choices = c("", nm),
-                         selected = "")
+                         selected = if (!is.na(g_resp)) g_resp else "")
     updateSelectizeInput(session, "bt_margin", choices = c("", nm),
                          selected = "")
     updateSelectInput(session, "bt_judge", choices = c(NONE_CH, nm),
@@ -1808,7 +1991,9 @@ server <- function(input, output, session) {
     adjN <- if (!is.null(input$run_adjN) && !is.na(input$run_adjN) &&
                 input$run_adjN > 0) input$run_adjN else NA
     # reproducible-code pieces (spliced into the branch-specific call below)
-    src_line <- if (!identical(input$demo_choice %||% "none", "none"))
+    src_line <- if (!is.null(sim_data()))
+      "# dat: simulated data (reproduce with the simulate_* call on the Simulate page)"
+    else if (!identical(input$demo_choice %||% "none", "none"))
       paste0("# dat: the \"", .demo_labels[[input$demo_choice]],
              "\" example dataset generated by the app")
     else
@@ -2125,7 +2310,9 @@ server <- function(input, output, session) {
     # menu headers hide too when everything inside them is hidden
     show("menu_independence", rasch_on || btl_on)
     show("menu_invariance", rasch_on || btl_dif_on)
-    show("menu_more", rasch_on || btl_on)
+    # More always shows: Simulate is the entry point when no data is loaded
+    show("menu_more", TRUE)
+    show("p_simulate", TRUE)
   })
 
   # ------------------------------------------------ UI visibility flags --
