@@ -280,8 +280,10 @@ btl_dimensionality <- function(fit, reps = 50L) {
     sw <- dd$weight; sjd <- dd$judge
     coef_exp <- dep$estimate[match("exposure", dep$effect)]
     coef_cry <- dep$estimate[match("carry_over", dep$effect)]
+    coef_pos <- dep$estimate[match("position", dep$effect)]
     if (is.na(coef_exp)) coef_exp <- 0
     if (is.na(coef_cry)) coef_cry <- 0
+    if (is.na(coef_pos)) coef_pos <- 0
     # sequential simulation mirroring .btl_exposure's history rules, with
     # the FITTED coefficients: seen-before indicator and running mean verdict
     seq_sim <- function() {
@@ -295,7 +297,9 @@ btl_dimensionality <- function(fit, reps = 50L) {
         z_exp <- as.numeric(na_ > 0) - as.numeric(nb_ > 0)
         z_cry <- (if (na_ > 0) gets(tot, ka) / na_ else 0) -
                  (if (nb_ > 0) gets(tot, kb) / nb_ else 0)
-        lp <- beta[sa[r]] - beta[sb[r]] + coef_exp * z_exp + coef_cry * z_cry
+        # position is a constant +1 for every (object_a-first) row
+        lp <- beta[sa[r]] - beta[sb[r]] + coef_exp * z_exp + coef_cry * z_cry +
+              coef_pos
         x <- if (m == 1L) as.integer(stats::runif(1) < stats::plogis(lp))
              else sample.int(m + 1L, 1L, prob = item_moments(lp, tau)$P) - 1L
         resp[r] <- x
