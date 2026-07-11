@@ -143,6 +143,17 @@ reference:
   - starts_with("plot_")
   - -starts_with("plot_btl")
 
+- title: Data simulation
+  desc: >
+    Generate data from each model family with dial-in departures from it, so a
+    known pathology can be planted and the matching diagnostic watched as it
+    fires. The true parameters are attached to every result.
+  contents:
+  - simulate_rasch
+  - simulate_btl
+  - simulate_mfrm
+  - simulate_efrm
+
 - title: Export and interface
   contents:
   - save_outputs

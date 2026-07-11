@@ -1,3 +1,22 @@
+# rasch 1.6.0
+
+* Data simulation across all four model families, each with dial-in
+  departures from the model -- so a known pathology can be planted and the
+  matching diagnostic watched as it fires. Every result carries the true
+  parameters (\code{attr(x, "truth")}) and prints what was planted.
+  - \code{simulate_rasch()}: dichotomous/PCM/RSM with discrimination misfit,
+    guessing, a second dimension, local dependence, DIF (uniform and
+    non-uniform), careless responders, disordered thresholds, and missing
+    data.
+  - \code{simulate_btl()}: paired comparisons with erratic judges, a second
+    object attribute (two judge camps), and within-judge exposure/carry-over
+    dependence; dichotomous or graded.
+  - \code{simulate_mfrm()}: rated data with rater-severity spread, erratic
+    raters, and a rater-by-item interaction.
+  - \code{simulate_efrm()}: frames with differing set and group units.
+  Verified end to end: each planted departure is recovered or flagged by the
+  corresponding fit / diagnostic (an app panel follows).
+
 # rasch 1.5.1
 
 * The judge unexpected-judgements map (\code{plot_btl_judge_map}) is now
