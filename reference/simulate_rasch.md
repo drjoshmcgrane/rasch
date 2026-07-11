@@ -43,7 +43,10 @@ simulate_rasch(
 
 - model:
 
-  `"dichotomous"`, `"PCM"`, or `"RSM"`.
+  `"dichotomous"`, `"PCM"`, or `"RSM"`. Under `"RSM"` every item shares
+  one category-threshold pattern (items differ by location only); under
+  `"PCM"` each item's threshold spacings and span are drawn afresh, as
+  the partial credit model allows.
 
 - n_categories:
 
@@ -108,10 +111,11 @@ simulate_rasch(
 
 - response_style:
 
-  `NULL`, or `list(type=, prop=)` with `type` `"extreme"` or `"middle"`:
-  a proportion of persons favour the end (or middle) categories
-  regardless of the trait (polytomous; feeds the category diagnostics
-  and person fit).
+  `NULL`, or `list(type=, prop=, strength=)` with `type` `"extreme"` or
+  `"middle"`: a proportion `prop` of persons favour the end (or middle)
+  categories regardless of the trait, with distortion `strength`
+  (default 1.6) on the log-probability scale (polytomous; feeds the
+  category diagnostics and person fit).
 
 - speeded:
 
@@ -150,7 +154,7 @@ holding the generating parameters and the planted departures.
 d <- simulate_rasch(400, 12, discrimination = c(3, rep(1, 11)),
                     dif = list(items = "I06", uniform = 1), n_groups = 2,
                     seed = 1)
-fit <- rasch(d, factors = "group")
+fit <- rasch(d, id = "id", factors = "group")
 fit$items[c("item", "infit_ms", "outfit_ms")]   # item 1 misfits
 #>    item  infit_ms outfit_ms
 #> 1   I01 1.0129467 0.4265500

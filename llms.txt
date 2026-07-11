@@ -577,3 +577,9 @@ it fires. The true parameters are attached to every result.
 - [`run_app()`](https://drjoshmcgrane.github.io/rasch/reference/run_app.md)
   : Launch the rasch graphical interface
 
+# Articles
+
+### Articles
+
+- [Planting misfit and watching the diagnostics
+  fire](https://drjoshmcgrane.github.io/rasch/articles/plant-and-detect.md):

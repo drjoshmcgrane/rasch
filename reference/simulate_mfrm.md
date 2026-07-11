@@ -75,6 +75,6 @@ with the truth attached.
 d <- simulate_mfrm(60, 5, 6, rater_severity_sd = 0.8, seed = 1)
 mf <- rasch_mfrm(d, person = "person", item = "item", score = "score",
                  facets = "rater")
-cor(mf$facet_effects$rater$measure, attr(d, "truth")$severity)  # recovered
-#> Error in cor(mf$facet_effects$rater$measure, attr(d, "truth")$severity): 'x' must be numeric
+cor(mf$facet_effects$rater$severity, attr(d, "truth")$severity)  # recovered
+#> [1] 0.9944333
 ```

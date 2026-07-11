@@ -14,7 +14,20 @@ simulating unidimensional data from the fitted model with the observed
 pair counts (a parametric bootstrap, as in
 [`plot_scree`](https://drjoshmcgrane.github.io/rasch/reference/plot_scree.md));
 an observed strength above the reference is structure the
-one-dimensional model does not explain.
+one-dimensional model does not explain. For graded fits the residual
+log-odds are taken on the points-proportion scale, whose model mean is
+not exactly `plogis(beta_i - beta_j)`; the simulated reference carries
+the same construction, so the test stays calibrated (verified mildly
+conservative on model-true graded data) rather than anticonservative.
+Likewise, when the fit carries within-judge dependence effects
+(`order`), the reference is simulated sequentially through each judge's
+comparisons WITH the fitted exposure and carry-over coefficients: order
+effects push the marginal pair rates around in a structured way, and a
+reference without them would read that structure as a second attribute.
+The price is power: carry-over and a judge-camp second attribute are
+partially confounded (both appear as consistent within-judge deviation),
+so with `order` modelled the test is conservative about attributing the
+ambiguous share to a second dimension.
 
 ## Usage
 
@@ -35,12 +48,12 @@ btl_dimensionality(fit, reps = 50L)
 
 ## Value
 
-A list of class `"rasch_btl_dim"`: `bimensions` (per bimension:
-strength, share of residual size, the reference mean and 95th
-percentile, and whether the observed strength clears the reference);
-`coords` (each object's position in the leading bimension plane, for the
-residual map); `leading_structured` (whether bimension 1 clears its
-reference); `residual_matrix`; and `notes`.
+A list of class `"rasch_btl_dim"`: `bimensions` (per bimension: strength
+and share of residual size; the reference mean, 95th percentile, and the
+clears-the-reference flag are reported for the leading bimension and
+`NA` for the rest); `coords` (each object's position in the leading
+bimension plane, for the residual map); `leading_structured` (whether
+bimension 1 clears its reference); `residual_matrix`; and `notes`.
 
 ## References
 

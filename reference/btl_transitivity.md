@@ -36,9 +36,10 @@ btl_transitivity(fit, min_triples = 5L)
 A list of class `"rasch_btl_transitivity"`: `summary` (one row: objects,
 pairs compared, complete triples, circular triads, the circular rate,
 the chance rate 0.25, the consistency index `1 - rate/0.25`, and
-Kendall's `zeta` when the design is a complete round-robin); `objects`
-(each object's circular-triad involvement); `judges` (per-judge
-consistency, when judges exist); and `notes`.
+Kendall's `zeta` when the design is a complete round-robin with no
+exactly-tied pair – `NA` otherwise); `objects` (each object's
+circular-triad involvement); `judges` (per-judge consistency, when
+judges exist); and `notes`.
 
 ## References
 
