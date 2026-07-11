@@ -807,3 +807,164 @@ test_that("btl_dimensionality is calibrated and powered on non-cyclic 2-D data",
   d1 <- btl_dimensionality(sim(7, FALSE, 1.6, 40), reps = 80)
   expect_false(d1$leading_structured)
 })
+
+test_that("the default (unanchored, no-position) path is unchanged", {
+  # regression net: the sum-zero path must be bit-identical to the pre-anchor
+  # engine. Locations and SEs are hard-coded from the code as it stood before
+  # the position/anchor design matrix was generalised (captured via git stash).
+  set.seed(42)
+  beta <- c(A = -1.2, B = -0.4, C = 0.1, D = 0.6, E = 0.9)
+  pr <- t(combn(names(beta), 2))
+  d <- data.frame(a = rep(pr[, 1], each = 50), b = rep(pr[, 2], each = 50))
+  d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b]), d$a, d$b)
+  f <- btl(d, "a", "b", winner = "win")
+  loc0 <- c(-1.43966223417452, -0.174047810032907, 0.0484307842564718,
+            0.72306904740734, 0.842210212543618)
+  se0 <- c(0.15899493095724, 0.123599149854014, 0.130315397443216,
+           0.129753126063131, 0.130417229533075)
+  expect_identical(f$objects$object, c("A", "B", "C", "D", "E"))
+  expect_equal(f$objects$location, loc0, tolerance = 1e-10)
+  expect_equal(f$objects$se, se0, tolerance = 1e-10)
+  expect_equal(sum(f$objects$location), 0, tolerance = 1e-12)  # sum-zero
+  expect_null(f$anchors)
+  expect_null(f$dependence)
+})
+
+test_that("position bias: a first-position advantage is recovered", {
+  # planted +0.5 first-position advantage with randomised orientation
+  # (object_a is the first-presented object of every comparison)
+  set.seed(101)
+  beta <- c(A = -1.0, B = -0.3, C = 0.2, D = 0.5, E = 0.9); beta <- beta - mean(beta)
+  objs <- names(beta); pr <- t(combn(objs, 2)); n_per <- 80
+  sim_pos <- function(gamma) {
+    rows <- list()
+    for (i in seq_len(nrow(pr))) for (k in seq_len(n_per)) {
+      # randomise which object is presented first (object_a)
+      if (runif(1) < 0.5) { aa <- pr[i, 1]; bb <- pr[i, 2] }
+      else { aa <- pr[i, 2]; bb <- pr[i, 1] }
+      p <- plogis(beta[aa] - beta[bb] + gamma)   # object_a first -> +gamma
+      rows[[length(rows) + 1L]] <- data.frame(
+        a = aa, b = bb, win = if (runif(1) < p) aa else bb)
+    }
+    do.call(rbind, rows)
+  }
+  f <- btl(sim_pos(0.5), "a", "b", winner = "win", position = TRUE)
+  pos <- f$dependence[f$dependence$effect == "position", ]
+  expect_identical(f$dependence$effect, "position")
+  expect_lt(abs(pos$estimate - 0.5), 3 * pos$se)          # within 3 SE of 0.5
+  expect_equal(pos$n_informative, f$n_comparisons)         # every row informative
+  # locations still recover, and stay sum-zero
+  loc <- f$objects$location[match(objs, f$objects$object)]
+  expect_gt(cor(loc, beta), 0.95)
+  expect_equal(sum(f$objects$location), 0, tolerance = 1e-8)
+
+  # planted zero: the coefficient is near zero and not significant
+  set.seed(202)
+  f0 <- btl(sim_pos(0), "a", "b", winner = "win", position = TRUE)
+  pos0 <- f0$dependence[f0$dependence$effect == "position", ]
+  expect_lt(abs(pos0$z), 2)
+
+  # identified through triangle closure even with a FIXED orientation (each
+  # pair always presented in the same order); the separation guard leaves it in
+  set.seed(707)
+  d2 <- data.frame(a = rep(pr[, 1], each = 120), b = rep(pr[, 2], each = 120))
+  d2$win <- ifelse(runif(nrow(d2)) < plogis(beta[d2$a] - beta[d2$b] + 0.5),
+                   d2$a, d2$b)
+  ff <- btl(d2, "a", "b", winner = "win", position = TRUE)
+  fp <- ff$dependence[ff$dependence$effect == "position", ]
+  expect_false(any(grepl("separated", ff$notes)))
+  expect_lt(abs(fp$estimate), 10)
+  expect_gt(fp$z, 2)
+  # the print label is the positional one, not "Within-judge"
+  expect_output(print(ff), "First-position advantage")
+})
+
+test_that("anchored estimation reproduces the free scale and equates panels", {
+  set.seed(303)
+  beta <- c(A = -1.2, B = -0.4, C = 0.1, D = 0.6, E = 0.9)
+  pr <- t(combn(names(beta), 2))
+  d <- data.frame(a = rep(pr[, 1], each = 60), b = rep(pr[, 2], each = 60))
+  d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b]), d$a, d$b)
+  ff <- btl(d, "a", "b", winner = "win")
+  loc_free <- setNames(ff$objects$location, ff$objects$object)
+
+  # (a) anchoring two objects AT their free-fit values reproduces the free fit
+  fa <- btl(d, "a", "b", winner = "win", anchors = loc_free[c("B", "D")])
+  loc_anc <- setNames(fa$objects$location, fa$objects$object)
+  expect_equal(unname(loc_anc[names(loc_free)]), unname(loc_free),
+               tolerance = 1e-6)
+  # (c) anchored rows are exact and report se 0
+  expect_equal(unname(loc_anc["B"]), unname(loc_free["B"]), tolerance = 1e-10)
+  expect_equal(unname(loc_anc["D"]), unname(loc_free["D"]), tolerance = 1e-10)
+  expect_equal(fa$objects$se[fa$objects$object %in% c("B", "D")], c(0, 0))
+  expect_setequal(names(fa$anchors), c("B", "D"))
+  expect_output(print(fa), "Anchored at 2 object")
+
+  # (b) two-panel equating: overlapping objects anchor panel 2 onto panel 1's
+  # scale; the non-common objects then land at their true spacing
+  truth <- c(A = -1.5, B = -0.7, C = 0, D = 0.7, E = 1.5, F = 2.1)
+  mkpanel <- function(objs, nper, seed) {
+    set.seed(seed)
+    pp <- t(combn(objs, 2))
+    dd <- data.frame(a = rep(pp[, 1], each = nper), b = rep(pp[, 2], each = nper))
+    dd$win <- ifelse(runif(nrow(dd)) < plogis(truth[dd$a] - truth[dd$b]),
+                     dd$a, dd$b)
+    dd
+  }
+  f1 <- btl(mkpanel(c("A", "B", "C", "D"), 80, 11), "a", "b", winner = "win")
+  l1 <- setNames(f1$objects$location, f1$objects$object)
+  f2 <- btl(mkpanel(c("C", "D", "E", "F"), 80, 22), "a", "b", winner = "win",
+            anchors = l1[c("C", "D")])
+  l2 <- setNames(f2$objects$location, f2$objects$object)
+  expect_equal(unname(l2["C"]), unname(l1["C"]), tolerance = 1e-10)  # anchored exact
+  expect_equal(unname(l2["D"]), unname(l1["D"]), tolerance = 1e-10)
+  # E and F recover their true spacing relative to the anchored D
+  expect_lt(abs((l2["E"] - l2["D"]) - (truth["E"] - truth["D"])), 0.35)
+  expect_lt(abs((l2["F"] - l2["D"]) - (truth["F"] - truth["D"])), 0.35)
+
+  # guard rails
+  expect_error(btl(d, "a", "b", winner = "win", anchors = c(ZZ = 1)),
+               "no `anchors` name")
+  expect_error(btl(d, "a", "b", winner = "win", anchors = c(1, 2)),
+               "named numeric")
+  # an anchored boundary object is an error, not silent removal
+  set.seed(9)
+  db <- data.frame(a = rep(pr[, 1], each = 30), b = rep(pr[, 2], each = 30))
+  db$win <- ifelse(runif(nrow(db)) < plogis(beta[db$a] - beta[db$b]),
+                   db$a, db$b)
+  db$win[db$a == "A" | db$b == "A"] <- "A"           # A undefeated
+  expect_error(btl(db, "a", "b", winner = "win", anchors = c(A = 0, C = 0.1)),
+               "boundary")
+  # the same boundary object, left free, is still removed with a note
+  fb <- btl(db, "a", "b", winner = "win", anchors = c(C = 0.1))
+  expect_false("A" %in% fb$objects$object)
+  expect_true(any(grepl("boundary", fb$notes)))
+})
+
+test_that("position and order covariates are estimated together", {
+  set.seed(505)
+  K <- 6; objs <- sprintf("O%d", 1:K)
+  beta <- setNames(seq(-1, 1, length.out = K), objs); beta <- beta - mean(beta)
+  jids <- sprintf("J%02d", 1:12); pr <- t(combn(objs, 2))
+  d <- data.frame(a = rep(pr[, 1], each = 30), b = rep(pr[, 2], each = 30))
+  d$judge <- sample(jids, nrow(d), TRUE)
+  d <- d[order(d$judge), ]; d$t <- ave(seq_len(nrow(d)), d$judge, FUN = seq_along)
+  # randomise orientation so position is well identified
+  flip <- runif(nrow(d)) < 0.5
+  aa <- ifelse(flip, d$b, d$a); bb <- ifelse(flip, d$a, d$b)
+  d$a <- aa; d$b <- bb
+  d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b] + 0.4), d$a, d$b)
+  f <- btl(d, "a", "b", winner = "win", judge = "judge", order = "t",
+           position = TRUE)
+  expect_true(f$converged)
+  expect_setequal(f$dependence$effect, c("exposure", "carry_over", "position"))
+  # both covariate machineries are present in the row-aligned tables
+  expect_true(all(c("exposure", "carry_over", "position") %in%
+                    names(f$comparisons)))
+  expect_true(all(c("exposure", "carry_over", "position") %in%
+                    names(f$dependence_data)))
+  # every row informs position; not every row informs exposure/carry-over
+  pos <- f$dependence[f$dependence$effect == "position", ]
+  expect_equal(pos$n_informative, f$n_comparisons)
+  expect_gt(pos$z, 2)   # the planted first-position advantage is detected
+})

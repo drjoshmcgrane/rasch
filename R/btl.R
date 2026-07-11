@@ -123,6 +123,27 @@
 #'   Marais and Andrich 2008), estimated jointly with the locations and
 #'   reported in \code{dependence}. Incompatible with
 #'   \code{ties = "half"}.
+#' @param position Logical: when \code{TRUE}, \code{object_a} is taken as the
+#'   first-presented (left) object of every comparison and a first-position
+#'   advantage is estimated -- a single coefficient, in logits, added to
+#'   every comparison's location difference, the pure positional form of the
+#'   Davidson and Beaver (1977) within-pair order-effect device. It is
+#'   reported in \code{dependence} with \code{effect = "position"} (every
+#'   comparison is informative, so \code{n_informative} is the total weighted
+#'   comparison count) and estimated jointly with the locations, alongside the
+#'   exposure and carry-over effects when \code{order} is also given.
+#'   Identification comes from triangle closure (K >= 3), so the constant
+#'   oriented covariate is estimable even when each pair has a fixed
+#'   orientation, though weakly. Note that \code{ties = "half"} duplicates
+#'   rows in the same orientation, so the first position stays well defined.
+#' @param anchors Optional named numeric vector for equating: names are object
+#'   names, values are fixed locations in logits. The named objects are held
+#'   exactly at those locations and the remaining objects are estimated freely
+#'   with no sum-zero constraint -- the origin and scale come from the anchors,
+#'   exactly as an anchored \code{\link{rasch}} calibration works. Anchored
+#'   objects report a standard error of zero (their location is a constant, not
+#'   an estimate). An anchored object that is undefeated or winless is an error,
+#'   not silently removed as a free boundary object would be.
 #' @param count Optional name of a column of replication counts (a row
 #'   standing for several identical comparisons).
 #' @param ties How to treat ties in the dichotomous analysis:
@@ -161,6 +182,10 @@
 #'   On extending the Bradley-Terry model to accommodate ties in paired
 #'   comparison experiments. Journal of the American Statistical
 #'   Association, 65(329), 317-328.
+#'
+#'   Davidson, R. R., & Beaver, R. J. (1977). On extending the Bradley-Terry
+#'   model to incorporate within-pair order effects. Biometrics, 33(4),
+#'   693-702.
 #' @examples
 #' set.seed(1)
 #' beta <- c(A = -1, B = -0.3, C = 0.4, D = 0.9)
@@ -173,6 +198,7 @@
 #' @export
 btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
                 margin = NULL, judge = NULL, count = NULL, order = NULL,
+                position = FALSE, anchors = NULL,
                 ties = c("drop", "half", "error"),
                 thresholds = c("free", "pc"), maxit = 60, tol = 1e-8) {
   ties <- match.arg(ties)
@@ -193,6 +219,17 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
   w <- if (is.null(count)) rep(1, nrow(data)) else as.numeric(data[[count]])
   ord <- if (is.null(order)) NULL else as.numeric(data[[order]])
   notes <- character(0)
+  if (!is.null(anchors)) {
+    if (!is.numeric(anchors) || is.null(names(anchors)) ||
+        any(!nzchar(names(anchors))))
+      stop("`anchors` must be a named numeric vector (names = object names)")
+    if (sum(names(anchors) %in% unique(c(a, b))) < 1L)
+      stop("no `anchors` name matches an object in the data")
+  }
+  # a constant, object_a-oriented covariate for the first-position advantage;
+  # appended to the dependence design (alone, or beside exposure/carry-over)
+  add_pos <- function(Z, n)
+    if (isTRUE(position)) cbind(Z, position = rep(1, n)) else Z
 
   if (!is.null(response)) {
     xr <- data[[response]]
@@ -218,8 +255,9 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
     if (!length(a)) stop("no usable comparisons")
     Z <- if (is.null(ord)) NULL else
       .btl_exposure(a, b, x, length(cats) - 1L, jd, ord, w)
+    Z <- add_pos(Z, length(a))
     return(.btl_graded(a, b, x, jd, w, cats, maxit, tol, notes,
-                       thr = thresholds, Z = Z, ord = ord))
+                       thr = thresholds, Z = Z, ord = ord, anchors = anchors))
   }
 
   if (!is.null(margin)) {
@@ -266,8 +304,9 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
                                 sum(tie)))
     Z <- if (is.null(ord)) NULL else
       .btl_exposure(a, b, as.integer(x), length(cats) - 1L, jd, ord, w)
+    Z <- add_pos(Z, length(a))
     return(.btl_graded(a, b, as.integer(x), jd, w, cats, maxit, tol, notes,
-                       thr = thresholds, Z = Z, ord = ord))
+                       thr = thresholds, Z = Z, ord = ord, anchors = anchors))
   }
 
   wn <- trimws(as.character(data[[winner]]))
@@ -321,12 +360,15 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
     }
   }
 
-  if (!is.null(ord)) {
-    # exposure covariates route through the graded engine, whose two-
+  if (!is.null(ord) || isTRUE(position)) {
+    # exposure/position covariates route through the graded engine, whose two-
     # category case reproduces the dichotomous analysis exactly
-    Z <- .btl_exposure(a, b, as.integer(y), 1L, jd, ord, w)
+    Z <- if (is.null(ord)) NULL else
+      .btl_exposure(a, b, as.integer(y), 1L, jd, ord, w)
+    Z <- add_pos(Z, length(a))
     return(.btl_graded(a, b, as.integer(y), jd, w, c("0", "1"), maxit, tol,
-                       notes, thr = "free", Z = Z, ord = ord))
+                       notes, thr = "free", Z = Z, ord = ord,
+                       anchors = anchors))
   }
 
   # the two-category graded engine IS the dichotomous conditional model
@@ -334,7 +376,7 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
   # serves both routes; m == 1 results are presented as wins / win
   # proportions inside .btl_graded
   .btl_graded(a, b, as.integer(y), jd, w, c("0", "1"), maxit, tol,
-              notes, thr = "free")
+              notes, thr = "free", anchors = anchors)
 }
 
 #' @export
@@ -347,12 +389,20 @@ print.rasch_btl <- function(x, ...) {
               if (x$clustered) " clustered by judge" else ""))
   cat(sprintf("Object separation index %.3f; pairwise chi-square %.2f on %d df, p = %s\n",
               x$osi$PSI, x$total_chisq, x$total_df, .fmt_p(x$total_p)))
+  if (!is.null(x$anchors))
+    cat(sprintf("Anchored at %d object(s) (se = 0): %s\n",
+                length(x$anchors), paste(names(x$anchors), collapse = ", ")))
   if (!is.null(x$dependence)) {
-    for (r in seq_len(nrow(x$dependence)))
-      cat(sprintf("Within-judge %s: %.3f logits (SE %.3f, z = %.2f, p = %s)\n",
-                  gsub("_", "-", x$dependence$effect[r]),
-                  x$dependence$estimate[r], x$dependence$se[r],
+    for (r in seq_len(nrow(x$dependence))) {
+      # position is a static first-presented advantage, not a within-judge
+      # history effect, so it is not labelled "Within-judge"
+      lab <- if (x$dependence$effect[r] == "position")
+        "First-position advantage" else
+        paste("Within-judge", gsub("_", "-", x$dependence$effect[r]))
+      cat(sprintf("%s: %.3f logits (SE %.3f, z = %.2f, p = %s)\n",
+                  lab, x$dependence$estimate[r], x$dependence$se[r],
                   x$dependence$z[r], .fmt_p(x$dependence$p[r])))
+    }
   }
   if (!is.null(x$thresholds)) {
     cat(sprintf("Graded comparisons in %d categories%s; symmetric thresholds: %s\n",
@@ -430,7 +480,7 @@ plot_btl <- function(fit, band = 2.5) {
 # follow the package conventions established in btl().
 # ---------------------------------------------------------------------------
 .btl_graded <- function(a, b, x, jd, w, cats, maxit, tol, notes,
-                        thr = "free", Z = NULL, ord = NULL) {
+                        thr = "free", Z = NULL, ord = NULL, anchors = NULL) {
   m <- length(cats) - 1L
   if (m < 1L) stop("graded responses need at least two categories")
   # identifiability: empty EXTREME categories leave no finite spread (the
@@ -472,6 +522,14 @@ plot_btl <- function(fit, band = 2.5) {
     }
     ext <- names(T_of)[T_of == 0 | T_of == N_of]
     if (!length(ext)) break
+    # an anchored object at a boundary is held at a known location, so it is
+    # not silently removed the way a free extreme object is; equating cannot
+    # proceed on a scale whose anchor has no comparisons to place it against
+    if (!is.null(anchors) && any(ext %in% names(anchors)))
+      stop("anchored object(s) at a response boundary (undefeated or winless): ",
+           paste(intersect(ext, names(anchors)), collapse = ", "),
+           "; an anchored object cannot be removed - drop it from `anchors`",
+           " or supply comparisons that place it")
     notes <- c(notes, sprintf(
       "object(s) at a response boundary removed (no finite estimate): %s",
       paste(ext, collapse = ", ")))
@@ -511,7 +569,30 @@ plot_btl <- function(fit, band = 2.5) {
     Cmat <- matrix(0, m, q)
     for (k in seq_len(q)) { Cmat[k, k] <- 1; Cmat[m + 1L - k, k] <- -1 }
   }
-  Bmat <- rbind(diag(K - 1L), rep(-1, K - 1L))
+  # location design B (K x nb) and fixed offset beta0 (length K), so that
+  # beta = Bmat %*% bfree + beta0. Without anchors this is the sum-zero map
+  # (bit-identical to the pre-anchor path); with anchors it is a selection
+  # matrix -- identity rows for the free objects, zero rows for the anchored
+  # ones -- plus the anchored values as the offset, so the anchored locations
+  # are held fixed and the rest float with no sum-zero constraint, the origin
+  # and scale coming from the anchors (as in an anchored rasch() calibration).
+  anch <- NULL
+  if (is.null(anchors)) {
+    Bmat <- rbind(diag(K - 1L), rep(-1, K - 1L))
+    beta0 <- numeric(K)
+  } else {
+    anch <- anchors[names(anchors) %in% objs]
+    if (!length(anch)) stop("no `anchors` name matches a comparable object")
+    apos <- match(names(anch), objs)
+    free <- setdiff(seq_len(K), apos)
+    if (!length(free)) stop("every object is anchored; nothing to estimate")
+    Bmat <- matrix(0, K, length(free))
+    Bmat[cbind(free, seq_along(free))] <- 1
+    beta0 <- numeric(K); beta0[apos] <- as.numeric(anch)
+    notes <- c(notes, sprintf(
+      "%d object(s) anchored; scale origin from anchors", length(anch)))
+  }
+  nb <- ncol(Bmat)
   pz <- if (is.null(Z)) 0L else ncol(Z)
   Zfull <- Z                         # all effect columns, for the audit table
   if (pz) {
@@ -523,7 +604,7 @@ plot_btl <- function(fit, band = 2.5) {
       Z <- Z[, keepz, drop = FALSE]; pz <- ncol(Z)
     }
   }
-  np <- (K - 1L) + q + pz
+  np <- nb + q + pz
   dep <- numeric(pz)
   sc <- 0:m
 
@@ -579,14 +660,14 @@ plot_btl <- function(fit, band = 2.5) {
     i0 <- (kk - 1L) %/% K + 1L; j0 <- (kk - 1L) %% K + 1L
     Hbb[cbind(i0, j0)] <- Hbb[cbind(i0, j0)] - hp
     Hbb[cbind(j0, i0)] <- Hbb[cbind(j0, i0)] - hp
-    H[1:(K - 1L), 1:(K - 1L)] <- crossprod(Bmat, Hbb %*% Bmat)
+    H[1:nb, 1:nb] <- crossprod(Bmat, Hbb %*% Bmat)
     if (q) {
       CovXc <- mo$EXc - mo$E * mo$S              # rows: Cov(X, 1(X>=k))
       wc <- (w * CovXc) %*% Cmat
       Hbt_full <- acc(wc, ib, K) - acc(wc, ia, K)
-      ti <- (K - 1L + 1L):(K - 1L + q)
-      H[1:(K - 1L), ti] <- crossprod(Bmat, Hbt_full)
-      H[ti, 1:(K - 1L)] <- t(H[1:(K - 1L), ti])
+      ti <- (nb + 1L):(nb + q)
+      H[1:nb, ti] <- crossprod(Bmat, Hbt_full)
+      H[ti, 1:nb] <- t(H[1:nb, ti])
       # sum_r w_r Cov(1(X>=i), 1(X>=j)) = ws[max(i,j)] - crossprod term,
       # since S_r[max(i, j)] depends only on the larger index
       ws <- colSums(w * mo$S)
@@ -595,32 +676,32 @@ plot_btl <- function(fit, band = 2.5) {
       H[ti, ti] <- crossprod(Cmat, Mcc %*% Cmat)
     }
     if (pz) {
-      zi <- (K - 1L + q + 1L):np
+      zi <- (nb + q + 1L):np
       wv <- w * mo$V
       H[zi, zi] <- crossprod(Z, Z * wv)
       Hbz_full <- acc(Z * wv, ia, K) - acc(Z * wv, ib, K)
-      H[1:(K - 1L), zi] <- crossprod(Bmat, Hbz_full)
-      H[zi, 1:(K - 1L)] <- t(H[1:(K - 1L), zi])
+      H[1:nb, zi] <- crossprod(Bmat, Hbz_full)
+      H[zi, 1:nb] <- t(H[1:nb, zi])
       if (q) {
         CovXc <- mo$EXc - mo$E * mo$S
         wc <- (w * CovXc) %*% Cmat
         Htz <- -crossprod(wc, Z)                     # q x pz
-        H[(K - 1L + 1L):(K - 1L + q), zi] <- Htz
-        H[zi, (K - 1L + 1L):(K - 1L + q)] <- t(Htz)
+        H[(nb + 1L):(nb + q), zi] <- Htz
+        H[zi, (nb + 1L):(nb + q)] <- t(Htz)
       }
     }
     list(g = g, H = H, resE = resE)
   }
 
-  beta <- numeric(K); tfree <- numeric(q)
+  beta <- beta0; tfree <- numeric(q)
   repeat {
     for (it in seq_len(maxit)) {
       mo <- moments(beta, tfree, dep)
       gh <- gH(mo)
       step <- solve(gh$H, gh$g)
-      beta <- beta + drop(Bmat %*% step[1:(K - 1L)])
-      if (q) tfree <- tfree + step[(K - 1L + 1L):(K - 1L + q)]
-      if (pz) dep <- dep + step[(K - 1L + q + 1L):np]
+      beta <- beta + drop(Bmat %*% step[1:nb])
+      if (q) tfree <- tfree + step[(nb + 1L):(nb + q)]
+      if (pz) dep <- dep + step[(nb + q + 1L):np]
       if (max(abs(step)) < tol) break
     }
     # a dependence effect running to a boundary is separation: its informative
@@ -635,9 +716,9 @@ plot_btl <- function(fit, band = 2.5) {
       "dependence effect(s) separated (one-sided informative comparisons) and dropped: %s",
       paste(colnames(Z)[runaway], collapse = ", ")))
     Z <- Z[, -runaway, drop = FALSE]; pz <- ncol(Z)
-    np <- (K - 1L) + q + pz
+    np <- nb + q + pz
     dep <- numeric(pz)
-    beta <- numeric(K); tfree <- numeric(q)
+    beta <- beta0; tfree <- numeric(q)
   }
   mo <- moments(beta, tfree, dep)
   tau <- mo$tau
@@ -656,20 +737,22 @@ plot_btl <- function(fit, band = 2.5) {
   # laid out cluster-major so one rowsum fills the (cluster x object) grid
   gA <- drop(acc(resE, (cidx - 1L) * K + ia, nc * K))
   gB <- drop(acc(resE, (cidx - 1L) * K + ib, nc * K))
-  Gm[, 1:(K - 1L)] <- t(matrix(gA - gB, nrow = K)) %*% Bmat
+  Gm[, 1:nb] <- t(matrix(gA - gB, nrow = K)) %*% Bmat
   if (q) {
     st_tau <- (w * (mo$S - cumInd)) %*% Cmat
-    Gm[, (K - 1L + 1L):(K - 1L + q)] <- acc(st_tau, cidx, nc)
+    Gm[, (nb + 1L):(nb + q)] <- acc(st_tau, cidx, nc)
   }
-  if (pz) Gm[, (K - 1L + q + 1L):np] <- acc(Z * resE, cidx, nc)
+  if (pz) Gm[, (nb + q + 1L):np] <- acc(Z * resE, cidx, nc)
   H <- gh$H
   Hi <- solve(H)
   covth <- Hi %*% crossprod(Gm) %*% Hi
-  cov_beta <- Bmat %*% covth[1:(K - 1L), 1:(K - 1L), drop = FALSE] %*% t(Bmat)
+  # anchored objects have a zero row in Bmat, so their location variance is
+  # structurally zero (se == 0): the location is a fixed constant, not an estimate
+  cov_beta <- Bmat %*% covth[1:nb, 1:nb, drop = FALSE] %*% t(Bmat)
   se <- sqrt(pmax(diag(cov_beta), 0))
   dependence <- NULL
   if (pz) {
-    zi <- (K - 1L + q + 1L):np
+    zi <- (nb + q + 1L):np
     dse <- sqrt(pmax(diag(covth)[zi], 0))
     dependence <- data.frame(
       effect = colnames(Z), estimate = dep, se = dse,
@@ -682,7 +765,7 @@ plot_btl <- function(fit, band = 2.5) {
   }
   thresholds <- NULL; components <- NULL
   if (q) {
-    ti <- (K - 1L + 1L):(K - 1L + q)
+    ti <- (nb + 1L):(nb + q)
     cov_tau <- Cmat %*% covth[ti, ti, drop = FALSE] %*% t(Cmat)
     thresholds <- data.frame(threshold = seq_len(m), tau = tau,
                              se = sqrt(pmax(diag(cov_tau), 0)))
@@ -775,7 +858,7 @@ plot_btl <- function(fit, band = 2.5) {
   rownames(pairs) <- NULL
   used <- pairs$n >= 2
   total_chisq <- sum(pairs$chisq[used])
-  total_df <- max(sum(used) - (K - 1L) - q, 1L)
+  total_df <- max(sum(used) - nb - q, 1L)
   osi <- .psi(objects$location, objects$se)
 
   # two categories ARE the dichotomous conditional model, so an m == 1 fit is
@@ -794,9 +877,10 @@ plot_btl <- function(fit, band = 2.5) {
     dd <- data.frame(judge = if (is.null(jd)) NA_character_ else jd,
                      order = if (is.null(ord)) NA_real_ else ord,
                      object_a = a, object_b = b, response = x, weight = w,
-                     exposure = Zfull[, "exposure"],
-                     carry_over = Zfull[, "carry_over"],
                      stringsAsFactors = FALSE)
+    # whichever covariate columns the design carried (exposure, carry_over,
+    # position), added by name so any subset works
+    for (cn in colnames(Zfull)) dd[[cn]] <- Zfull[, cn]
     dd <- dd[order(dd$judge, dd$order), ]; rownames(dd) <- NULL; dd
   }
   out <- list(objects = objects, thresholds = thresholds,
@@ -816,12 +900,11 @@ plot_btl <- function(fit, band = 2.5) {
                                     NA_character_ else jd)
                 # row-aligned history covariates, so downstream analyses
                 # (btl_dif) can hold the fitted dependence effects fixed
-                if (!is.null(Zfull)) {
-                  cmp$exposure <- Zfull[, "exposure"]
-                  cmp$carry_over <- Zfull[, "carry_over"]
-                }
+                if (!is.null(Zfull))
+                  for (cn in colnames(Zfull)) cmp[[cn]] <- Zfull[, cn]
                 cmp
               },
+              anchors = anch,
               notes = notes)
   class(out) <- "rasch_btl"
   out
