@@ -56,6 +56,7 @@
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_pcc.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_person_fit.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_pimap.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_recovery.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_resid_cor.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_resid_dist.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_scree.html</loc></url>
@@ -78,6 +79,8 @@
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/save_outputs.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/save_person_plots.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/score_table.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/sim_recovery.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/sim_replicate.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/simulate_btl.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/simulate_efrm.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/simulate_mfrm.html</loc></url>

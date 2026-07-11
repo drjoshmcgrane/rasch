@@ -11,7 +11,7 @@ difficulty, and rater severity. Departures each feed an MFRM diagnostic."></head
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,6 +61,7 @@ difficulty, and rater severity. Departures each feed an MFRM diagnostic.</p>
 <span>  rater_severity_sd <span class="op">=</span> <span class="fl">0.6</span>,</span>
 <span>  erratic_raters <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  interaction <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  halo <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -95,6 +96,12 @@ rater fit residual).</p></dd>
 <dd><p><code>NULL</code>, or <code>list(rater=, item=, bias=)</code>: one
 rater is unusually harsh (positive) or lenient (negative) on one item.
 Feeds the item-by-rater interaction (fit with <code>interaction = </code>).</p></dd>
+
+
+<dt id="arg-halo">halo<a class="anchor" aria-label="anchor" href="#arg-halo"></a></dt>
+<dd><p>Proportion of raters showing a halo effect: they rate by the
+person's overall level and barely differentiate items (feeds the rater
+fit residual and the item-by-rater interaction).</p></dd>
 
 
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>

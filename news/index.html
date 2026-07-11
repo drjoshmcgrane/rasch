@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,16 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.7.0" id="rasch-170">rasch 1.7.0<a class="anchor" aria-label="anchor" href="#rasch-170"></a></h2>
+<ul><li>Simulation gains the standard controls of a proper simulation tool.
+<ul><li>Population parameters: the person distribution (mean, SD, shape) and the item-difficulty range are now set directly (in the package and the app).</li>
+<li>More misfit: response styles (extreme / midpoint categories) and speededness (a not-reached tail) for , and a halo effect for .</li>
+<li> generates a batch of datasets for Monte Carlo power, Type-I, or recovery studies.</li>
+<li> and  compare the parameters a fit recovers with the ones that were planted (correlation, RMSE, bias, and a true-vs-estimated scatter) for every layout.</li>
+</ul></li>
+<li>Shiny app: the Simulate page renames the wide layout to “Rasch”, exposes the population parameters, shows a parameter-recovery report and the true-vs-estimated scatter after Run, and prints the reproducible  call.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.6.1" id="rasch-161">rasch 1.6.1<a class="anchor" aria-label="anchor" href="#rasch-161"></a></h2>
 <ul><li>Shiny app: a Simulate page (under More) exposes all four simulators with a data-type selector and per-layout misfit controls. Pressing Simulate generates the data, loads it as the current dataset with its roles set, and lists what was planted; pressing Run then analyses it so the matching diagnostic can be watched firing. Verified end to end for every layout (e.g. a planted DIF item is flagged by dif_anova, a many-facet fit recovers its rater severities).</li>

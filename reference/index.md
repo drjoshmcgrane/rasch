@@ -175,6 +175,8 @@ One plotting function per display, all base graphics.
   : Plot person fit
 - [`plot_pimap()`](https://drjoshmcgrane.github.io/rasch/reference/plot_pimap.md)
   : Plot the person-item threshold distribution
+- [`plot_recovery()`](https://drjoshmcgrane.github.io/rasch/reference/plot_recovery.md)
+  : Recovery scatter of planted against recovered parameters
 - [`plot_resid_cor()`](https://drjoshmcgrane.github.io/rasch/reference/plot_resid_cor.md)
   : Plot the residual-correlation heatmap
 - [`plot_resid_dist()`](https://drjoshmcgrane.github.io/rasch/reference/plot_resid_dist.md)
@@ -206,6 +208,12 @@ it fires. The true parameters are attached to every result.
   : Simulate many-facet (rated) data with dial-in misfit
 - [`simulate_efrm()`](https://drjoshmcgrane.github.io/rasch/reference/simulate_efrm.md)
   : Simulate extended frame-of-reference data with differing units
+- [`sim_replicate()`](https://drjoshmcgrane.github.io/rasch/reference/sim_replicate.md)
+  : Replicate a simulation for Monte Carlo studies
+- [`sim_recovery()`](https://drjoshmcgrane.github.io/rasch/reference/sim_recovery.md)
+  : Parameter recovery of a fit against the simulation truth
+- [`plot_recovery()`](https://drjoshmcgrane.github.io/rasch/reference/plot_recovery.md)
+  : Recovery scatter of planted against recovered parameters
 
 ## Export and interface
 

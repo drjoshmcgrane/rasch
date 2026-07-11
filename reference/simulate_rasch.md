@@ -26,6 +26,8 @@ simulate_rasch(
   dependence = NULL,
   dif = NULL,
   careless = 0,
+  response_style = NULL,
+  speeded = 0,
   disordered = NULL,
   n_groups = 1,
   missing = 0,
@@ -103,6 +105,19 @@ simulate_rasch(
 
   Proportion of persons who answer at random (person misfit; feeds
   person infit/outfit).
+
+- response_style:
+
+  `NULL`, or `list(type=, prop=)` with `type` `"extreme"` or `"middle"`:
+  a proportion of persons favour the end (or middle) categories
+  regardless of the trait (polytomous; feeds the category diagnostics
+  and person fit).
+
+- speeded:
+
+  Proportion not-reached at the last item: a growing tail of missing
+  responses over the final items, as under time pressure (feeds the item
+  statistics and the missingness pattern).
 
 - disordered:
 
