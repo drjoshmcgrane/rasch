@@ -1183,6 +1183,46 @@ panel_equating <- nav_panel("Equating", value = "p_equating", icon = bs_icon("ar
 
 # --------------------------------------------------------------- FRAMES --
 panel_frames <- nav_panel("Frames", value = "p_frames", icon = bs_icon("grid-3x3"),
+    # paired-comparison (BTL) fits: the paired-comparison extended frame of
+    # reference (judge-panel by object-set cells, this package's extension of
+    # Humphry's model to the Bradley-Terry-Luce family); the Rasch EFRM
+    # machinery below hides while a BTL fit is active
+    conditionalPanel("output.is_btl == true",
+      layout_sidebar(
+        sidebar = sidebar(width = 340, open = "always",
+          selectInput("btlef_panel", "Judge-panel column", NULL),
+          fileInput("btlef_sets_file", "Object sets (CSV: object, set)",
+                    accept = ".csv", placeholder = "optional"),
+          p(class = "text-muted small",
+            "Leave empty to infer sets from object-name prefixes (the part before trailing digits)."),
+          numericInput("btlef_boot", "Bootstrap replicates", value = 60,
+                       min = 20, max = 200),
+          radioButtons("btlef_se", "Standard errors",
+                       c("Bootstrap (recommended)" = "bootstrap",
+                         "Conditional (fast, understates)" = "conditional")),
+          input_task_button("btlef_run", "Estimate frame units",
+                            type = "primary", class = "w-100"),
+          p(class = "text-muted small mt-2",
+            "Frames are judge-panel by object-set cells. Panel units phi are a panel's discriminating power; set units alpha and origins kappa place the sets on one common scale, identified from the cross-set comparisons alone. A single set reduces to a panel-units model.")),
+        conditionalPanel("output.has_btlef != true",
+          card(card_body(p(class = "text-muted small mb-0",
+            "Choose the judge-panel column in the sidebar and press Estimate frame units to see results.")))),
+        conditionalPanel("output.has_btlef == true",
+          layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
+            tableCard("btlef_phi_tbl", "Panel units (phi)",
+              info = "The panel's discriminating power on the common scale; Wald test against log phi = 0."),
+            conditionalPanel("output.btlef_multiset == true",
+              tableCard("btlef_units_tbl", "Set units (alpha) and origins (kappa)",
+                info = "Identified from the cross-set comparisons alone (no distributional assumption about the objects); the reference set is fixed at alpha = 1, kappa = 0."))),
+          layout_columns(col_widths = breakpoints(sm = 12, lg = c(7, 5)),
+            plotCard("btlef_units_plot", "Frame units", height = "460px",
+              info = "Caterpillar plot of the log units with 95% intervals; the reference (one) is marked."),
+            tableCard("btlef_frames_tbl", "Frame fit",
+              info = "Each judge-panel by object-set cell holding within-set comparisons: rho = phi x alpha is the cell's discrimination, n_comparisons the comparison count, fit_resid the pooled fit residual.")),
+          uiOutput("btlef_note"))
+      )
+    ),
+    conditionalPanel("output.is_btl != true",
     layout_sidebar(
       sidebar = sidebar(width = 290, open = "always",
         selectizeInput("frame_item", "Item for ICC across frames", NULL,
@@ -1199,7 +1239,7 @@ panel_frames <- nav_panel("Frames", value = "p_frames", icon = bs_icon("grid-3x3
         plotCard("frame_icc", "ICC across frames")),
       card(card_header("Equal-unit comparison"),
            card_body(verbatimTextOutput("efrm_cmp")))
-    )
+    ))
   )
 
 # -------------------------------------------------- INDEPENDENCE: TRAIT --
@@ -1969,6 +2009,11 @@ server <- function(input, output, session) {
                          selected = if (!is.na(g_o)) g_o else "")
     updateSelectizeInput(session, "bt_jfactors", choices = nm,
                          selected = g_f)
+    # judge-panel column for the paired-comparison frames extension: the same
+    # judge-constant candidates as the judge factors above, one of them chosen
+    updateSelectInput(session, "btlef_panel",
+                      choices = if (length(g_f)) g_f else character(0),
+                      selected = if (length(g_f)) g_f[1] else character(0))
     updateSelectInput(session, "bt_count", choices = c(NONE_CH, nm),
                       selected = if (!is.na(g_c)) g_c else NONE)
   })
@@ -2478,7 +2523,9 @@ server <- function(input, output, session) {
       session$sendCustomMessage("rasch-nav-vis",
                                 list(value = value, show = isTRUE(on)))
     show("p_facets", inherits(f, "rasch_mfrm"))
-    show("p_frames", inherits(f, "rasch_efrm"))
+    # the Frames page also carries the paired-comparison (BTL) extended frame
+    # of reference branch, so it shows for either fit family
+    show("p_frames", inherits(f, "rasch_efrm") || !is.null(bf))
     show("p_guess", !is.null(f) && !inherits(f, "rasch_mfrm") &&
            !inherits(f, "rasch_efrm") && max(f$m) == 1L)
     rasch_on <- !is.null(f)
@@ -4362,6 +4409,180 @@ server <- function(input, output, session) {
     }
     cat(sprintf("\nItem fit residual SD under the frames model: %.3f\n",
                 f$item_fit_summary$sd))
+  })
+
+  # ------------------------------------ BTL frames (paired-comparison EFRM) --
+  # object -> set map for btl_efrm(): an uploaded CSV wins, otherwise infer
+  # from the object-name prefix (the part before trailing digits/separators),
+  # exactly as ef_setmap infers item sets for the Rasch EFRM above. Returns a
+  # named list (set -> object names, the shape btl_efrm() wants) plus a short
+  # description of the source for the frozen-run notes and code snippet.
+  btlef_build_sets <- function(objs) {
+    if (!is.null(input$btlef_sets_file)) {
+      mp <- tryCatch(read.csv(input$btlef_sets_file$datapath, stringsAsFactors = FALSE),
+                     error = function(e) NULL)
+      if (!is.null(mp) && all(c("object", "set") %in% names(mp))) {
+        out <- setNames(as.character(mp$set), as.character(mp$object))
+        miss <- setdiff(objs, names(out))
+        if (length(miss)) out[miss] <- "(rest)"
+        return(list(sets = split(objs, out[objs]), source = "the uploaded object-set CSV"))
+      }
+      showNotification("Object-set CSV needs columns object,set - inferring from name prefixes.",
+                       type = "warning")
+    }
+    pref <- sub("[_. -]*[0-9]+$", "", objs)
+    pref[pref == ""] <- "(rest)"
+    list(sets = split(objs, pref), source = "object-name prefixes (trailing digits stripped)")
+  }
+  btlef_res <- reactiveVal(NULL)
+  observeEvent(input$btlef_run, {
+    req(btl_fit())
+    df <- raw_data()
+    jc <- input$bt_judge
+    if (is.null(jc) || identical(jc, NONE) || !jc %in% names(df)) {
+      showNotification("Paired-comparison frames need the judge column nominated on the Data page.",
+                       type = "error", duration = 10)
+      btlef_res(NULL); return()
+    }
+    pcol <- input$btlef_panel
+    if (is.null(pcol) || !length(pcol) || !nzchar(pcol) || !pcol %in% names(df)) {
+      showNotification("Choose a judge-panel column in the sidebar.",
+                       type = "error", duration = 8)
+      btlef_res(NULL); return()
+    }
+    if (is.null(input$bt_win) || !nzchar(input$bt_win %||% "") ||
+        identical(input$bt_win, NONE) || !input$bt_win %in% names(df)) {
+      showNotification(paste("Paired-comparison frames fit dichotomous winner data only;",
+                             "nominate a Winner column on the Data page (not a graded response)."),
+                       type = "error", duration = 10)
+      btlef_res(NULL); return()
+    }
+    jd <- as.character(df[[jc]]); first <- !duplicated(jd)
+    # the panel column must be constant within judge (a panel attribute, not
+    # a per-comparison one) -- the same check bdif_factor_maps makes for a
+    # single judge factor
+    if (!all(tapply(as.character(df[[pcol]]), jd,
+                    function(v) length(unique(v)) == 1L))) {
+      showNotification(paste0('"', pcol, '" is not constant within judge; choose a ',
+                              "judge-panel (not per-comparison) column."),
+                       type = "error", duration = 10)
+      btlef_res(NULL); return()
+    }
+    panel_map <- setNames(as.character(df[[pcol]])[first], jd[first])
+    objs <- btl_fit()$objects$object
+    sm <- btlef_build_sets(objs)
+    se_method <- input$btlef_se %||% "bootstrap"
+    boot_reps <- input$btlef_boot
+    if (is.null(boot_reps) || is.na(boot_reps)) boot_reps <- 60
+    boot_reps <- max(20, min(200, round(boot_reps)))
+
+    r <- withProgress(message = "Estimating frame units (bootstrap may take a while)…",
+                      value = 0.3,
+                      tryCatch(btl_efrm(df, object_a = input$bt_a, object_b = input$bt_b,
+                                        winner = input$bt_win, judge = jc,
+                                        panels = panel_map, object_sets = sm$sets,
+                                        se_method = se_method, boot_reps = boot_reps),
+                               error = function(e) e))
+    # freeze the run's configuration alongside its results (the frozen-run
+    # pattern of bdif_res), so the reproducible snippets describe THIS table
+    # even if the sidebar changes before the next run
+    if (inherits(r, "error")) {
+      showNotification(paste("Frame estimation failed:", conditionMessage(r)),
+                       type = "error", duration = 10)
+      btlef_res(NULL)
+    } else {
+      r$run_panel_col <- pcol
+      r$run_judge_col <- jc
+      r$run_set_source <- sm$source
+      r$run_se_method <- se_method
+      r$run_boot_reps <- boot_reps
+      btlef_res(r)
+    }
+  })
+  output$has_btlef <- reactive(!is.null(btlef_res()))
+  outputOptions(output, "has_btlef", suspendWhenHidden = FALSE)
+  output$btlef_multiset <- reactive({
+    r <- btlef_res(); !is.null(r) && nrow(r$alpha_table) > 1L
+  })
+  outputOptions(output, "btlef_multiset", suspendWhenHidden = FALSE)
+  # the DISPLAYED run's setup lines, for the reproducible-code footers: panels
+  # built with setNames (as the bdif snippet builds its factors) and the
+  # object sets recovered from the run's own objects table (frozen at run
+  # time, so later sidebar edits cannot silently change what the snippet
+  # reproduces); falls back to the live sidebar before any run
+  btlef_code_setup <- function() {
+    r <- btlef_res()
+    pcol <- (if (!is.null(r)) r$run_panel_col else input$btlef_panel) %||% "panel"
+    jc <- (if (!is.null(r)) r$run_judge_col else input$bt_judge) %||% "judge"
+    se_m <- (if (!is.null(r)) r$run_se_method else input$btlef_se) %||% "bootstrap"
+    reps <- (if (!is.null(r)) r$run_boot_reps else input$btlef_boot) %||% 60
+    sets_txt <- if (!is.null(r))
+      paste(deparse(split(r$objects$object, r$objects$set)), collapse = "\n    ")
+    else "list(...)  # inferred from object-name prefixes, or the uploaded CSV"
+    paste0(
+      "# dat: the comparison data; the judge-panel column is '", pcol, "'\n",
+      sprintf("panels <- setNames(as.character(dat$%s), dat$%s)[!duplicated(dat$%s)]\n",
+              bq(pcol), bq(jc), bq(jc)),
+      sprintf("object_sets <- %s\n", sets_txt),
+      sprintf(paste0('frm <- btl_efrm(dat, object_a = "%s", object_b = "%s", ',
+                     'winner = "%s",\n                 judge = "%s", panels = panels, ',
+                     'object_sets = object_sets,\n                 se_method = "%s", ',
+                     "boot_reps = %s)"),
+              input$bt_a %||% "object_a", input$bt_b %||% "object_b",
+              input$bt_win %||% "winner", jc, se_m, reps))
+  }
+  btlef_code_call <- function(field) paste0(btlef_code_setup(), "\n", field)
+  register_table("btlef_phi_tbl", function() {
+    r <- btlef_res(); req(!is.null(r)); r$phi_table
+  }, function() {
+    r <- btlef_res()
+    validate(need(!is.null(r),
+                  "Choose the judge-panel column in the sidebar and press Estimate frame units."))
+    d <- r$phi_table
+    style_lo_red(num_dt(d), d, "p", 0.05)
+  }, code = function() btlef_code_call("frm$phi_table"))
+  # the alpha/kappa tables share the set column: merged for one readable
+  # table, keeping the fit's own set order (merge() sorts by key otherwise)
+  btlef_units_tbl <- reactive({
+    r <- btlef_res(); req(!is.null(r))
+    d <- merge(r$alpha_table[, c("set", "alpha", "se_log_alpha", "p")],
+              r$kappa_table[, c("set", "kappa", "se_kappa")], by = "set", sort = FALSE)
+    d <- d[stats::na.omit(match(r$alpha_table$set, d$set)), , drop = FALSE]
+    rownames(d) <- NULL
+    d
+  })
+  register_table("btlef_units_tbl", function() btlef_units_tbl(), function() {
+    r <- btlef_res()
+    validate(need(!is.null(r) && nrow(r$alpha_table) > 1L,
+                  "A single object set: set units are not estimated (panel-units model)."))
+    d <- btlef_units_tbl()
+    style_lo_red(num_dt(d), d, "p", 0.05)
+  }, code = function() btlef_code_call(paste0(
+    'merge(frm$alpha_table[, c("set", "alpha", "se_log_alpha", "p")],\n',
+    '      frm$kappa_table[, c("set", "kappa", "se_kappa")], by = "set")')))
+  register_plot("btlef_units_plot", function() {
+    r <- btlef_res(); req(!is.null(r))
+    plot_btl_units(r)
+  }, code = function() btlef_code_call("plot_btl_units(frm)"))
+  register_table("btlef_frames_tbl", function() {
+    r <- btlef_res(); req(!is.null(r)); r$frames
+  }, function() {
+    r <- btlef_res()
+    validate(need(!is.null(r),
+                  "Choose the judge-panel column in the sidebar and press Estimate frame units."))
+    num_dt(r$frames)
+  }, code = function() btlef_code_call("frm$frames"))
+  output$btlef_note <- renderUI({
+    r <- btlef_res()
+    if (is.null(r)) return(NULL)
+    eu <- r$equal_unit
+    bits <- character(0)
+    if (!is.na(eu$difference))
+      bits <- c(bits, sprintf("equal-unit comparison: ll_frames - ll_single = %.3f (%s)",
+                              eu$difference, eu$note))
+    bits <- c(bits, r$se_note)
+    if (length(r$notes)) bits <- c(bits, paste(r$notes, collapse = "; "))
+    p(class = "text-muted small mb-0", paste0("Note. ", paste(bits, collapse = "; "), "."))
   })
 
   # --------------------------------------------------------- dimensionality --
