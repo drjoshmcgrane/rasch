@@ -365,6 +365,17 @@ css <- HTML("
   .rcode summary { cursor: pointer; font-size: .78rem; color: var(--bs-secondary-color); }
   .rcode pre { font-size: .78rem; background: var(--bs-tertiary-bg); border: 1px solid var(--bs-border-color); border-radius: 6px; padding: .5rem .75rem; margin: .35rem 0 0; white-space: pre-wrap; }
   .rcode-copy { float: right; margin-top: .35rem; }
+  /* floating hover-identification tooltip on the person-fit and item-fit-map
+     scatter plots: a small dark pill that follows the cursor, positioned in
+     CSS pixels from nearPoints()/coords_css. Colours are fixed (not themed)
+     so it reads the same over the plot's white background in both app
+     themes; pointer-events: none keeps it from stealing the hover it reports. */
+  .rasch-hover-tip {
+    position: absolute; pointer-events: none; z-index: 20;
+    background: rgba(33, 37, 41, .85); color: #fff;
+    font-size: .78rem; padding: .25rem .5rem; border-radius: 4px;
+    white-space: nowrap; transform: translate(-50%, -100%);
+  }
 ")
 
 # collapsed per-output "R code" footer (jamovi-style syntax mode): shows the
@@ -405,8 +416,20 @@ card_header_bar <- function(title = NULL, buttons = NULL, info = NULL)
 # before the download chips; `extra` takes further header buttons (e.g.
 # the batch all-persons downloads on the kidmap card). title = NULL
 # renders a buttons-only header (for cards inside named accordion panels).
+# `hover = TRUE` opts a single-panel base-graphics plot into point
+# identification: the plotOutput records hover coordinates (throttled) into
+# input$<id>_hover, and the plot is wrapped in a position:relative div that
+# floats a uiOutput(<id>_tip) tooltip (rendered server-side via nearPoints())
+# over it. Left FALSE (the default) for every other plot card.
 plotCard <- function(id, title = NULL, height = "560px", info = NULL,
-                     controls = NULL, extra = NULL) {
+                     controls = NULL, extra = NULL, hover = FALSE) {
+  plot_out <- if (isTRUE(hover))
+    div(style = "position: relative",
+        plotOutput(id, height = height,
+                   hover = hoverOpts(paste0(id, "_hover"), delay = 60,
+                                     delayType = "throttle")),
+        uiOutput(paste0(id, "_tip")))
+  else plotOutput(id, height = height)
   card(
     full_screen = TRUE,
     `data-bs-theme` = "light",
@@ -415,7 +438,7 @@ plotCard <- function(id, title = NULL, height = "560px", info = NULL,
       downloadButton(paste0(id, "_png"), "PNG", class = "btn-outline-secondary btn-xs"),
       downloadButton(paste0(id, "_pdf"), "PDF", class = "btn-outline-secondary btn-xs"),
       extra)),
-    card_body(plotOutput(id, height = height), rcode_details(id),
+    card_body(plot_out, rcode_details(id),
               padding = 8, fillable = FALSE)
   )
 }
@@ -797,7 +820,7 @@ panel_items <- nav_panel("Items", value = "p_items", icon = bs_icon("list-check"
       accordion_panel("Threshold map", value = "items_thrmap",
         plotCard("thrmap")),
       accordion_panel("Item fit map", value = "items_imap",
-        plotCard("imap",
+        plotCard("imap", hover = TRUE,
           info = "Item locations plotted against their fit residuals; items beyond |2.5| warrant inspection.")),
       accordion_panel("Fit residual distribution", value = "items_rdist",
         plotCard("rdist_i")),
@@ -892,7 +915,7 @@ panel_persons <- nav_panel("Persons", value = "p_persons", icon = bs_icon("peopl
                          class = "btn-outline-secondary btn-xs")))),
     accordion(id = "persons_acc", open = "persons_pfit", class = "mt-3",
       accordion_panel("Person fit", value = "persons_pfit",
-        plotCard("pfit")),
+        plotCard("pfit", hover = TRUE)),
       accordion_panel("Fit residual distribution", value = "persons_rdist",
         plotCard("rdist_p")))),
     # paired-comparison (BTL) fits: the judges are the persons here, so the
@@ -3501,6 +3524,26 @@ server <- function(input, output, session) {
                 code = function() 'plot_resid_dist(fit, "persons")')
   register_plot("pfit",  function() plot_person_fit(fit()),
                 code = function() "plot_person_fit(fit)")
+  # hover identification for the person-fit scatter: nearPoints() against
+  # exactly the rows plot_person_fit() draws (theta and fit_resid both
+  # non-NA -- see R/plots.R), so the point under the cursor is always the
+  # one actually plotted there
+  output$pfit_tip <- renderUI({
+    req(fit())
+    hov <- input$pfit_hover
+    req(hov)
+    p <- fit()$person
+    ok <- !is.na(p$theta) & !is.na(p$fit_resid)
+    d <- data.frame(id = p$id[ok], theta = p$theta[ok], fit_resid = p$fit_resid[ok])
+    np <- nearPoints(d, hov, xvar = "theta", yvar = "fit_resid",
+                     threshold = 12, maxpoints = 1)
+    if (!nrow(np)) return(NULL)
+    div(class = "rasch-hover-tip",
+        style = sprintf("left:%.0fpx; top:%.0fpx;",
+                        hov$coords_css$x, hov$coords_css$y - 12),
+        sprintf("%s · location %.2f · fit residual %.2f",
+                np$id[1], np$theta[1], np$fit_resid[1]))
+  })
 
   # ------------------------------------------------------- targeting plots --
   # sidebar-controlled bins and scale range shared by both targeting plots
@@ -3529,6 +3572,22 @@ server <- function(input, output, session) {
                 code = function() "plot_threshold_map(fit)")
   register_plot("imap",   function() plot_item_map(fit()),
                 code = function() "plot_item_map(fit)")
+  # hover identification for the item fit map: nearPoints() against
+  # fit()$items (plot_item_map() draws every item -- no filtering)
+  output$imap_tip <- renderUI({
+    req(fit())
+    hov <- input$imap_hover
+    req(hov)
+    d <- fit()$items
+    np <- nearPoints(d, hov, xvar = "location", yvar = "fit_resid",
+                     threshold = 12, maxpoints = 1)
+    if (!nrow(np)) return(NULL)
+    div(class = "rasch-hover-tip",
+        style = sprintf("left:%.0fpx; top:%.0fpx;",
+                        hov$coords_css$x, hov$coords_css$y - 12),
+        sprintf("%s · location %.3f · fit residual %.2f",
+                np$item[1], np$location[1], np$fit_resid[1]))
+  })
   register_plot("rdist_i", function() plot_resid_dist(fit(), "items"),
                 code = function() 'plot_resid_dist(fit, "items")')
   # Test-page scale range (default -6..6 matches the functions' own default,

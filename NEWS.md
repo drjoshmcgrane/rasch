@@ -1,3 +1,10 @@
+# rasch 1.10.1
+
+* App: hovering a point on the person-fit plot or the item fit map now
+  shows who it is -- a floating tooltip with the person ID (or item name),
+  location, and fit residual, resolved server-side against exactly the
+  subset each plot draws. The navbar wordmark is left-justified.
+
 # rasch 1.10.0
 
 * Model comparison, calibrated for composite likelihood. `compare_fits()`
