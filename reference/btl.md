@@ -169,9 +169,11 @@ apportioned degrees of freedom – an erratic judge or an object of
 inconsistent quality shows exactly as an erratic person or misfitting
 item does. Per pair: the classical goodness-of-fit table comparing
 observed and expected win proportions, with the total chi-square on
-(pairs used) - (objects - 1) degrees of freedom. The object separation
-index is the analogue of the PSI: the proportion of observed location
-variance not due to error.
+(pairs used) minus (free location parameters) degrees of freedom. The
+object separation index is the analogue of the PSI: the proportion of
+observed location variance not due to error. Anchored objects enter it
+with their fixed locations and zero error – they are separated with
+certainty by construction.
 
 ## References
 

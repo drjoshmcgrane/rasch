@@ -188,6 +188,11 @@ plot_btl_dependence(bt, "carry_over")   # interrogate a dependence effect
 btl_transitivity(bt)         # preference loops: is one scale enough?
 btl_dimensionality(bt)       # residual "swirl" (bimensions) = a 2nd attribute?
 plot_btl_scree(btl_dimensionality(bt))  # bimension scree vs a noise reference
+btl(comparisons, ..., position = TRUE)  # first-position (order) advantage
+btl(comparisons, ..., anchors = c(S07 = 0.42))  # anchored, for equating
+btl_equate(bt, bt_lastyear)  # common-object drift tests across panels/years
+btl_information(bt)          # design information per object (targeting)
+btl_next_pairs(bt)           # adaptive next comparisons (Pollitt 2012)
 btl_dif(bt, list(panel = panel_map, experience = exp_map))
                              # judge-group DIF, factors modelled jointly
 plot_btl_icc(bt, "E04", group = panel_map)   # curves by judge group

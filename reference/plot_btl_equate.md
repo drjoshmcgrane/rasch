@@ -1,9 +1,10 @@
 # Plot a paired-comparison equating comparison
 
 Scatter of the two calibrations' common-object locations with the
-shifted identity line and per-object 95 per cent bands; objects that
-drift (after the multiplicity adjustment) are highlighted and labelled.
-The counterpart of
+shifted identity line, per-object 95 per cent error bars, and a dotted
+guide band at the average pooled precision; objects that drift (after
+the multiplicity adjustment) are highlighted and labelled. The
+counterpart of
 [`plot_equate`](https://drjoshmcgrane.github.io/rasch/reference/plot_equate.md)
 for Bradley-Terry-Luce scales.
 
