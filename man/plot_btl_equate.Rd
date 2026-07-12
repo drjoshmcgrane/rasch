@@ -21,7 +21,8 @@ Called for its plotting side effect; invisibly the
 }
 \description{
 Scatter of the two calibrations' common-object locations with the shifted
-identity line and per-object 95 per cent bands; objects that drift (after
+identity line, per-object 95 per cent error bars, and a dotted guide band
+at the average pooled precision; objects that drift (after
 the multiplicity adjustment) are highlighted and labelled. The counterpart
 of \code{\link{plot_equate}} for Bradley-Terry-Luce scales.
 }

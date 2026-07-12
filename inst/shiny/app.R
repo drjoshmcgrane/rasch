@@ -932,7 +932,7 @@ panel_targeting <- nav_panel("Targeting", value = "p_targeting", icon = bs_icon(
         "Targeting for paired comparisons: where on the scale the design measures well, and which new comparisons would sharpen it most. The design-information counterpart of the test-information function."),
       layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
         tableCard("btl_info_tbl", "Design information",
-          info = "Each object's design information is the pooled Fisher information of the comparisons it took part in - how tightly the observed contests pin its location down. se_naive = 1/sqrt(information) is the standard error that would hold if the comparisons were independent trials; it differs from the fit's judge-clustered sandwich se because repeated verdicts by one judge carry less independent information than their count suggests, so the gap between them is a diagnostic of clustering."),
+          info = "Each object's design information is the pooled Fisher information of the comparisons it took part in - how tightly the observed contests pin its location down. se_naive = 1/sqrt(information) is a single-parameter lower bound: the error the object's comparisons would give if its location were the only free parameter. The fit's se (estimated jointly with every other location, and judge-clustered) sits above it as a rule; read the ratio as descriptive, not as a clustering test."),
         plotCard("btl_targeting_plot", "Design information and targeting",
           info = "Every object at its location (x) and design information (y), the dot sized by its comparison count. The dashed reference curve, read on the right axis, traces the information one new comparison would carry against an opponent at each location, anchored at the centre of the scale so it peaks at gap zero - the visual reason an adaptive design chases near-neighbour contests, where information is bought most cheaply.")),
       accordion(class = "mt-3",
@@ -944,9 +944,9 @@ panel_targeting <- nav_panel("Targeting", value = "p_targeting", icon = bs_icon(
               checkboxInput("btl_next_wse", "Prioritise poorly-measured objects",
                             TRUE),
               p(class = "text-muted small",
-                "The adaptive comparative judgement step (Pollitt 2012): rank candidate pairs by the information one more comparison would carry at the current estimates, favouring near-neighbour contests. Weighting by the pair's standard errors promotes poorly measured objects.")),
+                "The adaptive comparative judgement step (Pollitt 2012): rank candidate pairs by the information one more comparison would carry at the current estimates, favouring near-neighbour contests. The priority weighting promotes pairs whose extra comparison would most reduce the total location error.")),
             tableCard("btl_next_tbl", "Recommended comparisons",
-              info = "The top candidate pairs by the information one new comparison would carry (Pollitt 2012 adaptive comparative judgement); with the weighting on, the priority multiplies expected information by the pair's error variance so poorly measured objects rise. A caution (Bramley 2015): adaptive selection inflates a naively computed scale-separation reliability, so report reliability from a non-adaptive subset or treat an adaptive value as an upper bound."))))),
+              info = "The top candidate pairs. With the weighting on, priority is the one-step reduction in total location variance that one added comparison of the pair would deliver, computed from the fit's covariance - so poorly measured (and correlated) objects rise; off, pairs rank by raw expected information (closeness). A caution (Bramley 2015): adaptive selection inflates a naively computed scale-separation reliability, so report reliability from a non-adaptive subset or treat an adaptive value as an upper bound."))))),
     conditionalPanel("output.is_btl != true",
     layout_sidebar(
       sidebar = sidebar(width = 280, open = "always",
@@ -1126,7 +1126,7 @@ panel_equating <- nav_panel("Equating", value = "p_equating", icon = bs_icon("ar
           tableCard("btl_eq_tbl", "Common-object comparison",
             info = "Each common object is tested against the shifted identity line after the precision-weighted origin shift (the two sum-zero scales are centred on different object sets). A drifting object weakens the link; p_adj is the multiplicity-adjusted drift p-value, shown red below 0.05."),
           plotCard("btl_eq_plot", "Equating plot",
-            info = "The two calibrations' common-object locations against the shifted identity line, with per-object bands; objects that drift after the multiplicity adjustment are highlighted and labelled."))
+            info = "The two calibrations' common-object locations against the shifted identity line, with per-object error bars and a dotted guide band at the average pooled precision; objects that drift after the multiplicity adjustment are highlighted and labelled."))
       )
     ),
     conditionalPanel("output.is_btl != true",
@@ -3916,7 +3916,7 @@ server <- function(input, output, session) {
                   paste("No dependence effect was estimable:",
                         paste(b$notes, collapse = "; "))))
     validate(need(e %in% b$dependence$effect,
-                  "This effect had no informative comparisons (or separated) and was dropped; see the notes."))
+                  "This effect was not estimated for this fit (no order column, no informative comparisons, or separated; see the notes). Estimated effects are read from the table."))
     plot_btl_dependence(b, e)
   }, w = 8, h = 5.5, code = function()
     sprintf('plot_btl_dependence(bt, "%s")', input$btl_dep_effect %||% "exposure"))
