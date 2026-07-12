@@ -29,7 +29,7 @@ phi_g (v_a - v_b), which places the sets on one common scale."><meta property="o
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.9.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.9.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -225,6 +225,22 @@ cover at a third of their nominal rate on linked designs. The
 sandwich for stage one, inverse observed information for stage two,
 conditional on stage one) for quick inspection; its <code>alpha</code> and
 <code>kappa</code> errors understate, and the fit says so.</p>
+<p>Two honesty notes on the bootstrap. It is model-based: replicates are drawn
+as independent Bernoulli outcomes at the fitted probabilities, which is
+self-consistent (the model has no judge parameter) but does not carry
+extra-model dependence within judges; the conditional stage-one errors are
+judge-clustered and guard against exactly that, so when the two disagree
+materially the larger is the cautious choice. And a parameter that reaches
+its boundary in some replicates (a set unit driven to zero when a resampled
+within-set order flips against the cross-set evidence, the signature of a
+two-object set with a near-even internal pair) has no normal sampling
+distribution: its standard error is reported as <code>NA</code> and a note names
+the parameter and the boundary count rather than manufacturing a number.
+Relatedly, a set whose within-set contests are all near-even (or all
+one-sided) carries no stable information about the panel-unit ratios; such
+sets are screened out of the <code>phi</code> reconciliation, refit with the
+panel units held at the reconciled <code>phi</code> (which the frame model says
+apply to them regardless), and named in a note.</p>
 <p>A single set (<code>S = 1</code>) reduces the model to panel units alone; stage
 two is skipped and the print states the panel-units model. When
 additionally <code>G = 1</code> the fit reduces exactly to <code><a href="btl.html">btl</a></code> on

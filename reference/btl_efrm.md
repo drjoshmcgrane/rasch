@@ -165,6 +165,24 @@ sandwich for stage one, inverse observed information for stage two,
 conditional on stage one) for quick inspection; its `alpha` and `kappa`
 errors understate, and the fit says so.
 
+Two honesty notes on the bootstrap. It is model-based: replicates are
+drawn as independent Bernoulli outcomes at the fitted probabilities,
+which is self-consistent (the model has no judge parameter) but does not
+carry extra-model dependence within judges; the conditional stage-one
+errors are judge-clustered and guard against exactly that, so when the
+two disagree materially the larger is the cautious choice. And a
+parameter that reaches its boundary in some replicates (a set unit
+driven to zero when a resampled within-set order flips against the
+cross-set evidence, the signature of a two-object set with a near-even
+internal pair) has no normal sampling distribution: its standard error
+is reported as `NA` and a note names the parameter and the boundary
+count rather than manufacturing a number. Relatedly, a set whose
+within-set contests are all near-even (or all one-sided) carries no
+stable information about the panel-unit ratios; such sets are screened
+out of the `phi` reconciliation, refit with the panel units held at the
+reconciled `phi` (which the frame model says apply to them regardless),
+and named in a note.
+
 A single set (`S = 1`) reduces the model to panel units alone; stage two
 is skipped and the print states the panel-units model. When additionally
 `G = 1` the fit reduces exactly to

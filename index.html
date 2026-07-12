@@ -32,7 +32,7 @@
 
     <a class="navbar-brand me-2" href="index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.9.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.9.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -260,6 +260,11 @@
 <h2 id="case-study-wording-effects-as-frame-units">Case study: wording effects as frame units<a class="anchor" aria-label="anchor" href="#case-study-wording-effects-as-frame-units"></a>
 </h2>
 <p><code>inst/casestudies/wording_units_selfesteem.R</code> applies the extended frame of reference model to the public Rosenberg Self-Esteem Scale dataset of the Open Source Psychometrics Project, treating positively and negatively worded items as two item sets. The positively worded items carry a unit about 27 per cent larger than the reverse-scored negative items (alpha ratio 1.266, 95% CI 1.246–1.286), and it matters: persons with identical raw scores differ by up to 0.85 logits once the wording units are modelled, and the male–female gap is understated by about 10 per cent under equal units. A free-slope model agrees at the set level, and sensitivity analysis localises part of the effect to the scale’s well-known ambivalent item.</p>
+</div>
+<div class="section level2">
+<h2 id="case-study-party-blocs-and-crisis-concern-as-frames">Case study: party blocs and crisis concern as frames<a class="anchor" aria-label="anchor" href="#case-study-party-blocs-and-crisis-concern-as-frames"></a>
+</h2>
+<p><code>inst/casestudies/party_blocs_crisis.R</code> applies the paired-comparison form to the Tübingen 2009 party-preference data shipped with <code>psychotools</code> (Strobl, Wickelmaier &amp; Zeileis 2011): ideological blocs as object sets, concern about the 2008–9 economic crisis as judge panels. Crisis-affected respondents judge party contests with a unit about a third smaller than the unaffected — less decisively, not more — though the contrast stays short of significance by either standard error, and it exceeds anything gender or education produces; the right bloc’s origin sits firmly below the left’s in this university-town sample. The study doubles as a design clinic: a two-object set whose single internal pair splits nearly evenly identifies neither its panel-ratio contribution nor its own unit, and the fit now screens the set out of the unit reconciliation, reports the boundary-unstable set unit as <code>NA</code>, and names both in notes rather than diverging — the honest answers to questions such a design cannot support.</p>
 </div>
 <div class="section level2">
 <h2 id="validation">Validation<a class="anchor" aria-label="anchor" href="#validation"></a>

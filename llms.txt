@@ -318,6 +318,24 @@ per cent under equal units. A free-slope model agrees at the set level,
 and sensitivity analysis localises part of the effect to the scale’s
 well-known ambivalent item.
 
+## Case study: party blocs and crisis concern as frames
+
+`inst/casestudies/party_blocs_crisis.R` applies the paired-comparison
+form to the Tübingen 2009 party-preference data shipped with
+`psychotools` (Strobl, Wickelmaier & Zeileis 2011): ideological blocs as
+object sets, concern about the 2008–9 economic crisis as judge panels.
+Crisis-affected respondents judge party contests with a unit about a
+third smaller than the unaffected — less decisively, not more — though
+the contrast stays short of significance by either standard error, and
+it exceeds anything gender or education produces; the right bloc’s
+origin sits firmly below the left’s in this university-town sample. The
+study doubles as a design clinic: a two-object set whose single internal
+pair splits nearly evenly identifies neither its panel-ratio
+contribution nor its own unit, and the fit now screens the set out of
+the unit reconciliation, reports the boundary-unstable set unit as `NA`,
+and names both in notes rather than diverging — the honest answers to
+questions such a design cannot support.
+
 ## Validation
 
 Every estimation and diagnostic component is validated against simulated

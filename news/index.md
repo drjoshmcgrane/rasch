@@ -1,5 +1,42 @@
 # Changelog
 
+## rasch 1.9.2
+
+- Case study: `inst/casestudies/party_blocs_crisis.R` applies
+  [`btl_efrm()`](https://drjoshmcgrane.github.io/rasch/reference/btl_efrm.md)
+  to the Tuebingen 2009 party-preference data (via `psychotools`), with
+  ideological blocs as object sets and economic-crisis concern as judge
+  panels. Running the model against real data surfaced three defects,
+  all fixed below.
+- A set whose within-set contests are all near-even (or all one-sided)
+  carries no stable information about the panel-unit ratios: its
+  stage-one ratio estimate diverged and poisoned the phi reconciliation
+  with a spurious covariance (on the party data, the right bloc’s single
+  CDU/CSU-FDP pair at 55:45 drove phi to 3e4 and a fatal error). Such
+  sets are now screened out of the reconciliation, refit with the panel
+  units held at the reconciled phi – which the frame model says apply to
+  them regardless – and named in a note. Stage one also gains the same
+  trust-region step cap as
+  [`btl()`](https://drjoshmcgrane.github.io/rasch/reference/btl.md).
+- Bootstrap replicates in which a set unit reaches its boundary (log
+  alpha driven to -Inf when a resampled within-set order flips against
+  the cross-set evidence, the signature of a two-object set with a
+  near-even internal pair) made the standard error silently NaN, printed
+  as blank. The SE is now reported as NA with a note naming the
+  parameter and the boundary count: no number is manufactured for a
+  sampling distribution that is not normal. A replicate whose
+  convergence flag was NA could also crash the bootstrap loop; it now
+  counts as a failure.
+- The stage convergence checks compared the gradient to an absolute
+  threshold, which is scale-dependent: on large designs a converged fit
+  could be flagged unconverged and – with the new screen – silently
+  rerouted, changing the estimates. Both stages now use a per-comparison
+  criterion, verified invariant to 50-fold duplication of the data.
+- Documentation: the bootstrap’s two honesty notes (model-based
+  resampling versus judge-clustered conditional errors, and
+  boundary-unstable parameters) are spelled out in
+  [`?btl_efrm`](https://drjoshmcgrane.github.io/rasch/reference/btl_efrm.md).
+
 ## rasch 1.9.1
 
 - Shiny app: the Frames page gains its paired-comparison variant –

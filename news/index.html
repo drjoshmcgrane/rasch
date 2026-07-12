@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.9.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.9.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,14 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.9.2" id="rasch-192">rasch 1.9.2<a class="anchor" aria-label="anchor" href="#rasch-192"></a></h2>
+<ul><li>Case study: <code>inst/casestudies/party_blocs_crisis.R</code> applies <code><a href="../reference/btl_efrm.html">btl_efrm()</a></code> to the Tuebingen 2009 party-preference data (via <code>psychotools</code>), with ideological blocs as object sets and economic-crisis concern as judge panels. Running the model against real data surfaced three defects, all fixed below.</li>
+<li>A set whose within-set contests are all near-even (or all one-sided) carries no stable information about the panel-unit ratios: its stage-one ratio estimate diverged and poisoned the phi reconciliation with a spurious covariance (on the party data, the right bloc’s single CDU/CSU-FDP pair at 55:45 drove phi to 3e4 and a fatal error). Such sets are now screened out of the reconciliation, refit with the panel units held at the reconciled phi – which the frame model says apply to them regardless – and named in a note. Stage one also gains the same trust-region step cap as <code><a href="../reference/btl.html">btl()</a></code>.</li>
+<li>Bootstrap replicates in which a set unit reaches its boundary (log alpha driven to -Inf when a resampled within-set order flips against the cross-set evidence, the signature of a two-object set with a near-even internal pair) made the standard error silently NaN, printed as blank. The SE is now reported as NA with a note naming the parameter and the boundary count: no number is manufactured for a sampling distribution that is not normal. A replicate whose convergence flag was NA could also crash the bootstrap loop; it now counts as a failure.</li>
+<li>The stage convergence checks compared the gradient to an absolute threshold, which is scale-dependent: on large designs a converged fit could be flagged unconverged and – with the new screen – silently rerouted, changing the estimates. Both stages now use a per-comparison criterion, verified invariant to 50-fold duplication of the data.</li>
+<li>Documentation: the bootstrap’s two honesty notes (model-based resampling versus judge-clustered conditional errors, and boundary-unstable parameters) are spelled out in <code><a href="../reference/btl_efrm.html">?btl_efrm</a></code>.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.9.1" id="rasch-191">rasch 1.9.1<a class="anchor" aria-label="anchor" href="#rasch-191"></a></h2>
 <ul><li>Shiny app: the Frames page gains its paired-comparison variant – nominate a judge-panel column and an object-set map (CSV, or inferred from object-name prefixes), estimate the frame units on demand (bootstrap standard errors by default), and read the panel units, set units and origins, the unit caterpillar, and the per-frame fit. On the app’s own paired-comparison demo the two judge panels differ significantly in discriminating power – the panel containing the erratic judge carries the smaller unit – which is precisely the phenomenon the model makes visible.</li>
