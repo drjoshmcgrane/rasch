@@ -96,3 +96,43 @@ test_that("score table is monotone in the raw score", {
   expect_true(all(diff(sc$theta) > 0))
   expect_true(all(sc$se > 0))
 })
+
+test_that("MFRM severity SEs are calibrated (fixed truth)", {
+  skip_on_cran()   # ~30 refits; the full battery lives in tools/calibration.R
+  simP2 <- function(t, tau) { x <- 0:length(tau)
+    p <- exp(x * t - c(0, cumsum(tau))); p / sum(p) }
+  lam <- c(R1 = -0.7, R2 = -0.2, R3 = 0.3, R4 = 0.6)   # truth held FIXED
+  del <- c(I1 = -0.8, I2 = -0.2, I3 = 0.3, I4 = 0.7)
+  base_tau <- c(-1.1, 0, 1.1)
+  est <- ses <- matrix(NA, 30, 4)
+  for (r in 1:30) { set.seed(7000 + r)
+    th <- rnorm(70, 0, 1.2)
+    g <- expand.grid(p = 1:70, i = 1:4, rt = 1:4)
+    sc <- vapply(seq_len(nrow(g)), function(k)
+      sample(0:3, 1, prob = simP2(th[g$p[k]],
+                                  base_tau + del[g$i[k]] + lam[g$rt[k]])), 0L)
+    d <- data.frame(person = sprintf("P%03d", g$p), item = names(del)[g$i],
+                    rater = names(lam)[g$rt], score = sc)
+    mf <- rasch_mfrm(d, person = "person", item = "item", score = "score",
+                     facets = "rater")
+    fe <- mf$facet_effects$rater
+    est[r, ] <- fe$severity[match(names(lam), fe$level)]
+    ses[r, ] <- fe$se[match(names(lam), fe$level)]
+  }
+  ratio <- colMeans(ses) / apply(est, 2, sd)
+  expect_true(all(ratio > 0.7 & ratio < 1.4))   # 30 reps: generous but real band
+})
+
+test_that("dif_size standard errors are calibrated (fixed truth)", {
+  skip_on_cran()
+  diffs <- ses <- numeric(30)
+  for (r in 1:30) {
+    d <- simulate_rasch(500, 10, dif = list(items = "I05", uniform = 0.8),
+                        n_groups = 2, seed = 8000 + r)
+    ds <- dif_size(rasch(d, id = "id", factors = "group"), "I05", by = "group")
+    diffs[r] <- ds$pairs$difference; ses[r] <- ds$pairs$se
+  }
+  ratio <- mean(ses) / sd(diffs)
+  expect_gt(ratio, 0.7); expect_lt(ratio, 1.5)
+  expect_lt(abs(mean(abs(diffs)) - 0.8), 0.15)   # the planted DIF is the estimand
+})
