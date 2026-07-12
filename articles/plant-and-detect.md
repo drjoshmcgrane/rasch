@@ -58,7 +58,7 @@ rec <- sim_recovery(fit, d)
 rec
 #> Parameter recovery (planted vs recovered):
 #>   item difficulty  n=10   r=0.998  RMSE=0.108  bias=-0.000
-#>   person ability   n=400  r=0.761  RMSE=0.826  bias=+0.000
+#>   person ability   n=400  r=0.761  RMSE=0.826  bias=-0.000
 ```
 
 ``` r
