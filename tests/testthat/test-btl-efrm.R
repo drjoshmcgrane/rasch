@@ -1,10 +1,14 @@
+# fast path for tests whose subject is not the standard errors: the
+# conditional SEs are exact for beta/phi and the estimates are identical
+befit <- function(...) btl_efrm(..., se_method = "conditional")
+
 # Extended frame of reference for paired comparisons: reduction to btl(),
 # recovery of panel and set units, null calibration, and the guards.
 
 test_that("G = 1, S = 1 reduces exactly to btl()", {
   d <- simulate_btl_efrm(n_objects_per_set = 7, n_sets = 1, n_panels = 1,
                          reps_within = 40, seed = 1)
-  fit <- btl_efrm(d, "object_a", "object_b", winner = "winner", judge = "judge",
+  fit <- befit(d, "object_a", "object_b", winner = "winner", judge = "judge",
                   panels = "panel", object_sets = attr(d, "truth")$object_sets)
   expect_s3_class(fit, "rasch_btl_efrm")
   bt <- btl(d, "object_a", "object_b", winner = "winner")
@@ -23,7 +27,7 @@ test_that("planted panel units (phi) are recovered and Wald-flagged", {
   d <- simulate_btl_efrm(n_objects_per_set = 8, n_sets = 1, n_panels = 3,
                          n_judges_per_panel = 20, reps_within = 120,
                          panel_units = phi_true, seed = 1)
-  fit <- btl_efrm(d, "object_a", "object_b", winner = "winner", judge = "judge",
+  fit <- befit(d, "object_a", "object_b", winner = "winner", judge = "judge",
                   panels = "panel", object_sets = attr(d, "truth")$object_sets)
   expect_true(fit$converged)
   pt <- fit$phi_table
@@ -46,7 +50,7 @@ test_that("planted set units (alpha) and origins (kappa) are recovered", {
                          n_judges_per_panel = 15, reps_within = 120,
                          reps_cross = 50, set_units = c(1, 1.4),
                          set_origins = c(0, 0.8), seed = 1)
-  fit <- btl_efrm(d, "object_a", "object_b", winner = "winner", judge = "judge",
+  fit <- befit(d, "object_a", "object_b", winner = "winner", judge = "judge",
                   panels = "panel", object_sets = attr(d, "truth")$object_sets)
   expect_true(fit$converged)
   a2 <- fit$alpha_table[fit$alpha_table$set == "set2", ]
@@ -71,7 +75,7 @@ test_that("units are not spuriously flagged under the null", {
     d <- simulate_btl_efrm(n_objects_per_set = 6, n_sets = 2, n_panels = 2,
                            n_judges_per_panel = 10, reps_within = 20,
                            reps_cross = 20, seed = base + k)
-    fit <- btl_efrm(d, "object_a", "object_b", winner = "winner",
+    fit <- befit(d, "object_a", "object_b", winner = "winner",
                     judge = "judge", panels = "panel",
                     object_sets = attr(d, "truth")$object_sets)
     flags <- flags + any(fit$phi_table$p < 0.05, na.rm = TRUE) +
@@ -90,7 +94,7 @@ test_that("guards fire with informative errors", {
   # graded response is not supported in this first implementation
   d$grade <- 1L
   expect_error(
-    btl_efrm(d, "object_a", "object_b", winner = "winner", judge = "judge",
+    befit(d, "object_a", "object_b", winner = "winner", judge = "judge",
              panels = "panel", object_sets = os, response = "grade"),
     "dichotomous")
 
@@ -98,7 +102,7 @@ test_that("guards fire with informative errors", {
   os_missing <- list(set1 = sprintf("S1O%02d", 1:6),
                      set2 = sprintf("S2O%02d", 1:5))    # drops S2O06
   expect_error(
-    btl_efrm(d, "object_a", "object_b", winner = "winner", judge = "judge",
+    befit(d, "object_a", "object_b", winner = "winner", judge = "judge",
              panels = "panel", object_sets = os_missing),
     "belong to exactly one set")
 
@@ -106,13 +110,13 @@ test_that("guards fire with informative errors", {
   os_dup <- list(set1 = c(sprintf("S1O%02d", 1:6), "S2O01"),
                  set2 = sprintf("S2O%02d", 1:6))
   expect_error(
-    btl_efrm(d, "object_a", "object_b", winner = "winner", judge = "judge",
+    befit(d, "object_a", "object_b", winner = "winner", judge = "judge",
              panels = "panel", object_sets = os_dup),
     "more than one set")
 
   # insufficient cross-set links: no set pair reaches min_link
   expect_error(
-    btl_efrm(d, "object_a", "object_b", winner = "winner", judge = "judge",
+    befit(d, "object_a", "object_b", winner = "winner", judge = "judge",
              panels = "panel", object_sets = os, min_link = 100000),
     "not reachable from the reference set")
 
@@ -131,14 +135,14 @@ test_that("guards fire with informative errors", {
   dw <- rbind(mk(o1, c("j1", "j2")), mk(o2, c("j3", "j4")))
   pmap <- c(j1 = "P1", j2 = "P1", j3 = "P2", j4 = "P2")   # set1->P1, set2->P2
   expect_error(
-    btl_efrm(dw, "object_a", "object_b", winner = "winner", judge = "judge",
+    befit(dw, "object_a", "object_b", winner = "winner", judge = "judge",
              panels = pmap, object_sets = list(set1 = o1, set2 = o2)),
     "panel")
 
   # single set: the print states the panel-units model
   ds <- simulate_btl_efrm(n_objects_per_set = 6, n_sets = 1, n_panels = 2,
                           reps_within = 25, seed = 3)
-  fs <- btl_efrm(ds, "object_a", "object_b", winner = "winner", judge = "judge",
+  fs <- befit(ds, "object_a", "object_b", winner = "winner", judge = "judge",
                  panels = "panel", object_sets = attr(ds, "truth")$object_sets)
   expect_output(print(fs), "panel units only")
 })
@@ -147,8 +151,47 @@ test_that("plot_btl_units draws without error", {
   d <- simulate_btl_efrm(n_objects_per_set = 6, n_sets = 2, n_panels = 2,
                          reps_within = 25, reps_cross = 25,
                          set_units = c(1, 1.3), seed = 4)
-  fit <- btl_efrm(d, "object_a", "object_b", winner = "winner", judge = "judge",
+  fit <- befit(d, "object_a", "object_b", winner = "winner", judge = "judge",
                   panels = "panel", object_sets = attr(d, "truth")$object_sets)
   pdf(NULL); on.exit(dev.off())
   expect_silent(plot_btl_units(fit))
+})
+
+test_that("bootstrap SEs propagate linking uncertainty (estimates unchanged)", {
+  skip_on_cran()
+  d <- simulate_btl_efrm(n_objects_per_set = 6, n_sets = 2, n_panels = 2,
+                         set_units = c(1, 1.4), set_origins = c(0, 0.8),
+                         reps_within = 60, reps_cross = 50, seed = 1)
+  os <- attr(d, "truth")$object_sets
+  set.seed(9)
+  fb <- btl_efrm(d, "object_a", "object_b", "winner", "judge", "panel", os,
+                 boot_reps = 40)
+  fc <- btl_efrm(d, "object_a", "object_b", "winner", "judge", "panel", os,
+                 se_method = "conditional")
+  expect_equal(fb$alpha_table$alpha, fc$alpha_table$alpha)   # same estimator
+  expect_equal(fb$objects$v, fc$objects$v)
+  # the bootstrap carries stage-one noise the conditional errors omit
+  expect_gt(fb$alpha_table$se_log_alpha[2], fc$alpha_table$se_log_alpha[2])
+})
+
+test_that("bootstrap SEs are calibrated on the chain-linked design", {
+  skip_on_cran()   # ~6 x 41 pipeline fits; the full battery: tools/calibration.R
+  la <- se <- numeric(6)
+  for (s in 1:6) {
+    d <- simulate_btl_efrm(n_objects_per_set = 7, n_sets = 3,
+                           n_judges_per_panel = 8, n_panels = 2,
+                           reps_within = 60, reps_cross = 60,
+                           panel_units = c(0.8, 1.25),
+                           set_units = c(1, 1.3, 0.75),
+                           set_origins = c(0, 0.5, -0.4), seed = 100 + s)
+    so <- attr(d, "truth")$set_of
+    sa <- so[d$object_a]; sb <- so[d$object_b]
+    d2 <- d[!((sa == 1 & sb == 3) | (sa == 3 & sb == 1)), ]   # sever A-C
+    set.seed(500 + s)
+    f <- btl_efrm(d2, "object_a", "object_b", "winner", "judge", "panel",
+                  attr(d, "truth")$object_sets, boot_reps = 40)
+    la[s] <- log(f$alpha_table$alpha[2]); se[s] <- f$alpha_table$se_log_alpha[2]
+  }
+  covered <- sum(abs(la - log(1.3)) <= 1.96 * se)
+  expect_gte(covered, 4L)   # was 4/12 with conditional SEs; bootstrap restores
 })

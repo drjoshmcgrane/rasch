@@ -1,3 +1,31 @@
+# rasch 1.9.0
+
+* The extended frame of reference model for paired comparisons:
+  `btl_efrm()` estimates object locations when the unit of the scale
+  differs across judge-panel by object-set frames -- the package's
+  extension of Humphry's persons-by-items EFRM to the Bradley-Terry-Luce
+  family. Panel units (phi, a panel's discriminating power) are identified
+  conditionally wherever two panels judge a common set; set units and
+  origins (alpha, kappa) are identified from cross-set comparisons, which
+  are themselves conditional outcomes -- so, unlike the persons-by-items
+  case, the linking makes no distributional assumption about the objects.
+  Everything is estimated by the staged conditional estimator: the
+  within-frame calibrations are invariant to the linking data (the
+  frame-of-reference property), a deliberate trade of efficiency for
+  invariance. The cross-frame discrimination convention (cross-set
+  contests judged at exactly phi) is stated plainly in the documentation
+  as an assumption, with the per-frame fit residuals as its check.
+* Inference for `btl_efrm()` defaults to a parametric bootstrap of the
+  whole two-stage pipeline: simulation showed the fast conditional errors
+  cover at a third of nominal on chain-linked designs (they omit the
+  stage-one uncertainty that flows into the linking), while the bootstrap
+  restores 12/12 coverage and nominal false-flag rates at both small and
+  large designs. The conditional errors remain available as
+  `se_method = "conditional"` for quick inspection, labelled as
+  understating. `plot_btl_units()` draws the unit caterpillar;
+  `simulate_btl_efrm()` generates frame-structured data with planted
+  units for the plant-to-detect loop.
+
 # rasch 1.8.0
 
 Three further paired-comparison analogues of the Rasch tool set, and CRAN

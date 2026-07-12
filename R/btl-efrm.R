@@ -318,6 +318,16 @@
 #' \code{beta}, so neither is identified within a set); across sets it is
 #' \code{phi_g (v_a - v_b)}, which places the sets on one common scale.
 #'
+#' One modelling convention deserves plain statement. Rewritten with a single
+#' latent value per object, the model says within-set-\code{s} contests are
+#' judged at discrimination \code{phi_g / alpha_s} while every cross-set
+#' contest is judged at exactly \code{phi_g}: the common scale is
+#' \emph{defined} as the scale of between-frame judgement. That is an
+#' assumption about how discriminal dispersion behaves when unlike objects
+#' meet (a Thurstonian question with no assumption-free answer), not a
+#' consequence of the theory; the per-frame fit residuals in \code{frames}
+#' are where a violation would show.
+#'
 #' Estimation follows \code{\link{rasch_efrm}} in two conditional stages. In
 #' stage one the within-set comparisons of each set, pooled over panels, fit
 #' the bilinear model \code{logit = rho_{gs} (b_a - b_b)} with \code{b}
@@ -342,17 +352,20 @@
 #' frame-dependent unit descends. The paired-comparison form is this package's
 #' extension of Humphry's model.
 #'
-#' Standard errors are staged and their honesty is explicit. The frame
-#' locations and log panel ratios carry judge-clustered Godambe sandwich
-#' standard errors from stage one; the panel units \code{phi} carry standard
-#' errors from the reconciliation. The set units \code{log alpha} and origins
-#' \code{kappa} carry inverse-observed-information standard errors from stage
-#' two that are CONDITIONAL on stage one -- the stage-one uncertainty in
-#' \code{beta} and \code{phi} is not propagated into them, exactly as the
-#' hybrid standard errors of \code{\link{rasch_efrm}} do not propagate the
-#' pairwise-stage uncertainty into the linking stage. The common-scale values
-#' \code{v} and their standard errors combine the conditional pieces by the
-#' delta method.
+#' The ESTIMATES are always the staged conditional estimator: the within-frame
+#' calibrations are invariant to the linking data (the frame-of-reference
+#' property), a deliberate trade of some efficiency for invariance, exactly as
+#' anchored equating trades. Inference defaults to a parametric bootstrap of
+#' the whole pipeline (\code{se_method = "bootstrap"}): winners are resampled
+#' from the fitted probabilities and both stages refitted, so the standard
+#' errors of \code{phi}, \code{alpha}, \code{kappa}, \code{beta} and the
+#' common-scale \code{v} carry every stage's sampling variability -- verified
+#' by simulation to restore nominal coverage where the conditional errors
+#' cover at a third of their nominal rate on linked designs. The
+#' \code{"conditional"} option keeps the fast analytic errors (judge-clustered
+#' sandwich for stage one, inverse observed information for stage two,
+#' conditional on stage one) for quick inspection; its \code{alpha} and
+#' \code{kappa} errors understate, and the fit says so.
 #'
 #' A single set (\code{S = 1}) reduces the model to panel units alone; stage
 #' two is skipped and the print states the panel-units model. When
@@ -382,6 +395,16 @@
 #' @param min_link Minimum number of cross-set comparisons a set pair must
 #'   supply to be used for linking; sets not reachable from the reference set
 #'   through sufficient cross-set pairs raise an error.
+#' @param se_method \code{"bootstrap"} (the default): a parametric bootstrap
+#'   of the ENTIRE two-stage pipeline -- winners resampled from the fitted
+#'   probabilities, both stages refitted \code{boot_reps} times -- so the
+#'   reported standard errors carry every source of sampling variability,
+#'   including the stage-one uncertainty that flows into the linking.
+#'   \code{"conditional"}: the fast analytic errors, exact for \code{beta} and
+#'   \code{phi} but conditional on stage one for \code{alpha} and
+#'   \code{kappa}, which they therefore UNDERSTATE (verified by simulation);
+#'   for quick inspection only.
+#' @param boot_reps Bootstrap replicates for \code{se_method = "bootstrap"}.
 #' @param maxit,tol Newton iteration cap and convergence tolerance.
 #' @return An object of class \code{"rasch_btl_efrm"}: \code{objects} (object,
 #'   set, \code{beta_set} and its standard error, common-scale \code{v} and its
@@ -423,8 +446,10 @@
 btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
                      object_sets, response = NULL,
                      ties = c("drop", "error"), min_link = 20,
-                     maxit = 60, tol = 1e-8) {
+                     se_method = c("bootstrap", "conditional"),
+                     boot_reps = 60, maxit = 60, tol = 1e-8) {
   ties <- match.arg(ties)
+  se_method <- match.arg(se_method)
   if (!is.null(response))
     stop("btl_efrm fits dichotomous winner data only in this first ",
          "implementation; a graded `response` is not supported. Reduce the ",
@@ -505,59 +530,29 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     stop("every set needs at least two objects; offending set(s): ",
          paste(names(which(table(set_of) < 2L)), collapse = ", "))
 
-  # --- stage 1: within-set bilinear solves ----------------------------------
-  bhat <- setNames(rep(NA_real_, length(objs_all)), objs_all)
-  se_bhat <- bhat
-  phi_ref_of_set <- setNames(rep(NA_real_, S), sets_u)
-  ref_of_set <- setNames(rep(NA_character_, S), sets_u)
-  within_p <- rep(NA_real_, length(a))                # frame-model fitted p
-  blocks <- list()                                    # per-set panel-ratio blocks
-  s1 <- vector("list", S); names(s1) <- sets_u
-  ll_within <- 0
-  for (s in sets_u) {
-    rows <- which(within & sa == s)
-    os <- sort(names(set_of)[set_of == s]); Ks <- length(os)
-    ia <- match(a[rows], os); ib <- match(b[rows], os)
-    if (anyNA(ia) || anyNA(ib) || any(is.na(match(os, unique(c(a[rows], b[rows]))))))
-      stop("set '", s, "' has object(s) with no within-set comparison; ",
-           "each object needs at least one comparison inside its own set")
-    fit1 <- .btlef_stage1(ia, ib, y[rows], pan[rows], jd[rows], Ks, maxit, tol)
-    s1[[s]] <- fit1
-    bhat[os] <- fit1$beta; se_bhat[os] <- fit1$se_beta
-    within_p[rows] <- fit1$p
-    ref_of_set[s] <- fit1$ref
-    ll_within <- ll_within + fit1$ll
-    blocks[[s]] <- list(ref = fit1$ref, free = fit1$free,
-                        lrho = setNames(log(fit1$rho[fit1$free]), fit1$free),
-                        cov = fit1$cov_lrho)
+  # --- structural checks that do not depend on the outcomes -----------------
+  # panel linkage first (its failure is the more fundamental design flaw):
+  # panels are connected when they share within-set comparisons in some set
+  if (G > 1L) {
+    pe <- unique(do.call(rbind, lapply(sets_u, function(s) {
+      pg <- unique(pan[within & sa == s])
+      if (length(pg) < 2L) return(NULL)
+      t(combn(match(pg, panels_u), 2))
+    })))
+    pcomp <- .btlef_components(G, if (is.null(pe)) matrix(numeric(0), 0, 2) else pe)
+    if (any(pcomp != pcomp[1]))
+      stop("the panels cannot be linked: no set contains comparisons from ",
+           "more than one panel connecting panel group(s) {",
+           paste(panels_u[pcomp != pcomp[1]], collapse = ", "),
+           "} to the rest; panel units phi are unidentified across them")
   }
-
-  # --- reconcile panel units and put beta on the common panel scale ---------
-  rec <- .btlef_reconcile_phi(panels_u, blocks)
-  phi <- rec$phi
-  for (s in sets_u) {
-    pr <- phi[[ref_of_set[s]]]; phi_ref_of_set[s] <- pr
-    os <- names(set_of)[set_of == s]
-    bhat[os] <- bhat[os] / pr; se_bhat[os] <- se_bhat[os] / pr
-  }
-  # recompute within-set fitted p on the common scale: logit = phi_g (bhat_a - bhat_b)
-  within_p[within] <- plogis(phi[pan[within]] * (bhat[a[within]] - bhat[b[within]]))
-
-  stage1_conv <- all(vapply(s1, function(z) z$converged, TRUE))
-
-  # --- stage 2: cross-set linking -------------------------------------------
   cross <- which(!within)
   n_cross <- data.frame(set_a = character(0), set_b = character(0),
                         n = integer(0), stringsAsFactors = FALSE)
-  alpha <- setNames(rep(1, S), sets_u); kappa <- setNames(rep(0, S), sets_u)
-  se_log_alpha <- setNames(rep(NA_real_, S), sets_u)
-  se_kappa <- setNames(rep(NA_real_, S), sets_u)
-  cov2 <- NULL; stage2_conv <- TRUE; ll_cross <- 0; cross_p <- NULL
   if (S > 1L) {
     if (!length(cross))
       stop("no cross-set comparisons: the sets cannot be linked to a common ",
            "scale (set units alpha and origins kappa are unidentified)")
-    # unordered set-pair counts
     key <- ifelse(sa[cross] < sb[cross], paste(sa[cross], sb[cross]),
                   paste(sb[cross], sa[cross]))
     tab <- table(key); parts <- do.call(rbind, strsplit(names(tab), " ", fixed = TRUE))
@@ -574,16 +569,79 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
            "' through cross-set pairs with at least min_link = ", min_link,
            " comparisons: ", paste(sets_u[comp != ref_comp], collapse = ", "),
            " (increase the cross-set data or lower min_link)")
-    st2 <- .btlef_stage2(a[cross], b[cross], y[cross], phi[pan[cross]],
-                         sa[cross], sb[cross], bhat, sets_u, maxit, tol)
-    alpha <- st2$alpha; kappa <- st2$kappa; cov2 <- st2$cov
-    se_log_alpha[st2$free] <- st2$se_log_alpha
-    se_kappa[st2$free] <- st2$se_kappa
-    stage2_conv <- st2$converged; ll_cross <- st2$ll; cross_p <- st2$p
   }
 
-  # --- common-scale values with delta-method standard errors ----------------
-  v <- alpha[set_of[objs_all]] * bhat[objs_all] + kappa[set_of[objs_all]]
+  # --- the staged conditional estimator, callable on any outcome vector -----
+  # (one function for the observed data and for every bootstrap replicate, so
+  # the resampled pipeline is identical to the reported one)
+  fit_once <- function(yy) {
+    bhat <- setNames(rep(NA_real_, length(objs_all)), objs_all)
+    se_bhat <- bhat
+    ref_of_set <- setNames(rep(NA_character_, S), sets_u)
+    within_p <- rep(NA_real_, length(a))              # frame-model fitted p
+    blocks <- list()                                  # per-set panel-ratio blocks
+    ll_within <- 0; s1_conv <- TRUE
+    for (s in sets_u) {
+      rows <- which(within & sa == s)
+      os <- sort(names(set_of)[set_of == s]); Ks <- length(os)
+      ia <- match(a[rows], os); ib <- match(b[rows], os)
+      if (anyNA(ia) || anyNA(ib) || any(is.na(match(os, unique(c(a[rows], b[rows]))))))
+        stop("set '", s, "' has object(s) with no within-set comparison; ",
+             "each object needs at least one comparison inside its own set")
+      fit1 <- .btlef_stage1(ia, ib, yy[rows], pan[rows], jd[rows], Ks, maxit, tol)
+      bhat[os] <- fit1$beta; se_bhat[os] <- fit1$se_beta
+      within_p[rows] <- fit1$p
+      ref_of_set[s] <- fit1$ref
+      ll_within <- ll_within + fit1$ll
+      s1_conv <- s1_conv && fit1$converged
+      blocks[[s]] <- list(ref = fit1$ref, free = fit1$free,
+                          lrho = setNames(log(fit1$rho[fit1$free]), fit1$free),
+                          cov = fit1$cov_lrho)
+    }
+    rec <- .btlef_reconcile_phi(panels_u, blocks)
+    phi <- rec$phi
+    for (s in sets_u) {
+      pr <- phi[[ref_of_set[s]]]
+      os <- names(set_of)[set_of == s]
+      bhat[os] <- bhat[os] / pr; se_bhat[os] <- se_bhat[os] / pr
+    }
+    # within-set fitted p on the common scale: logit = phi_g (bhat_a - bhat_b)
+    within_p[within] <- plogis(phi[pan[within]] * (bhat[a[within]] - bhat[b[within]]))
+
+    alpha <- setNames(rep(1, S), sets_u); kappa <- setNames(rep(0, S), sets_u)
+    se_log_alpha <- setNames(rep(NA_real_, S), sets_u)
+    se_kappa <- setNames(rep(NA_real_, S), sets_u)
+    cov2 <- NULL; s2_conv <- TRUE; ll_cross <- 0
+    p_all <- within_p
+    if (S > 1L) {
+      st2 <- .btlef_stage2(a[cross], b[cross], yy[cross], phi[pan[cross]],
+                           sa[cross], sb[cross], bhat, sets_u, maxit, tol)
+      alpha <- st2$alpha; kappa <- st2$kappa; cov2 <- st2$cov
+      se_log_alpha[st2$free] <- st2$se_log_alpha
+      se_kappa[st2$free] <- st2$se_kappa
+      s2_conv <- st2$converged; ll_cross <- st2$ll
+      p_all[cross] <- st2$p
+    }
+    v <- alpha[set_of[objs_all]] * bhat[objs_all] + kappa[set_of[objs_all]]
+    list(bhat = bhat, se_bhat = se_bhat, phi = phi,
+         se_log_phi = rec$se_log_phi, ref_of_set = ref_of_set,
+         alpha = alpha, kappa = kappa, cov2 = cov2,
+         se_log_alpha = se_log_alpha, se_kappa = se_kappa, v = v,
+         within_p = within_p, p_all = p_all,
+         ll_within = ll_within, ll_cross = ll_cross,
+         converged = s1_conv && s2_conv)
+  }
+
+  fit0 <- fit_once(y)
+  bhat <- fit0$bhat; se_bhat <- fit0$se_bhat
+  phi <- fit0$phi; ref_of_set <- fit0$ref_of_set
+  alpha <- fit0$alpha; kappa <- fit0$kappa; cov2 <- fit0$cov2
+  se_log_phi <- fit0$se_log_phi
+  se_log_alpha <- fit0$se_log_alpha; se_kappa <- fit0$se_kappa
+  v <- fit0$v; within_p <- fit0$within_p
+  ll_within <- fit0$ll_within; ll_cross <- fit0$ll_cross
+
+  # conditional (analytic) delta-method errors for the common-scale values
   se_v <- se_bhat[objs_all]                             # reference set: v = beta
   free <- sets_u[-1L]
   if (S > 1L) for (o in objs_all) {
@@ -593,6 +651,41 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     gvec <- c(alpha[[s]] * bhat[[o]], 1)                # d v / d(log alpha, kappa)
     var_link <- drop(t(gvec) %*% C2 %*% gvec)
     se_v[[o]] <- sqrt(pmax(alpha[[s]]^2 * se_bhat[[o]]^2 + var_link, 0))
+  }
+
+  # --- parametric bootstrap of the whole pipeline (default) -----------------
+  # winners resampled from the fitted probabilities, both stages refitted:
+  # the SEs then carry stage-one uncertainty into the linking, which the
+  # conditional errors omit (and demonstrably understate)
+  boot_fail <- 0L
+  if (se_method == "bootstrap") {
+    p_hat <- pmin(pmax(fit0$p_all, 1e-8), 1 - 1e-8)
+    draws <- list()
+    for (bb in seq_len(boot_reps)) {
+      yb <- rbinom(length(p_hat), 1L, p_hat)
+      fb <- tryCatch(fit_once(yb), error = function(e) NULL)
+      if (is.null(fb) || !fb$converged) { boot_fail <- boot_fail + 1L; next }
+      draws[[length(draws) + 1L]] <- c(log(fb$phi), log(fb$alpha), fb$kappa,
+                                       fb$bhat, fb$v)
+    }
+    if (length(draws) < max(20L, ceiling(boot_reps / 2)))
+      stop("parametric bootstrap failed on ", boot_fail, " of ", boot_reps,
+           " replicates; the design is too sparse for stable resampling -- ",
+           "add comparisons or use se_method = 'conditional'")
+    D <- do.call(rbind, draws)
+    sds <- apply(D, 2, sd)
+    nO <- length(objs_all)
+    se_log_phi <- setNames(sds[seq_len(G)], panels_u)
+    se_log_alpha <- setNames(sds[G + seq_len(S)], sets_u)
+    se_kappa <- setNames(sds[G + S + seq_len(S)], sets_u)
+    se_log_alpha[sets_u[1]] <- NA_real_                 # reference: fixed at 1 / 0
+    se_kappa[sets_u[1]] <- NA_real_
+    se_bhat <- setNames(sds[G + 2L * S + seq_len(nO)], objs_all)
+    se_v <- setNames(sds[G + 2L * S + nO + seq_len(nO)], objs_all)
+    if (boot_fail > 0)
+      notes <- c(notes, sprintf(
+        "bootstrap: %d of %d replicates failed and were skipped", boot_fail,
+        boot_reps))
   }
 
   # --- equal-unit (single-unit) comparison ----------------------------------
@@ -609,9 +702,9 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
                  "the Wald tests on log phi and log alpha carry the inference"))
 
   # --- structural tables ----------------------------------------------------
-  z_phi <- log(phi) / rec$se_log_phi
+  z_phi <- log(phi) / se_log_phi
   phi_table <- data.frame(panel = panels_u, phi = unname(phi),
-                          se_log_phi = unname(rec$se_log_phi),
+                          se_log_phi = unname(se_log_phi),
                           z = unname(z_phi), p = unname(2 * pnorm(-abs(z_phi))),
                           stringsAsFactors = FALSE)
   z_al <- log(alpha) / se_log_alpha
@@ -656,10 +749,19 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
               frames = frames, equal_unit = equal_unit, n_cross = n_cross,
               sets = sets_u, panels = panels_u, reference_set = sets_u[1],
               n_comparisons = length(a),
-              converged = stage1_conv && stage2_conv,
-              se_note = paste("stage-2 alpha and kappa standard errors are",
-                              "conditional on stage 1; stage-1 uncertainty in",
-                              "beta and phi is not propagated into them"),
+              converged = fit0$converged,
+              se_method = se_method,
+              boot_reps = if (se_method == "bootstrap") boot_reps else NA_integer_,
+              se_note = if (se_method == "bootstrap")
+                paste("standard errors from a parametric bootstrap of the",
+                      "whole two-stage pipeline: the staged conditional",
+                      "estimates are unchanged, and their errors carry the",
+                      "stage-one uncertainty into the linking")
+              else
+                paste("CONDITIONAL standard errors: exact for beta and phi,",
+                      "but the alpha and kappa errors are conditional on",
+                      "stage 1 and UNDERSTATE the total sampling variability;",
+                      "use se_method = 'bootstrap' for inference"),
               notes = notes)
   class(out) <- "rasch_btl_efrm"
   out
@@ -671,8 +773,11 @@ print.rasch_btl_efrm <- function(x, ...) {
                      "%d objects in %d set(s) x %d panel(s), %d comparisons\n"),
               nrow(x$objects), nrow(x$alpha_table), nrow(x$phi_table),
               x$n_comparisons))
-  cat(sprintf("Two-stage conditional ML: %s\n",
-              if (x$converged) "converged" else "NOT converged"))
+  cat(sprintf("Two-stage conditional ML: %s; SEs %s\n",
+              if (x$converged) "converged" else "NOT converged",
+              if (identical(x$se_method, "bootstrap"))
+                sprintf("by parametric bootstrap (B = %d)", x$boot_reps)
+              else "conditional (understate the linking uncertainty)"))
   if (nrow(x$alpha_table) == 1L)
     cat("Model: panel units only (single set; set units not estimated)\n")
   cat("\nPanel units (phi; Wald H0: log phi = 0):\n")

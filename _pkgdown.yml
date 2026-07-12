@@ -129,6 +129,7 @@ reference:
   contents:
   - btl
   - btl_dif
+  - btl_efrm
   - btl_transitivity
   - btl_dimensionality
   - btl_equate
@@ -144,6 +145,7 @@ reference:
   - plot_btl_scree
   - plot_btl_dim_map
   - plot_btl_judge_map
+  - plot_btl_units
   - plot_btl_equate
   - plot_btl_targeting
 
@@ -163,6 +165,7 @@ reference:
   - simulate_btl
   - simulate_mfrm
   - simulate_efrm
+  - simulate_btl_efrm
   - sim_replicate
   - sim_recovery
   - plot_recovery
