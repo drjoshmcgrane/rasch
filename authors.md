@@ -7,7 +7,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/drjoshmcgrane/rasch/blob/master/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/drjoshmcgrane/rasch/blob/v1.10.2/DESCRIPTION)
 
 McGrane J (2026). *rasch: Pairwise Conditional Rasch Measurement
 Analysis and Diagnostics*. R package version 1.10.2,
