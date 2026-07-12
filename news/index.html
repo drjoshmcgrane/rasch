@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.9.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.9.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,12 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.9.3" id="rasch-193">rasch 1.9.3<a class="anchor" aria-label="anchor" href="#rasch-193"></a></h2>
+<ul><li>Missing-data identification, verified and enforced. A booklet-design probe (zero complete cases, linked forms, MCAR on top) confirmed the pairwise conditional estimator recovers planted parameters with nominal coverage – and exposed two silent failure modes at the design’s edges, both now honest:</li>
+<li>Disconnected designs error instead of fitting. When no person answers items in more than one block, the pairwise likelihood is flat in the between-block shift; the fit used to return arbitrary cross-block spacing (within-block orders fine, origins meaningless) with no warning. <code><a href="../reference/pcml.html">pcml()</a></code>, <code><a href="../reference/pcml_pc.html">pcml_pc()</a></code>, and everything built on them now stop with an error naming the disconnected blocks. Anchors rescue a block (disjoint-form equating): with an anchored item in every block the fit proceeds; with any block unanchored it stops and names it.</li>
+<li>Thresholds beside near-empty categories report NA, not a lie. A category with 1-2 responses can send its threshold toward a boundary (observed: a single top-category response put an item location at +13.9 logits) while the ridged covariance printed SE = 0. Such thresholds are now flagged (<code>thr$weak</code>), their SEs and the item-location SE reported as NA, and a note names the item, the category, and its count, pointing to <code>pc_components</code> or category collapsing. Estimates are still returned; categories with zero responses are rescored away as before.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.9.2" id="rasch-192">rasch 1.9.2<a class="anchor" aria-label="anchor" href="#rasch-192"></a></h2>
 <ul><li>Case study: <code>inst/casestudies/party_blocs_crisis.R</code> applies <code><a href="../reference/btl_efrm.html">btl_efrm()</a></code> to the Tuebingen 2009 party-preference data (via <code>psychotools</code>), with ideological blocs as object sets and economic-crisis concern as judge panels. Running the model against real data surfaced three defects, all fixed below.</li>

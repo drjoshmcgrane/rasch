@@ -15,7 +15,7 @@ tau_ik = delta_i + kappa_k through the design matrix."><meta property="og:image"
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.9.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.9.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,7 +66,12 @@ estimates every threshold freely; the rating scale model constrains
 
 <dl><dt id="arg-x">X<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
 <dd><p>Persons-by-items integer score matrix (categories from 0). Missing
-values are handled by pairwise deletion.</p></dd>
+values are handled by pairwise deletion, so linked booklet designs and
+random missingness estimate without imputation; the item-pair graph must
+be connected (some person answering items in both of any two blocks),
+otherwise relative locations between blocks are unidentified and the fit
+stops with an error naming the blocks – unless <code>anchors</code> fix an
+item in every block, the disjoint-form equating case.</p></dd>
 
 
 <dt id="arg-model">model<a class="anchor" aria-label="anchor" href="#arg-model"></a></dt>
@@ -90,10 +95,14 @@ recentring is applied. PCM only.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list with the threshold table <code>thr</code> (columns <code>id</code>,
-  <code>item</code>, <code>k</code>, <code>tau</code>, <code>se</code>, <code>anchored</code>), the
+  <code>item</code>, <code>k</code>, <code>tau</code>, <code>se</code>, <code>anchored</code>, and
+  <code>weak</code> – <code>TRUE</code> for a threshold adjacent to a category with
+  fewer than 3 responses, whose estimate can run toward a boundary while
+  the ridged covariance understates the error; its <code>se</code> is reported
+  as <code>NA</code> and a note names the item and category), the
   threshold covariance matrix <code>cov_tau</code>, the pairwise conditional
-  log-likelihood, the iteration count, a convergence flag, and the
-  max-score vector <code>m</code>.</p>
+  log-likelihood, the iteration count, a convergence flag, <code>notes</code>,
+  and the max-score vector <code>m</code>.</p>
     </div>
 
     <div class="section level2">
@@ -103,22 +112,22 @@ recentring is applied. PCM only.</p></dd>
 <span class="r-in"><span><span class="va">X</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Binomial.html" class="external-link">rbinom</a></span><span class="op">(</span><span class="fl">400</span> <span class="op">*</span> <span class="fl">6</span>, <span class="fl">1</span>, <span class="fu"><a href="https://rdrr.io/r/stats/Logistic.html" class="external-link">plogis</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/outer.html" class="external-link">outer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">400</span><span class="op">)</span>, <span class="va">d</span>, <span class="st">"-"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>, <span class="fl">400</span>, <span class="fl">6</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">X</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"I"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">pcml</span><span class="op">(</span><span class="va">X</span><span class="op">)</span><span class="op">$</span><span class="va">thr</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   id item k        tau        se anchored</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1  1    1 1 -1.5174835 0.1297013    FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2  2    2 1 -0.7730904 0.1121427    FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3  3    3 1 -0.2093836 0.1023242    FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4  4    4 1  0.3667512 0.1047318    FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5  5    5 1  0.7889434 0.1105680    FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6  6    6 1  1.3442630 0.1221786    FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   id item k        tau        se anchored  weak</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1  1    1 1 -1.5174835 0.1297013    FALSE FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2  2    2 1 -0.7730904 0.1121427    FALSE FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3  3    3 1 -0.2093836 0.1023242    FALSE FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4  4    4 1  0.3667512 0.1047318    FALSE FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5  5    5 1  0.7889434 0.1105680    FALSE FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6  6    6 1  1.3442630 0.1221786    FALSE FALSE</span>
 <span class="r-in"><span><span class="co"># anchor two items at fixed values (equating)</span></span></span>
 <span class="r-in"><span><span class="fu">pcml</span><span class="op">(</span><span class="va">X</span>, anchors <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>item <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"I1"</span>, <span class="st">"I6"</span><span class="op">)</span>, k <span class="op">=</span> <span class="fl">1</span>, tau <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1.5</span>, <span class="fl">1.5</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">thr</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   id item k        tau        se anchored</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1  1    1 1 -1.5000000 0.0000000     TRUE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2  2    2 1 -0.6880959 0.1613982    FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3  3    3 1 -0.1211423 0.1463167    FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4  4    4 1  0.4586830 0.1532659    FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5  5    5 1  0.8835376 0.1568160    FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6  6    6 1  1.5000000 0.0000000     TRUE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   id item k        tau        se anchored  weak</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1  1    1 1 -1.5000000 0.0000000     TRUE FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2  2    2 1 -0.6880959 0.1613982    FALSE FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3  3    3 1 -0.1211423 0.1463167    FALSE FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4  4    4 1  0.4586830 0.1532659    FALSE FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5  5    5 1  0.8835376 0.1568160    FALSE FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6  6    6 1  1.5000000 0.0000000     TRUE FALSE</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
