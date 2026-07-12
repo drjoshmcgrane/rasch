@@ -17,5 +17,5 @@
 #' @import stats
 #' @import graphics
 #' @import grDevices
-#' @importFrom utils write.csv
+#' @importFrom utils write.csv combn
 "_PACKAGE"

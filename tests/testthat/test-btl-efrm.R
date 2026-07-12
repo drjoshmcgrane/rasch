@@ -195,3 +195,63 @@ test_that("bootstrap SEs are calibrated on the chain-linked design", {
   covered <- sum(abs(la - log(1.3)) <= 1.96 * se)
   expect_gte(covered, 4L)   # was 4/12 with conditional SEs; bootstrap restores
 })
+
+test_that("a set with no stable panel-ratio information is screened, not fatal", {
+  # The 'weak' set has one within pair whose preference DIRECTION flips
+  # between the panels: its panel ratio logit(p_yes)/logit(p_no) is negative,
+  # which no positive-unit parameterisation can represent, and before the
+  # screen the stage-1 solver diverged and poisoned the phi reconciliation
+  # (found live on GermanParties2009, where the CDU/CSU:FDP pair is
+  # near-even). The strong set identifies phi; the weak set is refit at the
+  # reconciled units and noted.
+  strong <- simulate_btl_efrm(n_objects_per_set = 5, n_sets = 1, n_panels = 2,
+                              n_judges_per_panel = 8, reps_within = 40,
+                              panel_units = c(0.8, 1.25), seed = 42)
+  sobj <- sort(unique(c(strong$object_a, strong$object_b)))   # "S1O01".."S1O05"
+  jd_of <- function(pnl, i) sprintf("%s_J%d", pnl, (i %% 8) + 1)
+  flip <- do.call(rbind, lapply(seq_len(160), function(i) {
+    pnl <- if (i <= 80) "panel1" else "panel2"
+    win <- if (i <= 80) (i %% 10 < 8) else (i %% 10 >= 8)   # 80/20 vs 20/80
+    data.frame(object_a = "w1", object_b = "w2",
+               winner = if (win) "w1" else "w2",
+               judge = jd_of(pnl, i), panel = pnl)
+  }))
+  cross <- do.call(rbind, lapply(seq_len(200), function(i) {
+    pnl <- if (i <= 100) "panel1" else "panel2"
+    data.frame(object_a = sobj[(i %% 5) + 1],
+               object_b = paste0("w", (i %% 2) + 1),
+               winner = if (i %% 3 == 0) paste0("w", (i %% 2) + 1)
+                        else sobj[(i %% 5) + 1],
+               judge = jd_of(pnl, i), panel = pnl)
+  }))
+  d <- rbind(strong[, names(flip)], flip, cross)
+  os <- list(strong = sobj, weak = c("w1", "w2"))
+  expect_no_error(fit <- befit(d, "object_a", "object_b", "winner", "judge",
+                               "panel", os))
+  expect_true(fit$converged)
+  expect_true(any(grepl("weak", fit$notes) & grepl("panel-ratio", fit$notes)))
+  # phi comes from the strong set alone and is finite and sane
+  expect_true(all(is.finite(fit$phi_table$phi)))
+  expect_true(all(fit$phi_table$phi > 0.2 & fit$phi_table$phi < 5))
+  # the weak set's objects are still located on the common scale
+  expect_true(all(is.finite(fit$objects$v[fit$objects$set == "weak"])))
+})
+
+test_that("estimates and convergence are invariant to duplicating the data", {
+  # an absolute gradient threshold is scale-dependent: on k-fold duplicated
+  # data a converged fit was flagged unconverged, which (with the stability
+  # screen) silently rerouted a set's estimation and CHANGED the estimates;
+  # the per-comparison criterion is invariant
+  d <- simulate_btl_efrm(n_objects_per_set = 6, n_sets = 2, n_panels = 2,
+                         n_judges_per_panel = 6, reps_within = 25,
+                         reps_cross = 25, panel_units = c(0.8, 1.25),
+                         set_units = c(1, 1.3), seed = 7)
+  os <- attr(d, "truth")$object_sets
+  f1 <- befit(d, "object_a", "object_b", "winner", "judge", "panel", os)
+  d50 <- d[rep(seq_len(nrow(d)), 50), ]
+  f2 <- befit(d50, "object_a", "object_b", "winner", "judge", "panel", os)
+  expect_true(f1$converged && f2$converged)
+  expect_equal(f2$phi_table$phi, f1$phi_table$phi, tolerance = 1e-6)
+  expect_equal(f2$alpha_table$alpha, f1$alpha_table$alpha, tolerance = 1e-6)
+  expect_equal(f2$objects$v, f1$objects$v, tolerance = 1e-6)
+})

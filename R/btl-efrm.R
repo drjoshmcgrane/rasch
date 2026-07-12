@@ -79,13 +79,15 @@
 # panels' log discrimination. Fisher scoring with a step-halving line search
 # gives the point estimate; a judge-clustered Godambe sandwich gives the
 # covariance, exactly as in btl().
-.btlef_stage1 <- function(ia, ib, y, panel, jd, K, maxit, tol) {
+.btlef_stage1 <- function(ia, ib, y, panel, jd, K, maxit, tol, rho_fixed = NULL) {
   R <- length(ia)
   pcount <- table(panel)
   present <- names(pcount)
   ref <- present[which.max(as.integer(pcount))]     # reference panel: rho = 1
-  free <- setdiff(present, ref); Gf <- length(free)
+  free <- if (is.null(rho_fixed)) setdiff(present, ref) else character(0)
+  Gf <- length(free)
   pf <- match(panel, free)                           # free-panel index, NA on ref
+  rho0 <- if (is.null(rho_fixed)) rep(1, R) else as.numeric(rho_fixed[panel])
   B <- rbind(diag(K - 1L), rep(-1, K - 1L))          # K x (K-1) sum-zero map
   Bd <- B[ia, , drop = FALSE] - B[ib, , drop = FALSE]
   np <- (K - 1L) + Gf
@@ -93,7 +95,7 @@
   eval_th <- function(th) {
     bfree <- th[seq_len(K - 1L)]
     beta <- as.numeric(B %*% bfree)
-    rho <- rep(1, R)
+    rho <- rho0
     if (Gf) {
       rr <- exp(th[(K - 1L) + seq_len(Gf)])
       ok <- !is.na(pf); rho[ok] <- rr[pf[ok]]
@@ -121,7 +123,9 @@
     g <- crossprod(J, u); Fi <- crossprod(J, J * av)
     step <- tryCatch(solve(Fi, g),
                      error = function(e) solve(Fi + diag(1e-8, np), g))
-    lam <- 1; moved <- FALSE
+    ms <- max(abs(step))                     # trust-region cap: a near-flat
+    if (is.finite(ms) && ms > 5) step <- step * (5 / ms)   # log-rho direction
+    lam <- 1; moved <- FALSE                 # cannot run away
     for (half in 1:30) {
       cand <- theta + lam * as.numeric(step); c2 <- eval_th(cand)
       if (is.finite(c2$ll) && c2$ll >= cur$ll - 1e-12) {
@@ -140,11 +144,17 @@
   Sr <- J * u
   Sc <- rowsum(Sr, jd)
   cov_theta <- bread %*% crossprod(Sc) %*% bread
-  conv <- max(abs(crossprod(J, u))) < 1e-4
+  # scale-free convergence: the gradient per comparison, invariant to the
+  # number of comparisons -- an absolute threshold flags converged fits as
+  # unconverged on large R (and would then misroute them into the screen);
+  # a per-observation criterion also stays permissive at a boundary, where
+  # the gradient vanishes but a Newton-decrement quadratic would not
+  conv <- isTRUE(max(abs(crossprod(J, u))) < 1e-6 * R)
 
   cov_bb <- B %*% cov_theta[seq_len(K - 1L), seq_len(K - 1L), drop = FALSE] %*% t(B)
   se_beta <- sqrt(pmax(diag(cov_bb), 0))
-  rho_p <- setNames(rep(1, length(present)), present)
+  rho_p <- if (is.null(rho_fixed)) setNames(rep(1, length(present)), present)
+           else rho_fixed[present]
   cov_lrho <- matrix(0, Gf, Gf, dimnames = list(free, free))
   if (Gf) {
     li <- (K - 1L) + seq_len(Gf)
@@ -281,7 +291,8 @@
   }
   cov <- tryCatch(solve(H), error = function(e)
     solve(crossprod(D, D * av) + diag(1e-8, np)))
-  conv <- max(abs(crossprod(D, u))) < 1e-4
+  # scale-free per-comparison gradient criterion (see .btlef_stage1)
+  conv <- isTRUE(max(abs(crossprod(D, u))) < 1e-6 * length(y))
   se <- sqrt(pmax(diag(cov), 0))
   list(alpha = cur$alpha, kappa = cur$kappa, p = cur$p, ll = cur$ll,
        cov = cov, se_log_alpha = setNames(se[seq_len(nf)], free),
@@ -366,6 +377,23 @@
 #' sandwich for stage one, inverse observed information for stage two,
 #' conditional on stage one) for quick inspection; its \code{alpha} and
 #' \code{kappa} errors understate, and the fit says so.
+#'
+#' Two honesty notes on the bootstrap. It is model-based: replicates are drawn
+#' as independent Bernoulli outcomes at the fitted probabilities, which is
+#' self-consistent (the model has no judge parameter) but does not carry
+#' extra-model dependence within judges; the conditional stage-one errors are
+#' judge-clustered and guard against exactly that, so when the two disagree
+#' materially the larger is the cautious choice. And a parameter that reaches
+#' its boundary in some replicates (a set unit driven to zero when a resampled
+#' within-set order flips against the cross-set evidence, the signature of a
+#' two-object set with a near-even internal pair) has no normal sampling
+#' distribution: its standard error is reported as \code{NA} and a note names
+#' the parameter and the boundary count rather than manufacturing a number.
+#' Relatedly, a set whose within-set contests are all near-even (or all
+#' one-sided) carries no stable information about the panel-unit ratios; such
+#' sets are screened out of the \code{phi} reconciliation, refit with the
+#' panel units held at the reconciled \code{phi} (which the frame model says
+#' apply to them regardless), and named in a note.
 #'
 #' A single set (\code{S = 1}) reduces the model to panel units alone; stage
 #' two is skipped and the print states the panel-units model. When
@@ -581,6 +609,7 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     within_p <- rep(NA_real_, length(a))              # frame-model fitted p
     blocks <- list()                                  # per-set panel-ratio blocks
     ll_within <- 0; s1_conv <- TRUE
+    s1 <- list(); dropped <- character(0)
     for (s in sets_u) {
       rows <- which(within & sa == s)
       os <- sort(names(set_of)[set_of == s]); Ks <- length(os)
@@ -589,21 +618,52 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
         stop("set '", s, "' has object(s) with no within-set comparison; ",
              "each object needs at least one comparison inside its own set")
       fit1 <- .btlef_stage1(ia, ib, yy[rows], pan[rows], jd[rows], Ks, maxit, tol)
-      bhat[os] <- fit1$beta; se_bhat[os] <- fit1$se_beta
+      s1[[s]] <- list(fit = fit1, rows = rows, os = os, ia = ia, ib = ib)
+      # A set carries information about the panel-unit ratios only through its
+      # internal separation: when its within-set contests are all near-even
+      # (or one-sided), the ratio log rho_gs is the quotient of two near-zero
+      # (or unbounded) logits and its estimate diverges with a spurious
+      # covariance. Screen such blocks out of the phi reconciliation rather
+      # than let them poison it; the set is refit below at the reconciled
+      # units, which the frame model says apply to it regardless.
+      lr <- log(fit1$rho[fit1$free])
+      usable <- isTRUE(fit1$converged) &&
+        (!length(fit1$free) ||
+           (all(is.finite(lr)) && max(abs(lr)) < 4 &&
+            all(is.finite(fit1$cov_lrho)) && all(diag(fit1$cov_lrho) > 0)))
+      if (!usable && length(fit1$free)) { dropped <- c(dropped, s); next }
+      blocks[[s]] <- list(ref = fit1$ref, free = fit1$free,
+                          lrho = setNames(lr, fit1$free),
+                          cov = fit1$cov_lrho)
+    }
+    rec <- tryCatch(.btlef_reconcile_phi(panels_u, blocks), error = function(e) {
+      if (length(dropped))
+        stop(conditionMessage(e), "\n  (set(s) ", paste(dropped, collapse = ", "),
+             " were excluded from the panel-unit reconciliation because their ",
+             "within-set comparisons carry no stable panel-ratio information)",
+             call. = FALSE)
+      stop(e)
+    })
+    phi <- rec$phi
+    for (s in sets_u) {
+      rows <- s1[[s]]$rows; os <- s1[[s]]$os
+      if (s %in% dropped) {
+        # refit the set's locations with the panel units held at the
+        # reconciled phi: beta comes out directly on the common scale
+        fit1 <- .btlef_stage1(s1[[s]]$ia, s1[[s]]$ib, yy[rows], pan[rows],
+                              jd[rows], length(os), maxit, tol,
+                              rho_fixed = phi)
+        s1[[s]]$fit <- fit1
+        bhat[os] <- fit1$beta; se_bhat[os] <- fit1$se_beta
+      } else {
+        fit1 <- s1[[s]]$fit
+        pr <- phi[[fit1$ref]]
+        bhat[os] <- fit1$beta / pr; se_bhat[os] <- fit1$se_beta / pr
+      }
       within_p[rows] <- fit1$p
       ref_of_set[s] <- fit1$ref
       ll_within <- ll_within + fit1$ll
-      s1_conv <- s1_conv && fit1$converged
-      blocks[[s]] <- list(ref = fit1$ref, free = fit1$free,
-                          lrho = setNames(log(fit1$rho[fit1$free]), fit1$free),
-                          cov = fit1$cov_lrho)
-    }
-    rec <- .btlef_reconcile_phi(panels_u, blocks)
-    phi <- rec$phi
-    for (s in sets_u) {
-      pr <- phi[[ref_of_set[s]]]
-      os <- names(set_of)[set_of == s]
-      bhat[os] <- bhat[os] / pr; se_bhat[os] <- se_bhat[os] / pr
+      s1_conv <- s1_conv && isTRUE(fit1$converged)
     }
     # within-set fitted p on the common scale: logit = phi_g (bhat_a - bhat_b)
     within_p[within] <- plogis(phi[pan[within]] * (bhat[a[within]] - bhat[b[within]]))
@@ -629,7 +689,8 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
          se_log_alpha = se_log_alpha, se_kappa = se_kappa, v = v,
          within_p = within_p, p_all = p_all,
          ll_within = ll_within, ll_cross = ll_cross,
-         converged = s1_conv && s2_conv)
+         dropped = dropped,
+         converged = isTRUE(s1_conv && s2_conv))
   }
 
   fit0 <- fit_once(y)
@@ -664,7 +725,7 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     for (bb in seq_len(boot_reps)) {
       yb <- rbinom(length(p_hat), 1L, p_hat)
       fb <- tryCatch(fit_once(yb), error = function(e) NULL)
-      if (is.null(fb) || !fb$converged) { boot_fail <- boot_fail + 1L; next }
+      if (is.null(fb) || !isTRUE(fb$converged)) { boot_fail <- boot_fail + 1L; next }
       draws[[length(draws) + 1L]] <- c(log(fb$phi), log(fb$alpha), fb$kappa,
                                        fb$bhat, fb$v)
     }
@@ -673,7 +734,24 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
            " replicates; the design is too sparse for stable resampling -- ",
            "add comparisons or use se_method = 'conditional'")
     D <- do.call(rbind, draws)
-    sds <- apply(D, 2, sd)
+    colnames(D) <- c(paste0("log phi[", panels_u, "]"),
+                     paste0("log alpha[", sets_u, "]"),
+                     paste0("kappa[", sets_u, "]"),
+                     paste0("beta[", objs_all, "]"), paste0("v[", objs_all, "]"))
+    # a parameter that reaches its boundary in some replicates (a set unit
+    # driven to zero when a resampled within-set order flips against the
+    # cross-set evidence) has no normal sampling distribution: report NA
+    # rather than a standard deviation over infinite draws
+    n_inf <- colSums(!is.finite(D))
+    sds <- rep(NA_real_, ncol(D))
+    ok_col <- n_inf == 0L
+    sds[ok_col] <- apply(D[, ok_col, drop = FALSE], 2, sd)
+    if (any(n_inf > 0L))
+      notes <- c(notes, paste0(
+        "bootstrap: ", paste(sprintf("%s reached the boundary in %d of %d replicates",
+                                     colnames(D)[n_inf > 0L], n_inf[n_inf > 0L],
+                                     length(draws)), collapse = "; "),
+        "; the parameter is weakly identified and its SE is reported as NA"))
     nO <- length(objs_all)
     se_log_phi <- setNames(sds[seq_len(G)], panels_u)
     se_log_alpha <- setNames(sds[G + seq_len(S)], sets_u)
@@ -743,6 +821,12 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     notes <- c(notes, "single set: panel-units model (set units alpha not estimated)")
   if (G == 1L && S == 1L)
     notes <- c(notes, "single panel and single set: reduces to btl()")
+  if (length(fit0$dropped))
+    notes <- c(notes, paste0(
+      "set(s) ", paste(fit0$dropped, collapse = ", "), " carry no stable ",
+      "panel-ratio information (within-set contests too close to even or ",
+      "too one-sided); they were excluded from the phi reconciliation and ",
+      "refit with the panel units held at the reconciled phi"))
 
   out <- list(objects = objects, phi_table = phi_table,
               alpha_table = alpha_table, kappa_table = kappa_table,
