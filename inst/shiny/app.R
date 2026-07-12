@@ -301,8 +301,8 @@ css <- HTML("
   .navbar-brand { font-weight: 700; letter-spacing: .02em; }
   /* two-line wordmark: the package name over the spelled-out tagline */
   .app-brand { display: inline-flex; flex-direction: column;
-               justify-content: center; align-items: center;
-               text-align: center; line-height: 1.06; }
+               justify-content: center; align-items: flex-start;
+               text-align: left; line-height: 1.06; }
   .app-brand-name { font-weight: 700; font-size: 1.05rem; letter-spacing: .02em; }
   .app-brand-sub { font-weight: 400; font-size: .70rem; opacity: .6;
                    letter-spacing: .03em; }
