@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.9.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.9.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,10 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.9.1" id="rasch-191">rasch 1.9.1<a class="anchor" aria-label="anchor" href="#rasch-191"></a></h2>
+<ul><li>Shiny app: the Frames page gains its paired-comparison variant – nominate a judge-panel column and an object-set map (CSV, or inferred from object-name prefixes), estimate the frame units on demand (bootstrap standard errors by default), and read the panel units, set units and origins, the unit caterpillar, and the per-frame fit. On the app’s own paired-comparison demo the two judge panels differ significantly in discriminating power – the panel containing the erratic judge carries the smaller unit – which is precisely the phenomenon the model makes visible.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.9.0" id="rasch-190">rasch 1.9.0<a class="anchor" aria-label="anchor" href="#rasch-190"></a></h2>
 <ul><li>The extended frame of reference model for paired comparisons: <code><a href="../reference/btl_efrm.html">btl_efrm()</a></code> estimates object locations when the unit of the scale differs across judge-panel by object-set frames – the package’s extension of Humphry’s persons-by-items EFRM to the Bradley-Terry-Luce family. Panel units (phi, a panel’s discriminating power) are identified conditionally wherever two panels judge a common set; set units and origins (alpha, kappa) are identified from cross-set comparisons, which are themselves conditional outcomes – so, unlike the persons-by-items case, the linking makes no distributional assumption about the objects. Everything is estimated by the staged conditional estimator: the within-frame calibrations are invariant to the linking data (the frame-of-reference property), a deliberate trade of efficiency for invariance. The cross-frame discrimination convention (cross-set contests judged at exactly phi) is stated plainly in the documentation as an assumption, with the per-frame fit residuals as its check.</li>

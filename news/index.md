@@ -1,5 +1,17 @@
 # Changelog
 
+## rasch 1.9.1
+
+- Shiny app: the Frames page gains its paired-comparison variant –
+  nominate a judge-panel column and an object-set map (CSV, or inferred
+  from object-name prefixes), estimate the frame units on demand
+  (bootstrap standard errors by default), and read the panel units, set
+  units and origins, the unit caterpillar, and the per-frame fit. On the
+  app’s own paired-comparison demo the two judge panels differ
+  significantly in discriminating power – the panel containing the
+  erratic judge carries the smaller unit – which is precisely the
+  phenomenon the model makes visible.
+
 ## rasch 1.9.0
 
 - The extended frame of reference model for paired comparisons:
