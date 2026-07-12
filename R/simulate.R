@@ -775,3 +775,121 @@ plot_recovery <- function(x, ...) {
           line = 0.2, cex = 0.8, col = .rr$soft)
   }
 }
+
+#' Simulate paired-comparison EFRM data with differing frame units
+#'
+#' Generates dichotomous paired comparisons whose latent unit differs across
+#' judge-panel by object-set frames -- the paired-comparison extension of the
+#' extended frame of reference model (Humphry 2005) fitted by
+#' \code{\link{btl_efrm}}. Objects in set \code{s} have a within-set
+#' calibration location \code{beta}; their common-scale value is
+#' \code{v = alpha_s beta + kappa_s}. A comparison judged in panel \code{g}
+#' carries the panel unit \code{phi_g}: within a set the comparison logit is
+#' \code{phi_g (beta_a - beta_b)}, across sets it is \code{phi_g (v_a - v_b)}.
+#' The planted panel units, set units and origins are recovered by
+#' \code{\link{btl_efrm}}.
+#'
+#' @param n_objects_per_set,n_sets Objects in each set and number of sets.
+#' @param n_judges_per_panel,n_panels Judges in each panel and number of panels.
+#' @param reps_within Replications of each within-set object pair.
+#' @param reps_cross Replications of each cross-set object pair.
+#' @param panel_units Panel units \code{phi} (length \code{n_panels}); the
+#'   default is all one, and any supplied vector is rescaled to geometric
+#'   mean one.
+#' @param set_units Set units \code{alpha} (length \code{n_sets}); the default
+#'   is all one, and \code{alpha_1} is forced to one (the reference set).
+#' @param set_origins Set origins \code{kappa} (length \code{n_sets}); the
+#'   default is all zero, and \code{kappa_1} is forced to zero.
+#' @param object_sd Spread of the within-set calibration locations.
+#' @param seed Optional RNG seed.
+#' @return A data frame of class \code{"rasch_sim"} with columns
+#'   \code{object_a}, \code{object_b}, \code{winner}, \code{judge} and
+#'   \code{panel}, and \code{attr(x, "truth")} holding the common-scale values
+#'   \code{v}, the per-set \code{beta}, the units \code{phi}, \code{alpha},
+#'   \code{kappa}, and the \code{object_sets} map to pass to
+#'   \code{\link{btl_efrm}}.
+#' @examples
+#' d <- simulate_btl_efrm(6, 2, set_units = c(1, 1.4), seed = 1)
+#' bt <- btl_efrm(d, "object_a", "object_b", winner = "winner",
+#'                judge = "judge", panels = "panel",
+#'                object_sets = attr(d, "truth")$object_sets)
+#' bt$alpha_table   # recovers the ~1.4 set unit
+#' @export
+simulate_btl_efrm <- function(n_objects_per_set = 8, n_sets = 2,
+                              n_judges_per_panel = 6, n_panels = 2,
+                              reps_within = 20, reps_cross = 20,
+                              panel_units = NULL, set_units = NULL,
+                              set_origins = NULL, object_sd = 1, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  S <- as.integer(n_sets); G <- as.integer(n_panels)
+  Kp <- as.integer(n_objects_per_set); Jp <- as.integer(n_judges_per_panel)
+
+  phi <- if (is.null(panel_units)) rep(1, G) else as.numeric(panel_units)
+  if (length(phi) != G) stop("panel_units must have length n_panels")
+  phi <- phi / exp(mean(log(phi)))                    # geometric mean one
+  alpha <- if (is.null(set_units)) rep(1, S) else as.numeric(set_units)
+  if (length(alpha) != S) stop("set_units must have length n_sets")
+  alpha <- alpha / alpha[1]                            # alpha_1 = 1
+  kappa <- if (is.null(set_origins)) rep(0, S) else as.numeric(set_origins)
+  if (length(kappa) != S) stop("set_origins must have length n_sets")
+  kappa <- kappa - kappa[1]                            # kappa_1 = 0
+
+  set_nm <- sprintf("set%d", seq_len(S))
+  panel_nm <- sprintf("panel%d", seq_len(G))
+  objs_by_set <- lapply(seq_len(S), function(s) sprintf("S%dO%02d", s, seq_len(Kp)))
+  names(objs_by_set) <- set_nm
+  beta <- numeric(0)
+  for (s in seq_len(S)) {
+    bs <- as.numeric(scale(seq_len(Kp))) * object_sd   # sum-zero, spread object_sd
+    beta <- c(beta, setNames(bs, objs_by_set[[s]]))
+  }
+  set_of <- setNames(rep(seq_len(S), each = Kp), unlist(objs_by_set))
+  v <- alpha[set_of] * beta + kappa[set_of]
+
+  judges <- sprintf("J%03d", seq_len(G * Jp))
+  panel_of <- setNames(panel_nm[rep(seq_len(G), each = Jp)], judges)
+
+  # assemble the object pairs (within each set, then across every set pair)
+  aa <- bb <- character(0)
+  for (s in seq_len(S)) {
+    pr <- t(utils::combn(objs_by_set[[s]], 2))
+    aa <- c(aa, rep(pr[, 1], reps_within)); bb <- c(bb, rep(pr[, 2], reps_within))
+  }
+  if (S > 1L) for (i in seq_len(S - 1L)) for (j in (i + 1L):S) {
+    grid <- expand.grid(oa = objs_by_set[[i]], ob = objs_by_set[[j]],
+                        KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
+    aa <- c(aa, rep(grid$oa, reps_cross)); bb <- c(bb, rep(grid$ob, reps_cross))
+  }
+  R <- length(aa)
+  jd <- sample(judges, R, replace = TRUE)
+  pan <- panel_of[jd]
+  # frame-dependent logit: within-set uses beta, cross-set uses the common v
+  same <- set_of[aa] == set_of[bb]
+  lp <- ifelse(same, phi[match(pan, panel_nm)] * (beta[aa] - beta[bb]),
+               phi[match(pan, panel_nm)] * (v[aa] - v[bb]))
+  win_a <- stats::runif(R) < stats::plogis(lp)
+  d <- data.frame(object_a = aa, object_b = bb,
+                  winner = ifelse(win_a, aa, bb),
+                  judge = jd, panel = unname(pan),
+                  stringsAsFactors = FALSE)
+  rownames(d) <- NULL
+
+  planted <- character(0)
+  if (any(phi != 1)) planted <- c(planted, sprintf(
+    "panel units phi = (%s)", paste(sprintf("%.2f", phi), collapse = ", ")))
+  if (any(alpha != 1)) planted <- c(planted, sprintf(
+    "set units alpha = (%s)", paste(sprintf("%.2f", alpha), collapse = ", ")))
+  if (any(kappa != 0)) planted <- c(planted, sprintf(
+    "set origins kappa = (%s)", paste(sprintf("%.2f", kappa), collapse = ", ")))
+  if (!length(planted)) planted <- "equal units (phi = alpha = 1)"
+
+  attr(d, "truth") <- list(
+    layout = "btl_efrm",
+    description = sprintf("%d objects (%d sets) x %d panels, %d comparisons",
+                          S * Kp, S, G, R),
+    v = v, beta = beta, phi = setNames(phi, panel_nm),
+    alpha = setNames(alpha, set_nm), kappa = setNames(kappa, set_nm),
+    set_of = set_of, object_sets = objs_by_set, planted = planted)
+  class(d) <- c("rasch_sim", "data.frame")
+  d
+}
