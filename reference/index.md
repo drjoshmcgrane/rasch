@@ -114,6 +114,8 @@ diagnostics (transitivity and the residual bimension decomposition).
   Fit the Bradley-Terry-Luce model to paired comparisons
 - [`btl_dif()`](https://drjoshmcgrane.github.io/rasch/reference/btl_dif.md)
   : DIF analysis for paired comparisons
+- [`btl_efrm()`](https://drjoshmcgrane.github.io/rasch/reference/btl_efrm.md)
+  : Fit the extended frame of reference model for paired comparisons
 - [`btl_transitivity()`](https://drjoshmcgrane.github.io/rasch/reference/btl_transitivity.md)
   : Transitivity of paired comparisons
 - [`btl_dimensionality()`](https://drjoshmcgrane.github.io/rasch/reference/btl_dimensionality.md)
@@ -145,6 +147,8 @@ diagnostics (transitivity and the residual bimension decomposition).
   : Residual map of the leading paired-comparison bimension
 - [`plot_btl_judge_map()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_judge_map.md)
   : Unexpected-judgement map for one judge (pair level)
+- [`plot_btl_units()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_units.md)
+  : Plot the frame units of a paired-comparison EFRM fit
 - [`plot_btl_equate()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_equate.md)
   : Plot a paired-comparison equating comparison
 - [`plot_btl_targeting()`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_targeting.md)
@@ -219,6 +223,8 @@ it fires. The true parameters are attached to every result.
   : Simulate many-facet (rated) data with dial-in misfit
 - [`simulate_efrm()`](https://drjoshmcgrane.github.io/rasch/reference/simulate_efrm.md)
   : Simulate extended frame-of-reference data with differing units
+- [`simulate_btl_efrm()`](https://drjoshmcgrane.github.io/rasch/reference/simulate_btl_efrm.md)
+  : Simulate paired-comparison EFRM data with differing frame units
 - [`sim_replicate()`](https://drjoshmcgrane.github.io/rasch/reference/sim_replicate.md)
   : Replicate a simulation for Monte Carlo studies
 - [`sim_recovery()`](https://drjoshmcgrane.github.io/rasch/reference/sim_recovery.md)
