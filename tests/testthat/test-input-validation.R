@@ -227,3 +227,19 @@ test_that("simulator rejects malformed second-dimension specifications", {
                                                        rho = c(.5, .6))),
                "single correlation")
 })
+
+test_that("fits saved before the t rename still print their dependence", {
+  set.seed(3)
+  K <- 6; b <- seq(-1, 1, length.out = K); n <- 400
+  ia <- sample(K, n, TRUE); ib <- (ia + sample(K - 1, n, TRUE) - 1L) %% K + 1L
+  d <- data.frame(object_a = paste0("O", ia), object_b = paste0("O", ib),
+                  winner = paste0("O", ifelse(
+                    rbinom(n, 1, plogis(b[ia] - b[ib] + 0.4)) == 1, ia, ib)),
+                  judge = sample(sprintf("J%d", 1:8), n, TRUE))
+  f <- btl(d, "object_a", "object_b", "winner", judge = "judge",
+           position = TRUE)
+  old <- f
+  names(old$dependence)[names(old$dependence) == "t"] <- "z"  # pre-1.11.5 shape
+  expect_output(print(old), "t = ")
+  expect_output(print(f), "t = ")
+})

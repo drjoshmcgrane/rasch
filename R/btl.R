@@ -433,9 +433,11 @@ print.rasch_btl <- function(x, ...) {
       lab <- if (x$dependence$effect[r] == "position")
         "First-position advantage" else
         paste("Within-judge", gsub("_", "-", x$dependence$effect[r]))
-      cat(sprintf("%s: %.3f logits (SE %.3f, z = %.2f, p = %s)\n",
+      st_r <- if (!is.null(x$dependence$t)) x$dependence$t[r]
+              else x$dependence$z[r]   # fits saved before 1.11.5
+      cat(sprintf("%s: %.3f logits (SE %.3f, t = %.2f, p = %s)\n",
                   lab, x$dependence$estimate[r], x$dependence$se[r],
-                  x$dependence$t[r], .fmt_p(x$dependence$p[r])))
+                  st_r, .fmt_p(x$dependence$p[r])))
     }
   }
   if (!is.null(x$thresholds)) {
@@ -823,7 +825,7 @@ plot_btl <- function(fit, band = 2.5) {
   rank_deficient <- !is.null(jd) && nc <= np
   if (rank_deficient)
     notes <- c(notes, sprintf(
-      "%d judge clusters for %d parameters: the clustered covariance is rank-deficient; marginal SEs are reported as consistent but understating estimates, dependence z/p should be read as descriptive, and the OSI is withheld (understated SEs would overstate it) -- reliable clustered inference needs more judges than parameters", nc, np))
+      "%d judge clusters for %d parameters: the clustered covariance is rank-deficient; marginal SEs are reported as consistent but understating estimates, dependence t/p should be read as descriptive, and the OSI is withheld (understated SEs would overstate it) -- reliable clustered inference needs more judges than parameters", nc, np))
   covth <- Hi %*% (crossprod(Gm) * cr1) %*% Hi
   # composite-likelihood information ingredients: tr(H^-1 J) = tr(covth H)
   # is the effective parameter count of the Godambe penalty (Varin & Vidoni
