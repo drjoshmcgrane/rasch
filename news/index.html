@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,16 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.11.1" id="rasch-1111">rasch 1.11.1<a class="anchor" aria-label="anchor" href="#rasch-1111"></a></h2>
+<p>The follow-up review’s residual findings, all verified and closed:</p>
+<ul><li>The BTL dimensionality reference now simulates binomial (multinomial) sums for count-weighted rows instead of one weighted Bernoulli, whose w^2 p(1-p) variance overdispersed the reference and made the test conservative on aggregated data; aggregated and expanded data now give the same reference (verified to &lt; 1%).</li>
+<li>The pairwise chi-square degrees of freedom subtract every estimated parameter (position and dependence covariates were omitted), and a design with nothing testable reports NA instead of df = 1.</li>
+<li>Judge-clustered covariance carries the standard CR1 small-sample factor G/(G-1), on top of the single-judge error and few-cluster note.</li>
+<li>
+<code>btl_efrm(se_method = "judge_bootstrap")</code>: judges resampled with replacement within panels and the whole pipeline refitted, so the errors carry within-judge dependence as well as stage-one uncertainty – closing the documented gap in the parametric bootstrap. On model-true data it agrees with the parametric bootstrap; estimates are unchanged by construction.</li>
+<li>The next-pair priority documentation is internally consistent (ranking heuristic; the Sherman-Morrison update is exact for information matrices, a scoring device on the sandwich).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.11.0" id="rasch-1110">rasch 1.11.0<a class="anchor" aria-label="anchor" href="#rasch-1110"></a></h2>
 <p>Statistical validity, from a second external review. Every finding was re-derived or reproduced by simulation before fixing; the fixes are verified by new calibration tests (test-statistical-validity.R).</p>

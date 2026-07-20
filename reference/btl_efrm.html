@@ -29,7 +29,7 @@ phi_g (v_a - v_b), which places the sets on one common scale."><meta property="o
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -89,7 +89,7 @@ origin cancels and the set unit is confounded with the spread of
 <span>  response <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  ties <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"drop"</span>, <span class="st">"error"</span><span class="op">)</span>,</span>
 <span>  min_link <span class="op">=</span> <span class="fl">20</span>,</span>
-<span>  se_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"bootstrap"</span>, <span class="st">"conditional"</span><span class="op">)</span>,</span>
+<span>  se_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"bootstrap"</span>, <span class="st">"judge_bootstrap"</span>, <span class="st">"conditional"</span><span class="op">)</span>,</span>
 <span>  boot_reps <span class="op">=</span> <span class="fl">60</span>,</span>
 <span>  maxit <span class="op">=</span> <span class="fl">60</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-08</span></span>
@@ -146,7 +146,9 @@ through sufficient cross-set pairs raise an error.</p></dd>
 
 
 <dt id="arg-se-method">se_method<a class="anchor" aria-label="anchor" href="#arg-se-method"></a></dt>
-<dd><p><code>"bootstrap"</code> (the default): a parametric bootstrap
+<dd><p><code>"bootstrap"</code> (the default): a parametric bootstrap;
+<code>"judge_bootstrap"</code>: judges resampled with replacement within
+panels, carrying within-judge dependence;
 of the ENTIRE two-stage pipeline – winners resampled from the fitted
 probabilities, both stages refitted <code>boot_reps</code> times – so the
 reported standard errors carry every source of sampling variability,
@@ -225,12 +227,16 @@ cover at a third of their nominal rate on linked designs. The
 sandwich for stage one, inverse observed information for stage two,
 conditional on stage one) for quick inspection; its <code>alpha</code> and
 <code>kappa</code> errors understate, and the fit says so.</p>
-<p>Two honesty notes on the bootstrap. It is model-based: replicates are drawn
-as independent Bernoulli outcomes at the fitted probabilities, which is
-self-consistent (the model has no judge parameter) but does not carry
-extra-model dependence within judges; the conditional stage-one errors are
-judge-clustered and guard against exactly that, so when the two disagree
-materially the larger is the cautious choice. And a parameter that reaches
+<p>Two honesty notes on the bootstrap. The default is model-based:
+replicates are drawn as independent Bernoulli outcomes at the fitted
+probabilities, which is self-consistent (the model has no judge
+parameter) but does not carry extra-model dependence within judges. When
+judges plausibly carry idiosyncratic preferences across their
+comparisons, use <code>se_method = "judge_bootstrap"</code>: judges are
+redrawn with replacement within each panel and the whole pipeline is
+refitted, so the errors carry both the stage-one uncertainty and the
+within-judge dependence (it needs enough judges per panel to resample
+stably; failed replicates are counted and reported). And a parameter that reaches
 its boundary in some replicates (a set unit driven to zero when a resampled
 within-set order flips against the cross-set evidence, the signature of a
 two-object set with a near-even internal pair) has no normal sampling

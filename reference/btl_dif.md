@@ -150,7 +150,7 @@ btl_dif(f, grp, objects = "C")
 #> 
 #> Resolved locations (logits; BH over 1 comparison(s); practical 0.50)
 #>  object  term level_a level_b difference    se     z   p_adj significant
-#>       C group      g1      g2      1.404 0.271 5.186 < 0.001           *
+#>       C group      g1      g2      1.404 0.283 4.965 < 0.001           *
 #>  practical
 #>          *
 ```
