@@ -31,7 +31,7 @@ graph must remain connected."><meta property="og:image" content="https://drjoshm
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -123,8 +123,11 @@ blanks) is treated as missing and dropped with a note. Ignored when
 
 <dt id="arg-response">response<a class="anchor" aria-label="anchor" href="#arg-response"></a></dt>
 <dd><p>Optional name of a column holding a graded preference
-for <code>object_a</code> over <code>object_b</code> – an ordered factor (worst
-to best for <code>object_a</code>) or integer scores <code>0..m</code>. Fits the
+for <code>object_a</code> over <code>object_b</code> – an ORDERED factor
+(<code>factor(..., ordered = TRUE)</code>, levels worst to best for
+<code>object_a</code>) or integer scores <code>0..m</code>; a plain factor is
+refused, since its alphabetical level order would silently define
+(and can reverse) the response scale. Fits the
 adjacent-categories ordinal extension of BTL (Tutz 1986; Agresti
 1992): a partial-credit structure on the difference of locations with
 thresholds constrained symmetric, <code>tau_k = -tau_(m+1-k)</code>, so the

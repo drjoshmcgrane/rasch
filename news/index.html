@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,15 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.11.4" id="rasch-1114">rasch 1.11.4<a class="anchor" aria-label="anchor" href="#rasch-1114"></a></h2>
+<p>Sixth review round: four findings, all verified and closed.</p>
+<ul><li>The integer-score guard reads factors through their LABELS: <code>as.numeric(factor)</code> returns level codes, so a factor score of “1.9” slipped past as the integer 3 and was then truncated. Non-numeric and non-finite scores now also error at every entry point instead of silently becoming missing.</li>
+<li>Graded <code><a href="../reference/btl.html">btl()</a></code> requires an ORDERED response factor: a plain factor’s alphabetical level order silently defined – and could reverse – the response scale (worse &lt; same &lt; better read as better &lt; same &lt; worse). Integer scores 0..m remain the alternative.</li>
+<li>Clustered dependence and position tests use a t reference with G - 1 degrees of freedom (the standard few-cluster correction) instead of normal theory; the table carries the df. Five judges now give honestly wide p-values.</li>
+<li>
+<code><a href="../reference/simulate_rasch.html">simulate_rasch()</a></code> validates the second-dimension specification: <code>rho</code> outside [-1, 1] and unknown item names/indices are errors (rho = 1.2 used to produce an all-missing second dimension that looked like a successful simulation), and the item-set resolver now range-checks every nominated item list centrally.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.11.3" id="rasch-1113">rasch 1.11.3<a class="anchor" aria-label="anchor" href="#rasch-1113"></a></h2>
 <p>Fifth review round: seven findings, all verified and closed.</p>

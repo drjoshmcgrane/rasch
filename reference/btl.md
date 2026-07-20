@@ -56,13 +56,15 @@ btl(
 - response:
 
   Optional name of a column holding a graded preference for `object_a`
-  over `object_b` – an ordered factor (worst to best for `object_a`) or
-  integer scores `0..m`. Fits the adjacent-categories ordinal extension
-  of BTL (Tutz 1986; Agresti 1992): a partial-credit structure on the
-  difference of locations with thresholds constrained symmetric,
-  `tau_k = -tau_(m+1-k)`, so the model is invariant to presentation
-  order. Two categories reproduce BTL exactly; three give the
-  Davidson (1970) ties model.
+  over `object_b` – an ORDERED factor (`factor(..., ordered = TRUE)`,
+  levels worst to best for `object_a`) or integer scores `0..m`; a plain
+  factor is refused, since its alphabetical level order would silently
+  define (and can reverse) the response scale. Fits the
+  adjacent-categories ordinal extension of BTL (Tutz 1986; Agresti
+  1992): a partial-credit structure on the difference of locations with
+  thresholds constrained symmetric, `tau_k = -tau_(m+1-k)`, so the model
+  is invariant to presentation order. Two categories reproduce BTL
+  exactly; three give the Davidson (1970) ties model.
 
 - margin:
 

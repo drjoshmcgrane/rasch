@@ -1,5 +1,31 @@
 # Changelog
 
+## rasch 1.11.4
+
+Sixth review round: four findings, all verified and closed.
+
+- The integer-score guard reads factors through their LABELS:
+  `as.numeric(factor)` returns level codes, so a factor score of “1.9”
+  slipped past as the integer 3 and was then truncated. Non-numeric and
+  non-finite scores now also error at every entry point instead of
+  silently becoming missing.
+- Graded
+  [`btl()`](https://drjoshmcgrane.github.io/rasch/reference/btl.md)
+  requires an ORDERED response factor: a plain factor’s alphabetical
+  level order silently defined – and could reverse – the response scale
+  (worse \< same \< better read as better \< same \< worse). Integer
+  scores 0..m remain the alternative.
+- Clustered dependence and position tests use a t reference with G - 1
+  degrees of freedom (the standard few-cluster correction) instead of
+  normal theory; the table carries the df. Five judges now give honestly
+  wide p-values.
+- [`simulate_rasch()`](https://drjoshmcgrane.github.io/rasch/reference/simulate_rasch.md)
+  validates the second-dimension specification: `rho` outside \[-1, 1\]
+  and unknown item names/indices are errors (rho = 1.2 used to produce
+  an all-missing second dimension that looked like a successful
+  simulation), and the item-set resolver now range-checks every
+  nominated item list centrally.
+
 ## rasch 1.11.3
 
 Fifth review round: seven findings, all verified and closed.
