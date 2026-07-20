@@ -238,8 +238,16 @@ test_that("fits saved before the t rename still print their dependence", {
                   judge = sample(sprintf("J%d", 1:8), n, TRUE))
   f <- btl(d, "object_a", "object_b", "winner", judge = "judge",
            position = TRUE)
-  old <- f
-  names(old$dependence)[names(old$dependence) == "t"] <- "z"  # pre-1.11.5 shape
-  expect_output(print(old), "t = ")
+  # 1.11.4 transitional schema: z name, df present, t-based p -> label t
+  trans <- f
+  names(trans$dependence)[names(trans$dependence) == "t"] <- "z"
+  expect_output(print(trans), "t = ")
+  # pre-1.11.4 schema: z, NO df, normal-reference p -> keep the z label,
+  # since relabelling it t would misrepresent how its p was computed
+  legacy <- f
+  names(legacy$dependence)[names(legacy$dependence) == "t"] <- "z"
+  legacy$dependence$df <- NULL
+  legacy$dependence$p <- 2 * pnorm(-abs(legacy$dependence$z))
+  expect_output(print(legacy), "z = ")
   expect_output(print(f), "t = ")
 })

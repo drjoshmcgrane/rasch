@@ -1,3 +1,16 @@
+# rasch 1.11.7
+
+Ninth review round: one finding.
+
+* `print()` distinguishes the three saved-fit dependence schemas by
+  their `df` field: current fits label the statistic `t`; 1.11.4
+  transitional fits (`z` name, `df` present, t-based p) print as `t`;
+  older fits (`z`, no `df`, normal-reference p) KEEP the `z` label --
+  relabelling them `t` misrepresented how their p-values were computed
+  (a legacy z = 3.17 with normal p = .002 is not the same claim as
+  t = 3.17 with p = .016 at five clusters). The regression test now
+  reconstructs both legacy schemas faithfully.
+
 # rasch 1.11.6
 
 Eighth review round: label and migration polish.

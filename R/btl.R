@@ -433,11 +433,20 @@ print.rasch_btl <- function(x, ...) {
       lab <- if (x$dependence$effect[r] == "position")
         "First-position advantage" else
         paste("Within-judge", gsub("_", "-", x$dependence$effect[r]))
-      st_r <- if (!is.null(x$dependence$t)) x$dependence$t[r]
-              else x$dependence$z[r]   # fits saved before 1.11.5
-      cat(sprintf("%s: %.3f logits (SE %.3f, t = %.2f, p = %s)\n",
+      # three saved-fit schemas: `t` (current, t reference); `z` with `df`
+      # (1.11.4 transitional: t-based inference under the old name); `z`
+      # without `df` (older fits whose p-values used the NORMAL reference:
+      # keep their own label rather than misrepresent their inference)
+      if (!is.null(x$dependence$t)) {
+        st_lab <- "t"; st_r <- x$dependence$t[r]
+      } else if (!is.null(x$dependence$df)) {
+        st_lab <- "t"; st_r <- x$dependence$z[r]
+      } else {
+        st_lab <- "z"; st_r <- x$dependence$z[r]
+      }
+      cat(sprintf("%s: %.3f logits (SE %.3f, %s = %.2f, p = %s)\n",
                   lab, x$dependence$estimate[r], x$dependence$se[r],
-                  st_r, .fmt_p(x$dependence$p[r])))
+                  st_lab, st_r, .fmt_p(x$dependence$p[r])))
     }
   }
   if (!is.null(x$thresholds)) {
