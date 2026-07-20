@@ -84,3 +84,67 @@ test_that("report_html escapes data-derived text", {
               grepl("A&lt;b>&amp;x", html, fixed = TRUE))
   unlink(out)
 })
+
+test_that("every public estimator rejects fractional scores", {
+  X <- matrix(c(0, 1, 1.9, 1, 0, 1, 0, 1, 1, 0, 1, 0), 6, 2,
+              dimnames = list(NULL, c("A", "B")))
+  expect_error(pcml(X), "non-integer")
+  expect_error(pcml_pc(X), "non-integer")
+  long <- data.frame(person = rep(sprintf("P%02d", 1:20), each = 2),
+                     item = rep(c("A", "B"), 20),
+                     score = c(1.9, rep(c(0, 1, 1, 0), 9), 0, 1, 1))
+  expect_error(rasch_mfrm(long, "person", "item", "score", facets = NULL),
+               "non-integer")
+  d <- data.frame(a = rep("X", 30), b = rep("Y", 30),
+                  resp = rep(c(0, 1, 1.5), 10))
+  expect_error(btl(d, "a", "b", response = "resp"), "integers 0..m")
+})
+
+test_that("item_moments is overflow-stable and person_wle survives wide items", {
+  im <- item_moments(8, seq(-3, 3, length.out = 30))
+  expect_true(all(is.finite(unlist(im))))
+  expect_equal(sum(im$P), 1, tolerance = 1e-12)
+  w <- person_wle(list(seq(-3, 3, length.out = 30)))
+  expect_true(all(is.finite(w$theta)))
+})
+
+test_that("secondary simulated trait keeps the requested mean and sd", {
+  d <- simulate_rasch(n_persons = 20000, n_items = 6, theta_mean = 2,
+                      theta_sd = 1, second_dim = list(items = 4:6, rho = 0.5),
+                      seed = 1)
+  t2 <- attr(d, "truth")$theta2
+  expect_false(is.null(t2))
+  expect_lt(abs(mean(t2) - 2), 0.05)
+  expect_lt(abs(sd(t2) - 1), 0.05)
+})
+
+test_that("a judge in two panels is rejected by btl_efrm", {
+  d <- simulate_btl_efrm(n_objects_per_set = 5, n_sets = 2, n_panels = 2,
+                         n_judges_per_panel = 6, reps_within = 15,
+                         reps_cross = 15, seed = 5)
+  jj <- unique(d$judge)[1]
+  d$panel[d$judge == jj][1] <- setdiff(unique(d$panel), d$panel[d$judge == jj][1])[1]
+  expect_error(
+    btl_efrm(d, "object_a", "object_b", "winner", "judge", "panel",
+             attr(d, "truth")$object_sets, se_method = "conditional"),
+    "more than one panel")
+})
+
+test_that("OSI is withheld when the clustered covariance is rank-deficient", {
+  set.seed(6)
+  K <- 10; beta <- seq(-1.5, 1.5, length.out = K); n <- 600
+  ia <- sample(K, n, TRUE); ib <- (ia + sample(K - 1, n, TRUE) - 1L) %% K + 1L
+  win <- rbinom(n, 1, plogis(beta[ia] - beta[ib]))
+  d <- data.frame(object_a = paste0("O", ia), object_b = paste0("O", ib),
+                  winner = paste0("O", ifelse(win == 1, ia, ib)),
+                  judge = sample(sprintf("J%d", 1:5), n, TRUE))
+  f <- btl(d, "object_a", "object_b", "winner", judge = "judge")
+  expect_true(is.na(f$osi$PSI))
+  expect_true(any(grepl("OSI is withheld", f$notes)))
+})
+
+test_that("alpha is NA, not -Inf, when the total score is constant", {
+  X <- cbind(I1 = rep(c(0L, 1L), 40), I2 = rep(c(1L, 0L), 40))
+  f <- suppressWarnings(rasch(X, n_groups = 2))
+  expect_true(is.na(f$alpha$alpha))
+})

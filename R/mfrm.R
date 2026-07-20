@@ -171,6 +171,7 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
 
   pid <- as.character(data[[person]])
   itm <- as.character(data[[item]])
+  .check_integer_scores(data[[score]], "the score column")
   sc <- suppressWarnings(as.integer(as.character(data[[score]])))
   n_na <- sum(!is.na(sc) & (sc %in% na_codes | sc < 0))
   sc[sc %in% na_codes | (!is.na(sc) & sc < 0)] <- NA

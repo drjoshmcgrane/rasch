@@ -57,6 +57,19 @@ threshold_index <- function(m) {
 # the ridge sends it -- garbage that must be an error, not a result. Anchors
 # rescue a block: a block containing an anchored item has its origin fixed.
 # ---------------------------------------------------------------------------
+# Refuse fractional scores BEFORE integer coercion truncates them: every
+# public estimator must give the same answer as rasch() here (which already
+# rejects), not silently fit altered data.
+.check_integer_scores <- function(X, what = "X") {
+  Xn <- suppressWarnings(as.numeric(X))
+  bad <- !is.na(Xn) & Xn != round(Xn)
+  if (any(bad))
+    stop("non-integer score(s) in ", what, " (e.g. ",
+         format(Xn[bad][1]), "); Rasch categories are integer counts -- ",
+         "round or rescore explicitly before analysis", call. = FALSE)
+  invisible(TRUE)
+}
+
 .pcml_check_connected <- function(pairs, L, item_names, anchored = integer(0)) {
   edges <- if (length(pairs))
     do.call(rbind, lapply(pairs, function(p) c(p$i, p$j)))
@@ -297,7 +310,8 @@ threshold_index <- function(m) {
 pcml <- function(X, model = c("PCM", "RSM"), anchors = NULL,
                  maxit = 60, tol = 1e-8) {
   model <- match.arg(model)
-  X <- as.matrix(X); storage.mode(X) <- "integer"
+  X <- as.matrix(X); .check_integer_scores(X, "the score matrix")
+  storage.mode(X) <- "integer"
   m <- apply(X, 2, max, na.rm = TRUE); L <- ncol(X)
   thr <- threshold_index(m); M <- nrow(thr)
   inames <- if (is.null(colnames(X))) paste0("V", seq_len(L)) else colnames(X)
@@ -533,7 +547,8 @@ pcml <- function(X, model = c("PCM", "RSM"), anchors = NULL,
 #' @export
 pcml_pc <- function(X, n_components = 4, maxit = 60, tol = 1e-8) {
   if (n_components < 1) stop("n_components must be at least 1")
-  X <- as.matrix(X); storage.mode(X) <- "integer"
+  X <- as.matrix(X); .check_integer_scores(X, "the score matrix")
+  storage.mode(X) <- "integer"
   m <- apply(X, 2, max, na.rm = TRUE); L <- ncol(X)
   thr <- threshold_index(m); M <- nrow(thr)
   ncomp <- pmin(m, n_components, 4L)

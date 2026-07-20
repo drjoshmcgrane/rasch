@@ -22,7 +22,8 @@
 #' @export
 item_moments <- function(theta, tau_i, disc = 1) {
   m <- length(tau_i); x <- 0:m
-  num <- exp(disc * (x * theta - c(0, cumsum(tau_i)))); P <- num / sum(num)
+  lp <- disc * (x * theta - c(0, cumsum(tau_i)))
+  num <- exp(lp - max(lp)); P <- num / sum(num)   # log-sum-exp: no overflow
   E <- sum(x * P); d <- x - E
   list(P = P, E = E, V = sum(d^2 * P), mu3 = sum(d^3 * P), mu4 = sum(d^4 * P))
 }
@@ -162,9 +163,12 @@ score_table <- function(fit, method = c("wle", "mle"),
     disc^2 * item_moments(th, tt, disc = disc)$V, 0))
   if (method == "mle") {
     for (r in seq_len(M - 1)) {
+      # the ML equation is sum(disc*(x_i - E_i)) = 0: the common
+      # discrimination cancels, so the root solves r = sum(E), not
+      # r = sum(disc*E)
       tab$theta[tab$score == r] <- uniroot(function(th)
         r - sum(vapply(fit$tau_list, function(tt)
-          disc * item_moments(th, tt, disc = disc)$E, 0)),
+          item_moments(th, tt, disc = disc)$E, 0)),
         c(-30, 30), tol = 1e-9)$root
     }
     tab$theta[c(1, M + 1)] <- NA_real_

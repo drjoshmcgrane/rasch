@@ -501,6 +501,13 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
   # panels: a judge-attribute column, or a named judge -> panel vector
   if (length(panels) == 1L && is.character(panels) && panels %in% names(data)) {
     pan <- as.character(data[[panels]])
+    # a panel is a judge attribute: one judge in two panels is a data error
+    # (and the judge bootstrap would silently reclassify their rows)
+    npan <- tapply(pan, jd, function(x) length(unique(x[!is.na(x)])))
+    if (any(npan > 1L, na.rm = TRUE))
+      stop("judge(s) assigned to more than one panel: ",
+           paste(names(npan)[npan > 1L], collapse = ", "),
+           "; a panel is a judge attribute and must be constant per judge")
   } else if (!is.null(names(panels)) && all(nzchar(names(panels)))) {
     pan <- unname(as.character(panels)[match(jd, names(panels))])
   } else {

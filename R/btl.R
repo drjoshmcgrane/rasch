@@ -244,7 +244,12 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
     if (is.factor(xr)) {
       cats <- levels(xr); x <- as.integer(xr) - 1L
     } else {
-      x <- as.integer(round(as.numeric(xr)))
+      xn <- as.numeric(xr)
+      if (any(!is.na(xn) & xn != round(xn)))
+        stop("graded responses must be integers 0..m (got e.g. ",
+             format(xn[!is.na(xn) & xn != round(xn)][1]),
+             "); rescore explicitly before analysis")
+      x <- as.integer(xn)
       if (any(x < 0, na.rm = TRUE))
         stop("graded responses must be non-negative integers 0..m")
       cats <- as.character(0:max(x, na.rm = TRUE))
@@ -794,9 +799,10 @@ plot_btl <- function(fit, band = 2.5) {
   cr1 <- if (!is.null(jd) && nc > 1L) nc / (nc - 1) else 1
   # with fewer clusters than parameters the empirical meat is singular by
   # construction: no scalar correction repairs that, so say so
-  if (!is.null(jd) && nc <= np)
+  rank_deficient <- !is.null(jd) && nc <= np
+  if (rank_deficient)
     notes <- c(notes, sprintf(
-      "%d judge clusters for %d parameters: the clustered covariance is rank-deficient and the standard errors likely understate -- reliable clustered inference needs more judges than parameters", nc, np))
+      "%d judge clusters for %d parameters: the clustered covariance is rank-deficient; marginal SEs are reported as consistent but understating estimates, dependence z/p should be read as descriptive, and the OSI is withheld (understated SEs would overstate it) -- reliable clustered inference needs more judges than parameters", nc, np))
   covth <- Hi %*% (crossprod(Gm) * cr1) %*% Hi
   # composite-likelihood information ingredients: tr(H^-1 J) = tr(covth H)
   # is the effective parameter count of the Godambe penalty (Varin & Vidoni
@@ -923,7 +929,10 @@ plot_btl <- function(fit, band = 2.5) {
   total_chisq <- sum(pairs$chisq[used])
   total_df <- sum(used) - np
   if (total_df < 1L) { total_chisq <- NA_real_; total_df <- NA_integer_ }
-  osi <- .psi(objects$location, objects$se)
+  osi <- if (rank_deficient)
+    list(PSI = NA_real_, separation = NA_real_, strata = NA_real_,
+         var_theta = NA_real_, mean_error_var = NA_real_, n = 0L)
+  else .psi(objects$location, objects$se)
 
   # two categories ARE the dichotomous conditional model, so an m == 1 fit is
   # presented in dichotomous terms: the score is the win count and the mean

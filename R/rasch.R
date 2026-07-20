@@ -394,11 +394,14 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
               alpha = alpha,
               targeting = .targeting(person, thr),
               power_of_fit = .fit_power(psi$PSI),
-              total_chisq = sum(it$chisq, na.rm = TRUE),
-              total_df = sum(it$df, na.rm = TRUE),
-              total_chisq_p = pchisq(sum(it$chisq, na.rm = TRUE),
-                                     sum(it$df, na.rm = TRUE),
-                                     lower.tail = FALSE),
+              total_chisq = if (sum(it$df, na.rm = TRUE) > 0)
+                sum(it$chisq, na.rm = TRUE) else NA_real_,
+              total_df = if (sum(it$df, na.rm = TRUE) > 0)
+                sum(it$df, na.rm = TRUE) else NA_integer_,
+              total_chisq_p = if (sum(it$df, na.rm = TRUE) > 0)
+                pchisq(sum(it$chisq, na.rm = TRUE),
+                       sum(it$df, na.rm = TRUE), lower.tail = FALSE)
+                else NA_real_,
               item_fit_summary = .dist_stats(rf$items$fit_resid),
               person_fit_summary = .dist_stats(rf$persons$fit_resid),
               summary_stats = list(

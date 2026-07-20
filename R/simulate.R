@@ -177,8 +177,12 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
   if (!is.null(second_dim)) {
     dim_items <- as_idx(second_dim$items)
     rho <- second_dim$rho %||% 0.5
-    theta2 <- rho * theta + sqrt(1 - rho^2) *
-      .sim_theta(N, theta_mean, theta_sd, theta_dist)
+    # centre both components so the secondary trait keeps the REQUESTED
+    # mean and sd: combining two mean-mu variables shifted the mean to
+    # mu(rho + sqrt(1 - rho^2))
+    z2 <- .sim_theta(N, theta_mean, theta_sd, theta_dist)
+    theta2 <- theta_mean + rho * (theta - theta_mean) +
+      sqrt(1 - rho^2) * (z2 - theta_mean)
   }
 
   X <- matrix(NA_integer_, N, I, dimnames = list(NULL, inm))
@@ -314,7 +318,7 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
     description = sprintf("%s, %d persons x %d items%s", model, N, I,
       if (!is.null(group)) sprintf(", %d groups", nlevels(group)) else ""),
     model = model, n_persons = N, n_items = I,
-    theta = theta, difficulty = delta, thresholds = tau,
+    theta = theta, theta2 = theta2, difficulty = delta, thresholds = tau,
     discrimination = disc, guessing = guess,
     groups = group, dim_items = inm[dim_items], dif_items = inm[dif_items],
     careless_idx = careless_idx, style_idx = style_idx, planted = planted)

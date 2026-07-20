@@ -369,6 +369,8 @@ chisq_detail <- function(fit, item) {
   if (nrow(Xc) < 3 || ncol(Xc) < 2) return(list(alpha = NA_real_, n = nrow(Xc),
                                                 applicable = applicable))
   L <- ncol(Xc); vi <- apply(Xc, 2, var); vt <- var(rowSums(Xc))
+  if (!is.finite(vt) || vt <= 0)          # constant total score: undefined
+    return(list(alpha = NA_real_, n = nrow(Xc), applicable = applicable))
   list(alpha = L / (L - 1) * (1 - sum(vi) / vt), n = nrow(Xc),
        applicable = applicable)
 }

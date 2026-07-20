@@ -60,7 +60,9 @@ test_that("an item with fewer than two class intervals gets NA, not df = 1", {
   expect_true(all(is.na(f$items$df)))
   expect_true(all(is.na(f$items$chisq)))
   expect_true(all(is.na(f$items$p)))
-  expect_equal(f$total_df, 0L)
+  # with nothing testable the omnibus is NA too, not chi-square 0 on 0 df
+  expect_true(is.na(f$total_df))
+  expect_true(is.na(f$total_chisq_p))
 })
 
 test_that("equating drift tests are calibrated under the null", {
