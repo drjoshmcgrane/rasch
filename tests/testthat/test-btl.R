@@ -187,9 +187,12 @@ test_that("three graded categories give the Davidson ties structure", {
   expect_equal(nrow(f$thresholds), 2L)
   expect_equal(f$thresholds$tau[1], -f$thresholds$tau[2])
   expect_equal(f$m, 2L)
-  # ordered-factor input maps by level order and keeps the labels
+  # ordered-factor input maps by level order and keeps the labels; a plain
+  # factor is refused (its level order may be alphabetical accident)
   d$lab <- factor(c("worse", "tie", "better")[d$grade + 1],
-                  levels = c("worse", "tie", "better"))
+                  levels = c("worse", "tie", "better"), ordered = TRUE)
+  d$plain <- factor(c("worse", "tie", "better")[d$grade + 1])
+  expect_error(btl(d, "a", "b", response = "plain"), "ORDERED")
   fl <- btl(d, "a", "b", response = "lab")
   expect_equal(fl$objects$location, f$objects$location, tolerance = 1e-8)
   expect_identical(fl$categories, c("worse", "tie", "better"))
@@ -283,7 +286,7 @@ test_that("the identifiability guards distinguish interior from extreme sparsene
   # declared levels with only the middle five used leaves categories 0 and
   # 6 empty in both orientations
   d$g <- factor(paste0("L", d$grade + 1),
-                levels = paste0("L", 0:6))
+                levels = paste0("L", 0:6), ordered = TRUE)
   expect_error(btl(d, "a", "b", response = "g"), "extreme category")
   expect_error(btl(d, "a", "b", response = "g", thresholds = "pc"),
                "extreme category")

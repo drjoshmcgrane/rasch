@@ -148,3 +148,49 @@ test_that("alpha is NA, not -Inf, when the total score is constant", {
   f <- suppressWarnings(rasch(X, n_groups = 2))
   expect_true(is.na(f$alpha$alpha))
 })
+
+test_that("factor scores cannot bypass the integer guard", {
+  long <- data.frame(person = rep(sprintf("P%02d", 1:20), each = 2),
+                     item = rep(c("A", "B"), 20),
+                     score = factor(c("1.9", rep(c("0", "1", "1", "0"), 9),
+                                      "0", "1", "1")))
+  expect_error(rasch_mfrm(long, "person", "item", "score", facets = NULL),
+               "non-integer")
+  expect_error(pcml(matrix(c(0, 1, Inf, 1, 0, 1, 0, 1), 4, 2)), "non-finite")
+  expect_error(pcml(matrix(c("0", "1", "abc", "1", "0", "1", "0", "1"), 4, 2)),
+               "non-numeric")
+})
+
+test_that("graded btl requires an ordered factor", {
+  d <- data.frame(a = rep(c("X", "Y", "Z"), 40), b = rep(c("Y", "Z", "X"), 40))
+  set.seed(1)
+  resp <- sample(c("worse", "same", "better"), 120, TRUE)
+  d$plain <- factor(resp)
+  d$ord <- factor(resp, levels = c("worse", "same", "better"), ordered = TRUE)
+  expect_error(btl(d, "a", "b", response = "plain"), "ORDERED")
+  f <- btl(d, "a", "b", response = "ord")
+  expect_identical(f$categories, c("worse", "same", "better"))
+})
+
+test_that("clustered dependence tests use a t reference with G - 1 df", {
+  set.seed(3)
+  K <- 6; b <- seq(-1, 1, length.out = K); n <- 800
+  ia <- sample(K, n, TRUE); ib <- (ia + sample(K - 1, n, TRUE) - 1L) %% K + 1L
+  d <- data.frame(object_a = paste0("O", ia), object_b = paste0("O", ib),
+                  winner = paste0("O", ifelse(
+                    rbinom(n, 1, plogis(b[ia] - b[ib] + 0.4)) == 1, ia, ib)),
+                  judge = sample(sprintf("J%d", 1:6), n, TRUE))
+  f <- btl(d, "object_a", "object_b", "winner", judge = "judge",
+           position = TRUE)
+  dp <- f$dependence
+  expect_equal(unique(dp$df), 5L)
+  expect_equal(dp$p, 2 * pt(-abs(dp$z), df = 5), tolerance = 1e-12)
+  expect_true(all(dp$p >= 2 * pnorm(-abs(dp$z))))   # wider than normal theory
+})
+
+test_that("simulate_rasch validates the second-dimension specification", {
+  expect_error(simulate_rasch(50, 6, second_dim = list(items = 4:6, rho = 1.2)),
+               "correlation in")
+  expect_error(simulate_rasch(50, 6, second_dim = list(items = "I99", rho = .5)),
+               "unknown item")
+})

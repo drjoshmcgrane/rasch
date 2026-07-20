@@ -107,8 +107,11 @@
 #'   zero here -- so thinly used categories borrow strength from every
 #'   response. Both modes report the component decomposition.
 #' @param response Optional name of a column holding a graded preference
-#'   for \code{object_a} over \code{object_b} -- an ordered factor (worst
-#'   to best for \code{object_a}) or integer scores \code{0..m}. Fits the
+#'   for \code{object_a} over \code{object_b} -- an ORDERED factor
+#'   (\code{factor(..., ordered = TRUE)}, levels worst to best for
+#'   \code{object_a}) or integer scores \code{0..m}; a plain factor is
+#'   refused, since its alphabetical level order would silently define
+#'   (and can reverse) the response scale. Fits the
 #'   adjacent-categories ordinal extension of BTL (Tutz 1986; Agresti
 #'   1992): a partial-credit structure on the difference of locations with
 #'   thresholds constrained symmetric, \code{tau_k = -tau_(m+1-k)}, so the
@@ -242,6 +245,14 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
   if (!is.null(response)) {
     xr <- data[[response]]
     if (is.factor(xr)) {
+      # a plain factor's alphabetical level order would silently define the
+      # response scale (and can reverse it); the order must be explicit
+      if (!is.ordered(xr))
+        stop("a graded response factor must be ORDERED ",
+             "(factor(..., ordered = TRUE) with levels from worst to ",
+             "best), or supply integer scores 0..m: an unordered ",
+             "factor's alphabetical levels would silently define -- and ",
+             "can reverse -- the response scale")
       cats <- levels(xr); x <- as.integer(xr) - 1L
     } else {
       xn <- as.numeric(xr)
@@ -820,9 +831,14 @@ plot_btl <- function(fit, band = 2.5) {
   if (pz) {
     zi <- (nb + q + 1L):np
     dse <- sqrt(pmax(diag(covth)[zi], 0))
+    # clustered: the z statistics get a t reference with G - 1 degrees of
+    # freedom (the standard few-cluster correction) rather than normal
+    # theory, so five judges give honestly wide p-values
+    t_df <- if (!is.null(jd)) max(nc - 1L, 1L) else Inf
     dependence <- data.frame(
       effect = colnames(Z), estimate = dep, se = dse,
-      z = dep / dse, p = 2 * pnorm(-abs(dep / dse)),
+      z = dep / dse, df = t_df,
+      p = 2 * pt(-abs(dep / dse), df = t_df),
       # count-weighted: the number of comparisons (not rows) that carry
       # information about each effect
       n_informative = vapply(seq_len(ncol(Z)), function(j)

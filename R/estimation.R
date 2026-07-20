@@ -61,8 +61,20 @@ threshold_index <- function(m) {
 # public estimator must give the same answer as rasch() here (which already
 # rejects), not silently fit altered data.
 .check_integer_scores <- function(X, what = "X") {
-  Xn <- suppressWarnings(as.numeric(X))
-  bad <- !is.na(Xn) & Xn != round(Xn)
+  # factors must be read through their LABELS: as.numeric(factor) returns
+  # level codes, which let factor("1.9") slip past as the integer 3
+  xc <- as.character(if (is.factor(X)) as.character(X) else X)
+  obs <- !is.na(xc)
+  Xn <- suppressWarnings(as.numeric(xc))
+  nonnum <- obs & is.na(Xn)
+  if (any(nonnum))
+    stop("non-numeric score(s) in ", what, " (e.g. '", xc[nonnum][1],
+         "'); scores must be integer counts", call. = FALSE)
+  noninf <- obs & !is.finite(Xn)
+  if (any(noninf))
+    stop("non-finite score(s) in ", what, " (e.g. ", xc[noninf][1],
+         "); scores must be integer counts", call. = FALSE)
+  bad <- obs & Xn != round(Xn)
   if (any(bad))
     stop("non-integer score(s) in ", what, " (e.g. ",
          format(Xn[bad][1]), "); Rasch categories are integer counts -- ",

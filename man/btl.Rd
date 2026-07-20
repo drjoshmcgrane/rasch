@@ -35,8 +35,11 @@ blanks) is treated as missing and dropped with a note. Ignored when
 \code{response} is given.}
 
 \item{response}{Optional name of a column holding a graded preference
-for \code{object_a} over \code{object_b} -- an ordered factor (worst
-to best for \code{object_a}) or integer scores \code{0..m}. Fits the
+for \code{object_a} over \code{object_b} -- an ORDERED factor
+(\code{factor(..., ordered = TRUE)}, levels worst to best for
+\code{object_a}) or integer scores \code{0..m}; a plain factor is
+refused, since its alphabetical level order would silently define
+(and can reverse) the response scale. Fits the
 adjacent-categories ordinal extension of BTL (Tutz 1986; Agresti
 1992): a partial-credit structure on the difference of locations with
 thresholds constrained symmetric, \code{tau_k = -tau_(m+1-k)}, so the

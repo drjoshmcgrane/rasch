@@ -139,7 +139,14 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
   m <- if (model == "dichotomous") 1L else as.integer(n_categories) - 1L
   I <- as.integer(n_items); N <- as.integer(n_persons)
   inm <- sprintf("I%02d", seq_len(I))
-  as_idx <- function(x) if (is.character(x)) match(x, inm) else as.integer(x)
+  as_idx <- function(x) {
+    if (is.null(x)) return(integer(0))
+    i <- if (is.character(x)) match(x, inm) else as.integer(x)
+    if (anyNA(i) || any(i < 1L | i > I))
+      stop("unknown item name(s)/index(es): ",
+           paste(x[is.na(i) | i < 1L | i > I], collapse = ", "))
+    i
+  }
 
   # item locations, thresholds, slopes, guessing (with per-item overrides)
   delta <- setNames(if (length(difficulty) == I) difficulty
@@ -177,6 +184,9 @@ simulate_rasch <- function(n_persons = 500, n_items = 20,
   if (!is.null(second_dim)) {
     dim_items <- as_idx(second_dim$items)
     rho <- second_dim$rho %||% 0.5
+    if (!is.finite(rho) || abs(rho) > 1)
+      stop("second_dim$rho must be a correlation in [-1, 1], got ",
+           format(rho))
     # centre both components so the secondary trait keeps the REQUESTED
     # mean and sd: combining two mean-mu variables shifted the mean to
     # mu(rho + sqrt(1 - rho^2))
