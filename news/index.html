@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,14 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.12.2" id="rasch-1122">rasch 1.12.2<a class="anchor" aria-label="anchor" href="#rasch-1122"></a></h2>
+<p>Twelfth review round: the incomplete-panel edges of the DIF engine. Development branch only; the CRAN submission of 1.11.7 is untouched.</p>
+<ul><li>Between-person margins are centred within each within-cell BY CLASS INTERVAL (falling back to the cell mean where a combination is empty): cell-only centring removed common occasion effects but not occasion-by-trait structure, which with differential missingness masqueraded as non-uniform group DIF at F = 214.7; it now reads F = 0.01 with the occasion terms intact.</li>
+<li>A between level that loses every complete within panel (for example a group observed only at baseline) no longer crashes lm() with a one-level factor: its within-stratum interactions are reported NA with an explanatory note, and every other test proceeds.</li>
+<li>Tukey candidates are filtered to between-only terms, so a significant multilevel within term can no longer reach TukeyHSD and crash on its empty result.</li>
+<li>Transparency: the count of person panels dropped from the within-person tests is returned in <code>notes</code>, alongside the non-estimable-term note.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.12.1" id="rasch-1121">rasch 1.12.1<a class="anchor" aria-label="anchor" href="#rasch-1121"></a></h2>
 <p>Eleventh review round on the rebuilt DIF engine: five findings, all verified and closed. Development branch only; the CRAN submission of 1.11.7 is untouched.</p>
