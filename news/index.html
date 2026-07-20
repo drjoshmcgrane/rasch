@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,12 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.11.6" id="rasch-1116">rasch 1.11.6<a class="anchor" aria-label="anchor" href="#rasch-1116"></a></h2>
+<p>Eighth review round: label and migration polish.</p>
+<ul><li>
+<code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> reads the dependence statistic from either the current <code>t</code> column or the pre-1.11.5 <code>z</code> column, so fits saved before the rename print completely; the printed label and the rank-deficiency note both say <code>t</code>, matching the t(G - 1) reference. No duplicate <code>z</code> alias column is added: the package has never had a released version with the old name, the rename is documented here, and old saved fits are read transparently.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.11.5" id="rasch-1115">rasch 1.11.5<a class="anchor" aria-label="anchor" href="#rasch-1115"></a></h2>
 <p>Seventh review round: three completions of round-six fixes, one label.</p>

@@ -1,5 +1,17 @@
 # Changelog
 
+## rasch 1.11.6
+
+Eighth review round: label and migration polish.
+
+- [`print()`](https://rdrr.io/r/base/print.html) reads the dependence
+  statistic from either the current `t` column or the pre-1.11.5 `z`
+  column, so fits saved before the rename print completely; the printed
+  label and the rank-deficiency note both say `t`, matching the t(G - 1)
+  reference. No duplicate `z` alias column is added: the package has
+  never had a released version with the old name, the rename is
+  documented here, and old saved fits are read transparently.
+
 ## rasch 1.11.5
 
 Seventh review round: three completions of round-six fixes, one label.
