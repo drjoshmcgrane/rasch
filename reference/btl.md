@@ -12,7 +12,12 @@ by judge when a judge column is given (so repeated comparisons by the
 same judge need not be independent). Objects that win or lose every
 comparison have no finite estimate and are removed with a note, exactly
 as extreme persons are set aside in a Rasch calibration; the comparison
-graph must remain connected.
+graph must remain connected. Beyond that, finite estimates exist only
+when the directed win graph is strongly connected (Ford 1957): if some
+subset of objects never concedes a point to the rest, the likelihood
+pushes the two clusters infinitely far apart, and the fit warns and
+notes the separated objects rather than presenting the optimiser's
+boundary values as measures.
 
 ## Usage
 
@@ -198,7 +203,8 @@ Analysis of ordinal paired comparison data. Journal of the Royal
 Statistical Society C, 41(2), 287-297. Davidson, R. R. (1970). On
 extending the Bradley-Terry model to accommodate ties in paired
 comparison experiments. Journal of the American Statistical Association,
-65(329), 317-328.
+65(329), 317-328. Ford, L. R. (1957). Solution of a ranking problem from
+binary comparisons. American Mathematical Monthly, 64(8), 28-33.
 
 Davidson, R. R., & Beaver, R. J. (1977). On extending the Bradley-Terry
 model to incorporate within-pair order effects. Biometrics, 33(4),

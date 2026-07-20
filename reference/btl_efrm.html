@@ -29,7 +29,7 @@ phi_g (v_a - v_b), which places the sets on one common scale."><meta property="o
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.13.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.13.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -175,7 +175,9 @@ for quick inspection only.</p></dd>
   <code>log phi = 0</code>), <code>alpha_table</code> and <code>kappa_table</code> (set units
   and origins with Wald tests; the reference set carries <code>alpha = 1</code>,
   <code>kappa = 0</code> with no standard error), <code>frames</code> (panel by set:
-  unit <code>rho = phi alpha</code>, comparison count, pooled fit residual),
+  common-scale discrimination <code>rho = phi / alpha</code> (the within-set
+  logit is <code>phi (beta_a - beta_b)</code> with <code>beta = (v - kappa) /
+  alpha</code>), comparison count, pooled fit residual),
   <code>equal_unit</code> (the descriptive single-unit comparison), <code>n_cross</code>
   (cross-set comparison counts per set pair), <code>notes</code> and
   <code>converged</code>.</p>

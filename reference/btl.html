@@ -11,7 +11,12 @@ by judge when a judge column is given (so repeated comparisons by the
 same judge need not be independent). Objects that win or lose every
 comparison have no finite estimate and are removed with a note, exactly
 as extreme persons are set aside in a Rasch calibration; the comparison
-graph must remain connected."><meta property="og:description" content="Estimates object locations from paired-comparison data by conditional
+graph must remain connected. Beyond that, finite estimates exist only
+when the directed win graph is strongly connected (Ford 1957): if some
+subset of objects never concedes a point to the rest, the likelihood
+pushes the two clusters infinitely far apart, and the fit warns and
+notes the separated objects rather than presenting the optimiser's
+boundary values as measures."><meta property="og:description" content="Estimates object locations from paired-comparison data by conditional
 maximum likelihood. The Bradley-Terry-Luce model is the conditional form
 of the dichotomous Rasch model – within an item pair, given one correct
 response, the Rasch probability that it was the easier item is exactly
@@ -23,7 +28,12 @@ by judge when a judge column is given (so repeated comparisons by the
 same judge need not be independent). Objects that win or lose every
 comparison have no finite estimate and are removed with a note, exactly
 as extreme persons are set aside in a Rasch calibration; the comparison
-graph must remain connected."><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch/logo.svg"></head><body>
+graph must remain connected. Beyond that, finite estimates exist only
+when the directed win graph is strongly connected (Ford 1957): if some
+subset of objects never concedes a point to the rest, the likelihood
+pushes the two clusters infinitely far apart, and the fit warns and
+notes the separated objects rather than presenting the optimiser's
+boundary values as measures."><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch/logo.svg"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -31,7 +41,7 @@ graph must remain connected."><meta property="og:image" content="https://drjoshm
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.13.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.13.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -76,7 +86,12 @@ by judge when a judge column is given (so repeated comparisons by the
 same judge need not be independent). Objects that win or lose every
 comparison have no finite estimate and are removed with a note, exactly
 as extreme persons are set aside in a Rasch calibration; the comparison
-graph must remain connected.</p>
+graph must remain connected. Beyond that, finite estimates exist only
+when the directed win graph is strongly connected (Ford 1957): if some
+subset of objects never concedes a point to the rest, the likelihood
+pushes the two clusters infinitely far apart, and the fit warns and
+notes the separated objects rather than presenting the optimiser's
+boundary values as measures.</p>
     </div>
 
     <div class="section level2">
@@ -267,7 +282,9 @@ they are separated with certainty by construction.</p>
   Royal Statistical Society C, 41(2), 287-297. Davidson, R. R. (1970).
   On extending the Bradley-Terry model to accommodate ties in paired
   comparison experiments. Journal of the American Statistical
-  Association, 65(329), 317-328.</p>
+  Association, 65(329), 317-328. Ford, L. R. (1957). Solution of a
+  ranking problem from binary comparisons. American Mathematical
+  Monthly, 64(8), 28-33.</p>
 <p>Davidson, R. R., &amp; Beaver, R. J. (1977). On extending the Bradley-Terry
   model to incorporate within-pair order effects. Biometrics, 33(4),
   693-702.</p>

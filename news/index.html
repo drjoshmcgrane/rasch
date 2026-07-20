@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.13.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.13.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,27 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.13.1" id="rasch-1131">rasch 1.13.1<a class="anchor" aria-label="anchor" href="#rasch-1131"></a></h2>
+<p>Fourteenth review round: three defects in the 1.13.0 additions and the review’s nine-item identification backlog. Development branch only; the CRAN submission of 1.11.7 is untouched.</p>
+<p>Defects in the new code:</p>
+<ul><li>EFRM crossed-frame labels: the solver orders cells as sorted strings while the frame construction used factor-crossing order, so with factor labels that sort differently the per-cell units were assigned to the wrong cells (a pure-noise 2x2 gave a spurious region effect at p = 2e-5). Cells are now matched by label throughout.</li>
+<li>MFRM <code><a href="../reference/dif_size.html">dif_size()</a></code> no longer lets facet severity leak into a between-group magnitude: the joint split now pools over the COMMON observed cells with common precision weights, so severity differences cancel by construction. A design that previously manufactured a -1.75-logit phantom effect (z = -6.5) now reports -0.11 (ns) while a planted 0.7 effect is still recovered.</li>
+<li>
+<code>phi_factorial</code> was a diagonally-weighted fit with coefficient-wise z tests; it is now a generalised least-squares decomposition on the JOINT covariance of the cell log-units (bootstrap draws when available, otherwise the solver’s centred covariance, inverted spectrally along its identified directions, intercept excluded as inestimable under the centring), with multi-degree-of-freedom Wald tests per term in <code>phi_factorial_tests</code>. A planted 1.5x region unit ratio is recovered at 1.52 with p = 2e-6 and null factors stay null.</li>
+</ul><p>Identification and input-handling backlog:</p>
+<ul><li>
+<code><a href="../reference/btl.html">btl()</a></code> now checks Ford’s (1957) existence condition: when the directed win graph is not strongly connected the maximum-likelihood locations diverge, and the fit warns and notes the separated objects instead of presenting the optimiser’s boundary values as measures.</li>
+<li>MFRM: wide input now carries <code>factors=</code> through the internal melt (character columns are replicated like facets, data-frame factors row-wise); duplicate person-by-item-by-facet responses are an error (keeping the first made results depend on row order); and a structural rank check on the facet design errors when facet levels are confounded with the items instead of returning a valid-looking but unidentified decomposition.</li>
+<li>EFRM: a group whose frames show no threshold spread beyond estimation noise has nothing for its unit to scale – previously the optimiser returned phi near 1 with a healthy-looking SE regardless of the true unit; such units are now reported NA with a note. The guard is signal-to-noise based (spread under 1.5x the pooled threshold SE in every set the group answers) and leaves even modest real spreads untouched.</li>
+<li>EFRM: under <code>se_method = "bootstrap"</code> the frame-level <code>se_log_rho</code> now comes from the joint replicate draws of log(alpha) + log(phi), capturing cross-stage dependence; the hybrid fallback still combines the stagewise errors as if uncorrelated, as documented.</li>
+<li>
+<code><a href="../reference/btl_efrm.html">btl_efrm()</a></code>: stage 2 checks the conditioning of its observed information; when the cross-set comparisons barely identify the set units (reciprocal condition number below 1e-10), the conditional SEs for alpha, kappa and the linked values are withheld with a note rather than reported from a near-singular inverse.</li>
+<li>
+<code><a href="../reference/btl_efrm.html">btl_efrm()</a></code> frame table: <code>rho</code> is now phi / alpha as documented (the within-set logit is phi (beta_a - beta_b) with beta = (v - kappa) / alpha), not phi * alpha.</li>
+<li>
+<code><a href="../reference/rasch_efrm.html">rasch_efrm()</a></code> validates <code>item_sets</code> (named list, no overlapping or unknown items); <code><a href="../reference/rasch.html">rasch()</a></code> removes data-frame factor columns from the response matrix even when <code>items</code> is not given, so a numeric factor can no longer be silently treated as an item.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.13.0" id="rasch-1130">rasch 1.13.0<a class="anchor" aria-label="anchor" href="#rasch-1130"></a></h2>
 <p>The three capability extensions from the review wishlist. Development branch only; the CRAN submission of 1.11.7 is untouched.</p>

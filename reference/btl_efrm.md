@@ -108,10 +108,12 @@ An object of class `"rasch_btl_efrm"`: `objects` (object, set,
 error), `phi_table` (panel units with Wald tests against `log phi = 0`),
 `alpha_table` and `kappa_table` (set units and origins with Wald tests;
 the reference set carries `alpha = 1`, `kappa = 0` with no standard
-error), `frames` (panel by set: unit `rho = phi alpha`, comparison
-count, pooled fit residual), `equal_unit` (the descriptive single-unit
-comparison), `n_cross` (cross-set comparison counts per set pair),
-`notes` and `converged`.
+error), `frames` (panel by set: common-scale discrimination
+`rho = phi / alpha` (the within-set logit is `phi (beta_a - beta_b)`
+with `beta = (v - kappa) / alpha`), comparison count, pooled fit
+residual), `equal_unit` (the descriptive single-unit comparison),
+`n_cross` (cross-set comparison counts per set pair), `notes` and
+`converged`.
 
 ## Details
 

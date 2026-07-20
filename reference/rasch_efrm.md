@@ -60,8 +60,16 @@ rasch_efrm(
   their crossed cells, per-cell units appear in `phi_table`, and a
   factorial decomposition of the cell units (sum-coded main effects, and
   the interaction when every cell is observed) is returned in
-  `phi_factorial`, with the cell standard errors treated as uncorrelated
-  across cells.
+  `phi_factorial`. The decomposition is a generalised least-squares fit
+  of the cell log-units using their joint covariance (bootstrap
+  replicates when available, otherwise the analytic centred covariance,
+  inverted spectrally along its identified directions); coefficient rows
+  are descriptive, and inference is carried by the
+  multi-degree-of-freedom Wald test per term in `phi_factorial_tests`. A
+  group whose frames show no threshold spread beyond estimation noise
+  has nothing for its unit to scale: its `phi` is reported `NA` with a
+  note rather than the uninformative near-1 value the optimiser would
+  return.
 
 - id, factors, items, n_groups, adjust_N, na_codes:
 
@@ -93,12 +101,16 @@ rasch_efrm(
 An object of classes `"rasch_efrm"` and `"rasch"`. In addition to the
 standard components (computed over item-by-group virtual columns with
 the frame units carried in `disc`), it has `frames` (one row per frame:
-units, origin, pooled fit), `phi_table`, `alpha_table`, `set_table`,
-`item_arbitrary` and `thresholds_arbitrary` (the structural parameters
-in the common unit), `score_curves` (per-group score-to-measure curves,
-replacing the raw-score table), `efrm_vs_rasch` (fit comparison against
-the equal-unit model on the same conditional information), and `linking`
-(the linking evidence).
+units, origin, pooled fit; under `se_method = "bootstrap"` the
+frame-level `se_log_rho` comes from the joint replicate draws of
+`log(alpha) + log(phi)`, capturing cross-stage dependence, while the
+hybrid fallback combines the stagewise errors as if uncorrelated),
+`phi_table`, `alpha_table`, `set_table`, `item_arbitrary` and
+`thresholds_arbitrary` (the structural parameters in the common unit),
+`score_curves` (per-group score-to-measure curves, replacing the
+raw-score table), `efrm_vs_rasch` (fit comparison against the equal-unit
+model on the same conditional information), and `linking` (the linking
+evidence).
 
 ## Details
 
