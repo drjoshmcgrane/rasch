@@ -65,11 +65,14 @@ rasch_efrm(
   replicates when available, otherwise the analytic centred covariance,
   inverted spectrally along its identified directions); coefficient rows
   are descriptive, and inference is carried by the
-  multi-degree-of-freedom Wald test per term in `phi_factorial_tests`. A
-  group whose frames show no threshold spread beyond estimation noise
-  has nothing for its unit to scale: its `phi` is reported `NA` with a
-  note rather than the uninformative near-1 value the optimiser would
-  return.
+  multi-degree-of-freedom Wald test per term in `phi_factorial_tests`.
+  Group units are checked for identification on the joint information: a
+  flat direction along a unit, or a unit whose analytic standard error
+  exceeds 5 log-units (uncertain beyond a factor of about 150), is
+  refused with an error naming the group, since every common-unit
+  quantity would silently depend on it. Weakly identified units with
+  real threshold spread are kept, with standard errors that say how weak
+  they are.
 
 - id, factors, items, n_groups, adjust_N, na_codes:
 

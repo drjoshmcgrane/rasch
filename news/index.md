@@ -1,5 +1,59 @@
 # Changelog
 
+## rasch 1.13.2
+
+Fifteenth review round: the 1.13.1 identification guards were the right
+idea executed too weakly (or, in one case, too strongly), and this
+release replaces heuristics with information-based checks throughout.
+Development branch only; the CRAN submission of 1.11.7 is untouched.
+
+- EFRM: the threshold-spread heuristic is gone. Group units are now
+  checked on the joint information itself – a flat direction loading on
+  a unit, or a unit whose analytic SE exceeds 5 log-units (uncertain
+  beyond a factor of ~150), is refused with an error naming the group,
+  since every common-unit quantity would silently depend on it. Weakly
+  identified units with real spread are KEPT with their honest large
+  SEs; the previous heuristic wrongly replaced some of them with NA.
+- MFRM: full column rank of the structural design is necessary but not
+  sufficient. The fit now also checks that no between-block shift of
+  person-disjoint response blocks is expressible by the facet map (a
+  column-space intersection test on the co-observation components):
+  designs such as two person groups answering disjoint item pairs – or
+  one rater per person – previously returned converged fits whose
+  between-block contrasts were ridge artefacts, and now error with the
+  blocks named. A test fixture with exactly this nested-rater flaw was
+  corrected accordingly.
+- btl_efrm stage 1: the per-set (locations, panel-ratio) information is
+  now checked for rank at the solution; panels observing disjoint object
+  pairs leave the ratio underdetermined, and such sets are screened out
+  of the panel-unit reconciliation (refit at the reconciled units) or,
+  when no ratio information remains anywhere, the fit stops.
+- btl_efrm stage 2: rank failures are now CLASSIFIED by where the
+  information fails. A flat direction confined to a set’s log-unit – its
+  within-set locations are indistinguishable, so the unit has nothing to
+  scale – refits with that unit fixed at the conventional 1 and reports
+  alpha as NA with a note; the set’s origin kappa and its objects’
+  placements remain identified and keep valid SEs (this is the
+  GermanParties2009 near-even-set pattern, which a blanket refusal would
+  have broken). A flat direction on an origin means the set cannot be
+  placed at all and is an error. Bootstrap replicates treat an expected
+  NA (the declared unit) as normal and any unexpected rank failure as a
+  failed replicate.
+- BTL: a Ford (1957) violation is now an error before estimation, not a
+  post-fit warning – a separated cluster has no finite maximum
+  likelihood locations, and the previous warning still presented the
+  optimiser’s boundary values with converged = TRUE.
+- EFRM input: data-frame `factors` columns are removed from the item
+  matrix (a numeric factor column could previously become an implicit
+  `(rest)` item).
+- MFRM input: rows dropped for missing person/item/facet identifiers now
+  drop from `factors` too (both the column-name and data-frame forms),
+  instead of failing with an internal length error.
+- Test honesty: the wide-MFRM factor-equivalence test compared a
+  nonexistent `$table` component (NULL == NULL, vacuously true); it now
+  compares the `$summary` F and p columns, on a properly linked design –
+  the equivalence itself was verified to hold.
+
 ## rasch 1.13.1
 
 Fourteenth review round: three defects in the 1.13.0 additions and the
