@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,15 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.11.5" id="rasch-1115">rasch 1.11.5<a class="anchor" aria-label="anchor" href="#rasch-1115"></a></h2>
+<p>Seventh review round: three completions of round-six fixes, one label.</p>
+<ul><li>
+<code>margin=</code> gets the same explicit-ordering rule as <code>response=</code>: an ORDERED factor (smallest to largest margin) or a numeric magnitude; plain factors AND character columns are refused, since alphabetical order could silently reverse which margin counts as the big win.</li>
+<li>Invalid graded numeric responses (“abc”, Inf) error through the shared guard instead of becoming missing and being dropped – the fit no longer succeeds on silently reduced data.</li>
+<li>The simulator’s item resolver rejects fractional indices (4.9 no longer truncates to item 4), an empty <code>second_dim$items</code>, and a vector-valued <code>rho</code>.</li>
+<li>The clustered dependence/position statistic is labelled <code>t</code>, matching its t(G - 1) reference (at infinite df it is the familiar z). The reviewer’s independent 400-run null simulation of the cluster-t correction found 5.25% rejection at nominal 5%.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.11.4" id="rasch-1114">rasch 1.11.4<a class="anchor" aria-label="anchor" href="#rasch-1114"></a></h2>
 <p>Sixth review round: four findings, all verified and closed.</p>
