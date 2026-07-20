@@ -75,9 +75,10 @@
 #' graph must remain connected. Beyond that, finite estimates exist only
 #' when the directed win graph is strongly connected (Ford 1957): if some
 #' subset of objects never concedes a point to the rest, the likelihood
-#' pushes the two clusters infinitely far apart, and the fit warns and
-#' notes the separated objects rather than presenting the optimiser's
-#' boundary values as measures.
+#' pushes the two clusters infinitely far apart, so the fit stops with an
+#' error naming the separated objects rather than presenting the
+#' optimiser's boundary values as measures -- remove the separated
+#' cluster, or collect comparisons that cross the divide.
 #'
 #' Fit is reported at three levels, mirroring the Rasch diagnostics.
 #' Per object and (when given) per judge: the log-of-mean-square fit
@@ -606,6 +607,37 @@ plot_btl <- function(fit, band = 2.5) {
     stop("the comparison graph is disconnected; components: ",
          paste(vapply(parts, paste, "", collapse = ","), collapse = " | "))
   }
+  # Ford's (1957) existence condition: finite maximum-likelihood locations
+  # exist only when the directed win graph is strongly connected. A single
+  # undefeated (or winless) object was removed above; a CLUSTER that never
+  # concedes a point to the rest is the collective form of the same
+  # boundary, and the likelihood pushes the divide to infinity while the
+  # optimiser stops at enormous finite values that look converged.
+  Wp <- matrix(0, K, K)
+  pts_a <- w * x; pts_b <- w * (m - x)
+  for (r in seq_along(ia)) {
+    Wp[ia[r], ib[r]] <- Wp[ia[r], ib[r]] + pts_a[r]
+    Wp[ib[r], ia[r]] <- Wp[ib[r], ia[r]] + pts_b[r]
+  }
+  adj <- Wp > 0
+  reach <- function(Amat) {
+    seen <- rep(FALSE, K); seen[1] <- TRUE; front <- 1L
+    while (length(front)) {
+      nxt <- which(colSums(Amat[front, , drop = FALSE]) > 0 & !seen)
+      seen[nxt] <- TRUE; front <- nxt
+    }
+    seen
+  }
+  if (!(all(reach(adj)) && all(reach(t(adj))))) {
+    fwd <- reach(adj); bwd <- reach(t(adj))
+    sep <- objs[!(fwd & bwd)]
+    stop("the win graph is not strongly connected: object(s) ",
+         paste(sep, collapse = ", "), " never concede points to (or never ",
+         "take points from) the rest, so finite maximum-likelihood ",
+         "locations do not exist (Ford 1957) -- remove the separated ",
+         "object(s), or collect comparisons (or ties/margins) that cross ",
+         "the divide in the missing direction", call. = FALSE)
+  }
 
   # symmetric-threshold map: tau = Cmat %*% tfree, tau_k = -tau_{m+1-k}.
   # Under thr = "pc" the free symmetric parameters are further pooled to
@@ -801,41 +833,6 @@ plot_btl <- function(fit, band = 2.5) {
   cl <- if (is.null(jd)) as.character(seq_along(ia)) else jd
   ucl <- unique(cl)
   nc <- length(ucl); cidx <- match(cl, ucl)
-  # Ford's (1957) existence condition: the ML locations are finite only
-  # when the directed win graph is strongly connected -- if some subset of
-  # objects never concedes a point to the rest, the likelihood pushes the
-  # divide to infinity and the trust region leaves enormous finite
-  # estimates that LOOK converged. Warn and note the separated objects.
-  Wp <- matrix(0, K, K)
-  pts_a <- w * x; pts_b <- w * (m - x)
-  for (r in seq_along(ia)) {
-    Wp[ia[r], ib[r]] <- Wp[ia[r], ib[r]] + pts_a[r]
-    Wp[ib[r], ia[r]] <- Wp[ib[r], ia[r]] + pts_b[r]
-  }
-  adj <- Wp > 0
-  reach <- function(Amat) {
-    seen <- rep(FALSE, K); seen[1] <- TRUE; front <- 1L
-    while (length(front)) {
-      nxt <- which(colSums(Amat[front, , drop = FALSE]) > 0 & !seen)
-      seen[nxt] <- TRUE; front <- nxt
-    }
-    seen
-  }
-  strong <- all(reach(adj)) && all(reach(t(adj)))
-  if (!strong) {
-    fwd <- reach(adj); bwd <- reach(t(adj))
-    sep <- objs[!(fwd & bwd)]
-    warning("the win graph is not strongly connected: object(s) ",
-            paste(sep, collapse = ", "), " never concede points to (or ",
-            "never take points from) the rest, so their maximum-likelihood ",
-            "locations are infinite (Ford 1957); the reported values sit ",
-            "at the optimiser's boundary", call. = FALSE)
-    notes <- c(notes, paste0(
-      "win graph not strongly connected: locations of ",
-      paste(sep, collapse = ", "),
-      " diverge (Ford 1957) and are reported at the search boundary"))
-  }
-
   # the clustered sandwich estimates the meat from between-judge variation:
   # with one judge it is identically ~zero (SEs collapse to ~1e-16), and
   # with very few judges it understates -- refuse the former, note the latter

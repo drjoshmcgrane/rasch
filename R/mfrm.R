@@ -308,6 +308,29 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
          qrB$rank, " for ", ncol(B), " parameters): some facet level(s) ",
          "are confounded with the items or with each other -- every ",
          "facet level needs items (and persons) in common with the rest")
+  # algebraic rank of B is necessary but not sufficient: the pairwise
+  # conditional likelihood carries information only within blocks of
+  # virtual items that share persons, so a relative shift between
+  # person-disjoint blocks is a flat direction of the likelihood whenever
+  # the structural map can express it -- the solve would then land
+  # wherever the ridge sends it while reporting convergence
+  co_obs <- crossprod(!is.na(Xv)) > 0
+  edges_v <- which(co_obs & upper.tri(co_obs), arr.ind = TRUE)
+  comp_v <- .btlef_components(ncol(Xv), edges_v)
+  if (length(unique(comp_v)) > 1L) {
+    comps_u <- sort(unique(comp_v))
+    U <- vapply(comps_u, function(cc) as.numeric(comp_v[thr_v$item] == cc),
+                numeric(nrow(thr_v)))
+    if (qr(cbind(B, U))$rank < qrB$rank + qr(U)$rank) {
+      blocks <- vapply(comps_u, function(cc)
+        paste(sort(unique(vmap$item[comp_v == cc])), collapse = ", "), "")
+      stop("the response design is disconnected and the facet structure ",
+           "does not bridge it: no person links the blocks {",
+           paste(blocks, collapse = "} and {"), "}, so their relative ",
+           "locations are unidentified -- link the blocks through common ",
+           "persons")
+    }
+  }
   sol <- .pcml_solve(Xv, thr_v, m_v, B, rep(0, P), maxit = maxit, tol = tol)
 
   thr_v$tau <- sol$tau; thr_v$se <- sol$se_tau; thr_v$anchored <- FALSE
@@ -329,7 +352,7 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
         stop("factor column(s) not found in the data: ",
              paste(miss, collapse = ", "))
       fac_df <- as.data.frame(lapply(factors, function(cn) {
-        v <- as.character(data[[cn]])
+        v <- as.character(data[[cn]])[!bad_id]
         nvar <- tapply(v, pid, function(x) length(unique(x[!is.na(x)])))
         if (any(nvar > 1L, na.rm = TRUE))
           stop("factor '", cn, "' varies within person(s) ",
@@ -342,7 +365,12 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
       names(fac_df) <- factors
     } else {
       fac_df <- as.data.frame(factors, stringsAsFactors = FALSE)
-      if (nrow(fac_df) == length(pid)) {
+      if (nrow(fac_df) == length(bad_id)) {
+        # one row per ORIGINAL data row: rows dropped for missing
+        # identifiers drop from the factors too, keeping them aligned
+        fac_df <- fac_df[!bad_id, , drop = FALSE]
+        fac_df <- fac_df[match(persons_u, pid), , drop = FALSE]
+      } else if (nrow(fac_df) == length(pid)) {
         fac_df <- fac_df[match(persons_u, pid), , drop = FALSE]
       } else if (nrow(fac_df) != length(persons_u))
         stop("`factors` needs one row per data row or one per unique ",

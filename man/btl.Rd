@@ -147,9 +147,10 @@ as extreme persons are set aside in a Rasch calibration; the comparison
 graph must remain connected. Beyond that, finite estimates exist only
 when the directed win graph is strongly connected (Ford 1957): if some
 subset of objects never concedes a point to the rest, the likelihood
-pushes the two clusters infinitely far apart, and the fit warns and
-notes the separated objects rather than presenting the optimiser's
-boundary values as measures.
+pushes the two clusters infinitely far apart, so the fit stops with an
+error naming the separated objects rather than presenting the
+optimiser's boundary values as measures -- remove the separated
+cluster, or collect comparisons that cross the divide.
 }
 \details{
 Fit is reported at three levels, mirroring the Rasch diagnostics.

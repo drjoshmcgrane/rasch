@@ -140,6 +140,13 @@
   # judge-clustered Godambe sandwich (unclustered when every judge appears once)
   J <- design(cur); u <- y - cur$p; av <- cur$p * (1 - cur$p)
   Fi <- crossprod(J, J * av)
+  # rank of the UNRIDGED information: panels that observe disjoint object
+  # pairs leave the (location, log rho) system underdetermined -- the
+  # ridged solve then lands somewhere on the flat manifold with a small
+  # gradient, which the convergence criterion cannot distinguish from a
+  # genuine optimum
+  rc1 <- tryCatch(rcond(Fi), error = function(e) 0)
+  rank_ok <- is.finite(rc1) && rc1 > 1e-10
   bread <- tryCatch(solve(Fi), error = function(e) solve(Fi + diag(1e-8, np)))
   Sr <- J * u
   Sc <- rowsum(Sr, jd)
@@ -164,7 +171,7 @@
   }
   list(beta = cur$beta, se_beta = se_beta, p = cur$p, ll = cur$ll,
        ref = ref, panels = present, rho = rho_p, free = free,
-       cov_lrho = cov_lrho, converged = conv)
+       cov_lrho = cov_lrho, converged = conv, rank_ok = rank_ok)
 }
 
 # Reconcile the per-set panel ratios into one set of panel units phi with
@@ -262,48 +269,105 @@
     D
   }
 
-  theta <- numeric(np); cur <- eval_th(theta)
-  for (it in seq_len(maxit)) {
-    D <- design(cur); u <- y - cur$p; av <- cur$p * (1 - cur$p)
-    g <- crossprod(D, u); Fi <- crossprod(D, D * av)
-    step <- tryCatch(solve(Fi, g),
-                     error = function(e) solve(Fi + diag(1e-8, np), g))
-    lam <- 1; moved <- FALSE
-    for (half in 1:30) {
-      cand <- theta + lam * as.numeric(step); c2 <- eval_th(cand)
-      if (is.finite(c2$ll) && c2$ll >= cur$ll - 1e-12) {
-        theta <- cand; cur <- c2; moved <- TRUE; break
+  solve_masked <- function(mask) {
+    theta <- numeric(np); cur <- eval_th(theta)
+    for (it in seq_len(maxit)) {
+      Dm <- design(cur)[, mask, drop = FALSE]
+      u <- y - cur$p; av <- cur$p * (1 - cur$p)
+      g <- crossprod(Dm, u); Fi <- crossprod(Dm, Dm * av)
+      sm <- tryCatch(solve(Fi, g),
+                     error = function(e) solve(Fi + diag(1e-8, sum(mask)), g))
+      step <- numeric(np); step[mask] <- as.numeric(sm)
+      lam <- 1; moved <- FALSE
+      for (half in 1:30) {
+        cand <- theta + lam * step; c2 <- eval_th(cand)
+        if (is.finite(c2$ll) && c2$ll >= cur$ll - 1e-12) {
+          theta <- cand; cur <- c2; moved <- TRUE; break
+        }
+        lam <- lam / 2
       }
-      lam <- lam / 2
+      if (!moved) break
+      if (max(abs(lam * step)) < tol) break
     }
-    if (!moved) break
-    if (max(abs(lam * step)) < tol) break
+    cur
+  }
+  obs_info <- function(cur) {
+    # observed information; the la-diagonal carries the curvature
+    # d2 eta / d la^2
+    D <- design(cur); u <- y - cur$p; av <- cur$p * (1 - cur$p)
+    H <- crossprod(D, D * av)
+    for (j in seq_len(nf)) {
+      sj <- free[j]; aj <- cur$alpha[[sj]]
+      onA <- !is.na(fa) & fa == j; onB <- !is.na(fb) & fb == j
+      curv <- phg * (onA * aj * ba - onB * aj * bb)
+      H[j, j] <- H[j, j] - sum(u * curv)
+    }
+    list(H = H, D = D, u = u)
   }
 
-  # observed information: the la-diagonal carries the curvature d2 eta / d la^2
-  D <- design(cur); u <- y - cur$p; av <- cur$p * (1 - cur$p)
-  H <- crossprod(D, D * av)
-  for (j in seq_len(nf)) {
-    s <- free[j]; aj <- cur$alpha[[s]]
-    onA <- !is.na(fa) & fa == j; onB <- !is.na(fb) & fb == j
-    curv <- phg * (onA * aj * ba - onB * aj * bb)
-    H[j, j] <- H[j, j] - sum(u * curv)
+  cur <- solve_masked(rep(TRUE, np))
+  oi <- obs_info(cur)
+
+  # identification, classified by WHERE the information fails. A flat
+  # direction confined to log-alpha columns is the degenerate-unit case:
+  # the set's within-set locations are (near) indistinguishable, so its
+  # unit has nothing to scale, but its origin kappa -- and with it the
+  # placement of its objects -- is still identified. Refit with those
+  # units fixed at the conventional 1 and report their alpha as NA. A
+  # flat direction that loads on a kappa column means the set cannot be
+  # PLACED at all: that is a structural failure of the cross-set design.
+  alpha_unident <- setNames(rep(FALSE, nf), free)
+  rank_ok <- TRUE
+  eh <- eigen(oi$H, symmetric = TRUE)
+  flat <- abs(eh$values) < max(abs(eh$values)) * 1e-10
+  if (any(flat)) {
+    V <- eh$vectors[, flat, drop = FALSE]
+    la_load <- sqrt(rowSums(V[seq_len(nf), , drop = FALSE]^2))
+    ka_load <- sqrt(rowSums(V[nf + seq_len(nf), , drop = FALSE]^2))
+    if (any(ka_load > 1e-2)) rank_ok <- FALSE
+    else {
+      alpha_unident[la_load > 1e-2] <- TRUE
+      mask <- rep(TRUE, np); mask[which(alpha_unident)] <- FALSE
+      cur <- solve_masked(mask)
+      oi <- obs_info(cur)
+      kept <- which(mask)
+      rc <- tryCatch(rcond(oi$H[kept, kept, drop = FALSE]),
+                     error = function(e) 0)
+      if (!(is.finite(rc) && rc > 1e-10)) rank_ok <- FALSE
+    }
   }
-  # a near-singular observed information (e.g. cross-set comparisons that
-  # barely span a set) would invert to huge but finite-looking SEs -- flag
-  # it and withhold the conditional errors rather than report them
-  rc <- tryCatch(rcond(H), error = function(e) 0)
-  rank_ok <- is.finite(rc) && rc > 1e-10
-  cov <- tryCatch(solve(H), error = function(e)
-    solve(crossprod(D, D * av) + diag(1e-8, np)))
+  if (rank_ok) {
+    rc <- tryCatch(rcond(oi$H), error = function(e) 0)
+    if (!any(alpha_unident) && !(is.finite(rc) && rc > 1e-10))
+      rank_ok <- FALSE
+  }
+
+  # covariance over the estimated parameters; fixed-by-convention units
+  # carry zero rows (their uncertainty is not defined, and the reported
+  # se_log_alpha is NA)
+  kept <- which(!c(alpha_unident, rep(FALSE, nf)))
+  cov <- matrix(0, np, np)
+  cov[kept, kept] <- tryCatch(solve(oi$H[kept, kept, drop = FALSE]),
+    error = function(e) {
+      Dk <- oi$D[, kept, drop = FALSE]
+      av <- cur$p * (1 - cur$p)
+      solve(crossprod(Dk, Dk * av) + diag(1e-8, length(kept)))
+    })
   # scale-free per-comparison gradient criterion (see .btlef_stage1)
-  conv <- isTRUE(max(abs(crossprod(D, u))) < 1e-6 * length(y))
+  conv <- isTRUE(max(abs(crossprod(oi$D[, kept, drop = FALSE], oi$u))) <
+                   1e-6 * length(y))
   se <- sqrt(pmax(diag(cov), 0))
   if (!rank_ok) se[] <- NA_real_
-  list(alpha = cur$alpha, kappa = cur$kappa, p = cur$p, ll = cur$ll,
-       cov = cov, se_log_alpha = setNames(se[seq_len(nf)], free),
+  alpha_rep <- cur$alpha
+  alpha_rep[names(which(alpha_unident))] <- NA_real_
+  se_la <- setNames(se[seq_len(nf)], free)
+  se_la[alpha_unident] <- NA_real_
+  list(alpha = alpha_rep, alpha_use = cur$alpha, kappa = cur$kappa,
+       p = cur$p, ll = cur$ll, cov = cov,
+       se_log_alpha = se_la,
        se_kappa = setNames(se[nf + seq_len(nf)], free),
-       free = free, converged = conv, rank_ok = rank_ok)
+       free = free, converged = conv, rank_ok = rank_ok,
+       alpha_unident = alpha_unident)
 }
 
 # pooled log-of-mean-square fit residual over a set of comparisons, using the
@@ -674,11 +738,16 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
       # than let them poison it; the set is refit below at the reconciled
       # units, which the frame model says apply to it regardless.
       lr <- log(fit1$rho[fit1$free])
-      usable <- isTRUE(fit1$converged) &&
+      usable <- isTRUE(fit1$converged) && isTRUE(fit1$rank_ok) &&
         (!length(fit1$free) ||
            (all(is.finite(lr)) && max(abs(lr)) < 4 &&
             all(is.finite(fit1$cov_lrho)) && all(diag(fit1$cov_lrho) > 0)))
       if (!usable && length(fit1$free)) { dropped <- c(dropped, s); next }
+      if (!isTRUE(fit1$rank_ok))
+        stop("the within-set information of set '", s, "' is singular: ",
+             "its object locations are unidentified even with the panel ",
+             "units fixed -- the within-set comparisons do not span the ",
+             "objects")
       blocks[[s]] <- list(ref = fit1$ref, free = fit1$free,
                           lrho = setNames(lr, fit1$free),
                           cov = fit1$cov_lrho)
@@ -687,8 +756,10 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
       if (length(dropped))
         stop(conditionMessage(e), "\n  (set(s) ", paste(dropped, collapse = ", "),
              " were excluded from the panel-unit reconciliation because their ",
-             "within-set comparisons carry no stable panel-ratio information)",
-             call. = FALSE)
+             "within-set comparisons carry no stable panel-ratio information ",
+             "-- their contests are near-even or one-sided, or their panels ",
+             "observe disjoint object pairs, leaving the ratio ",
+             "rank-deficient)", call. = FALSE)
       stop(e)
     })
     phi <- rec$phi
@@ -700,6 +771,10 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
         fit1 <- .btlef_stage1(s1[[s]]$ia, s1[[s]]$ib, yy[rows], pan[rows],
                               jd[rows], length(os), maxit, tol,
                               rho_fixed = phi)
+        if (!isTRUE(fit1$rank_ok))
+          stop("set '", s, "': object locations are unidentified even ",
+               "with the panel units held fixed -- the within-set ",
+               "comparisons do not span the objects")
         s1[[s]]$fit <- fit1
         bhat[os] <- fit1$beta; se_bhat[os] <- fit1$se_beta
       } else {
@@ -716,6 +791,8 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     within_p[within] <- plogis(phi[pan[within]] * (bhat[a[within]] - bhat[b[within]]))
 
     alpha <- setNames(rep(1, S), sets_u); kappa <- setNames(rep(0, S), sets_u)
+    alpha_use <- alpha
+    s2_alpha_unident <- setNames(logical(0), character(0))
     se_log_alpha <- setNames(rep(NA_real_, S), sets_u)
     se_kappa <- setNames(rep(NA_real_, S), sets_u)
     cov2 <- NULL; s2_conv <- TRUE; ll_cross <- 0; s2_rank_ok <- TRUE
@@ -723,17 +800,21 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     if (S > 1L) {
       st2 <- .btlef_stage2(a[cross], b[cross], yy[cross], phi[pan[cross]],
                            sa[cross], sb[cross], bhat, sets_u, maxit, tol)
-      alpha <- st2$alpha; kappa <- st2$kappa; cov2 <- st2$cov
+      alpha <- st2$alpha; alpha_use <- st2$alpha_use
+      kappa <- st2$kappa; cov2 <- st2$cov
+      s2_alpha_unident <- st2$alpha_unident
       se_log_alpha[st2$free] <- st2$se_log_alpha
       se_kappa[st2$free] <- st2$se_kappa
-      s2_conv <- st2$converged; ll_cross <- st2$ll
+      s2_conv <- st2$converged && st2$rank_ok; ll_cross <- st2$ll
       s2_rank_ok <- st2$rank_ok
       p_all[cross] <- st2$p
     }
-    v <- alpha[set_of[objs_all]] * bhat[objs_all] + kappa[set_of[objs_all]]
+    v <- alpha_use[set_of[objs_all]] * bhat[objs_all] +
+      kappa[set_of[objs_all]]
     list(bhat = bhat, se_bhat = se_bhat, phi = phi,
          se_log_phi = rec$se_log_phi, ref_of_set = ref_of_set,
-         alpha = alpha, kappa = kappa, cov2 = cov2,
+         alpha = alpha, alpha_use = alpha_use, kappa = kappa, cov2 = cov2,
+         s2_alpha_unident = s2_alpha_unident,
          se_log_alpha = se_log_alpha, se_kappa = se_kappa, v = v,
          within_p = within_p, p_all = p_all,
          ll_within = ll_within, ll_cross = ll_cross,
@@ -742,9 +823,23 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
   }
 
   fit0 <- fit_once(y)
+  if (S > 1L && !isTRUE(fit0$s2_rank_ok))
+    stop("the cross-set information matrix is singular or ill-conditioned: ",
+         "the cross-set comparisons cannot place the sets on one scale ",
+         "(a flat direction of the information loads on a set origin ",
+         "kappa) -- add cross-set comparisons that link every set")
+  if (any(fit0$s2_alpha_unident))
+    notes <- c(notes, paste0(
+      "set unit(s) unidentified for ",
+      paste(names(which(fit0$s2_alpha_unident)), collapse = ", "),
+      ": their within-set locations are indistinguishable, so the unit ",
+      "has nothing to scale; alpha is reported NA (fixed at 1 by ",
+      "convention in the linked values) and the objects are placed ",
+      "through the origin kappa alone"))
   bhat <- fit0$bhat; se_bhat <- fit0$se_bhat
   phi <- fit0$phi; ref_of_set <- fit0$ref_of_set
-  alpha <- fit0$alpha; kappa <- fit0$kappa; cov2 <- fit0$cov2
+  alpha <- fit0$alpha; alpha_use <- fit0$alpha_use
+  kappa <- fit0$kappa; cov2 <- fit0$cov2
   se_log_phi <- fit0$se_log_phi
   se_log_alpha <- fit0$se_log_alpha; se_kappa <- fit0$se_kappa
   v <- fit0$v; within_p <- fit0$within_p
@@ -755,19 +850,12 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
   free <- sets_u[-1L]
   if (S > 1L) for (o in objs_all) {
     s <- set_of[[o]]; if (s == sets_u[1]) next
-    if (!fit0$s2_rank_ok) { se_v[[o]] <- NA_real_; next }
     j <- match(s, free); idx <- c(j, (S - 1L) + j)
     C2 <- cov2[idx, idx, drop = FALSE]
-    gvec <- c(alpha[[s]] * bhat[[o]], 1)                # d v / d(log alpha, kappa)
+    gvec <- c(alpha_use[[s]] * bhat[[o]], 1)            # d v / d(log alpha, kappa)
     var_link <- drop(t(gvec) %*% C2 %*% gvec)
-    se_v[[o]] <- sqrt(pmax(alpha[[s]]^2 * se_bhat[[o]]^2 + var_link, 0))
+    se_v[[o]] <- sqrt(pmax(alpha_use[[s]]^2 * se_bhat[[o]]^2 + var_link, 0))
   }
-  if (S > 1L && !fit0$s2_rank_ok)
-    notes <- c(notes, paste0(
-      "cross-set information matrix is ill-conditioned (the cross-set ",
-      "comparisons barely identify the set units): conditional SEs for ",
-      "alpha, kappa and the linked values are withheld -- use ",
-      "se = \"judge_bootstrap\" if the design allows"))
 
   # --- parametric bootstrap of the whole pipeline (default) -----------------
   # winners resampled from the fitted probabilities, both stages refitted:
@@ -814,7 +902,10 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
       ka_b <- fb$kappa_table$kappa[match(sets_u, fb$kappa_table$set)]
       bh_b <- fb$objects$beta_set[match(objs_all, fb$objects$object)]
       v_b <- fb$objects$v[match(objs_all, fb$objects$object)]
-      if (anyNA(c(lphi_b, la_b, ka_b))) { boot_fail <- boot_fail + 1L; next }
+      # a unit the OBSERVED fit already reports NA (unidentified) is NA in
+      # replicates too; only unexpected NAs mark a failed replicate
+      exp_ok <- is.finite(c(log(phi), log(alpha), kappa))
+      if (anyNA(c(lphi_b, la_b, ka_b)[exp_ok])) { boot_fail <- boot_fail + 1L; next }
       draws[[length(draws) + 1L]] <- c(lphi_b, la_b, ka_b, bh_b, v_b)
     }
     if (length(draws) < max(20L, ceiling(boot_reps / 2)))
@@ -826,9 +917,12 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
                      paste0("log alpha[", sets_u, "]"),
                      paste0("kappa[", sets_u, "]"),
                      paste0("beta[", objs_all, "]"), paste0("v[", objs_all, "]"))
-    n_inf <- colSums(!is.finite(D))
+    known_na <- !is.finite(c(log(phi), log(alpha), kappa,
+                             bhat[objs_all], v))
+    D[, known_na] <- NA_real_
+    n_inf <- colSums(!is.finite(D)) * !known_na
     sds <- rep(NA_real_, ncol(D))
-    ok_col <- n_inf == 0L
+    ok_col <- n_inf == 0L & !known_na
     sds[ok_col] <- apply(D[, ok_col, drop = FALSE], 2, sd)
     if (any(n_inf > 0L))
       notes <- c(notes, paste0(
@@ -868,13 +962,19 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
                      paste0("log alpha[", sets_u, "]"),
                      paste0("kappa[", sets_u, "]"),
                      paste0("beta[", objs_all, "]"), paste0("v[", objs_all, "]"))
+    # a unit already reported NA in the observed fit (unidentified) is NA
+    # in every replicate by the same logic: exclude it from the boundary
+    # accounting so its absence is not misreported as boundary behaviour
+    known_na <- !is.finite(c(log(phi), log(alpha), kappa,
+                             bhat[objs_all], v))
+    D[, known_na] <- NA_real_
     # a parameter that reaches its boundary in some replicates (a set unit
     # driven to zero when a resampled within-set order flips against the
     # cross-set evidence) has no normal sampling distribution: report NA
     # rather than a standard deviation over infinite draws
-    n_inf <- colSums(!is.finite(D))
+    n_inf <- colSums(!is.finite(D)) * !known_na
     sds <- rep(NA_real_, ncol(D))
-    ok_col <- n_inf == 0L
+    ok_col <- n_inf == 0L & !known_na
     sds[ok_col] <- apply(D[, ok_col, drop = FALSE], 2, sd)
     if (any(n_inf > 0L))
       notes <- c(notes, paste0(

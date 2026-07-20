@@ -649,7 +649,7 @@ test_that("EFRM accepts several frame factors and reports the decomposition", {
                "not found")
 })
 
-test_that("EFRM flags group units with no threshold spread as unidentified", {
+test_that("EFRM unit identification is honest at both extremes", {
   skip_on_cran()
   set.seed(42)
   N <- 500; g <- rep(c("g1", "g2"), each = N / 2)
@@ -661,16 +661,18 @@ test_that("EFRM flags group units with no threshold spread as unidentified", {
     for (i in 1:16) X[[i]] <- rbinom(N, 1, plogis(phi_t * (th - deltas[i])))
     X
   }
-  # all items equally difficult: the threshold spread is estimation noise,
-  # so there is nothing for the group units to scale -- without the guard
-  # this returned phi near 1 (true ratio 1.5) with a healthy-looking SE
+  # all items equally difficult: the units are weakly identified at best.
+  # The identification check is on the information (rank/conditioning),
+  # not on a spread heuristic, so this full-rank case keeps its estimate;
+  # honesty lives in the SEs, which must be large enough that no unit
+  # difference could be claimed from them
   fz <- rasch_efrm(mk(rep(0, 16)), groups = g, item_sets = sets,
                    se_method = "hybrid")
-  expect_true(all(is.na(fz$phi_table$phi)))
-  expect_true(all(is.na(fz$frames$rho)))
-  expect_true(any(grepl("nothing for phi to scale", fz$notes)))
-  expect_null(fz$phi_factorial)
-  # even a modest half-logit spread is real signal and must not be flagged
+  lr <- abs(diff(log(fz$phi_table$phi)))
+  se_lr <- sqrt(sum(fz$phi_table$se_log_phi^2))
+  expect_lt(lr / se_lr, 2)              # no spurious unit claim
+  expect_gt(min(fz$phi_table$se_log_phi), 0.2)   # no spurious precision
+  # a modest half-logit spread is real signal and must not be refused
   fm <- rasch_efrm(mk(rep(seq(-0.25, 0.25, length.out = 8), 2)),
                    groups = g, item_sets = sets, se_method = "hybrid")
   expect_false(anyNA(fm$phi_table$phi))
@@ -711,7 +713,7 @@ test_that("phi_factorial_tests recover a planted region unit effect", {
   expect_true(all(fb$frames$se_log_rho > 0))
 })
 
-test_that("btl_efrm withholds conditional SEs when stage 2 is singular", {
+test_that("btl_efrm declares a degenerate set unit instead of reporting alpha = 1", {
   set.seed(31)
   # set B has two objects whose within-set record is perfectly balanced:
   # both centred locations are exactly 0, so the cross-set derivative for
@@ -738,7 +740,31 @@ test_that("btl_efrm withholds conditional SEs when stage 2 is singular", {
              object_sets = list(setA = c("A1", "A2", "A3"),
                                 setB = c("B1", "B2")),
              se_method = "conditional", min_link = 5))
-  expect_true(any(grepl("ill-conditioned", fit$notes)))
-  expect_true(all(is.na(
-    fit$alpha_table$se_log_alpha[fit$alpha_table$set == "setB"])))
+  # the unit is declared unidentified (NA), not reported as an arbitrary 1
+  expect_true(is.na(fit$alpha_table$alpha[fit$alpha_table$set == "setB"]))
+  expect_true(is.na(
+    fit$alpha_table$se_log_alpha[fit$alpha_table$set == "setB"]))
+  expect_true(any(grepl("unit\\(s\\) unidentified", fit$notes)))
+  # the set's objects are still PLACED: origin kappa and locations finite
+  expect_true(is.finite(
+    fit$kappa_table$kappa[fit$kappa_table$set == "setB"]))
+  expect_true(all(is.finite(fit$objects$v[fit$objects$set == "setB"])))
+})
+
+test_that("btl_efrm refuses panels that observe disjoint object pairs", {
+  set.seed(44)
+  mk <- function(a, b, n, pwin, judges, panel)
+    data.frame(a = a, b = b,
+               win = ifelse(rbinom(n, 1, pwin) == 1, a, b),
+               judge = sample(judges, n, TRUE), panel = panel)
+  # panel P1 sees only A-B and panel P2 only B-C: the free panel ratio and
+  # the location contrast enter only as a product, so stage 1 is rank 2
+  # for 3 parameters and the panel units are unidentified
+  d <- rbind(mk("A", "B", 40, 0.6, sprintf("J%d", 1:5), "P1"),
+             mk("B", "C", 40, 0.6, sprintf("K%d", 1:5), "P2"))
+  expect_error(suppressWarnings(
+    btl_efrm(d, "a", "b", winner = "win", judge = "judge",
+             panels = "panel", object_sets = list(S = c("A", "B", "C")),
+             se_method = "conditional", min_link = 5)),
+    "panel")
 })

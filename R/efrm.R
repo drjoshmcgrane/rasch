@@ -178,6 +178,22 @@
 
   J <- build_J(dtil, phi)
   H <- struct_H(J, glh)
+  # identification of the group units: a (near-)null direction of the
+  # UNRIDGED joint information that loads on a group's unit parameter
+  # means the data cannot identify that unit -- the ridged solve would
+  # land anywhere on the flat manifold and still show a small gradient.
+  # (H is the negative expected Hessian here, so its eigenvalues are
+  # nonnegative up to the bilinear cross term.)
+  phi_unident <- setNames(rep(FALSE, G), glevs)
+  if (G > 1L) {
+    eh <- eigen(H, symmetric = TRUE)
+    flat <- abs(eh$values) < max(abs(eh$values)) * 1e-10
+    if (any(flat)) {
+      V <- eh$vectors[, flat, drop = FALSE]
+      lp_load <- sqrt(rowSums(V[Pd + seq_len(G - 1L), , drop = FALSE]^2))
+      phi_unident[-1L][lp_load > 1e-2] <- TRUE
+    }
+  }
   Hinv <- tryCatch(solve(H), error = function(e) solve(H - diag(1e-8, nrow(H))))
   Jt <- .pcml_sandwich(Xv, thr_v, m_v, tau_hat, pairs)
   covb <- Hinv %*% crossprod(J, Jt %*% J) %*% Hinv
@@ -201,7 +217,7 @@
   dimnames(cov_lp) <- list(glevs, glevs)
   list(dtilde = dtil_c, phi = setNames(phi_c, glevs),
        se_log_phi = setNames(sqrt(pmax(diag(cov_lp), 0)), glevs),
-       cov_log_phi = cov_lp,
+       cov_log_phi = cov_lp, phi_unident = phi_unident,
        cov_dtilde = cov_dt, loglik = glh$ll, iterations = outer,
        converged = conv, gidx = gidx)
 }
@@ -445,10 +461,13 @@
 #'   covariance, inverted spectrally along its identified directions);
 #'   coefficient rows are descriptive, and inference is carried by the
 #'   multi-degree-of-freedom Wald test per term in
-#'   \code{phi_factorial_tests}. A group whose frames show no threshold
-#'   spread beyond estimation noise has nothing for its unit to scale:
-#'   its \code{phi} is reported \code{NA} with a note rather than the
-#'   uninformative near-1 value the optimiser would return.
+#'   \code{phi_factorial_tests}. Group units are checked for
+#'   identification on the joint information: a flat direction along a
+#'   unit, or a unit whose analytic standard error exceeds 5 log-units
+#'   (uncertain beyond a factor of about 150), is refused with an error
+#'   naming the group, since every common-unit quantity would silently
+#'   depend on it. Weakly identified units with real threshold spread are
+#'   kept, with standard errors that say how weak they are.
 #' @param id,factors,items,n_groups,adjust_N,na_codes As in
 #'   \code{\link{rasch}}.
 #' @param maxit,tol Outer iteration cap and convergence tolerance of the
@@ -534,7 +553,8 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
     } else if (is.data.frame(factors) && nrow(factors) == nrow(data))
       fac_df <- factors
     drop_cols <- c(if (is.character(id)) id else NULL,
-                   if (is.character(factors)) factors else NULL,
+                   if (is.character(factors)) factors
+                   else if (is.data.frame(factors)) intersect(names(factors), nm),
                    if (is.character(groups)) groups else NULL)
     item_cols <- if (!is.null(items)) intersect(items, nm) else setdiff(nm, drop_cols)
     X <- as.matrix(data[, item_cols, drop = FALSE])
@@ -657,6 +677,20 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
 
   sol <- .efrm_solve(Xv, thr_v, m_v, vmap, pairs, drow, A_D,
                      maxit = maxit, tol = tol)
+  # a unit is withheld -- by stopping, so no downstream quantity can quietly
+  # depend on it -- when the joint information has a flat direction along it
+  # (structural rank failure) or when its analytic SE exceeds 5 log-units
+  # (the unit would be uncertain beyond a factor of exp(5) ~ 150: zero
+  # usable information, the estimate is wherever the optimiser stopped).
+  # Groups whose frames carry small but real threshold spread keep their
+  # units, with the honest large standard errors saying how weak they are.
+  bad_g <- sol$phi_unident | !is.finite(sol$se_log_phi) | sol$se_log_phi > 5
+  if (length(glevs) > 1L && any(bad_g))
+    stop("the unit(s) of group(s) ", paste(glevs[bad_g], collapse = ", "),
+         " are unidentified: the thresholds in their frames carry no ",
+         "usable spread for phi to scale (information rank/conditioning ",
+         "failure) -- refit without these groups, or include items whose ",
+         "difficulties differ within the sets they answer")
   phi <- sol$phi; dtil <- sol$dtilde
 
   # equal-unit comparison on the same conditional information
@@ -796,38 +830,6 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
            else unname(link$se_log_alpha)
   fit$phi_table <- data.frame(group = glevs, phi = unname(phi),
                               se_log_phi = se_lp)
-  # a group's unit is identified by the spread of the thresholds in the
-  # frames it answers: when the estimated spread in every one of its sets
-  # is indistinguishable from estimation noise (all items equally
-  # difficult), there is nothing for phi to scale -- the estimate is
-  # pulled toward 1 with an SE that does not reveal the lack of
-  # identification. Flag a set as informative when its threshold spread
-  # exceeds 1.5x the pooled threshold SE (degenerate designs sit near
-  # ratio 1 by construction; even modest real spreads sit above 2).
-  phi_bad <- character(0)
-  if (G > 1L) {
-    set_ratio <- vapply(sets_u, function(su) {
-      rows <- which(set_of_drow == su)
-      if (length(rows) < 2L) return(0)
-      noise <- sqrt(mean(pmax(diag(cov_delta)[rows], 0)))
-      if (noise == 0) return(Inf)
-      stats::sd(delta[rows]) / noise
-    }, numeric(1))
-    for (g in glevs) {
-      gsets <- unique(vmap$set[vmap$group == g])
-      if (all(set_ratio[gsets] < 1.5)) phi_bad <- c(phi_bad, g)
-    }
-  }
-  if (length(phi_bad)) {
-    bad <- fit$phi_table$group %in% phi_bad
-    fit$phi_table$phi[bad] <- NA_real_
-    fit$phi_table$se_log_phi[bad] <- NA_real_
-    fit$notes <- c(fit$notes, paste0(
-      "unit(s) unidentified for group(s) ", paste(phi_bad, collapse = ", "),
-      ": the threshold spread in their frames is indistinguishable from ",
-      "estimation noise, so there is nothing for phi to scale ",
-      "(reported NA)"))
-  }
   # factorial decomposition of the cell units: generalised least squares
   # of log phi_cell on sum-coded main effects (and the interaction when
   # every cell is observed), using the JOINT covariance of the cell
@@ -936,12 +938,6 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
                fit_resid = gf$fit_resid, n_responses = gf$n)
   }))
   rownames(fit$frames) <- NULL
-  if (length(phi_bad)) {
-    bad <- fit$frames$group %in% phi_bad
-    fit$frames$phi[bad] <- NA_real_
-    fit$frames$rho[bad] <- NA_real_
-    fit$frames$se_log_rho[bad] <- NA_real_
-  }
 
   # equal-unit comparison and score curves. The pairwise comparison is only
   # informative about the group units (phi): the within-frame likelihood is

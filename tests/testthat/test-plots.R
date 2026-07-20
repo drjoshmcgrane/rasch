@@ -98,8 +98,13 @@ test_that("residual dependence displays generalise to MFRM and EFRM fits", {
   d <- seq(-1.5, 1.5, length.out = L)
   X <- matrix(rbinom(Np * L, 1, plogis(outer(rnorm(Np), d, "-"))), Np, L)
   colnames(X) <- sprintf("I%02d", 1:L)
-  mf <- rasch_mfrm(data.frame(person = seq_len(Np), X,
-                              rater = sample(c("A", "B"), Np, TRUE),
+  # each person appears under BOTH raters: a nested one-rater-per-person
+  # design leaves severity confounded with the person blocks and is now
+  # (correctly) refused by the connectivity check
+  X2 <- matrix(rbinom(Np * L, 1, plogis(outer(rnorm(Np), d, "-"))), Np, L)
+  colnames(X2) <- colnames(X)
+  mf <- rasch_mfrm(data.frame(person = rep(seq_len(Np), 2), rbind(X, X2),
+                              rater = rep(c("A", "B"), each = Np),
                               check.names = FALSE),
                    person = "person", facets = "rater", items = colnames(X))
   expect_false(is.null(mf$residuals))

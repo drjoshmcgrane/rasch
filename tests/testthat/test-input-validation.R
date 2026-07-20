@@ -257,11 +257,17 @@ test_that("MFRM wide input carries person factors through the melt", {
   N <- 80; I <- 4
   th <- rnorm(N); del <- seq(-1, 1, length.out = I)
   sev <- c(R1 = -0.3, R2 = 0.3)
-  wide <- data.frame(pid = seq_len(N),
-                     rater = sample(names(sev), N, replace = TRUE),
-                     grp = sample(c("boy", "girl"), N, replace = TRUE))
+  # every person is rated by BOTH raters (one wide row per person-rater
+  # combination): persons link the raters, which the conditional
+  # likelihood requires -- a fully nested rater design would be refused
+  # by the connectivity check, and rightly so
+  wide <- data.frame(pid = rep(seq_len(N), each = 2),
+                     rater = rep(names(sev), N),
+                     grp = rep(sample(c("boy", "girl"), N, replace = TRUE),
+                               each = 2))
   for (i in seq_len(I))
-    wide[[paste0("it", i)]] <- rbinom(N, 1, plogis(th - del[i] - sev[wide$rater]))
+    wide[[paste0("it", i)]] <- rbinom(2 * N, 1,
+      plogis(th[wide$pid] - del[i] - sev[wide$rater]))
   fw <- rasch_mfrm(wide, person = "pid", items = paste0("it", 1:I),
                    facets = "rater", factors = "grp")
   long <- reshape(wide, direction = "long", varying = paste0("it", 1:I),
@@ -271,13 +277,15 @@ test_that("MFRM wide input carries person factors through the melt", {
                    facets = "rater", factors = "grp")
   d1 <- dif_anova(fw, factors = "grp")
   d2 <- dif_anova(fl, factors = "grp")
-  expect_equal(d1$table$F, d2$table$F, tolerance = 1e-8)
+  expect_gt(nrow(d1$summary), 0)
+  expect_equal(d1$summary$F_uniform, d2$summary$F_uniform, tolerance = 1e-8)
+  expect_equal(d1$summary$p_uniform, d2$summary$p_uniform, tolerance = 1e-8)
   # a data-frame factor is replicated row-wise the same way
   fw2 <- rasch_mfrm(wide, person = "pid", items = paste0("it", 1:I),
                     facets = "rater",
                     factors = data.frame(grp = wide$grp))
-  expect_equal(dif_anova(fw2, factors = "grp")$table$F, d2$table$F,
-               tolerance = 1e-8)
+  expect_equal(dif_anova(fw2, factors = "grp")$summary$F_uniform,
+               d2$summary$F_uniform, tolerance = 1e-8)
   # misspelled wide factor column errors instead of silently dropping
   expect_error(rasch_mfrm(wide, person = "pid", items = paste0("it", 1:I),
                           facets = "rater", factors = "grpp"),
@@ -312,9 +320,10 @@ test_that("MFRM structurally confounded facet designs are an error", {
                "unidentified")
 })
 
-test_that("BTL flags directed separation of the win graph (Ford 1957)", {
+test_that("BTL refuses directed separation of the win graph (Ford 1957)", {
   set.seed(24)
-  # O1, O2 never lose to O3, O4: their locations diverge
+  # O1, O2 never lose to O3, O4: no finite ML locations exist, and the
+  # optimiser's boundary values must not be presented as a converged fit
   d <- data.frame(a = c(rep("O1", 15), rep("O2", 15), rep("O1", 10),
                         rep("O3", 10)),
                   b = c(rep("O3", 15), rep("O4", 15), rep("O2", 10),
@@ -322,12 +331,59 @@ test_that("BTL flags directed separation of the win graph (Ford 1957)", {
   d$win <- c(rep("O1", 15), rep("O2", 15),
              ifelse(runif(10) < .5, "O1", "O2"),
              ifelse(runif(10) < .5, "O3", "O4"))
-  expect_warning(f <- btl(d, "a", "b", winner = "win"),
-                 "not strongly connected")
-  expect_true(any(grepl("Ford", f$notes)))
-  # a design with wins in both directions across the divide is silent
+  expect_error(btl(d, "a", "b", winner = "win"), "not strongly connected")
+  # a design with wins in both directions across the divide is untouched
   d2 <- d
   d2$win[1:2] <- c("O3", "O3")
   expect_silent(f2 <- btl(d2, "a", "b", winner = "win"))
-  expect_false(any(grepl("Ford", f2$notes)))
+  expect_true(f2$converged)
+})
+
+test_that("MFRM refuses disconnected response blocks the facet map cannot bridge", {
+  set.seed(43)
+  d <- expand.grid(pid = 1:80, item = c("A", "B", "C", "D"),
+                   rater = c("R1", "R2"), stringsAsFactors = FALSE)
+  # persons 1-40 answer A/B only, persons 41-80 answer C/D only: B has
+  # full algebraic rank, but no person compares the blocks, so their
+  # relative locations are a flat direction of the conditional likelihood
+  d <- d[(d$pid <= 40 & d$item %in% c("A", "B")) |
+         (d$pid >  40 & d$item %in% c("C", "D")), ]
+  d$score <- rbinom(nrow(d), 1, 0.5)
+  expect_error(rasch_mfrm(d, person = "pid", item = "item", score = "score",
+                          facets = "rater"),
+               "does not bridge")
+})
+
+test_that("MFRM factors stay aligned when rows with missing identifiers drop", {
+  set.seed(6)
+  d <- data.frame(pid = rep(1:40, each = 3),
+                  item = rep(c("A", "B", "C"), 40),
+                  rater = rep(c("R1", "R2"), 60),
+                  score = rbinom(120, 1, 0.5))
+  d$sx <- sample(c("m", "f"), 40, TRUE)[d$pid]
+  d$pid[5] <- NA
+  f <- rasch_mfrm(d, person = "pid", item = "item", score = "score",
+                  facets = "rater", factors = "sx")
+  expect_true(any(grepl("dropped", f$notes)))
+  expect_equal(nrow(f$factors), length(unique(d$pid[!is.na(d$pid)])))
+  # data-frame factors with one row per original data row align the same way
+  f2 <- rasch_mfrm(d, person = "pid", item = "item", score = "score",
+                   facets = "rater", factors = data.frame(sx = d$sx))
+  expect_equal(f2$factors$sx, f$factors$sx)
+})
+
+test_that("EFRM removes data-frame factor columns from the item matrix", {
+  set.seed(5)
+  N <- 300; g <- rep(c("g1", "g2"), each = 150); th <- rnorm(N, sd = 1.5)
+  X <- as.data.frame(matrix(0L, N, 8)); names(X) <- paste0("v", 1:8)
+  del <- rep(seq(-1.5, 1.5, length.out = 4), 2)
+  for (i in 1:8) X[[i]] <- rbinom(N, 1, plogis(th - del[i]))
+  X$grp <- g
+  X$sex <- rep(c(1L, 2L), N / 2)
+  # without items=, the numeric factor column must not become an item
+  # (a single set keeps the test off the person-side linking machinery)
+  f <- rasch_efrm(X, groups = "grp",
+                  item_sets = list(A = paste0("v", 1:8)),
+                  factors = data.frame(sex = X$sex))
+  expect_setequal(unique(f$thresholds_arbitrary$item), paste0("v", 1:8))
 })
