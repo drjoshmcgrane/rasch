@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,12 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.11.7" id="rasch-1117">rasch 1.11.7<a class="anchor" aria-label="anchor" href="#rasch-1117"></a></h2>
+<p>Ninth review round: one finding.</p>
+<ul><li>
+<code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> distinguishes the three saved-fit dependence schemas by their <code>df</code> field: current fits label the statistic <code>t</code>; 1.11.4 transitional fits (<code>z</code> name, <code>df</code> present, t-based p) print as <code>t</code>; older fits (<code>z</code>, no <code>df</code>, normal-reference p) KEEP the <code>z</code> label – relabelling them <code>t</code> misrepresented how their p-values were computed (a legacy z = 3.17 with normal p = .002 is not the same claim as t = 3.17 with p = .016 at five clusters). The regression test now reconstructs both legacy schemas faithfully.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.11.6" id="rasch-1116">rasch 1.11.6<a class="anchor" aria-label="anchor" href="#rasch-1116"></a></h2>
 <p>Eighth review round: label and migration polish.</p>
