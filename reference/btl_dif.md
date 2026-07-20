@@ -144,7 +144,7 @@ btl_dif(f, grp, objects = "C")
 #> DIF for paired comparisons: 1 factor(s) [group], main effects
 #> Residual ANOVA per object and term (uniform = term; non-uniform = term x opponent band)
 #>  object  term F_uniform p_uniform_adj uniform_DIF F_nonuniform p_nonuniform_adj
-#>       C group    10.576         0.009           *        0.685            0.516
+#>       C group    10.576         0.009           *        0.685            0.514
 #>  nonuniform_DIF
 #>                
 #> 

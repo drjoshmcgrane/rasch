@@ -25,7 +25,7 @@ table and plot in the package applies to it."><meta property="og:image" content=
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -83,6 +83,7 @@ table and plot in the package applies to it.</p>
 <span>  adjust_N <span class="op">=</span> <span class="cn">NA</span>,</span>
 <span>  na_codes <span class="op">=</span> <span class="op">-</span><span class="fl">1</span>,</span>
 <span>  interaction <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  factors <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  maxit <span class="op">=</span> <span class="fl">60</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-08</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -149,6 +150,15 @@ equal one and the parameters are additive), but a significant
 interaction qualifies specific objectivity in practice: comparisons of
 the interacting facet's levels become item-dependent, which is itself
 the substantive finding.</p></dd>
+
+
+<dt id="arg-factors">factors<a class="anchor" aria-label="anchor" href="#arg-factors"></a></dt>
+<dd><p>Optional person factors for DIF analysis: a character
+vector naming columns of <code>data</code> that are constant within person,
+or a data frame with one row per data row or per unique person. They
+are carried into the fit so <code><a href="dif_anova.html">dif_anova</a></code> works on an MFRM
+fit directly. Facets are not person factors: facet DIF is an
+item-by-facet interaction (<code>interaction=</code>).</p></dd>
 
 
 <dt id="arg-maxit-tol">maxit, tol<a class="anchor" aria-label="anchor" href="#arg-maxit-tol"></a></dt>
