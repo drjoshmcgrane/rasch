@@ -735,6 +735,15 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     jd_rows <- split(seq_along(a), jd)
     pan_of_judge <- vapply(jd_rows, function(r) pan[r[1]], "")
     judges_by_panel <- split(names(jd_rows), pan_of_judge)
+    nj_min <- min(lengths(judges_by_panel))
+    if (nj_min < 2L)
+      stop("judge bootstrap needs at least 2 judges in every panel ",
+           "(resampling a single judge returns the same data every time, ",
+           "so its SEs would be a spurious zero); use se_method = ",
+           "'bootstrap' or 'conditional'")
+    if (nj_min < 5L)
+      notes <- c(notes, sprintf(
+        "judge bootstrap: smallest panel has only %d judges; resampling so few is unstable and the SEs are rough", nj_min))
     draws <- list()
     for (bb in seq_len(boot_reps)) {
       take <- unlist(lapply(judges_by_panel, function(js)

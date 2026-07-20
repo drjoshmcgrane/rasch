@@ -314,22 +314,34 @@ btl_dimensionality <- function(fit, reps = 50L) {
       resp
     }
   }
-  Pcat <- if (m == 1L || !is.null(seq_sim)) NULL else
-    vapply(d_lp, function(dd) item_moments(dd, tau)$P, numeric(m + 1L))
+  # the model-based reference simulates at the PAIR level: n_ij physical
+  # comparisons per unordered pair (count weights summed and rounded, so
+  # half-tie rows -- weight 0.5 in each direction -- recombine into whole
+  # comparisons), binomial or multinomial sums drawn at the fitted pair
+  # probabilities. Row-level simulation either overdispersed count weights
+  # (one weighted Bernoulli, variance w^2 p(1-p)) or broke entirely on
+  # fractional half-tie weights (as.integer(0.5) = 0).
+  if (is.null(seq_sim)) {
+    pi_lo <- pmin(ia, ib); pi_hi <- pmax(ia, ib)
+    pkey <- paste(pi_lo, pi_hi)
+    n_pair <- round(tapply(w, pkey, sum))
+    n_pair <- pmax(n_pair, 1L)
+    u_keys <- names(n_pair)
+    u_lo <- as.integer(sub(" .*", "", u_keys))
+    u_hi <- as.integer(sub(".* ", "", u_keys))
+    d_pair <- beta[u_lo] - beta[u_hi]
+    Pcat_pair <- if (m == 1L) NULL else
+      vapply(d_pair, function(dd) item_moments(dd, tau)$P, numeric(m + 1L))
+  }
   lead_ref <- vapply(seq_len(reps), function(r) {
     if (is.null(seq_sim)) {
-      # a count-weighted row stands for w comparisons: simulate the
-      # binomial (multinomial) SUM over those w and pass the mean response
-      # with weight w, so the reference carries variance w p(1-p) per row,
-      # not the w^2 p(1-p) of one weighted Bernoulli -- the overdispersed
-      # reference made the test conservative on aggregated data
       resp <- if (m == 1L)
-        stats::rbinom(length(d_lp), as.integer(w), stats::plogis(d_lp)) / w
-      else vapply(seq_along(d_lp), function(r) {
-        cnt <- stats::rmultinom(1L, as.integer(w[r]), Pcat[, r])
-        sum((0:m) * cnt) / w[r]
+        stats::rbinom(length(d_pair), n_pair, stats::plogis(d_pair)) / n_pair
+      else vapply(seq_along(d_pair), function(k) {
+        cnt <- stats::rmultinom(1L, n_pair[k], Pcat_pair[, k])
+        sum((0:m) * cnt) / n_pair[k]
       }, 0)
-      Rr <- .btl_resid_matrix(ia, ib, resp, w, m, K, beta)
+      Rr <- .btl_resid_matrix(u_lo, u_hi, resp, n_pair, m, K, beta)
     } else {
       resp <- seq_sim()
       Rr <- .btl_resid_matrix(match(fit$dependence_data$object_a, objs),
@@ -361,7 +373,8 @@ btl_dimensionality <- function(fit, reps = 50L) {
 
   out <- list(bimensions = bimensions, coords = coords,
               leading_structured = isTRUE(bm$strength[1] > ref_p95),
-              reference = list(mean = ref_mean, p95 = ref_p95, reps = reps),
+              reference = list(mean = ref_mean, p95 = ref_p95, reps = reps,
+                               draws = lead_ref),
               residual_matrix = R, notes = notes)
   class(out) <- "rasch_btl_dim"
   out

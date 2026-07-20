@@ -792,6 +792,11 @@ plot_btl <- function(fit, band = 2.5) {
   # by ~G/(G-1); the correction is standard practice and matters exactly
   # where few-cluster inference is already fragile (a note fires below 10)
   cr1 <- if (!is.null(jd) && nc > 1L) nc / (nc - 1) else 1
+  # with fewer clusters than parameters the empirical meat is singular by
+  # construction: no scalar correction repairs that, so say so
+  if (!is.null(jd) && nc <= np)
+    notes <- c(notes, sprintf(
+      "%d judge clusters for %d parameters: the clustered covariance is rank-deficient and the standard errors likely understate -- reliable clustered inference needs more judges than parameters", nc, np))
   covth <- Hi %*% (crossprod(Gm) * cr1) %*% Hi
   # composite-likelihood information ingredients: tr(H^-1 J) = tr(covth H)
   # is the effective parameter count of the Godambe penalty (Varin & Vidoni

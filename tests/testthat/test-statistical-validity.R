@@ -160,10 +160,12 @@ test_that("dimensionality reference respects comparison counts", {
   fe <- btl(expd, "a", "b", winner = "win")
   set.seed(11); da <- btl_dimensionality(fa, reps = 150)
   set.seed(11); de <- btl_dimensionality(fe, reps = 150)
-  ra <- mean(unlist(da$reference)); re <- mean(unlist(de$reference))
-  # one weighted Bernoulli per row overdispersed the aggregated reference
-  # by ~sqrt(w); binomial sums make the two forms agree
-  expect_lt(abs(ra - re) / re, 0.05)
+  # pair-level simulation makes the two forms draw from the same design:
+  # compare the leading-strength reference distribution, not a pooled mean
+  ra <- da$reference$draws; re <- de$reference$draws
+  expect_lt(abs(mean(ra) - mean(re)) / mean(re), 0.05)
+  expect_lt(abs(stats::quantile(ra, .95) - stats::quantile(re, .95)) /
+              stats::quantile(re, .95), 0.05)
 })
 
 test_that("judge-resampling bootstrap runs and matches the estimates", {
@@ -183,4 +185,50 @@ test_that("judge-resampling bootstrap runs and matches the estimates", {
   expect_true(all(is.finite(fj$phi_table$se_log_phi)))
   expect_true(is.finite(fj$alpha_table$se_log_alpha[2]))
   expect_match(fj$se_note, "judge-resampling")
+})
+
+test_that("half-tie weights no longer break the dimensionality reference", {
+  set.seed(4)
+  K <- 6; beta <- setNames(seq(-1, 1, length.out = K), paste0("O", 1:K))
+  pr <- t(combn(names(beta), 2)); rows <- list()
+  for (i in seq_len(nrow(pr))) for (r in 1:10) {
+    pw <- plogis(beta[pr[i, 1]] - beta[pr[i, 2]])
+    win <- if (runif(1) < 0.15) "tie" else
+      if (runif(1) < pw) pr[i, 1] else pr[i, 2]
+    rows[[length(rows) + 1]] <- data.frame(a = pr[i, 1], b = pr[i, 2],
+                                           win = win)
+  }
+  d <- do.call(rbind, rows)
+  f <- btl(d, "a", "b", winner = "win", ties = "half")
+  dm <- btl_dimensionality(f, reps = 60)
+  # fractional 0.5 weights fed as.integer() a zero binomial size before:
+  # every reference draw was degenerate at 0
+  expect_true(all(is.finite(dm$reference$draws)))
+  expect_gt(dm$reference$mean, 0.5)
+})
+
+test_that("judge bootstrap refuses a single-judge panel", {
+  d <- simulate_btl_efrm(n_objects_per_set = 5, n_sets = 2, n_panels = 2,
+                         n_judges_per_panel = 4, reps_within = 15,
+                         reps_cross = 15, seed = 3)
+  os <- attr(d, "truth")$object_sets
+  # collapse panel 2 to a single judge
+  keep <- d$panel != "panel2" | d$judge == d$judge[d$panel == "panel2"][1]
+  expect_error(
+    btl_efrm(d[keep, ], "object_a", "object_b", "winner", "judge", "panel",
+             os, se_method = "judge_bootstrap", boot_reps = 20),
+    "at least 2 judges in every panel")
+})
+
+test_that("clustered covariance notes rank deficiency (judges <= parameters)", {
+  set.seed(6)
+  K <- 10; beta <- seq(-1.5, 1.5, length.out = K)
+  n <- 600
+  ia <- sample(K, n, TRUE); ib <- (ia + sample(K - 1, n, TRUE) - 1L) %% K + 1L
+  win <- rbinom(n, 1, plogis(beta[ia] - beta[ib]))
+  d <- data.frame(object_a = paste0("O", ia), object_b = paste0("O", ib),
+                  winner = paste0("O", ifelse(win == 1, ia, ib)),
+                  judge = sample(sprintf("J%d", 1:5), n, TRUE))
+  f <- btl(d, "object_a", "object_b", "winner", judge = "judge")
+  expect_true(any(grepl("rank-deficient", f$notes)))
 })
