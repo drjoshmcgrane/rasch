@@ -49,7 +49,11 @@ person_wle <- function(tau_list, disc = 1) {
       mo <- lapply(tau_list, item_moments, theta = th, disc = disc)
       E  <- sum(vapply(mo, `[[`, 0, "E"));  V <- sum(vapply(mo, `[[`, 0, "V"))
       m3 <- sum(vapply(mo, `[[`, 0, "mu3"))
-      (R - E) + disc * m3 / (2 * V)
+      # Warm's weighted score is disc*(R - E) + disc^3 mu3 / (2 disc^2 V):
+      # the discrimination cancels throughout, so the correction carries NO
+      # disc factor (a stray disc here biased WLEs by up to 0.26 logits at
+      # disc = 0.5; the vector-disc EFRM path was already correct)
+      (R - E) + m3 / (2 * V)
     }
     root <- tryCatch(uniroot(g, c(-30, 30), tol = 1e-9)$root, error = function(e) NA_real_)
     theta[as.character(R)] <- root

@@ -19,3 +19,4 @@
 ^pkgdown$
 ^cran-comments\.md$
 ^Rplots\.pdf$
+^tests/testthat/_problems$

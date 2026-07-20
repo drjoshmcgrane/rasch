@@ -160,7 +160,10 @@
 #'   mean squares, fit residual and its df),
 #'   \code{pairs} (per pair: n, observed and expected win proportions --
 #'   or mean graded responses --
-#'   standardised residual, chi-square component), \code{judges} (when
+#'   standardised residual, chi-square component -- the pair chi-squares
+#'   treat comparisons as independent and are descriptive under judge
+#'   clustering; the object and judge fit residuals and the clustered
+#'   standard errors carry the robust inference), \code{judges} (when
 #'   given: per judge n, infit, outfit, fit residual, df), \code{total_chisq},
 #'   \code{total_df}, \code{total_p}, the object separation index
 #'   \code{osi}, \code{loglik}, \code{cl} (the composite-likelihood
@@ -740,13 +743,32 @@ plot_btl <- function(fit, band = 2.5) {
   loglik <- sum(w * log(pmax(mo$P[cbind(seq_along(x), x + 1L)], 1e-300)))
   gh <- gH(mo)
   resE <- gh$resE
-  converged <- max(abs(gh$g)) < 1e-4
+  # scale-free convergence: gradient per (count-weighted) comparison, so
+  # duplicated or very large data cannot flag a converged fit as unconverged
+  converged <- isTRUE(max(abs(gh$g)) < 1e-6 * sum(w))
+  if (!converged)
+    warning("btl estimation did NOT converge in ", it, " iterations: ",
+            "estimates, standard errors, and fit statistics are ",
+            "unreliable -- increase maxit or check the comparison design",
+            call. = FALSE)
 
   # Godambe sandwich over the full parameter, clustered by judge (each
   # cluster's score contributions accumulated by rowsum, not per-row loops)
   cl <- if (is.null(jd)) as.character(seq_along(ia)) else jd
   ucl <- unique(cl)
   nc <- length(ucl); cidx <- match(cl, ucl)
+  # the clustered sandwich estimates the meat from between-judge variation:
+  # with one judge it is identically ~zero (SEs collapse to ~1e-16), and
+  # with very few judges it understates -- refuse the former, note the latter
+  if (!is.null(jd)) {
+    if (nc < 2L)
+      stop("judge-clustered standard errors need at least 2 judges (got ",
+           nc, "); with a single judge drop judge= so comparisons are ",
+           "treated as independent, or supply more judges")
+    if (nc < 10L)
+      notes <- c(notes, sprintf(
+        "only %d judge clusters: judge-clustered standard errors are likely to understate with so few clusters", nc))
+  }
   Gm <- matrix(0, nc, np, dimnames = list(ucl, NULL))
   # beta block: per-cluster sums of resE into the winner / loser slots,
   # laid out cluster-major so one rowsum fills the (cluster x object) grid
@@ -1242,6 +1264,18 @@ plot_btl_dependence <- function(fit, effect = c("exposure", "carry_over"),
 #' refits, so dependence is not mistaken for judge-group DIF; count-weighted
 #' comparisons enter all tests with their weights.
 #'
+#' The screening ANOVA treats JUDGES as the independent units: residuals are
+#' aggregated to one weighted mean per judge (per opponent band) and tested
+#' in a split-plot design with the judge as the error unit -- group terms
+#' between judges, band terms and their interactions within. Testing
+#' judge-level factors against comparison-level residuals would
+#' pseudo-replicate (a null simulation with judge heterogeneity and
+#' arbitrary groups falsely flagged uniform DIF in 6 of 10 datasets); the
+#' judge-level design is calibrated, and its power grows with the number of
+#' judges per group, not the number of comparisons. Each factor level needs
+#' at least two judges, and an object at least four judges overall, to be
+#' testable.
+#'
 #' Each object is resolved against the other objects' common locations. When
 #' several objects carry real DIF, resolving them one at a time can spread a
 #' large effect onto clean objects as compensating, opposite-signed artificial
@@ -1367,37 +1401,59 @@ btl_dif <- function(fit, factors, objects = NULL,
     # residual z then has variance 1/weight, so weighted least squares is
     # exactly the expanded-rows analysis
     n_o <- sum(wo)
-    d <- data.frame(z = zo, w = wo)
+    jo <- c(cm$judge[sel_a], cm$judge[sel_b])[keep]
+    d <- data.frame(z = zo, w = wo, judge_unit = factor(jo))
     for (j in seq_along(fnames)) d[[safe[j]]] <- factor(gcols[[j]])
     if (n_o < 10 || any(vapply(safe, function(s)
       nlevels(droplevels(d[[s]])) < 2, TRUE))) next
     nb <- if (n_o >= 90) 3L else if (n_o >= 40) 2L else 1L
     if (nb > 1L) {
-      d$band <- factor(cut(rank(oloc, ties.method = "first"), nb,
-                           labels = FALSE))
-      form <- stats::as.formula(
-        paste("z ~ (", paste(safe, collapse = op), ") * band"))
-    } else {
-      form <- stats::as.formula(
-        paste("z ~ (", paste(safe, collapse = op), ")"))
+      # band breaks at count-weighted quantiles of the opponent location:
+      # invariant to whether comparisons arrive expanded or count-weighted
+      # (row-rank cuts were not), so aggregated and expanded data land in
+      # identical bands
+      ord <- order(oloc); cw <- cumsum(wo[ord]) / sum(wo)
+      br <- unique(vapply(seq_len(nb - 1L) / nb, function(q)
+        oloc[ord][which(cw >= q - 1e-12)[1]], 0))
+      d$band <- factor(findInterval(oloc, br, left.open = TRUE) + 1L)
+      if (nlevels(droplevels(d$band)) < 2L) d$band <- NULL
     }
-    # weights referenced as d$w (not bare w) so static checks see the binding
-    av <- tryCatch(stats::anova(stats::lm(form, data = d, weights = d$w)),
+    if (is.null(d$band)) nb <- 1L
+    # JUDGES, not comparisons, are the independent units here: a judge's
+    # comparisons share that judge's idiosyncratic preferences, and testing
+    # judge-level factors against comparison-level residuals
+    # pseudo-replicates -- a null simulation with judge heterogeneity and
+    # arbitrary groups falsely flagged uniform DIF in 6 of 10 datasets.
+    # Aggregate to one weighted-mean residual per judge (per opponent
+    # band), then a split-plot aov with the judge as the error unit: group
+    # terms are tested between judges, band terms and their interactions
+    # within judges -- the same design logic as the mixed-design person
+    # DIF ANOVA.
+    cellkey <- if (nb > 1L) interaction(d$judge_unit, d$band, drop = TRUE)
+               else droplevels(d$judge_unit)
+    zbar <- tapply(d$z * d$w, cellkey, sum) / tapply(d$w, cellkey, sum)
+    firsts <- which(!duplicated(cellkey))
+    ag <- d[firsts[match(levels(cellkey), as.character(cellkey[firsts]))],
+            c("judge_unit", safe, if (nb > 1L) "band"), drop = FALSE]
+    ag$z <- as.numeric(zbar)
+    # between-judge tests need at least two judges per level and enough
+    # judges overall to leave residual degrees of freedom
+    nj_ok <- all(vapply(safe, function(sn)
+      min(tapply(as.character(ag$judge_unit), ag[[sn]],
+                 function(x) length(unique(x)))) >= 2L, 0) >= 1)
+    if (!nj_ok || length(unique(ag$judge_unit)) < 4L) next
+    rhs <- paste("(", paste(safe, collapse = op), ")",
+                 if (nb > 1L) "* band" else "")
+    form <- stats::as.formula(paste("z ~", rhs, "+ Error(judge_unit)"))
+    av <- tryCatch(suppressWarnings(stats::aov(form, data = ag)),
                    error = function(e) NULL)
     if (is.null(av)) next
-    rss <- av["Residuals", "Sum Sq"]
-    # weighted least squares reproduces the expanded-rows sums of squares
-    # exactly, but its residual df counts rows; the residual mean square must
-    # be taken over the comparisons the rows stand for
-    df_eff <- n_o - (sum(av$Df) - av["Residuals", "Df"]) - 1
-    if (df_eff <= 0) next
-    for (tt in setdiff(rownames(av), "Residuals")) {
-      Fv <- (av[tt, "Sum Sq"] / av[tt, "Df"]) / (rss / df_eff)
+    ft <- .aov_terms_flat(av)
+    ft <- ft[ft$term != "Residuals" & is.finite(ft$F_value), , drop = FALSE]
+    for (k in seq_len(nrow(ft)))
       term_rows[[length(term_rows) + 1L]] <- data.frame(
-        object = o, term = tt, df = av[tt, "Df"], sum_sq = av[tt, "Sum Sq"],
-        F_value = Fv, p = stats::pf(Fv, av[tt, "Df"], df_eff,
-                                    lower.tail = FALSE), resid_ss = rss)
-    }
+        object = o, term = ft$term[k], df = ft$df[k], sum_sq = ft$sum_sq[k],
+        F_value = ft$F_value[k], p = ft$p[k], resid_ss = ft$resid_ss[k])
   }
   if (!length(term_rows)) stop("no object yielded an estimable DIF ANOVA")
   terms <- do.call(rbind, term_rows); rownames(terms) <- NULL

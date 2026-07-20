@@ -9,7 +9,13 @@ btl_next_pairs(fit, n = 10, weight_se = TRUE)
 \arguments{
 \item{fit}{A paired-comparison fit from \code{\link{btl}}.}
 
-\item{n}{Number of pairs to return.}
+\item{n}{Number of pairs to return.
+The priority is a greedy one-step RANKING heuristic: it plugs the
+judge-clustered sandwich covariance into an information-update formula
+that is exact only for a model-based information matrix, so the ranking
+orders candidate pairs sensibly but the implied variance reductions are
+not exact sandwich updates. Treat the ordering, not the magnitudes, as
+the output.}
 
 \item{weight_se}{Rank by the one-step total-variance reduction (default
 \code{TRUE}; falls back to \code{expected_information * (se_a^2 +
@@ -31,10 +37,13 @@ the current estimates. That information peaks when the two objects are
 close in location, so at equal measurement the recommender favours
 near-neighbour contests. With \code{weight_se = TRUE} (the default) each
 pair's priority is the one-step reduction in TOTAL location variance that
-one added comparison of the pair would deliver -- computed exactly from
-the fit's stored covariance by a rank-one (Sherman-Morrison) update with
-the comparison's information on the contrast -- so pairs of poorly
-measured (and correlated) objects are promoted.
+one added comparison of the pair would deliver, from a rank-one
+(Sherman-Morrison) update of the fit's stored covariance with the
+comparison's information on the contrast, so pairs of poorly
+measured (and correlated) objects are promoted. The update formula is
+exact for a model-based information matrix; applied to the sandwich
+covariance it is a scoring device, consistent with the ranking-heuristic
+status described below.
 }
 \details{
 Two honest cautions. This is a \emph{greedy} rule that scores each pair on

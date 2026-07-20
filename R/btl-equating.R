@@ -139,7 +139,15 @@ btl_equate <- function(fit1, fit2, alpha = 0.05, p_adjust = "holm") {
   if (is.null(S1)) S1 <- diag(a$se^2, length(common))
   if (is.null(S2)) S2 <- diag(b$se^2, length(common))
   shift_se <- sqrt(max(drop(t(u) %*% (S1 + S2) %*% u), 0))
-  se_diff <- sqrt(pmax(v, 1e-10))
+  # each drift test compares d_i - c0, and c0 is estimated from the SAME
+  # common objects: Var(d_i - c0) = [(I - 1u') Sigma (I - u 1')]_ii
+  #   = Sigma_ii - 2 (Sigma u)_i + u' Sigma u,
+  # not the naive Sigma_ii -- ignoring the estimated shift (and the
+  # within-calibration covariance) mis-states every drift p-value
+  Sg <- S1 + S2
+  Su <- drop(Sg %*% u)
+  var_d <- pmax(diag(Sg) - 2 * Su + drop(t(u) %*% Su), 1e-10)
+  se_diff <- sqrt(var_d)
   t <- (d - c0) / se_diff
   p <- 2 * pnorm(-abs(t))
   p_adj <- p.adjust(p, method = p_adjust)

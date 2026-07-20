@@ -47,6 +47,10 @@ The price is power: carry-over and a judge-camp second attribute are
 partially confounded (both appear as consistent within-judge deviation),
 so with \code{order} modelled the test is conservative about attributing
 the ambiguous share to a second dimension.
+The reference simulates from the point estimates without refitting each
+replicate, so it carries sampling noise in the responses but not
+estimation noise in the parameters -- adequate for the screening use
+here, slightly liberal in tiny designs.
 }
 \examples{
 set.seed(1); objs <- LETTERS[1:6]; beta <- setNames(seq(-1.5, 1.5, len = 6), objs)

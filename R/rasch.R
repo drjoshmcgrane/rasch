@@ -92,6 +92,21 @@
 #' Negative values indicate over-discrimination (Guttman-like responses),
 #' positive values under-discrimination.
 #'
+#' A calibration note that applies to the whole test-of-fit suite: the
+#' item-trait chi-square evaluates unconditional residuals at estimated
+#' person measures and refers the sum of correlated item statistics to a
+#' chi-square with summed degrees of freedom, following the convention of
+#' Andrich and Marais (2019); the class-interval ANOVA F and the
+#' Wilson-Hilferty-style transformations are approximations of the same
+#' kind. Null simulation with this package shows rejection rates near but
+#' not exactly at the nominal level (conservative in the settings
+#' examined), and the direction can vary with design. These statistics are
+#' therefore approximate, convention-faithful diagnostics for ordering and
+#' flagging misfit -- not exactly calibrated hypothesis tests; where exact
+#' calibration matters, use the simulation tools
+#' (\code{\link{sim_replicate}}) to build parametric-bootstrap reference
+#' distributions for the observed design.
+#'
 #' @param data Persons-by-items integer score matrix (categories from 0), or a
 #'   data frame also containing ID and person-factor columns. Missing values
 #'   are allowed.
@@ -111,7 +126,12 @@
 #'   \code{fit$n_groups}.
 #' @param adjust_N Optional reference sample size; if supplied, item-trait
 #'   chi-squares are rescaled to this size (a sample-size adjustment for the
-#'   sensitivity of the chi-square to large samples).
+#'   sensitivity of the chi-square to large samples). The scaling is
+#'   proportional and global -- every item's chi-square is multiplied by
+#'   \code{adjust_N} over the number of classified persons -- so an item
+#'   answered by a subset of persons keeps its proportionally smaller share
+#'   of the notional sample rather than being inflated to the full
+#'   \code{adjust_N}.
 #' @param anchors Optional anchor table for equating: a data frame with
 #'   columns \code{item}, \code{k}, and \code{tau} fixing nominated
 #'   thresholds at known values; see \code{\link{pcml}}. With anchors in
@@ -252,6 +272,11 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
     prep$notes <- c(prep$notes,
                     sprintf("thresholds estimated through %d principal component(s); see est$components",
                             pc_components))
+  if (!isTRUE(est$converged))
+    warning("estimation did NOT converge in ", est$iterations,
+            " iterations: estimates, standard errors, fit statistics, and ",
+            "p-values are unreliable -- increase maxit or check the data ",
+            "for unanswerable structure", call. = FALSE)
   fit <- .assemble_fit(model, X, est, id_vec, fac_df, n_groups, adjust_N,
                        c(prep$notes, est$notes))
   fit$mc <- mc
@@ -369,8 +394,11 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
               alpha = alpha,
               targeting = .targeting(person, thr),
               power_of_fit = .fit_power(psi$PSI),
-              total_chisq = sum(it$chisq), total_df = sum(it$df),
-              total_chisq_p = pchisq(sum(it$chisq), sum(it$df), lower.tail = FALSE),
+              total_chisq = sum(it$chisq, na.rm = TRUE),
+              total_df = sum(it$df, na.rm = TRUE),
+              total_chisq_p = pchisq(sum(it$chisq, na.rm = TRUE),
+                                     sum(it$df, na.rm = TRUE),
+                                     lower.tail = FALSE),
               item_fit_summary = .dist_stats(rf$items$fit_resid),
               person_fit_summary = .dist_stats(rf$persons$fit_resid),
               summary_stats = list(

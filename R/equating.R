@@ -11,6 +11,27 @@
 # drift and should be dropped from the link (or anchored individually).
 # ===========================================================================
 
+# Item-location covariance over a set of items: block means of the fit's
+# threshold covariance (recentred parameterisation), which carries the
+# negative correlations induced by the identification constraint. A bank
+# table has no covariance and contributes diag(se^2) -- conservative.
+.equate_loc_cov <- function(obj, items) {
+  if (inherits(obj, "rasch") && !is.null(obj$est$cov_tau)) {
+    thr <- obj$est$thr
+    # thr$item holds integer item positions in column order, which is the
+    # order of obj$items: the match below is by position, not name
+    idx <- match(items, obj$items$item)
+    rows <- lapply(idx, function(i) thr$id[thr$item == i])
+    S <- matrix(0, length(items), length(items))
+    for (i in seq_along(rows)) for (j in seq_along(rows))
+      S[i, j] <- mean(obj$est$cov_tau[rows[[i]], rows[[j]]])
+    return(S)
+  }
+  ref <- .equate_ref(obj)
+  se <- ref$se[match(items, ref$item)]
+  diag(se^2, length(items))
+}
+
 .equate_ref <- function(reference) {
   if (inherits(reference, "rasch"))
     return(data.frame(item = reference$items$item,
@@ -77,11 +98,25 @@ equate_tests <- function(fit, reference, shift = c("mean", "none")) {
       stop("fewer than two common items with usable locations and standard ",
            "errors remain; ", note)
   }
-  c0 <- if (shift == "mean") {
+  # the shift c0 is estimated from the same common items the drift tests
+  # then examine, and each calibration's locations are correlated through
+  # its identification constraint: the drift denominators use
+  # Var(d_i - c0) = [(I - 1u') Sigma (I - u 1')]_ii over the usable items,
+  # with Sigma the sum of the two calibrations' item-location covariances
+  Sg <- .equate_loc_cov(fit, common) + .equate_loc_cov(reference, common)
+  var_d <- rep(NA_real_, length(common))
+  if (shift == "mean") {
     w <- 1 / pmax(v[usable], 1e-10)
-    sum(w * d[usable]) / sum(w)
-  } else 0
-  t <- ifelse(usable, (d - c0) / sqrt(pmax(v, 1e-10)), NA_real_)
+    c0 <- sum(w * d[usable]) / sum(w)
+    u <- w / sum(w)
+    Suu <- Sg[usable, usable, drop = FALSE]
+    Su <- drop(Suu %*% u)
+    var_d[usable] <- pmax(diag(Suu) - 2 * Su + drop(t(u) %*% Su), 1e-10)
+  } else {
+    c0 <- 0
+    var_d[usable] <- pmax(diag(Sg)[usable], 1e-10)
+  }
+  t <- ifelse(usable, (d - c0) / sqrt(var_d), NA_real_)
   p <- 2 * pnorm(-abs(t))
   n <- sum(usable)
   p_adj <- rep(NA_real_, length(p))

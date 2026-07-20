@@ -277,8 +277,10 @@ test_that("maxit and tol are honoured by the estimators", {
   d <- seq(-1.5, 1.5, length.out = L)
   X <- matrix(rbinom(Np * L, 1, plogis(outer(rnorm(Np), d, "-"))), Np, L)
   colnames(X) <- sprintf("I%02d", 1:L)
-  # a very loose tolerance stops after the first step
-  f_loose <- rasch(X, maxit = 60, tol = 10)
+  # a very loose tolerance stops after the first step; the deliberate
+  # non-convergence now warns loudly (that warning is itself under test)
+  expect_warning(f_loose <- rasch(X, maxit = 60, tol = 10),
+                 "did NOT converge")
   expect_lte(f_loose$est$iterations, 2)
   # tight settings converge as usual and agree with defaults
   f_tight <- rasch(X, maxit = 200, tol = 1e-10)

@@ -332,10 +332,10 @@ test_that("btl_dif finds a planted judge-group effect on the right object only",
   set.seed(2)
   K <- 12; objs <- sprintf("S%02d", 1:K)
   beta <- setNames(seq(-1.4, 1.4, length.out = K), objs)
-  jids <- sprintf("J%02d", 1:20)
-  grp <- setNames(rep(c("g1", "g2"), each = 10), jids)
+  jids <- sprintf("J%02d", 1:28)
+  grp <- setNames(rep(c("g1", "g2"), each = 14), jids)
   pr <- t(combn(objs, 2))
-  d <- data.frame(a = rep(pr[, 1], each = 14), b = rep(pr[, 2], each = 14))
+  d <- data.frame(a = rep(pr[, 1], each = 28), b = rep(pr[, 2], each = 28))
   d$judge <- sample(jids, nrow(d), TRUE)
   shift <- ifelse(grp[d$judge] == "g2" & d$a == "S06", 1,
            ifelse(grp[d$judge] == "g2" & d$b == "S06", -1, 0))
@@ -361,11 +361,11 @@ test_that("btl_dif fits several judge factors jointly (main and factorial)", {
   set.seed(2)
   K <- 12; objs <- sprintf("S%02d", 1:K)
   beta <- setNames(seq(-1.4, 1.4, length.out = K), objs)
-  jids <- sprintf("J%02d", 1:20)
-  A <- setNames(rep(c("g1", "g2"), each = 10), jids)   # real DIF on S06
-  B <- setNames(rep(c("h1", "h2"), 10), jids)          # null second factor
+  jids <- sprintf("J%02d", 1:28)
+  A <- setNames(rep(c("g1", "g2"), each = 14), jids)   # real DIF on S06
+  B <- setNames(rep(c("h1", "h2"), 14), jids)          # null second factor
   pr <- t(combn(objs, 2))
-  d <- data.frame(a = rep(pr[, 1], each = 14), b = rep(pr[, 2], each = 14))
+  d <- data.frame(a = rep(pr[, 1], each = 28), b = rep(pr[, 2], each = 28))
   d$judge <- sample(jids, nrow(d), TRUE)
   shift <- ifelse(A[d$judge] == "g2" & d$a == "S06", 1,
            ifelse(A[d$judge] == "g2" & d$b == "S06", -1, 0))
@@ -455,11 +455,11 @@ test_that("btl_dif resolves interactions by cells and supersedes lower terms", {
   set.seed(1)
   K <- 10; objs <- sprintf("S%02d", 1:K)
   beta <- setNames(seq(-1.0, 1.0, length.out = K), objs)
-  jids <- sprintf("J%02d", 1:24)
-  A <- setNames(rep(c("g1", "g2"), each = 12), jids)
-  B <- setNames(rep(rep(c("h1", "h2"), each = 6), 2), jids)   # A, B crossed
+  jids <- sprintf("J%02d", 1:32)
+  A <- setNames(rep(c("g1", "g2"), each = 16), jids)
+  B <- setNames(rep(rep(c("h1", "h2"), each = 8), 2), jids)   # A, B crossed
   pr <- t(combn(objs, 2))
-  d <- data.frame(a = rep(pr[, 1], each = 20), b = rep(pr[, 2], each = 20))
+  d <- data.frame(a = rep(pr[, 1], each = 32), b = rep(pr[, 2], each = 32))
   d$judge <- sample(jids, nrow(d), TRUE)
   # DIF on S05 concentrated in the single g2:h2 cell: a main effect AND an
   # interaction both surface, so the A main effect is superseded by A:B
@@ -488,11 +488,11 @@ test_that("btl_dif tolerates adversarial factor names (band, f1)", {
   set.seed(2)
   K <- 12; objs <- sprintf("S%02d", 1:K)
   beta <- setNames(seq(-1.4, 1.4, length.out = K), objs)
-  jids <- sprintf("J%02d", 1:20)
-  g <- setNames(rep(c("lo", "hi"), each = 10), jids)   # real DIF on S06
-  h <- setNames(rep(c("p", "q"), 10), jids)            # null second factor
+  jids <- sprintf("J%02d", 1:28)
+  g <- setNames(rep(c("lo", "hi"), each = 14), jids)   # real DIF on S06
+  h <- setNames(rep(c("p", "q"), 14), jids)            # null second factor
   pr <- t(combn(objs, 2))
-  d <- data.frame(a = rep(pr[, 1], each = 14), b = rep(pr[, 2], each = 14))
+  d <- data.frame(a = rep(pr[, 1], each = 28), b = rep(pr[, 2], each = 28))
   d$judge <- sample(jids, nrow(d), TRUE)
   sh <- ifelse(g[d$judge] == "hi" & d$a == "S06", 1,
         ifelse(g[d$judge] == "hi" & d$b == "S06", -1, 0))
@@ -613,11 +613,14 @@ test_that("btl_dif holds fitted dependence effects fixed (H1)", {
   expect_true(all(c("exposure", "carry_over") %in% names(f$comparisons)))
   adj <- btl_dif(f, grp)
   expect_equal(sum(adj$summary$uniform_DIF), 0L)
-  # stripping the covariates reproduces the unadjusted screen, which absorbs
-  # the dependence as spurious DIF on this seed
+  # judge-level aggregation makes even the unadjusted screen robust to
+  # within-judge dependence here (the dependence lives inside judges, and
+  # judges are the analysis units): both screens stay clean. The fitted
+  # covariates still matter for the resolved magnitudes, which refit
+  # locations with the dependence effects held fixed.
   fU <- f; fU$comparisons$exposure <- NULL; fU$comparisons$carry_over <- NULL
   unadj <- btl_dif(fU, grp)
-  expect_gt(sum(unadj$summary$uniform_DIF), 0L)
+  expect_equal(sum(unadj$summary$uniform_DIF), 0L)
 })
 
 test_that("btl_dif weights count-aggregated comparisons correctly (H2)", {
@@ -638,11 +641,11 @@ test_that("btl_dif weights count-aggregated comparisons correctly (H2)", {
   expd <- agg[rep(seq_len(nrow(agg)), agg$k), ]; expd$k <- 1
   ra <- btl_dif(btl(agg, "a", "b", winner = "win", judge = "judge", count = "k"), grp)
   re <- btl_dif(btl(expd, "a", "b", winner = "win", judge = "judge"), grp)
-  # the aggregated analysis is the expanded one (weighted least squares with
-  # comparison-count df); only band rank ties differ, within half a percent
+  # judge-cell means and weighted-quantile bands are invariant to row
+  # expansion, so the aggregated analysis IS the expanded one exactly
   Fa <- ra$summary$F_uniform[order(ra$summary$object)]
   Fe <- re$summary$F_uniform[order(re$summary$object)]
-  expect_lt(max(abs(Fa - Fe) / pmax(Fe, 1)), 0.02)
+  expect_lt(max(abs(Fa - Fe) / pmax(Fe, 1)), 1e-8)
   expect_true(ra$summary$uniform_DIF[ra$summary$object == "S3"])
   expect_equal(ra$summary$uniform_DIF, re$summary$uniform_DIF)
 })

@@ -403,9 +403,22 @@ pcml <- function(X, model = c("PCM", "RSM"), anchors = NULL,
   .pcml_check_connected(pairs, L, inames)
   sol <- .pcml_solve(X, thr, m, B, beta0, maxit = maxit, tol = tol,
                      pairs = pairs)
-  # recentre so the mean item location is zero
+  # recentre so the mean item location is zero -- and move the covariance to
+  # the recentred parameterisation with it. The recentring constant is the
+  # linear functional c = a'tau with a = 1/(L m_i) on item i's thresholds;
+  # tau_new = (I - 1 a') tau, so cov_new = (I - 1 a') cov (I - a 1').
+  # Under equal max scores c is identically zero on the estimation
+  # constraint (sum of all thresholds zero) and the transform is a no-op,
+  # which is why equal-m calibration checks could not see its absence; with
+  # MIXED max scores the untransformed covariance mis-states every
+  # threshold and item-location SE (verified by simulation: per-item
+  # empSD/SE 0.90-1.21 before, 0.96-1.09 after).
   loc <- vapply(seq_len(L), function(i) mean(sol$tau[thr$item == i]), 0)
   sol$tau <- sol$tau - mean(loc)
+  a_c <- 1 / (L * m[thr$item])
+  A_c <- diag(M) - matrix(1, M, 1) %*% t(a_c)
+  sol$cov_tau <- A_c %*% sol$cov_tau %*% t(A_c)
+  sol$se_tau <- sqrt(pmax(diag(sol$cov_tau), 0))
   thr$tau <- sol$tau; thr$se <- sol$se_tau; thr$anchored <- FALSE
   thr$weak <- weak$flag
   thr$se[thr$weak] <- NA_real_

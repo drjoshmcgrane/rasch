@@ -29,3 +29,4 @@ local_audit/
 .claude/
 Rplots.pdf
 docs
+tests/testthat/_problems/

@@ -230,6 +230,10 @@ print.rasch_btl_transitivity <- function(x, ...) {
 #' partially confounded (both appear as consistent within-judge deviation),
 #' so with \code{order} modelled the test is conservative about attributing
 #' the ambiguous share to a second dimension.
+#' The reference simulates from the point estimates without refitting each
+#' replicate, so it carries sampling noise in the responses but not
+#' estimation noise in the parameters -- adequate for the screening use
+#' here, slightly liberal in tiny designs.
 #'
 #' @param fit A paired-comparison fit from \code{\link{btl}}.
 #' @param reps Model-simulated replicates for the noise reference.

@@ -111,7 +111,10 @@ A list of class \code{"rasch_btl"}: \code{objects} (location, se,
   mean squares, fit residual and its df),
   \code{pairs} (per pair: n, observed and expected win proportions --
   or mean graded responses --
-  standardised residual, chi-square component), \code{judges} (when
+  standardised residual, chi-square component -- the pair chi-squares
+  treat comparisons as independent and are descriptive under judge
+  clustering; the object and judge fit residuals and the clustered
+  standard errors carry the robust inference), \code{judges} (when
   given: per judge n, infit, outfit, fit residual, df), \code{total_chisq},
   \code{total_df}, \code{total_p}, the object separation index
   \code{osi}, \code{loglik}, \code{cl} (the composite-likelihood

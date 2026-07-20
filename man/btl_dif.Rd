@@ -74,6 +74,18 @@ refits, so dependence is not mistaken for judge-group DIF; count-weighted
 comparisons enter all tests with their weights.
 }
 \details{
+The screening ANOVA treats JUDGES as the independent units: residuals are
+aggregated to one weighted mean per judge (per opponent band) and tested
+in a split-plot design with the judge as the error unit -- group terms
+between judges, band terms and their interactions within. Testing
+judge-level factors against comparison-level residuals would
+pseudo-replicate (a null simulation with judge heterogeneity and
+arbitrary groups falsely flagged uniform DIF in 6 of 10 datasets); the
+judge-level design is calibrated, and its power grows with the number of
+judges per group, not the number of comparisons. Each factor level needs
+at least two judges, and an object at least four judges overall, to be
+testable.
+
 Each object is resolved against the other objects' common locations. When
 several objects carry real DIF, resolving them one at a time can spread a
 large effect onto clean objects as compensating, opposite-signed artificial

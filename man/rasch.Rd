@@ -46,7 +46,12 @@ at most 10, at least 2. The resolved value is stored in
 
 \item{adjust_N}{Optional reference sample size; if supplied, item-trait
 chi-squares are rescaled to this size (a sample-size adjustment for the
-sensitivity of the chi-square to large samples).}
+sensitivity of the chi-square to large samples). The scaling is
+proportional and global -- every item's chi-square is multiplied by
+\code{adjust_N} over the number of classified persons -- so an item
+answered by a subset of persons keeps its proportionally smaller share
+of the notional sample rather than being inflated to the full
+\code{adjust_N}.}
 
 \item{anchors}{Optional anchor table for equating: a data frame with
 columns \code{item}, \code{k}, and \code{tau} fixing nominated
@@ -121,6 +126,21 @@ approximately N(0,1) under fit; the conventional flagging value is 2.5
 (Andrich and Marais 2019, ch. 15).
 Negative values indicate over-discrimination (Guttman-like responses),
 positive values under-discrimination.
+
+A calibration note that applies to the whole test-of-fit suite: the
+item-trait chi-square evaluates unconditional residuals at estimated
+person measures and refers the sum of correlated item statistics to a
+chi-square with summed degrees of freedom, following the convention of
+Andrich and Marais (2019); the class-interval ANOVA F and the
+Wilson-Hilferty-style transformations are approximations of the same
+kind. Null simulation with this package shows rejection rates near but
+not exactly at the nominal level (conservative in the settings
+examined), and the direction can vary with design. These statistics are
+therefore approximate, convention-faithful diagnostics for ordering and
+flagging misfit -- not exactly calibrated hypothesis tests; where exact
+calibration matters, use the simulation tools
+(\code{\link{sim_replicate}}) to build parametric-bootstrap reference
+distributions for the observed design.
 }
 \examples{
 set.seed(1)

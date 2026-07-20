@@ -235,7 +235,11 @@
       used[i] <- used[i] + 1L
     }
   }
-  df_i <- pmax(used - 1L, 1L)
+  # an item whose responders fall in fewer than two class intervals has no
+  # estimable item-by-trait interaction: its chi-square and df are NA, not
+  # a manufactured df = 1 with a valid-looking p
+  df_i <- ifelse(used >= 2L, used - 1L, NA_integer_)
+  chi[is.na(df_i)] <- NA_real_
   n_used <- sum(!is.na(ci))
   if (!is.na(adjust_N)) chi <- chi * (adjust_N / n_used)
   p <- pchisq(chi, df_i, lower.tail = FALSE)

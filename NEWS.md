@@ -1,3 +1,55 @@
+# rasch 1.11.0
+
+Statistical validity, from a second external review. Every finding was
+re-derived or reproduced by simulation before fixing; the fixes are
+verified by new calibration tests (test-statistical-validity.R).
+
+* Recentred covariance for mixed max scores. `pcml()` recentres thresholds
+  so the mean item location is zero, but the covariance stayed under the
+  sum-of-thresholds constraint -- identical only when every item has the
+  same maximum score. With mixed 1/2/3-threshold items, per-item
+  empSD/SE ran 0.90-1.21 by item type; the linear transform
+  `(I - 1a') cov (I - a1')` restores 0.96-1.09. Affects threshold and
+  item SEs, separation, and equating weights on mixed designs.
+* Warm WLE discrimination cancellation. The common-discrimination weighted
+  score is `disc[(R-E) + mu3/(2V)]` -- the discrimination cancels; a stray
+  `disc` factor in the correction biased WLEs by up to 0.26 logits at
+  disc = 0.5 (exact at disc = 1, so ordinary analyses were unaffected;
+  the vector-disc EFRM path was already correct).
+* Honest chi-square degrees of freedom. An item whose responders occupy
+  fewer than two class intervals has no estimable item-trait interaction:
+  chi-square, df, and p are now NA (df was manufactured as 1 with p = 1),
+  and the total test sums over testable items only. The `adjust_N`
+  proportional-scaling semantics are now documented explicitly.
+* Covariance-correct equating drift tests, both families. The shift c0 is
+  estimated from the same common items the tests examine, and locations
+  within a calibration are correlated through the identification
+  constraint: drift denominators now use
+  `[(I - 1u') Sigma (I - u1')]_ii` with Sigma the sum of the two
+  calibrations' location covariances (a bank contributes diag(se^2)).
+  Null calibration: 4.6% rejection at nominal 5%, t-SD 0.97.
+* Judge-clustered SEs refuse a single judge (they collapse to ~1e-16) and
+  note fewer than 10 clusters as likely understating.
+* `btl_dif()` now tests at the judge level: residuals aggregate to one
+  weighted mean per judge (per opponent band) and enter a split-plot
+  ANOVA with the judge as the error unit. The comparison-level ANOVA
+  pseudo-replicated -- 6 of 10 null datasets with judge heterogeneity and
+  arbitrary groups falsely flagged uniform DIF; the judge-level design
+  flags 0 of 10 while still detecting a planted 1-logit effect. Band
+  breaks moved to count-weighted quantiles, making aggregated and
+  expanded data exactly equivalent. Power now scales with judges per
+  group -- the honest unit.
+* Non-convergence now warns loudly at fit time in `rasch()` and `btl()`
+  (it was only visible in print); `btl()`'s convergence flag is
+  scale-free (gradient per comparison).
+* Documentation: the test-of-fit suite's calibration status is stated
+  plainly (approximate, convention-faithful diagnostics; simulation shows
+  near-but-not-nominal rejection), with parametric-bootstrap references
+  via `sim_replicate()` recommended where exact calibration matters; the
+  BTL pair chi-squares are marked descriptive under judge clustering; the
+  next-pair priority is documented as a ranking heuristic; the BTL
+  dimensionality reference's no-refit design is stated.
+
 # rasch 1.10.3
 
 Input honesty, from an external code review (five findings, all confirmed
