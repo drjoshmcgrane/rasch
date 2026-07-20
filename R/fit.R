@@ -171,7 +171,10 @@
 .ci_allocate <- function(th, n_groups) {
   ut <- sort(unique(th))
   if (length(ut) <= n_groups) return(match(th, ut))
-  cnt <- as.integer(table(factor(th, levels = ut)))
+  # tabulate(match()) not table(factor()): two distinct doubles can share a
+  # printed representation, and factor(levels = ut) then dies on
+  # "duplicated" levels (person-mean locations from tapply hit this)
+  cnt <- tabulate(match(th, ut), nbins = length(ut))
   cum <- cumsum(cnt)
   n <- length(th)
   b <- integer(n_groups - 1L)

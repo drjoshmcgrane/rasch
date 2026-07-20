@@ -46,11 +46,24 @@ adjustment and the practical-significance flag. Each size involves a
 re-analysis, so this costs one refit per flagged item-term.}
 
 \item{id, within}{Person identifier and within-subject factor names for
-stacked repeated-measures designs. When any factor is within-subject the
-model becomes a mixed (split-plot) analysis of variance -- the class
-interval taken at the person level, the within factors carrying a person
-error stratum -- so their terms are tested validly. Auto-detected from
-the fit's person identifier.}
+stacked repeated-measures designs, auto-detected from the fit's person
+identifier. Whenever ids repeat, PERSONS are the units of analysis:
+residuals are aggregated to one mean per person (per within-subject
+cell), so duplicated or stacked observations cannot manufacture
+information, and the class interval is taken at the person level.
+Between-person terms are tested with order-invariant Type II sums of
+squares -- every term adjusted for every term not containing it, the
+class interval always among them, so entry order cannot decide which
+correlated factor absorbs shared or trait variance. Within-person
+terms are tested on the person-by-cell means through orthonormal
+contrasts with the Greenhouse-Geisser epsilon correction (Maxwell and
+Delaney 2004), so multi-level within factors are valid without the
+sphericity assumption; persons missing any within cell are dropped
+from the within-stratum tests. A factor that varies within persons
+must be declared (or auto-detected) as within-subject; treating it as
+between-subjects is refused. The BH adjustment is applied across
+items separately within each term: each term is read as its own
+prespecified family, not as one pooled screen across all terms.}
 }
 \value{
 A list with \code{summary}, the compact reading of the analysis

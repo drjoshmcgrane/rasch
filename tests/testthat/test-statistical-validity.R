@@ -234,3 +234,91 @@ test_that("clustered covariance notes rank deficiency (judges <= parameters)", {
   f <- btl(d, "object_a", "object_b", "winner", judge = "judge")
   expect_true(any(grepl("rank-deficient", f$notes)))
 })
+
+# --- DIF ANOVA engine (round 10): order invariance, person units, GG ------
+
+test_that("multi-factor DIF tests are order-invariant (Type II)", {
+  skip_on_cran()
+  set.seed(42)
+  N <- 500; L <- 8; btrue <- seq(-1.5, 1.5, length.out = L)
+  g1 <- sample(c("a", "b"), N, TRUE, prob = c(0.35, 0.65))
+  g2 <- ifelse(runif(N) < 0.8, ifelse(g1 == "a", "x", "y"),
+               sample(c("x", "y"), N, TRUE))
+  th <- rnorm(N)
+  X <- matrix(0L, N, L, dimnames = list(NULL, paste0("I", 1:L)))
+  for (j in 1:L)
+    X[, j] <- rbinom(N, 1, plogis(th - btrue[j] +
+                                    ifelse(j == 3 & g1 == "b", 0.8, 0)))
+  df <- data.frame(X, g1 = g1, g2 = g2)
+  s12 <- dif_anova(rasch(df, factors = c("g1", "g2"),
+                         items = paste0("I", 1:L)))$summary
+  s21 <- dif_anova(rasch(df, factors = c("g2", "g1"),
+                         items = paste0("I", 1:L)))$summary
+  key <- function(s) s[order(s$item, s$term), c("F_uniform", "F_nonuniform")]
+  expect_equal(key(s12), key(s21), tolerance = 1e-8, ignore_attr = TRUE)
+})
+
+test_that("duplicating every person leaves the DIF tests exactly unchanged", {
+  set.seed(7)
+  N <- 250; L <- 6; btrue <- seq(-1.2, 1.2, length.out = L)
+  g <- sample(c("a", "b"), N, TRUE); th <- rnorm(N)
+  X <- matrix(0L, N, L, dimnames = list(NULL, paste0("I", 1:L)))
+  for (j in 1:L) X[, j] <- rbinom(N, 1, plogis(th - btrue[j]))
+  d1 <- data.frame(X, g = g, pid = sprintf("P%03d", 1:N))
+  f1 <- rasch(d1, factors = "g", id = "pid", items = paste0("I", 1:L))
+  f2 <- rasch(rbind(d1, d1), factors = "g", id = "pid",
+              items = paste0("I", 1:L))
+  s1 <- dif_anova(f1)$summary; s2 <- dif_anova(f2)$summary
+  expect_equal(s2$F_uniform[order(s2$item)], s1$F_uniform[order(s1$item)],
+               tolerance = 1e-8)
+})
+
+test_that("stacked between-treatment is refused; within declarations checked", {
+  set.seed(3)
+  N <- 120; d <- seq(-1, 1, length.out = 6)
+  X <- rbind(matrix(rbinom(N * 6, 1, plogis(outer(rnorm(N), d, "-"))), N, 6),
+             matrix(rbinom(N * 6, 1, plogis(outer(rnorm(N), d, "-"))), N, 6))
+  colnames(X) <- paste0("I", 1:6)
+  dat <- data.frame(X, occ = rep(c("t1", "t2"), each = N))
+  id <- rep(sprintf("P%03d", 1:N), 2)
+  fit <- rasch(dat, factors = "occ", id = id)
+  expect_error(dif_anova(fit, within = character(0)), "vary within persons")
+  expect_error(dif_anova(fit, within = "nope"), "not among the nominated")
+})
+
+test_that("multi-level within DIF is GG-calibrated and has power", {
+  skip_on_cran()   # replicate fits
+  np <- 120; L2 <- 6; b2 <- seq(-1, 1, length.out = L2); K <- 4
+  gen <- function(seed, occ_sd, shift3_t4 = 0) {
+    set.seed(seed)
+    th0 <- rnorm(np); rows <- list()
+    for (k in 1:K) {
+      thk <- th0 + rnorm(np, 0, occ_sd[k])
+      Xk <- matrix(0L, np, L2, dimnames = list(NULL, paste0("I", 1:L2)))
+      for (j in 1:L2)
+        Xk[, j] <- rbinom(np, 1, plogis(thk - b2[j] +
+                                          ifelse(j == 3 & k == 4,
+                                                 shift3_t4, 0)))
+      rows[[k]] <- data.frame(Xk, occ = paste0("t", k),
+                              pid = sprintf("P%03d", 1:np))
+    }
+    rasch(do.call(rbind, rows), factors = "occ", id = "pid",
+          items = paste0("I", 1:L2))
+  }
+  ## nonspherical null: raw rejections at or below ~nominal over 15 fits
+  rej <- 0; tot <- 0
+  for (r in 1:15) {
+    ss <- dif_anova(gen(100 + r, c(0.05, 0.05, 0.05, 1.5)))$summary
+    rej <- rej + sum(ss$p_uniform < 0.05, na.rm = TRUE)
+    tot <- tot + sum(is.finite(ss$p_uniform))
+  }
+  expect_lte(rej / tot, 0.09)   # the uncorrected engine sat near 9-percent
+  ## planted occasion DIF: detected as the top flag in most replicates
+  hits <- 0
+  for (r in 1:5) {
+    ss <- dif_anova(gen(200 + r, rep(0.4, K), shift3_t4 = -1.0))$summary
+    fl <- ss$item[ss$uniform_DIF %in% TRUE]
+    hits <- hits + ("I3" %in% fl)
+  }
+  expect_gte(hits, 3)
+})

@@ -27,10 +27,15 @@
 # levels (or with the factor-combination cells in the factorial), so the
 # interval count is chosen to keep the smallest group's expected cell size
 # adequate -- independently of the interval count of the overall fit.
-.dif_n_groups <- function(fit, grp, cell_min = 30L) {
+.dif_n_groups <- function(fit, grp, cell_min = 30L, id = NULL) {
   ok <- !is.na(grp) & !is.na(fit$person$theta)
   if (!any(ok)) return(2L)
-  n_min <- min(table(droplevels(factor(grp[ok]))))
+  # with repeated ids the cells are counted in PERSONS, not rows: stacked
+  # or duplicated observations must not widen the interval rule
+  n_min <- if (!is.null(id))
+    min(tapply(as.character(id)[ok], droplevels(factor(grp[ok])),
+               function(v) length(unique(v))))
+  else min(table(droplevels(factor(grp[ok]))))
   max(2L, min(10L, as.integer(n_min) %/% as.integer(cell_min)))
 }
 
@@ -54,6 +59,150 @@
 
 # variables of an ANOVA term label, e.g. "g1:ci" -> c("g1", "ci")
 .term_vars <- function(term) strsplit(term, ":", fixed = TRUE)[[1]]
+
+# ---------------------------------------------------------------------------
+# Order-invariant person-level DIF tests. Between-person terms get Type II
+# sums of squares on person-level residual means: each term is adjusted for
+# every term NOT containing it (so the class interval is always adjusted
+# out of every group test), with F against the full model's between-person
+# residual -- sequential (Type I) tests let a group factor absorb trait or
+# correlated-factor variance in unbalanced designs, flipping which factor
+# flags with entry order. Within-person terms are tested on person-by-cell
+# means through orthonormal contrasts with the Greenhouse-Geisser epsilon
+# correction (Maxwell & Delaney 2004): classical split-plot strata assume
+# sphericity, and a nonspherical 4-level null rejected at ~9% nominal 5%.
+# ---------------------------------------------------------------------------
+.dif_type2 <- function(d, term_labels, resp = "z") {
+  mk <- function(tl) stats::as.formula(paste(
+    resp, "~", if (length(tl)) paste(tl, collapse = " + ") else "1"))
+  full <- tryCatch(stats::lm(mk(term_labels), data = d),
+                   error = function(e) NULL)
+  if (is.null(full)) return(NULL)
+  rss_full <- sum(stats::resid(full)^2)
+  df_res <- stats::df.residual(full)
+  if (df_res < 1 || rss_full <= 0) return(NULL)
+  mse <- rss_full / df_res
+  out <- list()
+  for (tt in term_labels) {
+    tv <- .term_vars(tt)
+    not_cont <- term_labels[!vapply(term_labels, function(u)
+      all(tv %in% .term_vars(u)), TRUE)]
+    m0 <- stats::lm(mk(not_cont), data = d)
+    m1 <- stats::lm(mk(c(not_cont, tt)), data = d)
+    df_t <- stats::df.residual(m0) - stats::df.residual(m1)
+    if (df_t < 1) next
+    ss_t <- max(sum(stats::resid(m0)^2) - sum(stats::resid(m1)^2), 0)
+    Fv <- (ss_t / df_t) / mse
+    out[[length(out) + 1L]] <- data.frame(
+      term = tt, df = df_t, sum_sq = ss_t, mean_sq = ss_t / df_t,
+      F_value = Fv, p = stats::pf(Fv, df_t, df_res, lower.tail = FALSE),
+      resid_ss = rss_full, stringsAsFactors = FALSE)
+  }
+  if (!length(out)) return(NULL)
+  rbind(do.call(rbind, out),
+        data.frame(term = "Residuals", df = df_res, sum_sq = rss_full,
+                   mean_sq = mse, F_value = NA_real_, p = NA_real_,
+                   resid_ss = NA_real_, stringsAsFactors = FALSE))
+}
+
+# Within-stratum tests on the person-by-within-cell mean matrix Y (complete
+# cases over cells). For a term pairing the within subspace (Kronecker
+# contrast matrix over the within factors) with a between portion, the
+# contrast scores S = Y C are tested by Type II model comparison of each
+# score column on the between design, pooled over columns, with df scaled
+# by the Greenhouse-Geisser epsilon of the residual score covariance.
+.dif_within_tests <- function(Y, pdat, wname, wlv, within_terms,
+                              bterms_all) {
+  n <- nrow(Y)
+  contr_of <- function(k) {
+    C <- stats::contr.helmert(k)
+    sweep(C, 2, sqrt(colSums(C^2)), "/")
+  }
+  meanvec_of <- function(k) matrix(1 / sqrt(k), k, 1)
+  mk <- function(tl, resp) stats::as.formula(paste(
+    resp, "~", if (length(tl)) paste(tl, collapse = " + ") else "1"))
+  out <- list(); resid_pool <- 0; resid_df <- 0
+  for (tt in within_terms) {
+    tv <- .term_vars(tt)
+    w_t <- intersect(tv, names(wlv))
+    b_t <- setdiff(tv, w_t)
+    Cm <- matrix(1, 1, 1)
+    for (wf in names(wlv)) {
+      k <- wlv[[wf]]
+      Cm <- Cm %x% (if (wf %in% w_t) contr_of(k) else meanvec_of(k))
+    }
+    S <- Y %*% Cm
+    m <- ncol(S)
+    # between design for the scores: all between-stratum terms
+    bt_full <- bterms_all
+    fits_j <- lapply(seq_len(m), function(j) {
+      dd <- pdat; dd$s_ <- S[, j]
+      stats::lm(mk(bt_full, "s_"), data = dd)
+    })
+    rss_f <- sum(vapply(fits_j, function(f) sum(stats::resid(f)^2), 0))
+    dfr1 <- stats::df.residual(fits_j[[1]])
+    df_err <- m * dfr1
+    if (df_err < 1 || rss_f <= 0) next
+    # Greenhouse-Geisser epsilon from the residual score covariance
+    E <- vapply(fits_j, stats::resid, numeric(n))
+    Sg <- crossprod(as.matrix(E)) / dfr1
+    lam <- eigen(Sg, symmetric = TRUE, only.values = TRUE)$values
+    lam <- pmax(lam, 0)
+    eps <- if (m == 1L || sum(lam^2) <= 0) 1 else
+      max(min(sum(lam)^2 / (m * sum(lam^2)), 1), 1 / m)
+    if (!length(b_t)) {
+      # the within main effect is the grand mean of the contrast scores,
+      # adjusted for the between design. Removing the intercept from a
+      # FORMULA does nothing when factors are present (R re-parameterises
+      # them to absorb the constant), so the design is built explicitly
+      # with sum-to-zero factor coding, where the intercept column is the
+      # balanced grand mean and genuinely separable.
+      Xb <- if (length(bt_full)) {
+        fml <- stats::as.formula(paste("~", paste(bt_full, collapse = " + ")))
+        fac_cols <- names(pdat)[vapply(pdat, is.factor, TRUE)]
+        ctr <- stats::setNames(
+          rep(list("contr.sum"), length(fac_cols)), fac_cols)
+        stats::model.matrix(fml, data = pdat, contrasts.arg = ctr)
+      } else matrix(1, n, 1)
+      ss_t <- 0
+      for (j in seq_len(m)) {
+        r_full <- stats::lm.fit(Xb, S[, j])$residuals
+        r_red <- stats::lm.fit(Xb[, -1, drop = FALSE], S[, j])$residuals
+        ss_t <- ss_t + max(sum(r_red^2) - sum(r_full^2), 0)
+      }
+      df_t <- m
+    } else {
+      not_cont <- bt_full[!vapply(bt_full, function(u)
+        all(b_t %in% .term_vars(u)), TRUE)]
+      rss0 <- rss1 <- 0; df_t1 <- NA_integer_
+      for (j in seq_len(m)) {
+        dd <- pdat; dd$s_ <- S[, j]
+        f0 <- stats::lm(mk(not_cont, "s_"), data = dd)
+        f1 <- stats::lm(mk(c(not_cont, paste(b_t, collapse = ":")), "s_"),
+                        data = dd)
+        rss0 <- rss0 + sum(stats::resid(f0)^2)
+        rss1 <- rss1 + sum(stats::resid(f1)^2)
+        df_t1 <- stats::df.residual(f0) - stats::df.residual(f1)
+      }
+      if (is.na(df_t1) || df_t1 < 1) next
+      ss_t <- max(rss0 - rss1, 0)
+      df_t <- m * df_t1
+    }
+    Fv <- (ss_t / df_t) / (rss_f / df_err)
+    out[[length(out) + 1L]] <- data.frame(
+      term = tt, df = df_t, sum_sq = ss_t, mean_sq = ss_t / df_t,
+      F_value = Fv,
+      p = stats::pf(Fv, eps * df_t, eps * df_err, lower.tail = FALSE),
+      resid_ss = rss_f, stringsAsFactors = FALSE)
+    resid_pool <- rss_f; resid_df <- df_err
+  }
+  if (!length(out)) return(NULL)
+  rbind(do.call(rbind, out),
+        data.frame(term = "Residuals", df = resid_df, sum_sq = resid_pool,
+                   mean_sq = if (resid_df > 0) resid_pool / resid_df else
+                     NA_real_, F_value = NA_real_, p = NA_real_,
+                   resid_ss = NA_real_, stringsAsFactors = FALSE))
+}
 
 # Flatten an aov (single- or multi-stratum) into one row per term, carrying
 # the residual sum of squares of the term's own stratum so a partial
@@ -120,11 +269,24 @@
 #'   factor-by-factor terms); \code{"factorial"} also crosses the factors
 #'   with each other. Immaterial with a single factor.
 #' @param id,within Person identifier and within-subject factor names for
-#'   stacked repeated-measures designs. When any factor is within-subject the
-#'   model becomes a mixed (split-plot) analysis of variance -- the class
-#'   interval taken at the person level, the within factors carrying a person
-#'   error stratum -- so their terms are tested validly. Auto-detected from
-#'   the fit's person identifier.
+#'   stacked repeated-measures designs, auto-detected from the fit's person
+#'   identifier. Whenever ids repeat, PERSONS are the units of analysis:
+#'   residuals are aggregated to one mean per person (per within-subject
+#'   cell), so duplicated or stacked observations cannot manufacture
+#'   information, and the class interval is taken at the person level.
+#'   Between-person terms are tested with order-invariant Type II sums of
+#'   squares -- every term adjusted for every term not containing it, the
+#'   class interval always among them, so entry order cannot decide which
+#'   correlated factor absorbs shared or trait variance. Within-person
+#'   terms are tested on the person-by-cell means through orthonormal
+#'   contrasts with the Greenhouse-Geisser epsilon correction (Maxwell and
+#'   Delaney 2004), so multi-level within factors are valid without the
+#'   sphericity assumption; persons missing any within cell are dropped
+#'   from the within-stratum tests. A factor that varies within persons
+#'   must be declared (or auto-detected) as within-subject; treating it as
+#'   between-subjects is refused. The BH adjustment is applied across
+#'   items separately within each term: each term is read as its own
+#'   prespecified family, not as one pooled screen across all terms.
 #' @param sizes Also compute DIF magnitudes in logits (\code{\link{dif_size}})
 #'   for every significant, non-superseded group term: the item is resolved
 #'   by the term's levels (interaction terms by their cells) and all
@@ -171,10 +333,43 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
   # analysis into a mixed (split-plot) one: the class interval is taken at
   # the person level so it is a clean whole-plot factor, and the within
   # factors carry a person error stratum.
-  if (is.character(id) && length(id) == 1L && !is.null(fit$factors) &&
-      id %in% names(fit$factors)) id <- fit$factors[[id]]
+  if (is.character(id) && length(id) == 1L) {
+    if (is.null(fit$factors) || !id %in% names(fit$factors))
+      stop("id column '", id, "' not found among the fit's factors")
+    id <- fit$factors[[id]]
+  }
   if (is.null(id) && !is.null(fit$person$id)) id <- as.character(fit$person$id)
-  if (is.null(within) && !is.null(id) && anyDuplicated(id)) {
+  if (!is.null(id)) id <- as.character(id)
+  repeated <- !is.null(id) && anyDuplicated(id) > 0L
+  if (!is.null(within)) {
+    unknown <- setdiff(within, names(factors))
+    if (length(unknown))
+      stop("within-subject factor(s) not among the nominated factors: ",
+           paste(unknown, collapse = ", "))
+    if (!repeated)
+      stop("within-subject factors need repeated person ids (each id ",
+           "observed more than once); no id repeats here")
+    varies <- vapply(within, function(fn)
+      any(tapply(as.character(factors[[fn]]), id,
+                 function(v) length(unique(v)) > 1L)), TRUE)
+    if (any(!varies))
+      stop("factor(s) declared within-subject never vary within any id: ",
+           paste(within[!varies], collapse = ", "))
+    # the converse is equally ill-defined: a factor that varies within
+    # persons has no person-level value, so it cannot be treated as
+    # between-subjects (the old row-level treatment pseudo-replicated)
+    other <- setdiff(names(factors), within)
+    ovaries <- vapply(other, function(fn)
+      any(tapply(as.character(factors[[fn]]), id,
+                 function(v) length(unique(v)) > 1L)), TRUE)
+    if (length(other) && any(ovaries))
+      stop("factor(s) vary within persons but are not declared in ",
+           "`within`: ", paste(other[ovaries], collapse = ", "),
+           "; declare them within-subject (or aggregate the data to one ",
+           "row per person) -- treating repeated observations as ",
+           "independent between-person rows manufactures information")
+  }
+  if (is.null(within) && repeated) {
     within <- names(factors)[vapply(names(factors), function(fn)
       any(tapply(as.character(factors[[fn]]), id,
                  function(v) length(unique(v)) > 1L)), TRUE)]
@@ -185,33 +380,87 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
 
   if (is.null(n_groups)) {
     cells <- interaction(factors, drop = TRUE)
-    n_groups <- .dif_n_groups(fit, cells)
+    n_groups <- .dif_n_groups(fit, cells,
+                              id = if (repeated) id else NULL)
   }
-  ci <- if (mixed) .dif_person_ci(fit, id, n_groups) else
+  # PERSONS are the units whenever ids repeat (stacked or duplicated rows):
+  # observation-level tests would let copied observations manufacture
+  # information. The class interval is taken at the person level so it is a
+  # clean whole-plot covariate.
+  ci <- if (repeated) .dif_person_ci(fit, id, n_groups) else
     .dif_class_intervals(fit, n_groups)
 
   fnames <- names(factors)
   safe <- paste0("f", seq_along(fnames))           # syntactic stand-ins
+  wsafe <- safe[match(within, fnames)]
+  bsafe <- setdiff(safe, wsafe)
   op <- if (effects == "factorial") " * " else " + "
-  err <- if (mixed) {
-    wsafe <- safe[match(within, fnames)]
-    paste0(" + Error(pid/(", paste(wsafe, collapse = " * "), "))")
-  } else ""
-  form <- stats::as.formula(
-    paste("z ~ (", paste(safe, collapse = op), ") * ci", err))
+  form_all <- stats::as.formula(
+    paste("z ~ (", paste(safe, collapse = op), ") * ci"))
+  all_terms <- attr(stats::terms(form_all), "term.labels")
+  bterms <- all_terms[!vapply(all_terms, function(tt)
+    any(.term_vars(tt) %in% wsafe), TRUE)]
+  wterms <- setdiff(all_terms, bterms)
 
   fits <- vector("list", L); rows <- list()
+  incomplete_note <- 0L
   for (i in seq_len(L)) {
     d <- data.frame(z = Z[, i], ci = ci)
-    if (mixed) d$pid <- factor(id)
+    d$pid <- if (is.null(id)) sprintf("p%06d", seq_len(nrow(d))) else id
     for (j in seq_along(fnames)) d[[safe[j]]] <- factor(factors[[fnames[j]]])
     d <- d[stats::complete.cases(d), ]
     if (nrow(d) < 10 || any(vapply(safe, function(s)
       length(unique(d[[s]])) < 2, TRUE))) next
-    a <- tryCatch(stats::aov(form, data = d), error = function(e) NULL)
-    if (is.null(a)) next
-    fits[[i]] <- a
-    ft <- .aov_terms_flat(a)
+
+    # aggregate to one mean residual per person per within-cell (persons
+    # without repeats aggregate to themselves)
+    wcell <- if (mixed) interaction(d[wsafe], drop = FALSE) else
+      factor(rep("all", nrow(d)))
+    key <- interaction(d$pid, wcell, drop = TRUE)
+    agz <- tapply(d$z, key, mean)
+    firsts <- which(!duplicated(key))
+    ag <- d[firsts[match(levels(key), as.character(key[firsts]))],
+            c("pid", "ci", safe), drop = FALSE]
+    ag$z <- as.numeric(agz)
+
+    # person-level frame for the between stratum: one row per person, the
+    # mean over that person's within cells
+    pkey <- factor(ag$pid)
+    pz <- tapply(ag$z, pkey, mean)
+    pfirst <- which(!duplicated(pkey))
+    pdat <- ag[pfirst[match(levels(pkey), as.character(pkey[pfirst]))],
+               c("pid", "ci", bsafe), drop = FALSE]
+    pdat$z <- as.numeric(pz)
+
+    ft_b <- .dif_type2(pdat, bterms)
+    ft_w <- NULL
+    if (mixed && length(wterms)) {
+      # complete within-cell matrix per person; incomplete persons are
+      # dropped explicitly (multi-stratum projections on unbalanced data
+      # are exactly the murky territory this engine replaces)
+      wl <- lapply(wsafe, function(sn) sort(unique(as.character(ag[[sn]]))))
+      names(wl) <- wsafe
+      Ywide <- tapply(ag$z, list(factor(ag$pid),
+                                 interaction(ag[wsafe], drop = FALSE)), mean)
+      complete <- rowSums(is.na(Ywide)) == 0L
+      incomplete_note <- incomplete_note + sum(!complete)
+      if (sum(complete) >= 6L) {
+        Y <- Ywide[complete, , drop = FALSE]
+        pd2 <- pdat[match(rownames(Y), as.character(pdat$pid)), ,
+                    drop = FALSE]
+        wlv <- lapply(wl, length)
+        ft_w <- .dif_within_tests(Y, pd2, paste(wsafe, collapse = ":"),
+                                  wlv, wterms, bterms)
+      }
+    }
+    ft <- rbind(ft_b, ft_w)
+    if (is.null(ft)) next
+    # a person-level aov (class interval first) retained solely for the
+    # Tukey HSD follow-ups: cell means and the error MS are what Tukey
+    # needs, and they do not depend on the sum-of-squares type
+    fits[[i]] <- tryCatch(stats::aov(stats::as.formula(paste(
+      "z ~ ci + (", paste(safe, collapse = op), ")")), data = ag),
+      error = function(e) NULL)
     rows[[length(rows) + 1L]] <- data.frame(item = colnames(Z)[i], ft)
   }
   if (!length(rows)) stop("no item yielded an estimable factorial ANOVA")

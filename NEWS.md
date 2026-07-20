@@ -1,3 +1,41 @@
+# rasch 1.12.0
+
+The multi-factor DIF ANOVA engine rebuilt for statistical validity
+(tenth review round; three P1 findings, every one reproduced before
+fixing). This release is on the development branch only -- it does NOT
+supersede the CRAN submission of 1.11.7.
+
+* Order-invariant tests. Between-person terms now use Type II sums of
+  squares on person-level residual means: every term is adjusted for
+  every term not containing it, with the class interval always among
+  them. The old sequential (Type I) tests with factors entered first
+  let entry order decide which of two correlated factors flagged -- in
+  the reproduction, reversing the order LOST a planted 0.8-logit DIF
+  entirely -- and let a group factor absorb pure trait variance
+  (reported p = 2e-25 where the adjusted test gives p = 0.83). Verified
+  exactly order-invariant.
+* Persons are the units whenever ids repeat. Residuals aggregate to one
+  mean per person (per within cell) before any test, and the automatic
+  class-interval rule counts persons, not rows: exactly duplicating
+  every person previously changed F = 4.06 (unflagged) to F = 8.21
+  (flagged); it now changes nothing (verified to 2e-13).
+* Within-person terms are tested on person-by-cell means through
+  orthonormal contrasts with the Greenhouse-Geisser epsilon (Maxwell &
+  Delaney 2004), replacing raw multi-stratum aov: a nonspherical
+  four-level null rejected ~9% at nominal 5% before (and could crash on
+  tied person means -- also fixed, in the interval allocator); it now
+  runs at 2.8%, with the spherical null at 6.1% and planted
+  within-occasion DIF still detected. Persons missing a within cell are
+  dropped from the within tests explicitly rather than projected
+  murkily. The two-level case still agrees with its paired-t gold
+  standard.
+* Input honesty: unknown `within` names error; declaring a factor
+  within-subject with no repeated ids errors; and a factor that VARIES
+  within persons can no longer be forced between-subjects (the old
+  row-level treatment pseudo-replicated).
+* The BH family choice (per term, across items) is now documented
+  explicitly.
+
 # rasch 1.11.7
 
 Ninth review round: one finding.
