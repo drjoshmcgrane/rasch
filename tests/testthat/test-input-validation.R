@@ -339,6 +339,69 @@ test_that("BTL refuses directed separation of the win graph (Ford 1957)", {
   expect_true(f2$converged)
 })
 
+test_that("zero-information response pairs do not connect item blocks", {
+  set.seed(1)
+  N <- 120
+  th <- rnorm(N)
+  X <- matrix(NA_integer_, N + 1, 4,
+              dimnames = list(NULL, c("A", "B", "C", "D")))
+  X[1:60, 1:2] <- cbind(rbinom(60, 1, plogis(th[1:60])),
+                        rbinom(60, 1, plogis(th[1:60] - 0.5)))
+  X[61:120, 3:4] <- cbind(rbinom(60, 1, plogis(th[61:120] + 0.5)),
+                          rbinom(60, 1, plogis(th[61:120])))
+  # the only bridge respondent scores (0, 0) on the B-C pair: total zero
+  # has a single feasible conditional allocation and carries no
+  # information, so the blocks stay unlinked
+  X[121, c("B", "C")] <- c(0L, 0L)
+  expect_error(rasch(X), "not connected")
+  # a SINGLE informative bridge is still perfect separation in the
+  # conditional pair logit: the pair MLE runs to the boundary, the
+  # information vanishes at the solution, and the projected-information
+  # backstop refuses what the graph check alone cannot see
+  X[121, c("B", "C")] <- c(1L, 0L)
+  expect_error(rasch(X), "singular")
+  # two bridges in opposite directions give an interior maximum: a real link
+  X <- rbind(X, NA_integer_)
+  X[122, c("B", "C")] <- c(0L, 1L)
+  f <- rasch(X)
+  expect_true(f$est$converged)
+  expect_true(all(f$items$se > 0, na.rm = TRUE))
+  # MFRM analogue: an extreme-total bridge does not join the blocks
+  set.seed(2)
+  d <- expand.grid(pid = 1:80, item = c("A", "B", "C", "D"),
+                   rater = c("R1", "R2"), stringsAsFactors = FALSE)
+  d <- d[(d$pid <= 40 & d$item %in% c("A", "B")) |
+         (d$pid >  40 & d$item %in% c("C", "D")), ]
+  d$score <- rbinom(nrow(d), 1, 0.5)
+  d <- rbind(d, data.frame(pid = 81L, item = c("B", "C"), rater = "R1",
+                           score = c(0L, 0L)))
+  expect_error(rasch_mfrm(d, person = "pid", item = "item", score = "score",
+                          facets = "rater"),
+               "does not bridge")
+})
+
+test_that("anchors relax the Ford condition to anchored recession bounds", {
+  # two balanced components, each with its own anchor, joined only by
+  # A always beating C: with both endpoints of the crossing edge fixed,
+  # nothing diverges and every free object is tied to an anchor in both
+  # directions -- the unrestricted Ford condition would wrongly refuse it
+  d <- rbind(data.frame(a = "A", b = "B",
+                        win = rep(c("A", "B"), each = 15)),
+             data.frame(a = "C", b = "D",
+                        win = rep(c("C", "D"), each = 15)),
+             data.frame(a = "A", b = "C", win = rep("A", 10)))
+  f <- btl(d, "a", "b", winner = "win", anchors = c(A = 1, C = -1))
+  expect_true(f$converged)
+  loc <- setNames(f$objects$location, f$objects$object)
+  expect_equal(unname(loc["A"]), 1)
+  expect_equal(unname(loc["C"]), -1)
+  expect_lt(abs(loc["B"] - 1), 0.75)     # balanced against the anchor at 1
+  expect_lt(abs(loc["D"] + 1), 0.75)
+  # without the C anchor the C-D cluster can recede: still refused
+  expect_error(btl(d, "a", "b", winner = "win", anchors = c(A = 1)),
+               "not tied to an anchor")
+})
+
 test_that("MFRM refuses disconnected response blocks the facet map cannot bridge", {
   set.seed(43)
   d <- expand.grid(pid = 1:80, item = c("A", "B", "C", "D"),

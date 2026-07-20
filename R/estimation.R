@@ -83,6 +83,16 @@ threshold_index <- function(m) {
 }
 
 .pcml_check_connected <- function(pairs, L, item_names, anchored = integer(0)) {
+  # a co-observed pair whose every observed total is 0 or the maximum has a
+  # single feasible conditional allocation and carries NO information: it
+  # must not count as a link, or one respondent scoring (0, 0) across two
+  # blocks would "connect" them while the likelihood stays flat between
+  # them (every intermediate total has at least two allocations, so any
+  # response off the two extreme-total corners is a real link)
+  informative <- vapply(pairs, function(p) {
+    sum(p$n) - p$n[1L, 1L] - p$n[nrow(p$n), ncol(p$n)] > 0
+  }, TRUE)
+  pairs <- pairs[informative]
   edges <- if (length(pairs))
     do.call(rbind, lapply(pairs, function(p) c(p$i, p$j)))
   else matrix(integer(0), 0L, 2L)
@@ -265,6 +275,18 @@ threshold_index <- function(m) {
     if (done) break
   }
   Hb <- crossprod(B, glh$H %*% B)
+  # the projected information must have full rank at the solution: a
+  # singular Hb means some parameter direction is unidentified (e.g.
+  # blocks linked only through non-informative extreme-total pairs slip
+  # past graph checks), and the ridged inverse would report plausible or
+  # even zero standard errors for a direction the data never determined
+  rc <- tryCatch(rcond(Hb), error = function(e) 0)
+  if (!(is.finite(rc) && rc > 1e-12))
+    stop("the projected information matrix is singular (reciprocal ",
+         "condition number ", format(rc, digits = 3), "): some parameter ",
+         "direction is not identified by the data -- typically blocks of ",
+         "items linked only through responses with no conditional ",
+         "information (all at the minimum or maximum)", call. = FALSE)
   Hinv <- tryCatch(solve(Hb), error = function(e)
     solve(Hb - diag(1e-8, nrow(Hb))))
   J  <- .pcml_sandwich(X, thr, m, drop(offset + B %*% beta), pairs)

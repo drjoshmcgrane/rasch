@@ -150,7 +150,11 @@ subset of objects never concedes a point to the rest, the likelihood
 pushes the two clusters infinitely far apart, so the fit stops with an
 error naming the separated objects rather than presenting the
 optimiser's boundary values as measures -- remove the separated
-cluster, or collect comparisons that cross the divide.
+cluster, or collect comparisons that cross the divide. Anchors relax
+this condition: an anchored object is pinned, so the fit only requires
+every free object to be tied to an anchor in both win directions
+(otherwise the constrained likelihood still recedes along the
+unanchored cluster, and the same error results).
 }
 \details{
 Fit is reported at three levels, mirroring the Rasch diagnostics.

@@ -78,7 +78,11 @@
 #' pushes the two clusters infinitely far apart, so the fit stops with an
 #' error naming the separated objects rather than presenting the
 #' optimiser's boundary values as measures -- remove the separated
-#' cluster, or collect comparisons that cross the divide.
+#' cluster, or collect comparisons that cross the divide. Anchors relax
+#' this condition: an anchored object is pinned, so the fit only requires
+#' every free object to be tied to an anchor in both win directions
+#' (otherwise the constrained likelihood still recedes along the
+#' unanchored cluster, and the same error results).
 #'
 #' Fit is reported at three levels, mirroring the Rasch diagnostics.
 #' Per object and (when given) per judge: the log-of-mean-square fit
@@ -620,23 +624,45 @@ plot_btl <- function(fit, band = 2.5) {
     Wp[ib[r], ia[r]] <- Wp[ib[r], ia[r]] + pts_b[r]
   }
   adj <- Wp > 0
-  reach <- function(Amat) {
-    seen <- rep(FALSE, K); seen[1] <- TRUE; front <- 1L
+  reach <- function(Amat, start) {
+    seen <- rep(FALSE, K); seen[start] <- TRUE; front <- start
     while (length(front)) {
       nxt <- which(colSums(Amat[front, , drop = FALSE]) > 0 & !seen)
       seen[nxt] <- TRUE; front <- nxt
     }
     seen
   }
-  if (!(all(reach(adj)) && all(reach(t(adj))))) {
-    fwd <- reach(adj); bwd <- reach(t(adj))
-    sep <- objs[!(fwd & bwd)]
-    stop("the win graph is not strongly connected: object(s) ",
-         paste(sep, collapse = ", "), " never concede points to (or never ",
-         "take points from) the rest, so finite maximum-likelihood ",
-         "locations do not exist (Ford 1957) -- remove the separated ",
-         "object(s), or collect comparisons (or ties/margins) that cross ",
-         "the divide in the missing direction", call. = FALSE)
+  anch_idx <- if (!is.null(anchors)) which(objs %in% names(anchors))
+              else integer(0)
+  if (!length(anch_idx)) {
+    if (!(all(reach(adj, 1L)) && all(reach(t(adj), 1L)))) {
+      fwd <- reach(adj, 1L); bwd <- reach(t(adj), 1L)
+      sep <- objs[!(fwd & bwd)]
+      stop("the win graph is not strongly connected: object(s) ",
+           paste(sep, collapse = ", "), " never concede points to (or never ",
+           "take points from) the rest, so finite maximum-likelihood ",
+           "locations do not exist (Ford 1957) -- remove the separated ",
+           "object(s), or collect comparisons (or ties/margins) that cross ",
+           "the divide in the missing direction", call. = FALSE)
+    }
+  } else {
+    # anchored fits relax Ford: an anchor pins its object, so a divergent
+    # (recession) direction exists only for objects not tied to an anchor
+    # in BOTH constraint directions. With edge j -> i whenever i took
+    # points off j (the constraint d_i >= d_j on any recession direction
+    # d, with d = 0 at anchors), an object is safe iff an anchor is
+    # reachable from it (bounded above) and it is reachable from an
+    # anchor (bounded below); otherwise its up- or down-set contains no
+    # anchor and the likelihood recedes along that set
+    up <- reach(adj, anch_idx); down <- reach(t(adj), anch_idx)
+    bad <- !(up & down)
+    if (any(bad))
+      stop("object(s) ", paste(objs[bad], collapse = ", "), " are not ",
+           "tied to an anchor in both win directions: even with the ",
+           "anchors fixed, their likelihood recedes to a boundary and no ",
+           "finite maximum exists -- anchor an object in the separated ",
+           "cluster or collect comparisons that cross the divide",
+           call. = FALSE)
   }
 
   # symmetric-threshold map: tau = Cmat %*% tfree, tau_k = -tau_{m+1-k}.

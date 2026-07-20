@@ -314,7 +314,14 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
   # person-disjoint blocks is a flat direction of the likelihood whenever
   # the structural map can express it -- the solve would then land
   # wherever the ridge sends it while reporting convergence
-  co_obs <- crossprod(!is.na(Xv)) > 0
+  # informative co-observation only: a person at the extreme total of a
+  # pair (both responses 0, or both at their maxima) has one feasible
+  # conditional allocation and links nothing
+  obs_m <- !is.na(Xv)
+  zeros <- obs_m & !is.na(Xv) & Xv == 0
+  maxs <- obs_m & sweep(Xv, 2, m_v, `==`); maxs[is.na(maxs)] <- FALSE
+  zeros[is.na(zeros)] <- FALSE
+  co_obs <- (crossprod(obs_m) - crossprod(zeros) - crossprod(maxs)) > 0
   edges_v <- which(co_obs & upper.tri(co_obs), arr.ind = TRUE)
   comp_v <- .btlef_components(ncol(Xv), edges_v)
   if (length(unique(comp_v)) > 1L) {

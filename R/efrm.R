@@ -463,11 +463,14 @@
 #'   multi-degree-of-freedom Wald test per term in
 #'   \code{phi_factorial_tests}. Group units are checked for
 #'   identification on the joint information: a flat direction along a
-#'   unit, or a unit whose analytic standard error exceeds 5 log-units
-#'   (uncertain beyond a factor of about 150), is refused with an error
-#'   naming the group, since every common-unit quantity would silently
-#'   depend on it. Weakly identified units with real threshold spread are
-#'   kept, with standard errors that say how weak they are.
+#'   unit (structural non-identification) is refused with an error naming
+#'   the group, since every common-unit quantity would silently depend on
+#'   it. A unit whose analytic standard error exceeds 5 log-units
+#'   (uncertain beyond a factor of about 150) is practically
+#'   uninformative but not structurally unidentified: its estimate is
+#'   kept for sensitivity work, with a warning and a note. Weakly
+#'   identified units with real threshold spread are kept, with standard
+#'   errors that say how weak they are.
 #' @param id,factors,items,n_groups,adjust_N,na_codes As in
 #'   \code{\link{rasch}}.
 #' @param maxit,tol Outer iteration cap and convergence tolerance of the
@@ -677,20 +680,32 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
 
   sol <- .efrm_solve(Xv, thr_v, m_v, vmap, pairs, drow, A_D,
                      maxit = maxit, tol = tol)
-  # a unit is withheld -- by stopping, so no downstream quantity can quietly
-  # depend on it -- when the joint information has a flat direction along it
-  # (structural rank failure) or when its analytic SE exceeds 5 log-units
-  # (the unit would be uncertain beyond a factor of exp(5) ~ 150: zero
-  # usable information, the estimate is wherever the optimiser stopped).
-  # Groups whose frames carry small but real threshold spread keep their
-  # units, with the honest large standard errors saying how weak they are.
-  bad_g <- sol$phi_unident | !is.finite(sol$se_log_phi) | sol$se_log_phi > 5
+  # STRUCTURAL non-identification (a flat direction of the information
+  # along a unit) is an error: every common-unit quantity would silently
+  # depend on the arbitrary point the optimiser stopped at. PRACTICAL
+  # weakness -- an analytic SE above 5 log-units, i.e. the unit uncertain
+  # beyond a factor of exp(5) ~ 150 -- keeps its estimate for sensitivity
+  # work but warns loudly and is noted: the SE already says the data
+  # carry essentially no unit information.
+  bad_g <- sol$phi_unident | !is.finite(sol$se_log_phi)
   if (length(glevs) > 1L && any(bad_g))
     stop("the unit(s) of group(s) ", paste(glevs[bad_g], collapse = ", "),
          " are unidentified: the thresholds in their frames carry no ",
          "usable spread for phi to scale (information rank/conditioning ",
          "failure) -- refit without these groups, or include items whose ",
          "difficulties differ within the sets they answer")
+  weak_g <- !bad_g & sol$se_log_phi > 5
+  if (length(glevs) > 1L && any(weak_g)) {
+    warning("the unit(s) of group(s) ",
+            paste(glevs[weak_g], collapse = ", "), " are only weakly ",
+            "identified (SE of log phi above 5): the estimates are kept ",
+            "for sensitivity work, but the data carry essentially no ",
+            "information about these units", call. = FALSE)
+    notes <- c(notes, paste0(
+      "weakly identified unit(s) for group(s) ",
+      paste(glevs[weak_g], collapse = ", "),
+      ": SE of log phi exceeds 5, so no unit inference is supportable"))
+  }
   phi <- sol$phi; dtil <- sol$dtilde
 
   # equal-unit comparison on the same conditional information
