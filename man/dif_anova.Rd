@@ -13,7 +13,8 @@ dif_anova(
   effects = c("main", "factorial"),
   sizes = FALSE,
   id = NULL,
-  within = NULL
+  within = NULL,
+  pool_facets = TRUE
 )
 }
 \arguments{
@@ -64,6 +65,11 @@ must be declared (or auto-detected) as within-subject; treating it as
 between-subjects is refused. The BH adjustment is applied across
 items separately within each term: each term is read as its own
 prespecified family, not as one pooled screen across all terms.}
+
+\item{pool_facets}{For MFRM fits: pool residuals to the underlying
+items (the default), so DIF is tested per item rather than per
+item-by-facet virtual cell; \code{FALSE} tests the virtual items.
+Ignored for other fits.}
 }
 \value{
 A list with \code{summary}, the compact reading of the analysis

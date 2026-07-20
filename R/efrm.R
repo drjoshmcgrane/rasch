@@ -433,6 +433,12 @@
 #'   mentioned form their own set \code{"(rest)"} when a list is given.
 #' @param groups Name of the person-group column in \code{data}, or a vector
 #'   with one entry per person.
+#'   Several column names may be given: the frames are then their crossed
+#'   cells, per-cell units appear in \code{phi_table}, and a factorial
+#'   decomposition of the cell units (sum-coded main effects, and the
+#'   interaction when every cell is observed) is returned in
+#'   \code{phi_factorial}, with the cell standard errors treated as
+#'   uncorrelated across cells.
 #' @param id,factors,items,n_groups,adjust_N,na_codes As in
 #'   \code{\link{rasch}}.
 #' @param maxit,tol Outer iteration cap and convergence tolerance of the
@@ -481,19 +487,40 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
   if (is.null(boot_reps)) boot_reps <- if (se_method == "hybrid") 300L else 200L
   # --- roles ----------------------------------------------------------------
   id_vec <- NULL; fac_df <- NULL; grp <- NULL; grp_name <- "group"
+  grp_components <- NULL
   if (is.data.frame(data)) {
     nm <- names(data)
-    if (is.character(groups) && length(groups) == 1L && groups %in% nm) {
-      grp <- data[[groups]]; grp_name <- groups
+    if (is.character(groups) && length(groups) != nrow(data)) {
+      # column name(s); a character vector of length nrow(data) is the
+      # group values themselves and is handled below
+      miss <- setdiff(groups, nm)
+      if (length(miss))
+        stop("group column(s) not found in the data: ",
+             paste(miss, collapse = ", "))
+      if (length(groups) == 1L) {
+        grp <- data[[groups]]; grp_name <- groups
+      } else {
+        # SEVERAL frame-defining factors: the frames are their crossed
+        # cells, and a factorial decomposition of the cell units is
+        # reported in phi_factorial
+        grp_components <- data[groups]
+        grp <- interaction(grp_components, sep = ":", drop = TRUE)
+        grp_name <- paste(groups, collapse = ":")
+      }
     }
     if (is.character(id) && length(id) == 1L && id %in% nm) id_vec <- data[[id]]
     else if (!is.null(id) && length(id) == nrow(data)) id_vec <- id
-    if (is.character(factors) && all(factors %in% nm))
+    if (is.character(factors)) {
+      missf <- setdiff(factors, nm)
+      if (length(missf))
+        stop("factor column(s) not found in the data: ",
+             paste(missf, collapse = ", "))
       fac_df <- data[, factors, drop = FALSE]
-    else if (is.data.frame(factors) && nrow(factors) == nrow(data)) fac_df <- factors
+    } else if (is.data.frame(factors) && nrow(factors) == nrow(data))
+      fac_df <- factors
     drop_cols <- c(if (is.character(id)) id else NULL,
                    if (is.character(factors)) factors else NULL,
-                   if (is.character(groups) && length(groups) == 1L) groups else NULL)
+                   if (is.character(groups)) groups else NULL)
     item_cols <- if (!is.null(items)) intersect(items, nm) else setdiff(nm, drop_cols)
     X <- as.matrix(data[, item_cols, drop = FALSE])
   } else {
@@ -718,10 +745,18 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
 
   fac_all <- data.frame(g = as.character(grp), stringsAsFactors = FALSE)
   names(fac_all) <- grp_name
+  if (!is.null(grp_components)) {
+    gc_chr <- as.data.frame(lapply(grp_components, as.character),
+                            stringsAsFactors = FALSE)
+    fac_all <- cbind(fac_all, gc_chr)
+  }
   if (!is.null(fac_df)) fac_all <- cbind(fac_all, fac_df)
   fit <- .assemble_fit("EFRM", Xv, est, id_vec, fac_all, n_groups, adjust_N,
                        notes, disc = rho_v)
-  fit$frame_group <- grp_name
+  # every frame-defining factor (the crossed cell and its components) is
+  # frame structure, not a testable DIF factor
+  fit$frame_group <- c(grp_name,
+                       if (!is.null(grp_components)) names(grp_components))
 
   # --- structural tables -----------------------------------------------------------
   se_lp <- if (!is.null(boot)) apply(boot[, seq_len(G), drop = FALSE], 2, sd)
@@ -730,6 +765,40 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
            else unname(link$se_log_alpha)
   fit$phi_table <- data.frame(group = glevs, phi = unname(phi),
                               se_log_phi = se_lp)
+  # factorial decomposition of the cell units: log phi_cell regressed on
+  # sum-coded main effects (and their interaction), weighted by the
+  # cells' unit precisions. The cell SEs are treated as uncorrelated
+  # across cells (stage-one covariance between cells is not stored), so
+  # the decomposition is a transparent reparameterisation of the
+  # estimated cell units, not an independent test.
+  if (!is.null(grp_components)) {
+    cell_lab <- strsplit(glevs, ":", fixed = TRUE)
+    dd <- as.data.frame(do.call(rbind, cell_lab), stringsAsFactors = FALSE)
+    names(dd) <- names(grp_components)
+    for (cn in names(dd)) dd[[cn]] <- factor(dd[[cn]])
+    estimable <- all(vapply(dd, nlevels, 1L) >= 2L) &&
+      nrow(dd) > sum(vapply(dd, nlevels, 1L) - 1L)
+    if (estimable) {
+      ctr <- stats::setNames(rep(list("contr.sum"), ncol(dd)), names(dd))
+      full <- nrow(dd) >= prod(vapply(dd, nlevels, 1L))
+      fml <- stats::as.formula(paste("~", paste(names(dd), collapse =
+        if (full && ncol(dd) > 1L) " * " else " + ")))
+      Xf <- stats::model.matrix(fml, dd, contrasts.arg = ctr)
+      w <- 1 / pmax(fit$phi_table$se_log_phi, 1e-6)^2
+      XtW <- t(Xf * w)
+      cf_cov <- tryCatch(solve(XtW %*% Xf), error = function(e) NULL)
+      if (!is.null(cf_cov)) {
+        cf <- drop(cf_cov %*% (XtW %*% log(fit$phi_table$phi)))
+        fit$phi_factorial <- data.frame(
+          term = colnames(Xf), log_unit = cf,
+          se = sqrt(pmax(diag(cf_cov), 0)),
+          stringsAsFactors = FALSE)
+        fit$phi_factorial$z <- fit$phi_factorial$log_unit /
+          fit$phi_factorial$se
+        fit$phi_factorial$p <- 2 * stats::pnorm(-abs(fit$phi_factorial$z))
+      }
+    }
+  }
   fit$alpha_table <- data.frame(set = sets_u, alpha = unname(alpha),
                                 se_log_alpha = se_la)
   fit$set_table <- data.frame(set = sets_u, mu = unname(mu),

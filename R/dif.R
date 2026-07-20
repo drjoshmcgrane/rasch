@@ -316,6 +316,10 @@
 #'   between-subjects is refused. The BH adjustment is applied across
 #'   items separately within each term: each term is read as its own
 #'   prespecified family, not as one pooled screen across all terms.
+#' @param pool_facets For MFRM fits: pool residuals to the underlying
+#'   items (the default), so DIF is tested per item rather than per
+#'   item-by-facet virtual cell; \code{FALSE} tests the virtual items.
+#'   Ignored for other fits.
 #' @param sizes Also compute DIF magnitudes in logits (\code{\link{dif_size}})
 #'   for every significant, non-superseded group term: the item is resolved
 #'   by the term's levels (interaction terms by their cells) and all
@@ -353,23 +357,45 @@
 dif_anova <- function(fit, factors = NULL, n_groups = NULL,
                                 p_adjust = "BH", alpha = 0.05,
                                 effects = c("main", "factorial"),
-                                sizes = FALSE, id = NULL, within = NULL) {
+                                sizes = FALSE, id = NULL, within = NULL,
+                                pool_facets = TRUE) {
   effects <- match.arg(effects)
   Z <- fit$residuals; L <- ncol(Z)
+  # MFRM residuals pool to the UNDERLYING items by default: users ask
+  # whether item A shows DIF, not whether the virtual cell A:R2 does; the
+  # per-virtual-item tests remain available with pool_facets = FALSE
+  pooled_note <- NULL
+  if (inherits(fit, "rasch_mfrm") && isTRUE(pool_facets) &&
+      !is.null(fit$virtual_map)) {
+    vm <- fit$virtual_map
+    items_u <- unique(vm$item)
+    Zp <- vapply(items_u, function(it)
+      rowMeans(Z[, vm$vkey[vm$item == it], drop = FALSE], na.rm = TRUE),
+      numeric(nrow(Z)))
+    Zp[!is.finite(Zp)] <- NA_real_
+    colnames(Zp) <- items_u
+    Z <- Zp; L <- ncol(Z)
+    pooled_note <- paste(
+      "MFRM residuals pooled to the underlying items (mean over each",
+      "item's facet cells); pool_facets = FALSE tests the virtual items")
+  }
   factors <- .dif_factors(fit, factors)
   # the EFRM frame group IS the frame structure: each frame has its own
   # virtual items, so the group factor has a single level among any
   # virtual item's responders and cannot be tested as DIF
   drop_frame_note <- NULL
-  if (!is.null(fit$frame_group) && fit$frame_group %in% names(factors)) {
-    if (length(factors) == 1L)
-      stop("'", fit$frame_group, "' is the EFRM frame structure itself ",
-           "(each frame has its own virtual items), so it cannot be ",
+  if (!is.null(fit$frame_group) && any(names(factors) %in% fit$frame_group)) {
+    hit <- intersect(names(factors), fit$frame_group)
+    if (length(hit) == length(factors))
+      stop("'", paste(hit, collapse = "', '"),
+           "' define(s) the EFRM frame structure itself ",
+           "(each frame has its own virtual items), so they cannot be ",
            "tested as DIF; nominate other person factors")
-    factors <- factors[names(factors) != fit$frame_group]
-    drop_frame_note <- paste0("frame group '", fit$frame_group,
-                              "' excluded: it is the frame structure, ",
-                              "not a testable DIF factor")
+    factors <- factors[!names(factors) %in% fit$frame_group]
+    drop_frame_note <- paste0("frame factor(s) '",
+                              paste(hit, collapse = "', '"),
+                              "' excluded: they are the frame structure, ",
+                              "not testable DIF factors")
   }
 
   # within-subject factors (levels repeating within a person) turn the
@@ -703,6 +729,7 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     size_tab$term <- relabel(size_tab$term)
 
   notes <- character(0)
+  if (!is.null(pooled_note)) notes <- c(notes, pooled_note)
   if (!is.null(drop_frame_note)) notes <- c(notes, drop_frame_note)
   if (!is.null(size_note)) notes <- c(notes, size_note)
   if (incomplete_note > 0L)
@@ -797,9 +824,13 @@ print.rasch_dif <- function(x, ...) {
 #' @export
 dif_size <- function(fit, item, by, p_adjust = "holm", alpha = 0.05,
                      flag_logits = 0.5, min_n = 20) {
-  i <- .item_idx(fit, item)
-  if (is.na(i)) stop("no such item")
-  item <- fit$items$item[i]
+  mfrm_item <- inherits(fit, "rasch_mfrm") && !is.null(fit$virtual_map) &&
+    !(item %in% colnames(fit$X)) && item %in% fit$virtual_map$item
+  if (!mfrm_item) {
+    i <- .item_idx(fit, item)
+    if (is.na(i)) stop("no such item")
+    item <- fit$items$item[i]
+  }
   if (is.character(by) && length(by) < nrow(fit$X)) {
     bad <- if (is.null(fit$factors)) by else setdiff(by, names(fit$factors))
     if (length(bad))
@@ -826,7 +857,11 @@ dif_size <- function(fit, item, by, p_adjust = "holm", alpha = 0.05,
   }
 
   # drop levels too thin on this item to resolve
-  n_lev <- table(grp[!is.na(fit$X[, i]) & !is.na(grp)])
+  obs_i <- if (mfrm_item)
+    rowSums(!is.na(fit$X[, fit$virtual_map$vkey[
+      fit$virtual_map$item == item], drop = FALSE])) > 0L
+  else !is.na(fit$X[, i])
+  n_lev <- table(grp[obs_i & !is.na(grp)])
   thin <- names(n_lev)[n_lev < min_n]
   if (length(thin)) {
     notes <- c(notes, sprintf("level(s) dropped with fewer than %d responders: %s",
@@ -837,23 +872,32 @@ dif_size <- function(fit, item, by, p_adjust = "holm", alpha = 0.05,
     stop("fewer than two usable levels for item ", item)
   grp <- droplevels(grp)
 
-  refit <- split_items(fit, item, by = grp)
-  levs <- levels(grp)
-  split_names <- paste0(item, " (", levs, ")")
-  idx <- match(split_names, refit$items$item)
-  if (anyNA(idx))
-    stop("resolved item(s) missing after re-analysis (too little data): ",
-         paste(split_names[is.na(idx)], collapse = ", "))
+  if (mfrm_item) {
+    # underlying MFRM item: pooled virtual-level resolution (one joint
+    # unstructured refit of the virtual matrix; see .dif_resolve)
+    rs <- .dif_resolve(fit, item, grp, min_n)
+    if (is.null(rs))
+      stop("could not resolve item ", item, " (too little data per level)")
+    levs <- rs$levs; loc <- rs$loc; vloc <- rs$vloc
+    notes <- c(notes, rs$notes)
+  } else {
+    refit <- split_items(fit, item, by = grp)
+    levs <- levels(grp)
+    split_names <- paste0(item, " (", levs, ")")
+    idx <- match(split_names, refit$items$item)
+    if (anyNA(idx))
+      stop("resolved item(s) missing after re-analysis (too little data): ",
+           paste(split_names[is.na(idx)], collapse = ", "))
 
-  # location covariance from the sandwich: var(mean of a threshold block)
-  thr <- refit$thresholds; cv <- refit$est$cov_tau
-  block <- lapply(idx, function(k) thr$id[thr$item == k])
-  loc <- refit$items$location[idx]
-  vloc <- matrix(NA_real_, length(levs), length(levs))
-  for (a in seq_along(levs)) for (b in seq_along(levs))
-    vloc[a, b] <- mean(cv[block[[a]], block[[b]], drop = FALSE])
-
-  n_item <- as.integer(table(grp[!is.na(fit$X[, i]) & !is.na(grp)])[levs])
+    # location covariance from the sandwich: var(mean of a threshold block)
+    thr <- refit$thresholds; cv <- refit$est$cov_tau
+    block <- lapply(idx, function(k) thr$id[thr$item == k])
+    loc <- refit$items$location[idx]
+    vloc <- matrix(NA_real_, length(levs), length(levs))
+    for (a in seq_along(levs)) for (b in seq_along(levs))
+      vloc[a, b] <- mean(cv[block[[a]], block[[b]], drop = FALSE])
+  }
+  n_item <- as.integer(table(grp[obs_i & !is.na(grp)])[levs])
   levels_df <- data.frame(level = levs, location = loc,
                           se = sqrt(pmax(diag(vloc), 0)), n = n_item)
 
@@ -907,6 +951,59 @@ print.rasch_dif_size <- function(x, ...) {
 
 # Resolve one item over grouping cells: locations and sandwich covariance.
 .dif_resolve <- function(fit, item, grp, min_n) {
+  # an UNDERLYING MFRM item resolves at the virtual level: every one of
+  # its facet cells is split by the groups in one joint unstructured
+  # refit of the virtual matrix (the facet decomposition is not
+  # reimposed), and the per-level locations are precision-weighted means
+  # over the item's cells with the full covariance carried
+  if (inherits(fit, "rasch_mfrm") && !is.null(fit$virtual_map) &&
+      !(item %in% colnames(fit$X)) && item %in% fit$virtual_map$item) {
+    vm <- fit$virtual_map
+    cols <- vm$vkey[vm$item == item]
+    notes <- paste0(item, ": resolved at the virtual-item level, pooled ",
+                    "over its facet cells (facet structure not reimposed)")
+    obs <- rowSums(!is.na(fit$X[, cols, drop = FALSE])) > 0L
+    n_lev <- table(grp[obs & !is.na(grp)])
+    thin <- names(n_lev)[n_lev < min_n]
+    if (length(thin)) {
+      notes <- c(notes, sprintf(
+        "%s: level(s) dropped with fewer than %d responders: %s",
+        item, min_n, paste(thin, collapse = ", ")))
+      grp <- factor(ifelse(as.character(grp) %in% thin, NA,
+                           as.character(grp)))
+    }
+    grp <- droplevels(grp)
+    if (nlevels(grp) < 2) return(NULL)
+    vfit <- fit; class(vfit) <- "rasch"
+    vfit$model <- "PCM"   # unstructured virtual thresholds refit as PCM
+    refit <- tryCatch(split_items(vfit, cols, by = grp),
+                      error = function(e) NULL)
+    if (is.null(refit)) return(NULL)
+    levs <- levels(grp)
+    thr <- refit$thresholds; cv <- refit$est$cov_tau
+    loc <- numeric(length(levs))
+    wts <- vector("list", length(levs))
+    blocks <- vector("list", length(levs))
+    for (a in seq_along(levs)) {
+      idx_a <- match(paste0(cols, " (", levs[a], ")"), refit$items$item)
+      idx_a <- idx_a[!is.na(idx_a)]
+      if (!length(idx_a)) return(NULL)
+      bl <- lapply(idx_a, function(k) thr$id[thr$item == k])
+      vr <- vapply(bl, function(rws) mean(cv[rws, rws]), 0)
+      w <- 1 / pmax(vr, 1e-10); w <- w / sum(w)
+      loc[a] <- sum(w * refit$items$location[idx_a])
+      wts[[a]] <- w; blocks[[a]] <- bl
+    }
+    vloc <- matrix(NA_real_, length(levs), length(levs))
+    for (a in seq_along(levs)) for (b in seq_along(levs)) {
+      acc <- 0
+      for (ca in seq_along(blocks[[a]])) for (cb in seq_along(blocks[[b]]))
+        acc <- acc + wts[[a]][ca] * wts[[b]][cb] *
+          mean(cv[blocks[[a]][[ca]], blocks[[b]][[cb]], drop = FALSE])
+      vloc[a, b] <- acc
+    }
+    return(list(levs = levs, loc = loc, vloc = vloc, notes = notes))
+  }
   i <- .item_idx(fit, item)
   item <- fit$items$item[i]
   notes <- character(0)

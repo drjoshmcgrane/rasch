@@ -1,3 +1,30 @@
+# rasch 1.13.0
+
+The three capability extensions from the review wishlist. Development
+branch only; the CRAN submission of 1.11.7 is untouched.
+
+* MFRM DIF pools to the underlying items by default: `dif_anova()` on
+  an MFRM fit now answers "does item A show DIF" by pooling residuals
+  over each item's facet cells (`pool_facets = FALSE` keeps the
+  per-virtual-cell tests). With few items, the compensating artificial
+  DIF the plant creates on the remaining items is visible -- as it
+  should be -- with the planted item carrying the dominant F.
+* `dif_size()` works on underlying MFRM items: every facet cell of the
+  item is split by the groups in one joint unstructured refit of the
+  virtual matrix (the facet decomposition is not reimposed, which the
+  note states), and per-level locations are precision-weighted means
+  over the cells with the full covariance carried. A planted 0.7-logit
+  sex effect is recovered at 0.82 (SE 0.17), and
+  `dif_anova(mf, sizes = TRUE)` now yields magnitude rows.
+* `rasch_efrm()` accepts several frame-defining factors: the frames are
+  their crossed cells, per-cell units appear in `phi_table`, and
+  `phi_factorial` reports a factorial decomposition of the cell units
+  (sum-coded mains, plus the interaction when every cell is observed),
+  weighted by the cells' unit precisions with the independence
+  approximation stated. All frame-defining factors (cell and
+  components) are excluded from DIF testing; misspelled group and
+  factor column names now error instead of silently falling through.
+
 # rasch 1.12.3
 
 Thirteenth review round: the BTL, EFRM, and MFRM analogues of the DIF

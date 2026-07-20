@@ -30,7 +30,13 @@ a named character vector mapping item names to set names. Items not
 mentioned form their own set \code{"(rest)"} when a list is given.}
 
 \item{groups}{Name of the person-group column in \code{data}, or a vector
-with one entry per person.}
+with one entry per person.
+Several column names may be given: the frames are then their crossed
+cells, per-cell units appear in \code{phi_table}, and a factorial
+decomposition of the cell units (sum-coded main effects, and the
+interaction when every cell is observed) is returned in
+\code{phi_factorial}, with the cell standard errors treated as
+uncorrelated across cells.}
 
 \item{id, factors, items, n_groups, adjust_N, na_codes}{As in
 \code{\link{rasch}}.}

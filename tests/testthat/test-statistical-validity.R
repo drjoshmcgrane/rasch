@@ -581,11 +581,70 @@ test_that("dif_anova integrates with EFRM and MFRM fits", {
   dd$sex <- sx[dd$person]
   mf <- rasch_mfrm(dd, person = "person", item = "item", score = "score",
                    facets = "rater", factors = "sex")
-  dm <- dif_anova(mf)
-  expect_true(any(dm$summary$uniform_DIF[grepl("^B:", dm$summary$item)] %in%
+  dm <- dif_anova(mf)                       # pooled to underlying items
+  expect_true(dm$summary$uniform_DIF[dm$summary$item == "B"] %in% TRUE)
+  dmv <- dif_anova(mf, pool_facets = FALSE) # virtual mode preserved
+  expect_true(any(dmv$summary$uniform_DIF[grepl("^B:", dmv$summary$item)] %in%
                     TRUE))
   expect_error(
     rasch_mfrm(dd, person = "person", item = "item", score = "score",
                facets = "rater", factors = "rater"),
     "varies within person")
+})
+
+# --- capability round: pooled MFRM DIF, MFRM sizes, factorial EFRM frames --
+
+test_that("MFRM DIF pools to underlying items and resolves magnitudes", {
+  skip_on_cran()
+  set.seed(1)
+  simP <- function(th, tau) { x <- 0:length(tau)
+    p <- exp(x * th - c(0, cumsum(tau))); p / sum(p) }
+  persons <- sprintf("P%03d", 1:200); raters <- paste0("R", 1:3)
+  th <- setNames(rnorm(200, 0, 1.3), persons)
+  sx <- setNames(rep(c("m", "f"), length.out = 200), persons)
+  rho <- setNames(c(-0.4, 0, 0.4), raters)
+  tau <- list(A = c(-1, 1), B = c(-0.5, 1.2), C = c(-1.2, 0.4))
+  dd <- expand.grid(person = persons, item = names(tau), rater = raters,
+                    stringsAsFactors = FALSE)
+  dd$score <- mapply(function(p, i, r)
+    sample(0:2, 1, prob = simP(th[p] + ifelse(i == "B" & sx[p] == "f",
+                                              -0.7, 0),
+                               tau[[i]] + rho[r])),
+    dd$person, dd$item, dd$rater)
+  dd$sex <- sx[dd$person]
+  mf <- rasch_mfrm(dd, person = "person", item = "item", score = "score",
+                   facets = "rater", factors = "sex")
+  dp <- dif_anova(mf)
+  # pooled to underlying items; planted B carries the dominant F (with 3
+  # items, compensating artificial DIF on A and C is expected and real)
+  expect_true(all(dp$summary$item %in% c("A", "B", "C")))
+  expect_equal(dp$summary$item[which.max(dp$summary$F_uniform)], "B")
+  expect_true(any(grepl("pooled to the underlying", dp$notes)))
+  # per-virtual mode preserved
+  expect_true(any(grepl(":", dif_anova(mf, pool_facets = FALSE)$summary$item)))
+  # magnitudes at the underlying-item level, planted size recovered
+  ds <- dif_size(mf, "B", by = "sex")
+  expect_lt(abs(abs(ds$pairs$difference) - 0.7), 3 * ds$pairs$se)
+  expect_true(ds$pairs$significant)
+  dsz <- dif_anova(mf, sizes = TRUE)
+  expect_gt(nrow(dsz$sizes), 0)
+})
+
+test_that("EFRM accepts several frame factors and reports the decomposition", {
+  skip_on_cran()
+  d <- simulate_efrm(n_per_group = 300, items_per_set = 8, n_sets = 2,
+                     n_groups = 2, group_unit_ratio = 1.25, seed = 1)
+  tr <- attr(d, "truth")
+  d$region <- rep(c("N", "S"), length.out = nrow(d))
+  d$grp <- tr$groups
+  f <- rasch_efrm(d, item_sets = tr$item_sets, groups = c("grp", "region"),
+                  items = unlist(tr$item_sets))
+  expect_equal(nrow(f$phi_table), 4L)
+  expect_false(is.null(f$phi_factorial))
+  expect_true(any(grepl("grp", f$phi_factorial$term)))
+  # every frame-defining factor is excluded from DIF testing
+  expect_error(dif_anova(f), "frame structure")
+  expect_error(rasch_efrm(d, item_sets = tr$item_sets,
+                          groups = c("grp", "nonexistent")),
+               "not found")
 })
