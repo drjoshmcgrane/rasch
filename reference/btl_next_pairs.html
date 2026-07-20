@@ -5,19 +5,25 @@ the current estimates. That information peaks when the two objects are
 close in location, so at equal measurement the recommender favours
 near-neighbour contests. With weight_se = TRUE (the default) each
 pair's priority is the one-step reduction in TOTAL location variance that
-one added comparison of the pair would deliver – computed exactly from
-the fit's stored covariance by a rank-one (Sherman-Morrison) update with
-the comparison's information on the contrast – so pairs of poorly
-measured (and correlated) objects are promoted."><meta property="og:description" content="The adaptive comparative judgement step of Pollitt (2012): rank candidate
+one added comparison of the pair would deliver, from a rank-one
+(Sherman-Morrison) update of the fit's stored covariance with the
+comparison's information on the contrast, so pairs of poorly
+measured (and correlated) objects are promoted. The update formula is
+exact for a model-based information matrix; applied to the sandwich
+covariance it is a scoring device, consistent with the ranking-heuristic
+status described below."><meta property="og:description" content="The adaptive comparative judgement step of Pollitt (2012): rank candidate
 object pairs by the information one additional comparison would carry at
 the current estimates. That information peaks when the two objects are
 close in location, so at equal measurement the recommender favours
 near-neighbour contests. With weight_se = TRUE (the default) each
 pair's priority is the one-step reduction in TOTAL location variance that
-one added comparison of the pair would deliver – computed exactly from
-the fit's stored covariance by a rank-one (Sherman-Morrison) update with
-the comparison's information on the contrast – so pairs of poorly
-measured (and correlated) objects are promoted."><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch/logo.svg"></head><body>
+one added comparison of the pair would deliver, from a rank-one
+(Sherman-Morrison) update of the fit's stored covariance with the
+comparison's information on the contrast, so pairs of poorly
+measured (and correlated) objects are promoted. The update formula is
+exact for a model-based information matrix; applied to the sandwich
+covariance it is a scoring device, consistent with the ranking-heuristic
+status described below."><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch/logo.svg"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -25,7 +31,7 @@ measured (and correlated) objects are promoted."><meta property="og:image" conte
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.10.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,10 +70,13 @@ the current estimates. That information peaks when the two objects are
 close in location, so at equal measurement the recommender favours
 near-neighbour contests. With <code>weight_se = TRUE</code> (the default) each
 pair's priority is the one-step reduction in TOTAL location variance that
-one added comparison of the pair would deliver – computed exactly from
-the fit's stored covariance by a rank-one (Sherman-Morrison) update with
-the comparison's information on the contrast – so pairs of poorly
-measured (and correlated) objects are promoted.</p>
+one added comparison of the pair would deliver, from a rank-one
+(Sherman-Morrison) update of the fit's stored covariance with the
+comparison's information on the contrast, so pairs of poorly
+measured (and correlated) objects are promoted. The update formula is
+exact for a model-based information matrix; applied to the sandwich
+covariance it is a scoring device, consistent with the ranking-heuristic
+status described below.</p>
     </div>
 
     <div class="section level2">
@@ -84,7 +93,13 @@ measured (and correlated) objects are promoted.</p>
 
 
 <dt id="arg-n">n<a class="anchor" aria-label="anchor" href="#arg-n"></a></dt>
-<dd><p>Number of pairs to return.</p></dd>
+<dd><p>Number of pairs to return.
+The priority is a greedy one-step RANKING heuristic: it plugs the
+judge-clustered sandwich covariance into an information-update formula
+that is exact only for a model-based information matrix, so the ranking
+orders candidate pairs sensibly but the implied variance reductions are
+not exact sandwich updates. Treat the ordering, not the magnitudes, as
+the output.</p></dd>
 
 
 <dt id="arg-weight-se">weight_se<a class="anchor" aria-label="anchor" href="#arg-weight-se"></a></dt>

@@ -25,7 +25,7 @@ score-to-measure table."><meta property="og:image" content="https://drjoshmcgran
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.10.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -131,7 +131,12 @@ at most 10, at least 2. The resolved value is stored in
 <dt id="arg-adjust-n">adjust_N<a class="anchor" aria-label="anchor" href="#arg-adjust-n"></a></dt>
 <dd><p>Optional reference sample size; if supplied, item-trait
 chi-squares are rescaled to this size (a sample-size adjustment for the
-sensitivity of the chi-square to large samples).</p></dd>
+sensitivity of the chi-square to large samples). The scaling is
+proportional and global – every item's chi-square is multiplied by
+<code>adjust_N</code> over the number of classified persons – so an item
+answered by a subset of persons keeps its proportionally smaller share
+of the notional sample rather than being inflated to the full
+<code>adjust_N</code>.</p></dd>
 
 
 <dt id="arg-anchors">anchors<a class="anchor" aria-label="anchor" href="#arg-anchors"></a></dt>
@@ -207,6 +212,20 @@ approximately N(0,1) under fit; the conventional flagging value is 2.5
 (Andrich and Marais 2019, ch. 15).
 Negative values indicate over-discrimination (Guttman-like responses),
 positive values under-discrimination.</p>
+<p>A calibration note that applies to the whole test-of-fit suite: the
+item-trait chi-square evaluates unconditional residuals at estimated
+person measures and refers the sum of correlated item statistics to a
+chi-square with summed degrees of freedom, following the convention of
+Andrich and Marais (2019); the class-interval ANOVA F and the
+Wilson-Hilferty-style transformations are approximations of the same
+kind. Null simulation with this package shows rejection rates near but
+not exactly at the nominal level (conservative in the settings
+examined), and the direction can vary with design. These statistics are
+therefore approximate, convention-faithful diagnostics for ordering and
+flagging misfit – not exactly calibrated hypothesis tests; where exact
+calibration matters, use the simulation tools
+(<code><a href="sim_replicate.html">sim_replicate</a></code>) to build parametric-bootstrap reference
+distributions for the observed design.</p>
     </div>
 
     <div class="section level2">

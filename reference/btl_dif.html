@@ -39,7 +39,7 @@ comparisons enter all tests with their weights."><meta property="og:image" conte
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.10.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -168,7 +168,18 @@ dropped from its resolution, with a note.</p></dd>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Each object is resolved against the other objects' common locations. When
+    <p>The screening ANOVA treats JUDGES as the independent units: residuals are
+aggregated to one weighted mean per judge (per opponent band) and tested
+in a split-plot design with the judge as the error unit – group terms
+between judges, band terms and their interactions within. Testing
+judge-level factors against comparison-level residuals would
+pseudo-replicate (a null simulation with judge heterogeneity and
+arbitrary groups falsely flagged uniform DIF in 6 of 10 datasets); the
+judge-level design is calibrated, and its power grows with the number of
+judges per group, not the number of comparisons. Each factor level needs
+at least two judges, and an object at least four judges overall, to be
+testable.</p>
+<p>Each object is resolved against the other objects' common locations. When
 several objects carry real DIF, resolving them one at a time can spread a
 large effect onto clean objects as compensating, opposite-signed artificial
 DIF (Andrich &amp; Hagquist 2012, 2015); read large flags on several objects
@@ -203,7 +214,7 @@ first and re-running.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span> DIF for paired comparisons: 1 factor(s) [group], main effects</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Residual ANOVA per object and term (uniform = term; non-uniform = term x opponent band)</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  object  term F_uniform p_uniform_adj uniform_DIF F_nonuniform p_nonuniform_adj</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>       C group    14.495       &lt; 0.001           *        0.081            0.922</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>       C group    10.576         0.009           *        0.685            0.516</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  nonuniform_DIF</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>

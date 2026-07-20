@@ -96,6 +96,18 @@ significance and practical flags); `effects`, `factors`, and `notes`.
 
 ## Details
 
+The screening ANOVA treats JUDGES as the independent units: residuals
+are aggregated to one weighted mean per judge (per opponent band) and
+tested in a split-plot design with the judge as the error unit – group
+terms between judges, band terms and their interactions within. Testing
+judge-level factors against comparison-level residuals would
+pseudo-replicate (a null simulation with judge heterogeneity and
+arbitrary groups falsely flagged uniform DIF in 6 of 10 datasets); the
+judge-level design is calibrated, and its power grows with the number of
+judges per group, not the number of comparisons. Each factor level needs
+at least two judges, and an object at least four judges overall, to be
+testable.
+
 Each object is resolved against the other objects' common locations.
 When several objects carry real DIF, resolving them one at a time can
 spread a large effect onto clean objects as compensating,
@@ -132,7 +144,7 @@ btl_dif(f, grp, objects = "C")
 #> DIF for paired comparisons: 1 factor(s) [group], main effects
 #> Residual ANOVA per object and term (uniform = term; non-uniform = term x opponent band)
 #>  object  term F_uniform p_uniform_adj uniform_DIF F_nonuniform p_nonuniform_adj
-#>       C group    14.495       < 0.001           *        0.081            0.922
+#>       C group    10.576         0.009           *        0.685            0.516
 #>  nonuniform_DIF
 #>                
 #> 

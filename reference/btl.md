@@ -150,8 +150,11 @@ A list of class `"rasch_btl"`: `objects` (location, se, comparisons,
 wins – or the graded `score` – infit and outfit mean squares, fit
 residual and its df), `pairs` (per pair: n, observed and expected win
 proportions – or mean graded responses – standardised residual,
-chi-square component), `judges` (when given: per judge n, infit, outfit,
-fit residual, df), `total_chisq`, `total_df`, `total_p`, the object
+chi-square component – the pair chi-squares treat comparisons as
+independent and are descriptive under judge clustering; the object and
+judge fit residuals and the clustered standard errors carry the robust
+inference), `judges` (when given: per judge n, infit, outfit, fit
+residual, df), `total_chisq`, `total_df`, `total_p`, the object
 separation index `osi`, `loglik`, `cl` (the composite-likelihood
 information ingredients used by
 [`compare_fits`](https://drjoshmcgrane.github.io/rasch/reference/compare_fits.md):
