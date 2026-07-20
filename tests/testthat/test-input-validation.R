@@ -251,3 +251,83 @@ test_that("fits saved before the t rename still print their dependence", {
   expect_output(print(legacy), "z = ")
   expect_output(print(f), "t = ")
 })
+
+test_that("MFRM wide input carries person factors through the melt", {
+  set.seed(21)
+  N <- 80; I <- 4
+  th <- rnorm(N); del <- seq(-1, 1, length.out = I)
+  sev <- c(R1 = -0.3, R2 = 0.3)
+  wide <- data.frame(pid = seq_len(N),
+                     rater = sample(names(sev), N, replace = TRUE),
+                     grp = sample(c("boy", "girl"), N, replace = TRUE))
+  for (i in seq_len(I))
+    wide[[paste0("it", i)]] <- rbinom(N, 1, plogis(th - del[i] - sev[wide$rater]))
+  fw <- rasch_mfrm(wide, person = "pid", items = paste0("it", 1:I),
+                   facets = "rater", factors = "grp")
+  long <- reshape(wide, direction = "long", varying = paste0("it", 1:I),
+                  v.names = "score", timevar = "item",
+                  times = paste0("it", 1:I), idvar = "..rid")
+  fl <- rasch_mfrm(long, person = "pid", item = "item", score = "score",
+                   facets = "rater", factors = "grp")
+  d1 <- dif_anova(fw, factors = "grp")
+  d2 <- dif_anova(fl, factors = "grp")
+  expect_equal(d1$table$F, d2$table$F, tolerance = 1e-8)
+  # a data-frame factor is replicated row-wise the same way
+  fw2 <- rasch_mfrm(wide, person = "pid", items = paste0("it", 1:I),
+                    facets = "rater",
+                    factors = data.frame(grp = wide$grp))
+  expect_equal(dif_anova(fw2, factors = "grp")$table$F, d2$table$F,
+               tolerance = 1e-8)
+  # misspelled wide factor column errors instead of silently dropping
+  expect_error(rasch_mfrm(wide, person = "pid", items = paste0("it", 1:I),
+                          facets = "rater", factors = "grpp"),
+               "not found")
+})
+
+test_that("MFRM duplicate person-by-cell responses are an error", {
+  set.seed(22)
+  d <- data.frame(pid = rep(1:40, each = 3),
+                  item = rep(c("A", "B", "C"), 40),
+                  rater = rep(c("R1", "R2"), 60),
+                  score = rbinom(120, 1, 0.5))
+  f <- rasch_mfrm(d, person = "pid", item = "item", score = "score",
+                  facets = "rater")
+  expect_s3_class(f, "rasch_mfrm")
+  # a repeated row would make the kept response depend on row order
+  expect_error(rasch_mfrm(d[c(seq_len(nrow(d)), 1L), ], person = "pid",
+                          item = "item", score = "score", facets = "rater"),
+               "duplicate")
+})
+
+test_that("MFRM structurally confounded facet designs are an error", {
+  set.seed(23)
+  d <- expand.grid(pid = 1:60, item = c("A", "B", "C", "D"),
+                   stringsAsFactors = FALSE)
+  # each rater sees a disjoint half of the items: severity is confounded
+  # with the item locations
+  d$rater <- ifelse(d$item %in% c("A", "B"), "R1", "R2")
+  d$score <- rbinom(nrow(d), 1, 0.5)
+  expect_error(rasch_mfrm(d, person = "pid", item = "item", score = "score",
+                          facets = "rater"),
+               "unidentified")
+})
+
+test_that("BTL flags directed separation of the win graph (Ford 1957)", {
+  set.seed(24)
+  # O1, O2 never lose to O3, O4: their locations diverge
+  d <- data.frame(a = c(rep("O1", 15), rep("O2", 15), rep("O1", 10),
+                        rep("O3", 10)),
+                  b = c(rep("O3", 15), rep("O4", 15), rep("O2", 10),
+                        rep("O4", 10)))
+  d$win <- c(rep("O1", 15), rep("O2", 15),
+             ifelse(runif(10) < .5, "O1", "O2"),
+             ifelse(runif(10) < .5, "O3", "O4"))
+  expect_warning(f <- btl(d, "a", "b", winner = "win"),
+                 "not strongly connected")
+  expect_true(any(grepl("Ford", f$notes)))
+  # a design with wins in both directions across the divide is silent
+  d2 <- d
+  d2$win[1:2] <- c("O3", "O3")
+  expect_silent(f2 <- btl(d2, "a", "b", winner = "win"))
+  expect_false(any(grepl("Ford", f2$notes)))
+})

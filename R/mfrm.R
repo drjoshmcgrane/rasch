@@ -156,11 +156,28 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
         suppressWarnings(as.numeric(data[[cn]])))),
       stringsAsFactors = FALSE)
     for (f in facets) long[[f]] <- rep(as.character(data[[f]]), length(items))
+    # person factors survive the melt: named columns are replicated like
+    # facets, a data frame is replicated row-wise to match the long rows
+    fac_pass <- factors
+    if (is.character(factors)) {
+      missf <- setdiff(factors, names(data))
+      if (length(missf))
+        stop("factor column(s) not found in the data: ",
+             paste(missf, collapse = ", "))
+      for (cn in factors)
+        long[[cn]] <- rep(as.character(data[[cn]]), length(items))
+    } else if (is.data.frame(factors)) {
+      if (nrow(factors) != nrow(data))
+        stop("`factors` data frame needs one row per data row")
+      fac_pass <- factors[rep(seq_len(nrow(data)), length(items)), ,
+                          drop = FALSE]
+      rownames(fac_pass) <- NULL
+    }
     return(rasch_mfrm(long, person = "..person", item = "..item",
                       score = "..score", facets = facets,
                       n_groups = n_groups, adjust_N = adjust_N,
                       na_codes = na_codes, interaction = interaction,
-                      maxit = maxit, tol = tol))
+                      factors = fac_pass, maxit = maxit, tol = tol))
   }
   if (is.null(item) || is.null(score))
     stop("give either `items` (wide) or `item` + `score` (long)")
@@ -234,8 +251,10 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
   ri <- match(pid, persons_u); cj <- match(vkey, vlev)
   dup <- duplicated(cbind(ri, cj))
   if (any(dup))
-    notes <- c(notes, sprintf("%d duplicate person-by-virtual-item response(s) ignored (first kept)",
-                              sum(dup)))
+    stop(sum(dup), " duplicate person-by-item-by-facet response(s): the ",
+         "design has one cell per combination, so duplicates are ",
+         "ambiguous (keeping the first would make results depend on row ",
+         "order) -- aggregate or de-duplicate explicitly")
   use <- !dup & !is.na(sc)
   Xv[cbind(ri[use], cj[use])] <- sc[use]
 
@@ -279,6 +298,16 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
   }
 
   # concave likelihood: Newton-Raphson from zero with step halving
+  # the structural design must have full column rank: a facet level that
+  # never shares items (or persons) with the others is confounded with
+  # the item parameters, and the ridged solve would return a
+  # valid-looking but unidentified decomposition
+  qrB <- qr(B)
+  if (qrB$rank < ncol(B))
+    stop("the facet design is structurally unidentified (rank ",
+         qrB$rank, " for ", ncol(B), " parameters): some facet level(s) ",
+         "are confounded with the items or with each other -- every ",
+         "facet level needs items (and persons) in common with the rest")
   sol <- .pcml_solve(Xv, thr_v, m_v, B, rep(0, P), maxit = maxit, tol = tol)
 
   thr_v$tau <- sol$tau; thr_v$se <- sol$se_tau; thr_v$anchored <- FALSE

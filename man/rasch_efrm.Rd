@@ -35,8 +35,16 @@ Several column names may be given: the frames are then their crossed
 cells, per-cell units appear in \code{phi_table}, and a factorial
 decomposition of the cell units (sum-coded main effects, and the
 interaction when every cell is observed) is returned in
-\code{phi_factorial}, with the cell standard errors treated as
-uncorrelated across cells.}
+\code{phi_factorial}. The decomposition is a generalised
+least-squares fit of the cell log-units using their joint covariance
+(bootstrap replicates when available, otherwise the analytic centred
+covariance, inverted spectrally along its identified directions);
+coefficient rows are descriptive, and inference is carried by the
+multi-degree-of-freedom Wald test per term in
+\code{phi_factorial_tests}. A group whose frames show no threshold
+spread beyond estimation noise has nothing for its unit to scale:
+its \code{phi} is reported \code{NA} with a note rather than the
+uninformative near-1 value the optimiser would return.}
 
 \item{id, factors, items, n_groups, adjust_N, na_codes}{As in
 \code{\link{rasch}}.}
@@ -58,7 +66,12 @@ bootstrap and 200 for the full bootstrap.}
 An object of classes \code{"rasch_efrm"} and \code{"rasch"}. In
   addition to the standard components (computed over item-by-group
   virtual columns with the frame units carried in \code{disc}), it has
-  \code{frames} (one row per frame: units, origin, pooled fit),
+  \code{frames} (one row per frame: units, origin, pooled fit;
+  under \code{se_method = "bootstrap"} the frame-level
+  \code{se_log_rho} comes from the joint replicate draws of
+  \code{log(alpha) + log(phi)}, capturing cross-stage dependence,
+  while the hybrid fallback combines the stagewise errors as if
+  uncorrelated),
   \code{phi_table}, \code{alpha_table}, \code{set_table},
   \code{item_arbitrary} and \code{thresholds_arbitrary} (the structural
   parameters in the common unit), \code{score_curves} (per-group

@@ -72,7 +72,12 @@
 #' same judge need not be independent). Objects that win or lose every
 #' comparison have no finite estimate and are removed with a note, exactly
 #' as extreme persons are set aside in a Rasch calibration; the comparison
-#' graph must remain connected.
+#' graph must remain connected. Beyond that, finite estimates exist only
+#' when the directed win graph is strongly connected (Ford 1957): if some
+#' subset of objects never concedes a point to the rest, the likelihood
+#' pushes the two clusters infinitely far apart, and the fit warns and
+#' notes the separated objects rather than presenting the optimiser's
+#' boundary values as measures.
 #'
 #' Fit is reported at three levels, mirroring the Rasch diagnostics.
 #' Per object and (when given) per judge: the log-of-mean-square fit
@@ -192,7 +197,9 @@
 #'   Royal Statistical Society C, 41(2), 287-297. Davidson, R. R. (1970).
 #'   On extending the Bradley-Terry model to accommodate ties in paired
 #'   comparison experiments. Journal of the American Statistical
-#'   Association, 65(329), 317-328.
+#'   Association, 65(329), 317-328. Ford, L. R. (1957). Solution of a
+#'   ranking problem from binary comparisons. American Mathematical
+#'   Monthly, 64(8), 28-33.
 #'
 #'   Davidson, R. R., & Beaver, R. J. (1977). On extending the Bradley-Terry
 #'   model to incorporate within-pair order effects. Biometrics, 33(4),
@@ -794,6 +801,41 @@ plot_btl <- function(fit, band = 2.5) {
   cl <- if (is.null(jd)) as.character(seq_along(ia)) else jd
   ucl <- unique(cl)
   nc <- length(ucl); cidx <- match(cl, ucl)
+  # Ford's (1957) existence condition: the ML locations are finite only
+  # when the directed win graph is strongly connected -- if some subset of
+  # objects never concedes a point to the rest, the likelihood pushes the
+  # divide to infinity and the trust region leaves enormous finite
+  # estimates that LOOK converged. Warn and note the separated objects.
+  Wp <- matrix(0, K, K)
+  pts_a <- w * x; pts_b <- w * (m - x)
+  for (r in seq_along(ia)) {
+    Wp[ia[r], ib[r]] <- Wp[ia[r], ib[r]] + pts_a[r]
+    Wp[ib[r], ia[r]] <- Wp[ib[r], ia[r]] + pts_b[r]
+  }
+  adj <- Wp > 0
+  reach <- function(Amat) {
+    seen <- rep(FALSE, K); seen[1] <- TRUE; front <- 1L
+    while (length(front)) {
+      nxt <- which(colSums(Amat[front, , drop = FALSE]) > 0 & !seen)
+      seen[nxt] <- TRUE; front <- nxt
+    }
+    seen
+  }
+  strong <- all(reach(adj)) && all(reach(t(adj)))
+  if (!strong) {
+    fwd <- reach(adj); bwd <- reach(t(adj))
+    sep <- objs[!(fwd & bwd)]
+    warning("the win graph is not strongly connected: object(s) ",
+            paste(sep, collapse = ", "), " never concede points to (or ",
+            "never take points from) the rest, so their maximum-likelihood ",
+            "locations are infinite (Ford 1957); the reported values sit ",
+            "at the optimiser's boundary", call. = FALSE)
+    notes <- c(notes, paste0(
+      "win graph not strongly connected: locations of ",
+      paste(sep, collapse = ", "),
+      " diverge (Ford 1957) and are reported at the search boundary"))
+  }
+
   # the clustered sandwich estimates the meat from between-judge variation:
   # with one judge it is identically ~zero (SEs collapse to ~1e-16), and
   # with very few judges it understates -- refuse the former, note the latter

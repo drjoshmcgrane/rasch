@@ -213,7 +213,13 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
       fac_df <- data[, factors, drop = FALSE]
     } else if (is.data.frame(factors) && nrow(factors) == nrow(data)) fac_df <- factors
     drop_cols <- c(if (is.character(id)) id else NULL,
-                   if (is.character(factors)) factors else NULL)
+                   if (is.character(factors)) factors else NULL,
+                   # an externally supplied factor data frame whose column
+                   # names also appear in `data` almost certainly refers to
+                   # those columns: without this they would silently become
+                   # numeric ITEMS
+                   if (is.data.frame(factors))
+                     intersect(names(factors), nm) else NULL)
     item_cols <- if (is.null(items)) setdiff(nm, drop_cols)
     else if (is.character(items)) {
       miss <- setdiff(items, nm)

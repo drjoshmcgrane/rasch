@@ -981,25 +981,38 @@ print.rasch_dif_size <- function(x, ...) {
     if (is.null(refit)) return(NULL)
     levs <- levels(grp)
     thr <- refit$thresholds; cv <- refit$est$cov_tau
-    loc <- numeric(length(levs))
-    wts <- vector("list", length(levs))
-    blocks <- vector("list", length(levs))
-    for (a in seq_along(levs)) {
-      idx_a <- match(paste0(cols, " (", levs[a], ")"), refit$items$item)
-      idx_a <- idx_a[!is.na(idx_a)]
-      if (!length(idx_a)) return(NULL)
-      bl <- lapply(idx_a, function(k) thr$id[thr$item == k])
-      vr <- vapply(bl, function(rws) mean(cv[rws, rws]), 0)
-      w <- 1 / pmax(vr, 1e-10); w <- w / sum(w)
-      loc[a] <- sum(w * refit$items$location[idx_a])
-      wts[[a]] <- w; blocks[[a]] <- bl
-    }
+    # COMMON cells with COMMON weights: every facet cell used must be
+    # resolved for EVERY level, and each cell gets one weight shared by
+    # all levels, so the cell's facet severity cancels exactly from every
+    # level contrast. Group-specific precision weights let severity leak
+    # into the DIF magnitude when groups have different facet exposure
+    # (a no-DIF design with sex-linked rater allocation read -1.75
+    # logits, z = -6.5).
+    idx_m <- sapply(levs, function(l)
+      match(paste0(cols, " (", l, ")"), refit$items$item))
+    if (is.null(dim(idx_m))) idx_m <- matrix(idx_m, nrow = length(cols))
+    common <- rowSums(is.na(idx_m)) == 0L
+    if (sum(common) < 1L) return(NULL)
+    if (any(!common))
+      notes <- c(notes, sprintf(
+        "%s: facet cell(s) dropped from the magnitude (not resolvable for every level): %s",
+        item, paste(cols[!common], collapse = ", ")))
+    idx_m <- idx_m[common, , drop = FALSE]
+    blocks <- lapply(seq_len(nrow(idx_m)), function(ci)
+      lapply(idx_m[ci, ], function(k) thr$id[thr$item == k]))
+    # one weight per cell: inverse of the level-averaged location variance
+    vr_c <- vapply(blocks, function(bl)
+      mean(vapply(bl, function(rws) mean(cv[rws, rws]), 0)), 0)
+    w_c <- 1 / pmax(vr_c, 1e-10); w_c <- w_c / sum(w_c)
+    loc <- vapply(seq_along(levs), function(a)
+      sum(w_c * vapply(seq_along(blocks), function(ci)
+        refit$items$location[idx_m[ci, a]], 0)), 0)
     vloc <- matrix(NA_real_, length(levs), length(levs))
     for (a in seq_along(levs)) for (b in seq_along(levs)) {
       acc <- 0
-      for (ca in seq_along(blocks[[a]])) for (cb in seq_along(blocks[[b]]))
-        acc <- acc + wts[[a]][ca] * wts[[b]][cb] *
-          mean(cv[blocks[[a]][[ca]], blocks[[b]][[cb]], drop = FALSE])
+      for (ca in seq_along(blocks)) for (cb in seq_along(blocks))
+        acc <- acc + w_c[ca] * w_c[cb] *
+          mean(cv[blocks[[ca]][[a]], blocks[[cb]][[b]], drop = FALSE])
       vloc[a, b] <- acc
     }
     return(list(levs = levs, loc = loc, vloc = vloc, notes = notes))

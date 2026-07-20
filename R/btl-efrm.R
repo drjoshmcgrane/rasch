@@ -289,15 +289,21 @@
     curv <- phg * (onA * aj * ba - onB * aj * bb)
     H[j, j] <- H[j, j] - sum(u * curv)
   }
+  # a near-singular observed information (e.g. cross-set comparisons that
+  # barely span a set) would invert to huge but finite-looking SEs -- flag
+  # it and withhold the conditional errors rather than report them
+  rc <- tryCatch(rcond(H), error = function(e) 0)
+  rank_ok <- is.finite(rc) && rc > 1e-10
   cov <- tryCatch(solve(H), error = function(e)
     solve(crossprod(D, D * av) + diag(1e-8, np)))
   # scale-free per-comparison gradient criterion (see .btlef_stage1)
   conv <- isTRUE(max(abs(crossprod(D, u))) < 1e-6 * length(y))
   se <- sqrt(pmax(diag(cov), 0))
+  if (!rank_ok) se[] <- NA_real_
   list(alpha = cur$alpha, kappa = cur$kappa, p = cur$p, ll = cur$ll,
        cov = cov, se_log_alpha = setNames(se[seq_len(nf)], free),
        se_kappa = setNames(se[nf + seq_len(nf)], free),
-       free = free, converged = conv)
+       free = free, converged = conv, rank_ok = rank_ok)
 }
 
 # pooled log-of-mean-square fit residual over a set of comparisons, using the
@@ -446,7 +452,9 @@
 #'   \code{log phi = 0}), \code{alpha_table} and \code{kappa_table} (set units
 #'   and origins with Wald tests; the reference set carries \code{alpha = 1},
 #'   \code{kappa = 0} with no standard error), \code{frames} (panel by set:
-#'   unit \code{rho = phi alpha}, comparison count, pooled fit residual),
+#'   common-scale discrimination \code{rho = phi / alpha} (the within-set
+#'   logit is \code{phi (beta_a - beta_b)} with \code{beta = (v - kappa) /
+#'   alpha}), comparison count, pooled fit residual),
 #'   \code{equal_unit} (the descriptive single-unit comparison), \code{n_cross}
 #'   (cross-set comparison counts per set pair), \code{notes} and
 #'   \code{converged}.
@@ -710,7 +718,7 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     alpha <- setNames(rep(1, S), sets_u); kappa <- setNames(rep(0, S), sets_u)
     se_log_alpha <- setNames(rep(NA_real_, S), sets_u)
     se_kappa <- setNames(rep(NA_real_, S), sets_u)
-    cov2 <- NULL; s2_conv <- TRUE; ll_cross <- 0
+    cov2 <- NULL; s2_conv <- TRUE; ll_cross <- 0; s2_rank_ok <- TRUE
     p_all <- within_p
     if (S > 1L) {
       st2 <- .btlef_stage2(a[cross], b[cross], yy[cross], phi[pan[cross]],
@@ -719,6 +727,7 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
       se_log_alpha[st2$free] <- st2$se_log_alpha
       se_kappa[st2$free] <- st2$se_kappa
       s2_conv <- st2$converged; ll_cross <- st2$ll
+      s2_rank_ok <- st2$rank_ok
       p_all[cross] <- st2$p
     }
     v <- alpha[set_of[objs_all]] * bhat[objs_all] + kappa[set_of[objs_all]]
@@ -728,7 +737,7 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
          se_log_alpha = se_log_alpha, se_kappa = se_kappa, v = v,
          within_p = within_p, p_all = p_all,
          ll_within = ll_within, ll_cross = ll_cross,
-         dropped = dropped,
+         dropped = dropped, s2_rank_ok = s2_rank_ok,
          converged = isTRUE(s1_conv && s2_conv))
   }
 
@@ -746,12 +755,19 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
   free <- sets_u[-1L]
   if (S > 1L) for (o in objs_all) {
     s <- set_of[[o]]; if (s == sets_u[1]) next
+    if (!fit0$s2_rank_ok) { se_v[[o]] <- NA_real_; next }
     j <- match(s, free); idx <- c(j, (S - 1L) + j)
     C2 <- cov2[idx, idx, drop = FALSE]
     gvec <- c(alpha[[s]] * bhat[[o]], 1)                # d v / d(log alpha, kappa)
     var_link <- drop(t(gvec) %*% C2 %*% gvec)
     se_v[[o]] <- sqrt(pmax(alpha[[s]]^2 * se_bhat[[o]]^2 + var_link, 0))
   }
+  if (S > 1L && !fit0$s2_rank_ok)
+    notes <- c(notes, paste0(
+      "cross-set information matrix is ill-conditioned (the cross-set ",
+      "comparisons barely identify the set units): conditional SEs for ",
+      "alpha, kappa and the linked values are withheld -- use ",
+      "se = \"judge_bootstrap\" if the design allows"))
 
   # --- parametric bootstrap of the whole pipeline (default) -----------------
   # winners resampled from the fitted probabilities, both stages refitted:
@@ -923,7 +939,11 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     rows <- which(within & sa == s & pan == g)
     if (!length(rows)) next
     fr[[length(fr) + 1L]] <- data.frame(
-      panel = g, set = s, rho = unname(phi[[g]] * alpha[[s]]),
+      # within-set logit = phi_g (beta_a - beta_b) and beta = (v - kappa)/
+      # alpha, so the discrimination applied to COMMON-SCALE differences
+      # within this frame is phi/alpha (phi * alpha composed the map the
+      # wrong way round)
+      panel = g, set = s, rho = unname(phi[[g]] / alpha[[s]]),
       n_comparisons = length(rows),
       fit_resid = .btlef_frame_fit(y[rows], within_p[rows]),
       stringsAsFactors = FALSE)

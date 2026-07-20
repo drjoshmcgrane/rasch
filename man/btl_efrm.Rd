@@ -72,7 +72,9 @@ An object of class \code{"rasch_btl_efrm"}: \code{objects} (object,
   \code{log phi = 0}), \code{alpha_table} and \code{kappa_table} (set units
   and origins with Wald tests; the reference set carries \code{alpha = 1},
   \code{kappa = 0} with no standard error), \code{frames} (panel by set:
-  unit \code{rho = phi alpha}, comparison count, pooled fit residual),
+  common-scale discrimination \code{rho = phi / alpha} (the within-set
+  logit is \code{phi (beta_a - beta_b)} with \code{beta = (v - kappa) /
+  alpha}), comparison count, pooled fit residual),
   \code{equal_unit} (the descriptive single-unit comparison), \code{n_cross}
   (cross-set comparison counts per set pair), \code{notes} and
   \code{converged}.

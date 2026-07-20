@@ -648,3 +648,97 @@ test_that("EFRM accepts several frame factors and reports the decomposition", {
                           groups = c("grp", "nonexistent")),
                "not found")
 })
+
+test_that("EFRM flags group units with no threshold spread as unidentified", {
+  skip_on_cran()
+  set.seed(42)
+  N <- 500; g <- rep(c("g1", "g2"), each = N / 2)
+  th <- rnorm(N, sd = 1.5)
+  phi_t <- ifelse(g == "g1", 1, 1.5)
+  sets <- list(A = paste0("v", 1:8), B = paste0("v", 9:16))
+  mk <- function(deltas) {
+    X <- as.data.frame(matrix(0L, N, 16)); names(X) <- paste0("v", 1:16)
+    for (i in 1:16) X[[i]] <- rbinom(N, 1, plogis(phi_t * (th - deltas[i])))
+    X
+  }
+  # all items equally difficult: the threshold spread is estimation noise,
+  # so there is nothing for the group units to scale -- without the guard
+  # this returned phi near 1 (true ratio 1.5) with a healthy-looking SE
+  fz <- rasch_efrm(mk(rep(0, 16)), groups = g, item_sets = sets,
+                   se_method = "hybrid")
+  expect_true(all(is.na(fz$phi_table$phi)))
+  expect_true(all(is.na(fz$frames$rho)))
+  expect_true(any(grepl("nothing for phi to scale", fz$notes)))
+  expect_null(fz$phi_factorial)
+  # even a modest half-logit spread is real signal and must not be flagged
+  fm <- rasch_efrm(mk(rep(seq(-0.25, 0.25, length.out = 8), 2)),
+                   groups = g, item_sets = sets, se_method = "hybrid")
+  expect_false(anyNA(fm$phi_table$phi))
+})
+
+test_that("phi_factorial_tests recover a planted region unit effect", {
+  skip_on_cran()
+  set.seed(42)
+  N <- 500; th <- rnorm(N, sd = 1.5)
+  delh <- rep(seq(-1.2, 1.2, length.out = 8), 2)
+  reg <- rep(c("N", "S"), each = N / 2)
+  set.seed(7)
+  grp <- sample(c("g1", "g2"), N, TRUE)
+  phi_r <- ifelse(reg == "N", 1, 1.5)      # unit effect on region only
+  X <- as.data.frame(matrix(0L, N, 16)); names(X) <- paste0("v", 1:16)
+  for (i in 1:16) X[[i]] <- rbinom(N, 1, plogis(phi_r * (th - delh[i])))
+  X$grp <- grp; X$region <- reg
+  f <- rasch_efrm(X, groups = c("grp", "region"), items = paste0("v", 1:16),
+                  item_sets = list(A = paste0("v", 1:8),
+                                   B = paste0("v", 9:16)),
+                  se_method = "hybrid")
+  tt <- f$phi_factorial_tests
+  expect_setequal(tt$term, c("grp", "region", "grp:region"))
+  expect_lt(tt$p[tt$term == "region"], 0.01)
+  expect_gt(tt$p[tt$term == "grp"], 0.05)
+  expect_gt(tt$p[tt$term == "grp:region"], 0.05)
+  # the sum-coded region effect reproduces the planted unit ratio 1.5
+  lu <- f$phi_factorial$log_unit[f$phi_factorial$term == "region1"]
+  expect_gt(exp(2 * abs(lu)), 1.2)
+  expect_lt(exp(2 * abs(lu)), 1.9)
+  # bootstrap draws feed se_log_rho jointly: finite and positive
+  fb <- rasch_efrm(X, groups = c("grp", "region"),
+                   items = paste0("v", 1:16),
+                   item_sets = list(A = paste0("v", 1:8),
+                                    B = paste0("v", 9:16)),
+                   se_method = "bootstrap", boot_reps = 40)
+  expect_true(all(is.finite(fb$frames$se_log_rho)))
+  expect_true(all(fb$frames$se_log_rho > 0))
+})
+
+test_that("btl_efrm withholds conditional SEs when stage 2 is singular", {
+  set.seed(31)
+  # set B has two objects whose within-set record is perfectly balanced:
+  # both centred locations are exactly 0, so the cross-set derivative for
+  # log alpha_B vanishes identically and stage 2 is rank-deficient even
+  # though the cross-set comparisons touch both objects of B
+  judges <- sprintf("J%d", 1:6)
+  withinA <- expand.grid(a = c("A1", "A2", "A3"), b = c("A1", "A2", "A3"),
+                         rep = 1:8, stringsAsFactors = FALSE)
+  withinA <- withinA[withinA$a < withinA$b, c("a", "b")]
+  bA <- c(A1 = -0.8, A2 = 0, A3 = 0.8)
+  withinA$win <- ifelse(rbinom(nrow(withinA), 1,
+                               plogis(bA[withinA$a] - bA[withinA$b])) == 1,
+                        withinA$a, withinA$b)
+  withinB <- data.frame(a = rep("B1", 24), b = rep("B2", 24),
+                        win = rep(c("B1", "B2"), 12))
+  cross <- expand.grid(a = c("A1", "A2", "A3"), b = c("B1", "B2"),
+                       rep = 1:5, stringsAsFactors = FALSE)[, c("a", "b")]
+  cross$win <- ifelse(seq_len(nrow(cross)) %% 2 == 0, cross$a, cross$b)
+  d <- rbind(withinA, withinB, cross)
+  d$judge <- rep_len(judges, nrow(d))
+  d$panel <- "P1"
+  fit <- suppressWarnings(
+    btl_efrm(d, "a", "b", winner = "win", judge = "judge", panels = "panel",
+             object_sets = list(setA = c("A1", "A2", "A3"),
+                                setB = c("B1", "B2")),
+             se_method = "conditional", min_link = 5))
+  expect_true(any(grepl("ill-conditioned", fit$notes)))
+  expect_true(all(is.na(
+    fit$alpha_table$se_log_alpha[fit$alpha_table$set == "setB"])))
+})

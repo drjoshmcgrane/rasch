@@ -198,8 +198,10 @@
   cov_dt <- A_D %*% covb[seq_len(Pd), seq_len(Pd), drop = FALSE] %*% t(A_D) *
     exp(2 * cc)
 
+  dimnames(cov_lp) <- list(glevs, glevs)
   list(dtilde = dtil_c, phi = setNames(phi_c, glevs),
        se_log_phi = setNames(sqrt(pmax(diag(cov_lp), 0)), glevs),
+       cov_log_phi = cov_lp,
        cov_dtilde = cov_dt, loglik = glh$ll, iterations = outer,
        converged = conv, gidx = gidx)
 }
@@ -437,8 +439,16 @@
 #'   cells, per-cell units appear in \code{phi_table}, and a factorial
 #'   decomposition of the cell units (sum-coded main effects, and the
 #'   interaction when every cell is observed) is returned in
-#'   \code{phi_factorial}, with the cell standard errors treated as
-#'   uncorrelated across cells.
+#'   \code{phi_factorial}. The decomposition is a generalised
+#'   least-squares fit of the cell log-units using their joint covariance
+#'   (bootstrap replicates when available, otherwise the analytic centred
+#'   covariance, inverted spectrally along its identified directions);
+#'   coefficient rows are descriptive, and inference is carried by the
+#'   multi-degree-of-freedom Wald test per term in
+#'   \code{phi_factorial_tests}. A group whose frames show no threshold
+#'   spread beyond estimation noise has nothing for its unit to scale:
+#'   its \code{phi} is reported \code{NA} with a note rather than the
+#'   uninformative near-1 value the optimiser would return.
 #' @param id,factors,items,n_groups,adjust_N,na_codes As in
 #'   \code{\link{rasch}}.
 #' @param maxit,tol Outer iteration cap and convergence tolerance of the
@@ -453,7 +463,12 @@
 #' @return An object of classes \code{"rasch_efrm"} and \code{"rasch"}. In
 #'   addition to the standard components (computed over item-by-group
 #'   virtual columns with the frame units carried in \code{disc}), it has
-#'   \code{frames} (one row per frame: units, origin, pooled fit),
+#'   \code{frames} (one row per frame: units, origin, pooled fit;
+#'   under \code{se_method = "bootstrap"} the frame-level
+#'   \code{se_log_rho} comes from the joint replicate draws of
+#'   \code{log(alpha) + log(phi)}, capturing cross-stage dependence,
+#'   while the hybrid fallback combines the stagewise errors as if
+#'   uncorrelated),
 #'   \code{phi_table}, \code{alpha_table}, \code{set_table},
 #'   \code{item_arbitrary} and \code{thresholds_arbitrary} (the structural
 #'   parameters in the common unit), \code{score_curves} (per-group
@@ -541,6 +556,17 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
 
   # --- item sets --------------------------------------------------------------
   if (is.list(item_sets)) {
+    if (is.null(names(item_sets)) || any(!nzchar(names(item_sets))))
+      stop("item_sets must be a NAMED list (each element a set of item ",
+           "names)")
+    ov <- unlist(item_sets)
+    if (anyDuplicated(ov))
+      stop("item(s) assigned to more than one set: ",
+           paste(unique(ov[duplicated(ov)]), collapse = ", "))
+    unknown <- setdiff(ov, colnames(X))
+    if (length(unknown))
+      stop("item_sets name item(s) not in the data: ",
+           paste(unknown, collapse = ", "))
     set_of <- rep(NA_character_, L); names(set_of) <- colnames(X)
     for (s in names(item_sets)) {
       hit <- intersect(item_sets[[s]], colnames(X))
@@ -556,7 +582,12 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
     names(set_of) <- colnames(X)
   }
   sets_u <- sort(unique(set_of)); S <- length(sets_u)
-  glevs <- levels(grp); G <- length(glevs)
+  # STRING-SORTED group levels, matching .efrm_solve's internal ordering
+  # exactly: interaction() orders levels first-factor-fastest, the solver
+  # sorts labels as strings, and attaching the solver's phi positionally
+  # to a differently ordered glevs swapped crossed cells (g2:N took
+  # g1:S's unit in a 2-by-2, manufacturing a spurious factor effect)
+  glevs <- sort(levels(grp)); G <- length(glevs)
 
   # --- virtual columns: item x group ------------------------------------------
   vmap <- expand.grid(item = colnames(X), group = glevs,
@@ -765,37 +796,98 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
            else unname(link$se_log_alpha)
   fit$phi_table <- data.frame(group = glevs, phi = unname(phi),
                               se_log_phi = se_lp)
-  # factorial decomposition of the cell units: log phi_cell regressed on
-  # sum-coded main effects (and their interaction), weighted by the
-  # cells' unit precisions. The cell SEs are treated as uncorrelated
-  # across cells (stage-one covariance between cells is not stored), so
-  # the decomposition is a transparent reparameterisation of the
-  # estimated cell units, not an independent test.
+  # a group's unit is identified by the spread of the thresholds in the
+  # frames it answers: when the estimated spread in every one of its sets
+  # is indistinguishable from estimation noise (all items equally
+  # difficult), there is nothing for phi to scale -- the estimate is
+  # pulled toward 1 with an SE that does not reveal the lack of
+  # identification. Flag a set as informative when its threshold spread
+  # exceeds 1.5x the pooled threshold SE (degenerate designs sit near
+  # ratio 1 by construction; even modest real spreads sit above 2).
+  phi_bad <- character(0)
+  if (G > 1L) {
+    set_ratio <- vapply(sets_u, function(su) {
+      rows <- which(set_of_drow == su)
+      if (length(rows) < 2L) return(0)
+      noise <- sqrt(mean(pmax(diag(cov_delta)[rows], 0)))
+      if (noise == 0) return(Inf)
+      stats::sd(delta[rows]) / noise
+    }, numeric(1))
+    for (g in glevs) {
+      gsets <- unique(vmap$set[vmap$group == g])
+      if (all(set_ratio[gsets] < 1.5)) phi_bad <- c(phi_bad, g)
+    }
+  }
+  if (length(phi_bad)) {
+    bad <- fit$phi_table$group %in% phi_bad
+    fit$phi_table$phi[bad] <- NA_real_
+    fit$phi_table$se_log_phi[bad] <- NA_real_
+    fit$notes <- c(fit$notes, paste0(
+      "unit(s) unidentified for group(s) ", paste(phi_bad, collapse = ", "),
+      ": the threshold spread in their frames is indistinguishable from ",
+      "estimation noise, so there is nothing for phi to scale ",
+      "(reported NA)"))
+  }
+  # factorial decomposition of the cell units: generalised least squares
+  # of log phi_cell on sum-coded main effects (and the interaction when
+  # every cell is observed), using the JOINT covariance of the cell
+  # log-units -- from the bootstrap replicates when available, else the
+  # solver's centred analytic covariance. The centring constraint
+  # (sum log phi = 0) makes the cells dependent and the covariance
+  # singular along the constant, so a spectral pseudo-inverse is used.
+  # Coefficients are reported descriptively (estimate, SE); inference is
+  # carried by MULTI-DEGREE-OF-FREEDOM Wald tests per term in
+  # phi_factorial_tests (coefficient-wise z would not be an omnibus test
+  # for factors with more than two levels).
   if (!is.null(grp_components)) {
     cell_lab <- strsplit(glevs, ":", fixed = TRUE)
     dd <- as.data.frame(do.call(rbind, cell_lab), stringsAsFactors = FALSE)
     names(dd) <- names(grp_components)
     for (cn in names(dd)) dd[[cn]] <- factor(dd[[cn]])
     estimable <- all(vapply(dd, nlevels, 1L) >= 2L) &&
-      nrow(dd) > sum(vapply(dd, nlevels, 1L) - 1L)
+      nrow(dd) > sum(vapply(dd, nlevels, 1L) - 1L) &&
+      !anyNA(fit$phi_table$phi)
     if (estimable) {
       ctr <- stats::setNames(rep(list("contr.sum"), ncol(dd)), names(dd))
       full <- nrow(dd) >= prod(vapply(dd, nlevels, 1L))
       fml <- stats::as.formula(paste("~", paste(names(dd), collapse =
         if (full && ncol(dd) > 1L) " * " else " + ")))
       Xf <- stats::model.matrix(fml, dd, contrasts.arg = ctr)
-      w <- 1 / pmax(fit$phi_table$se_log_phi, 1e-6)^2
-      XtW <- t(Xf * w)
-      cf_cov <- tryCatch(solve(XtW %*% Xf), error = function(e) NULL)
-      if (!is.null(cf_cov)) {
-        cf <- drop(cf_cov %*% (XtW %*% log(fit$phi_table$phi)))
+      # the centring constraint (sum log phi = 0) makes the intercept
+      # inestimable -- and it lies in the null space of the centred
+      # covariance, so keeping it would make the GLS cross-product
+      # singular. The sum-coded effects describe the centred cells fully.
+      asg <- attr(Xf, "assign")
+      Xf <- Xf[, asg != 0L, drop = FALSE]
+      asg <- asg[asg != 0L]
+      Sig <- if (!is.null(boot))
+        stats::cov(boot[, seq_len(G), drop = FALSE])
+      else sol$cov_log_phi
+      eg <- eigen(Sig, symmetric = TRUE)
+      pos <- eg$values > max(eg$values) * 1e-8
+      Sinv <- eg$vectors[, pos, drop = FALSE] %*%
+        (t(eg$vectors[, pos, drop = FALSE]) / eg$values[pos])
+      XtS <- t(Xf) %*% Sinv
+      V <- tryCatch(solve(XtS %*% Xf), error = function(e) NULL)
+      if (!is.null(V)) {
+        cf <- drop(V %*% (XtS %*% log(fit$phi_table$phi)))
         fit$phi_factorial <- data.frame(
           term = colnames(Xf), log_unit = cf,
-          se = sqrt(pmax(diag(cf_cov), 0)),
-          stringsAsFactors = FALSE)
-        fit$phi_factorial$z <- fit$phi_factorial$log_unit /
-          fit$phi_factorial$se
-        fit$phi_factorial$p <- 2 * stats::pnorm(-abs(fit$phi_factorial$z))
+          se = sqrt(pmax(diag(V), 0)), stringsAsFactors = FALSE)
+        tls <- attr(stats::terms(fml), "term.labels")
+        tests <- list()
+        for (tno in seq_along(tls)) {
+          ii <- which(asg == tno)
+          if (!length(ii)) next
+          Vt <- V[ii, ii, drop = FALSE]
+          W <- tryCatch(drop(t(cf[ii]) %*% solve(Vt) %*% cf[ii]),
+                        error = function(e) NA_real_)
+          tests[[length(tests) + 1L]] <- data.frame(
+            term = tls[tno], df = length(ii), wald = W,
+            p = stats::pchisq(W, length(ii), lower.tail = FALSE),
+            stringsAsFactors = FALSE)
+        }
+        fit$phi_factorial_tests <- do.call(rbind, tests)
       }
     }
   }
@@ -828,11 +920,15 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
                n_persons = npers, n_items = length(cols),
                alpha = unname(alpha[fr$set[j]]), phi = unname(phi[fr$group[j]]),
                rho = unname(alpha[fr$set[j]] * phi[fr$group[j]]),
-               # log alpha and log phi are estimated in different stages
-               # and their cross-stage covariance is not available: the
-               # combined SE treats them as uncorrelated, which the frames
-               # documentation states plainly
-               se_log_rho = sqrt(
+               # with bootstrap replicates the SE of log rho comes from
+               # the JOINT draws (log phi + log alpha per replicate), so
+               # cross-stage dependence is captured; the analytic fallback
+               # has no cross-stage covariance and treats the two stages
+               # as uncorrelated, which the frames documentation states
+               se_log_rho = if (!is.null(boot))
+                 stats::sd(boot[, match(fr$group[j], glevs)] +
+                           boot[, G + match(fr$set[j], sets_u)])
+               else sqrt(
                  fit$alpha_table$se_log_alpha[match(fr$set[j], sets_u)]^2 +
                  fit$phi_table$se_log_phi[match(fr$group[j], glevs)]^2),
                origin = unname(mu[fr$set[j]]),
@@ -840,6 +936,12 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
                fit_resid = gf$fit_resid, n_responses = gf$n)
   }))
   rownames(fit$frames) <- NULL
+  if (length(phi_bad)) {
+    bad <- fit$frames$group %in% phi_bad
+    fit$frames$phi[bad] <- NA_real_
+    fit$frames$rho[bad] <- NA_real_
+    fit$frames$se_log_rho[bad] <- NA_real_
+  }
 
   # equal-unit comparison and score curves. The pairwise comparison is only
   # informative about the group units (phi): the within-frame likelihood is
@@ -847,7 +949,7 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
   # their evidence is the Wald test on log alpha.
   ut <- rbind(
     if (G > 1L) data.frame(parameter = paste0("log phi[", glevs, "]"),
-                           estimate = log(phi),
+                           estimate = log(fit$phi_table$phi),
                            se = fit$phi_table$se_log_phi),
     if (S > 1L) data.frame(parameter = paste0("log alpha[", sets_u, "]"),
                            estimate = log(alpha),
