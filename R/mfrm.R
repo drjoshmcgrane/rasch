@@ -181,6 +181,21 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
   fac <- lapply(facets, function(f) as.character(data[[f]]))
   names(fac) <- facets
 
+  # a missing person, item, or facet identifier cannot be attached to any
+  # virtual item: paste() would otherwise coerce NA to the literal string
+  # "NA", silently pooling unrelated rows under a phantom level
+  bad_id <- is.na(pid) | is.na(itm) |
+    Reduce(`|`, lapply(fac, is.na), rep(FALSE, length(pid)))
+  if (any(bad_id)) {
+    notes <- c(notes, sprintf(
+      "%d row(s) dropped: missing person, item, or facet identifier",
+      sum(bad_id)))
+    pid <- pid[!bad_id]; itm <- itm[!bad_id]; sc <- sc[!bad_id]
+    fac <- lapply(fac, `[`, !bad_id)
+    if (!length(pid)) stop("no rows remain after dropping rows with ",
+                           "missing person/item/facet identifiers")
+  }
+
   # rescore each item to consecutive categories from 0
   items_u <- sort(unique(itm))
   item_m <- setNames(integer(length(items_u)), items_u)

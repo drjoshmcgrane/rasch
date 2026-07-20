@@ -358,7 +358,8 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
                           max_rows, nrow(d))
     d <- d[seq_len(max_rows), , drop = FALSE]
   }
-  esc <- function(x) gsub("<", "&lt;", gsub("&", "&amp;", as.character(x)))
+  esc <- function(x) gsub(">", "&gt;", gsub("<", "&lt;",
+                          gsub("&", "&amp;", as.character(x))))
   # drop all-FALSE logical flag columns and constant 'max' columns
   drop <- vapply(seq_along(d), function(j)
     (is.logical(d[[j]]) && !any(d[[j]], na.rm = TRUE)) ||
@@ -416,7 +417,12 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
     sprintf("<img src='data:image/png;base64,%s' alt='%s'/>", .b64(path), name)
   }
   s <- function(...) paste0(...)
-  chips <- s("<span class='chip'>", fit$model, "</span>",
+  # data-derived text (title, notes, item names) must be escaped before it
+  # is pasted into markup: an item named "A<b>" must render as text
+  esc <- function(x) gsub(">", "&gt;", gsub("<", "&lt;",
+                          gsub("&", "&amp;", as.character(x))))
+  title <- esc(title)
+  chips <- s("<span class='chip'>", esc(fit$model), "</span>",
              "<span class='chip'>", nrow(fit$X), " persons</span>",
              "<span class='chip'>", ncol(fit$X), " items</span>",
              sprintf("<span class='chip'>PSI %.3f</span>", fit$psi$PSI),
@@ -433,7 +439,7 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
     sprintf("PSI %.3f (%.3f without extremes); item separation %.3f; power of the test of fit: %s.</p>",
             fit$psi$PSI, fit$psi_noext$PSI, fit$isi$PSI, fit$power_of_fit),
     if (length(fit$notes))
-      s("<p class='note'>Notes: ", paste(fit$notes, collapse = "; "), "</p>")
+      s("<p class='note'>Notes: ", esc(paste(fit$notes, collapse = "; ")), "</p>")
     else "")
   rc <- residual_correlations(fit)
   dt <- dimensionality_test(fit)
@@ -442,7 +448,7 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
             100 * dt$prop_significant, 100 * dt$ci[1], 100 * dt$ci[2],
             if (dt$multidimensional) "<span class='flag'>evidence of multidimensionality</span>"
             else "consistent with one dimension")
-  else sprintf("<p class='note'>%s</p>", dt$note)
+  else sprintf("<p class='note'>%s</p>", esc(dt$note))
   ctt <- tryCatch(ctt_table(fit), error = function(e) NULL)
 
   html <- s(
@@ -471,7 +477,7 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
     { dis <- names(which(vapply(fit$thresholds_diag, function(dd)
         !dd$ordered && length(dd$thresholds) > 1L, TRUE)))
       if (length(dis)) sprintf("<p class='flag'>Disordered thresholds: %s.</p>",
-                               paste(dis, collapse = ", "))
+                               esc(paste(dis, collapse = ", ")))
       else "<p class='note'>All polytomous items have ordered thresholds.</p>" },
     shot(function() plot_threshold_map(fit), "threshold_map"),
     "<h2>Test characteristic and information</h2>",

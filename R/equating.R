@@ -62,12 +62,30 @@ equate_tests <- function(fit, reference, shift = c("mean", "none")) {
   b <- ref[match(common, ref$item), ]
   d <- a$location - b$location
   v <- a$se^2 + b$se^2
-  w <- 1 / pmax(v, 1e-10)
-  c0 <- if (shift == "mean") sum(w * d) / sum(w) else 0
-  t <- (d - c0) / sqrt(pmax(v, 1e-10))
+  # an item whose location or SE is unavailable (for example a weakly
+  # determined item whose SE is honestly NA) cannot contribute to the
+  # precision-weighted shift or the drift tests, but it must not poison
+  # the remaining items either: exclude it, say so, and carry its row in
+  # the table with NA test columns
+  usable <- is.finite(d) & is.finite(v)
+  note <- NULL
+  if (any(!usable)) {
+    note <- sprintf(
+      "common item(s) excluded from the shift and drift tests (location or SE unavailable): %s",
+      paste(common[!usable], collapse = ", "))
+    if (sum(usable) < 2)
+      stop("fewer than two common items with usable locations and standard ",
+           "errors remain; ", note)
+  }
+  c0 <- if (shift == "mean") {
+    w <- 1 / pmax(v[usable], 1e-10)
+    sum(w * d[usable]) / sum(w)
+  } else 0
+  t <- ifelse(usable, (d - c0) / sqrt(pmax(v, 1e-10)), NA_real_)
   p <- 2 * pnorm(-abs(t))
-  n <- length(common)
-  p_adj <- p.adjust(p, method = "BH")
+  n <- sum(usable)
+  p_adj <- rep(NA_real_, length(p))
+  p_adj[usable] <- p.adjust(p[usable], method = "BH")
   tab <- data.frame(item = common,
                     location_1 = a$location, se_1 = a$se,
                     location_2 = b$location, se_2 = b$se,
@@ -76,8 +94,8 @@ equate_tests <- function(fit, reference, shift = c("mean", "none")) {
                     drift = p_adj < 0.05)
   rownames(tab) <- NULL
   structure(class = "rasch_equate", list(table = tab, shift = c0,
-       correlation = cor(a$location, b$location),
-       rmsd = sqrt(mean((d - c0)^2)), n = n))
+       correlation = cor(a$location[usable], b$location[usable]),
+       rmsd = sqrt(mean((d[usable] - c0)^2)), n = n, note = note))
 }
 
 #' Plot a test-equating comparison
@@ -110,18 +128,20 @@ plot_equate <- function(fit, reference, shift = c("mean", "none")) {
                            eq$n, eq$shift, eq$correlation), grid_x = TRUE)
   on.exit(par(op))
   abline(eq$shift, 1, col = .rr$ink, lwd = 2)
-  abline(eq$shift + 1.96 * sqrt(mean(tab$se_1^2 + tab$se_2^2)), 1,
-         lty = 3, col = .rr$soft)
-  abline(eq$shift - 1.96 * sqrt(mean(tab$se_1^2 + tab$se_2^2)), 1,
-         lty = 3, col = .rr$soft)
+  # excluded items (NA SEs) still appear as points, but the average band
+  # and the drift highlighting are computed over the usable rows only
+  band <- 1.96 * sqrt(mean(tab$se_1^2 + tab$se_2^2, na.rm = TRUE))
+  abline(eq$shift + band, 1, lty = 3, col = .rr$soft)
+  abline(eq$shift - band, 1, lty = 3, col = .rr$soft)
   segments(tab$location_2, tab$location_1 - 1.96 * tab$se_1,
            tab$location_2, tab$location_1 + 1.96 * tab$se_1,
            col = paste0(.rr$soft, "88"))
+  dr <- tab$drift %in% TRUE
   points(tab$location_2, tab$location_1, pch = 21, cex = 1.6,
-         bg = ifelse(tab$drift, .rr$red, .rr$blue), col = "white", lwd = 1.2)
-  if (any(tab$drift))
-    text(tab$location_2[tab$drift], tab$location_1[tab$drift],
-         tab$item[tab$drift], pos = 3, offset = 0.5, cex = 0.75, col = .rr$red)
+         bg = ifelse(dr, .rr$red, .rr$blue), col = "white", lwd = 1.2)
+  if (any(dr))
+    text(tab$location_2[dr], tab$location_1[dr],
+         tab$item[dr], pos = 3, offset = 0.5, cex = 0.75, col = .rr$red)
   invisible(eq)
 }
 
@@ -134,5 +154,6 @@ print.rasch_equate <- function(x, ...) {
             "p_adj", "drift")
   print(.fmt_df(x$table[, intersect(core, names(x$table))]), row.names = FALSE)
   cat("(standard errors and unadjusted columns on $table)\n")
+  if (!is.null(x$note)) cat("Note:", x$note, "\n")
   invisible(x)
 }

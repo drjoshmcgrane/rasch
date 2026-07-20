@@ -22,8 +22,18 @@
   notes <- character(0)
   X <- as.matrix(X)
   if (is.null(colnames(X))) colnames(X) <- sprintf("I%02d", seq_len(ncol(X)))
+  Xn <- suppressWarnings(apply(X, 2, function(col) as.numeric(as.character(col))))
   Xi <- suppressWarnings(apply(X, 2, function(col) as.integer(as.character(col))))
-  dim(Xi) <- dim(X); dimnames(Xi) <- dimnames(X)
+  dim(Xn) <- dim(X); dim(Xi) <- dim(X); dimnames(Xi) <- dimnames(X)
+  # as.integer() TRUNCATES fractional values (1.9 -> 1) without a warning:
+  # that silently alters response data, so it must be an error, not a note
+  frac <- colSums(!is.na(Xn) & !is.na(Xi) & Xn != Xi) > 0
+  if (any(frac))
+    stop("non-integer score(s) in: ",
+         paste(colnames(X)[frac], collapse = ", "),
+         " (e.g. ", format(Xn[!is.na(Xn) & !is.na(Xi) & Xn != Xi][1]),
+         "); Rasch categories are integer counts -- round or rescore ",
+         "explicitly before analysis")
   bad_num <- colSums(!is.na(X) & is.na(Xi)) > 0
   if (any(bad_num))
     notes <- c(notes, paste0("non-numeric entries set to missing in: ",
@@ -168,15 +178,30 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
   id_vec <- NULL; fac_df <- NULL
   if (is.data.frame(data)) {
     nm <- names(data)
-    if (is.character(id) && length(id) == 1L && id %in% nm) {
+    # a misspelled column name must be an error, never a silent fallback:
+    # dropping it quietly produces a valid-looking analysis of the wrong data
+    if (is.character(id) && length(id) == 1L) {
+      if (!id %in% nm)
+        stop("id column '", id, "' not found in the data")
       id_vec <- data[[id]]
     } else if (!is.null(id) && length(id) == nrow(data)) id_vec <- id
-    if (is.character(factors) && all(factors %in% nm)) {
+    if (is.character(factors)) {
+      miss <- setdiff(factors, nm)
+      if (length(miss))
+        stop("factor column(s) not found in the data: ",
+             paste(miss, collapse = ", "))
       fac_df <- data[, factors, drop = FALSE]
     } else if (is.data.frame(factors) && nrow(factors) == nrow(data)) fac_df <- factors
     drop_cols <- c(if (is.character(id)) id else NULL,
                    if (is.character(factors)) factors else NULL)
-    item_cols <- if (!is.null(items)) intersect(items, nm) else setdiff(nm, drop_cols)
+    item_cols <- if (is.null(items)) setdiff(nm, drop_cols)
+    else if (is.character(items)) {
+      miss <- setdiff(items, nm)
+      if (length(miss))
+        stop("item column(s) not found in the data: ",
+             paste(miss, collapse = ", "))
+      items
+    } else nm[items]
     X <- as.matrix(data[, item_cols, drop = FALSE])
   } else {
     X <- as.matrix(data)
