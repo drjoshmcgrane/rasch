@@ -35,7 +35,7 @@ diagnostic tables and plots apply."><meta property="og:image" content="https://d
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.13.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -122,7 +122,13 @@ mentioned form their own set <code>"(rest)"</code> when a list is given.</p></dd
 
 <dt id="arg-groups">groups<a class="anchor" aria-label="anchor" href="#arg-groups"></a></dt>
 <dd><p>Name of the person-group column in <code>data</code>, or a vector
-with one entry per person.</p></dd>
+with one entry per person.
+Several column names may be given: the frames are then their crossed
+cells, per-cell units appear in <code>phi_table</code>, and a factorial
+decomposition of the cell units (sum-coded main effects, and the
+interaction when every cell is observed) is returned in
+<code>phi_factorial</code>, with the cell standard errors treated as
+uncorrelated across cells.</p></dd>
 
 
 <dt id="arg-id-factors-items-n-groups-adjust-n-na-codes">id, factors, items, n_groups, adjust_N, na_codes<a class="anchor" aria-label="anchor" href="#arg-id-factors-items-n-groups-adjust-n-na-codes"></a></dt>

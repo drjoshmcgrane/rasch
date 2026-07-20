@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.13.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,15 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.13.0" id="rasch-1130">rasch 1.13.0<a class="anchor" aria-label="anchor" href="#rasch-1130"></a></h2>
+<p>The three capability extensions from the review wishlist. Development branch only; the CRAN submission of 1.11.7 is untouched.</p>
+<ul><li>MFRM DIF pools to the underlying items by default: <code><a href="../reference/dif_anova.html">dif_anova()</a></code> on an MFRM fit now answers “does item A show DIF” by pooling residuals over each item’s facet cells (<code>pool_facets = FALSE</code> keeps the per-virtual-cell tests). With few items, the compensating artificial DIF the plant creates on the remaining items is visible – as it should be – with the planted item carrying the dominant F.</li>
+<li>
+<code><a href="../reference/dif_size.html">dif_size()</a></code> works on underlying MFRM items: every facet cell of the item is split by the groups in one joint unstructured refit of the virtual matrix (the facet decomposition is not reimposed, which the note states), and per-level locations are precision-weighted means over the cells with the full covariance carried. A planted 0.7-logit sex effect is recovered at 0.82 (SE 0.17), and <code>dif_anova(mf, sizes = TRUE)</code> now yields magnitude rows.</li>
+<li>
+<code><a href="../reference/rasch_efrm.html">rasch_efrm()</a></code> accepts several frame-defining factors: the frames are their crossed cells, per-cell units appear in <code>phi_table</code>, and <code>phi_factorial</code> reports a factorial decomposition of the cell units (sum-coded mains, plus the interaction when every cell is observed), weighted by the cells’ unit precisions with the independence approximation stated. All frame-defining factors (cell and components) are excluded from DIF testing; misspelled group and factor column names now error instead of silently falling through.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.12.3" id="rasch-1123">rasch 1.12.3<a class="anchor" aria-label="anchor" href="#rasch-1123"></a></h2>
 <p>Thirteenth review round: the BTL, EFRM, and MFRM analogues of the DIF and identification work. Development branch only; the CRAN submission of 1.11.7 is untouched.</p>

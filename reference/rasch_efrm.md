@@ -56,7 +56,12 @@ rasch_efrm(
 - groups:
 
   Name of the person-group column in `data`, or a vector with one entry
-  per person.
+  per person. Several column names may be given: the frames are then
+  their crossed cells, per-cell units appear in `phi_table`, and a
+  factorial decomposition of the cell units (sum-coded main effects, and
+  the interaction when every cell is observed) is returned in
+  `phi_factorial`, with the cell standard errors treated as uncorrelated
+  across cells.
 
 - id, factors, items, n_groups, adjust_N, na_codes:
 

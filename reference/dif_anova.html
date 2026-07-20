@@ -29,7 +29,7 @@ interpret the highest-order significant terms.'><meta property="og:image" conten
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.13.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -87,7 +87,8 @@ interpret the highest-order significant terms.</p>
 <span>  effects <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"main"</span>, <span class="st">"factorial"</span><span class="op">)</span>,</span>
 <span>  sizes <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  within <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  within <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  pool_facets <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -157,6 +158,13 @@ must be declared (or auto-detected) as within-subject; treating it as
 between-subjects is refused. The BH adjustment is applied across
 items separately within each term: each term is read as its own
 prespecified family, not as one pooled screen across all terms.</p></dd>
+
+
+<dt id="arg-pool-facets">pool_facets<a class="anchor" aria-label="anchor" href="#arg-pool-facets"></a></dt>
+<dd><p>For MFRM fits: pool residuals to the underlying
+items (the default), so DIF is tested per item rather than per
+item-by-facet virtual cell; <code>FALSE</code> tests the virtual items.
+Ignored for other fits.</p></dd>
 
 </dl></div>
     <div class="section level2">
