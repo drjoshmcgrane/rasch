@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.10.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.10.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,9 +35,20 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.svg" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/v1.10.2/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.10.3" id="rasch-1103">rasch 1.10.3<a class="anchor" aria-label="anchor" href="#rasch-1103"></a></h2>
+<p>Input honesty, from an external code review (five findings, all confirmed and fixed):</p>
+<ul><li>Misspelled <code>id</code>, <code>factors</code>, or <code>items</code> column names in <code><a href="../reference/rasch.html">rasch()</a></code> are now errors naming the missing columns; they were silently ignored (one misspelled factor silently dropped ALL factors), producing valid-looking analyses of the wrong data. Numeric item indices still work.</li>
+<li>Fractional scores (e.g. 1.9) are now an error naming the columns; <code><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer()</a></code> used to truncate them silently, altering response data. Integer-valued doubles (“2.0”) still pass.</li>
+<li>MFRM rows with a missing person, item, or facet identifier are dropped with a note; <code><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste()</a></code> used to coerce <code>NA</code> to the literal string “NA”, silently pooling unrelated rows under a phantom level.</li>
+<li>
+<code><a href="../reference/equate_tests.html">equate_tests()</a></code> excludes common items whose location or SE is unavailable (e.g. weakly determined items with honest NA SEs) from the precision-weighted shift and drift tests, notes them, and keeps their rows with NA test columns – one such item used to turn every statistic NA. <code><a href="../reference/plot_equate.html">plot_equate()</a></code> handles the excluded rows.</li>
+<li>
+<code><a href="../reference/report_html.html">report_html()</a></code> escapes all data-derived text (title, notes, item and facet names) – crafted column names could inject markup into reports; table cells were already escaped.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.10.2" id="rasch-1102">rasch 1.10.2<a class="anchor" aria-label="anchor" href="#rasch-1102"></a></h2>
 <ul><li>App: hover identification is now consistent across the app, through one shared mechanism. Beyond the person-fit plot and item fit map, hovering identifies the point (or cell) on: the Guttman scalogram (person, item, score), both residual-correlation heatmaps (item pair and its Q3/Q3*), the common-item equating plot and the tailored-analysis comparison (item, reference and current locations), and – for paired comparisons – the unexpected-judgements map (matchup, surprise, location), the group characteristic curves’ observed means (object, panel, mean), and the equating plot (object, both calibrations). Every tooltip is resolved server-side against exactly the rows its plot draws. Plots whose points are already labelled (kidmap, Wright map, caterpillars) and curve or distribution displays are deliberately left without hover.</li>

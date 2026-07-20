@@ -1,5 +1,36 @@
 # Changelog
 
+## rasch 1.10.3
+
+Input honesty, from an external code review (five findings, all
+confirmed and fixed):
+
+- Misspelled `id`, `factors`, or `items` column names in
+  [`rasch()`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md)
+  are now errors naming the missing columns; they were silently ignored
+  (one misspelled factor silently dropped ALL factors), producing
+  valid-looking analyses of the wrong data. Numeric item indices still
+  work.
+- Fractional scores (e.g. 1.9) are now an error naming the columns;
+  [`as.integer()`](https://rdrr.io/r/base/integer.html) used to truncate
+  them silently, altering response data. Integer-valued doubles (“2.0”)
+  still pass.
+- MFRM rows with a missing person, item, or facet identifier are dropped
+  with a note; [`paste()`](https://rdrr.io/r/base/paste.html) used to
+  coerce `NA` to the literal string “NA”, silently pooling unrelated
+  rows under a phantom level.
+- [`equate_tests()`](https://drjoshmcgrane.github.io/rasch/reference/equate_tests.md)
+  excludes common items whose location or SE is unavailable (e.g. weakly
+  determined items with honest NA SEs) from the precision-weighted shift
+  and drift tests, notes them, and keeps their rows with NA test columns
+  – one such item used to turn every statistic NA.
+  [`plot_equate()`](https://drjoshmcgrane.github.io/rasch/reference/plot_equate.md)
+  handles the excluded rows.
+- [`report_html()`](https://drjoshmcgrane.github.io/rasch/reference/report_html.md)
+  escapes all data-derived text (title, notes, item and facet names) –
+  crafted column names could inject markup into reports; table cells
+  were already escaped.
+
 ## rasch 1.10.2
 
 - App: hover identification is now consistent across the app, through

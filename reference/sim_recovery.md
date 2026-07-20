@@ -41,6 +41,6 @@ behind each).
 d <- simulate_rasch(500, 12, seed = 1)
 sim_recovery(rasch(d, id = "id"), d)$summary
 #>         parameter   n correlation      rmse          bias
-#> 1 item difficulty  12   0.9980002 0.1703475  6.822709e-17
-#> 2  person ability 500   0.8177074 0.6756437 -4.631495e-18
+#> 1 item difficulty  12   0.9980002 0.1703475  5.087986e-17
+#> 2  person ability 500   0.8177074 0.6756437 -2.833454e-18
 ```
