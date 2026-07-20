@@ -27,7 +27,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,7 +69,7 @@
                         <h4 data-toc-skip class="author">rasch</h4>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/v1.11.7/vignettes/plant-and-detect.Rmd" class="external-link"><code>vignettes/plant-and-detect.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/vignettes/plant-and-detect.Rmd" class="external-link"><code>vignettes/plant-and-detect.Rmd</code></a></small>
       <div class="d-none name"><code>plant-and-detect.Rmd</code></div>
     </div>
 
@@ -198,16 +198,16 @@ Andrich 2017), and should flag I06 alone.</p>
 <span><span class="va">da</span>   <span class="op">&lt;-</span> <span class="fu"><a href="../reference/dif_anova.html">dif_anova</a></span><span class="op">(</span><span class="va">fit3</span><span class="op">)</span></span>
 <span><span class="va">da</span><span class="op">$</span><span class="va">summary</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"item"</span>, <span class="st">"term"</span>, <span class="st">"F_uniform"</span>, <span class="st">"p_uniform_adj"</span>, <span class="st">"uniform_DIF"</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="co">#&gt;    item  term F_uniform p_uniform_adj uniform_DIF</span></span>
-<span><span class="co">#&gt; 1   I01 group 1.167e-01     9.430e-01       FALSE</span></span>
-<span><span class="co">#&gt; 2   I02 group 3.053e+00     2.707e-01       FALSE</span></span>
-<span><span class="co">#&gt; 3   I03 group 2.886e-01     9.430e-01       FALSE</span></span>
-<span><span class="co">#&gt; 4   I04 group 3.798e-01     9.430e-01       FALSE</span></span>
-<span><span class="co">#&gt; 5   I05 group 3.617e+00     2.707e-01       FALSE</span></span>
-<span><span class="co">#&gt; 6   I06 group 2.135e+01     4.917e-05        TRUE</span></span>
-<span><span class="co">#&gt; 7   I07 group 7.175e-02     9.430e-01       FALSE</span></span>
-<span><span class="co">#&gt; 8   I08 group 4.865e-06     9.982e-01       FALSE</span></span>
-<span><span class="co">#&gt; 9   I09 group 3.645e-02     9.430e-01       FALSE</span></span>
-<span><span class="co">#&gt; 10  I10 group 4.046e-02     9.430e-01       FALSE</span></span></code></pre></div>
+<span><span class="co">#&gt; 1   I01 group  0.164009      0.855993       FALSE</span></span>
+<span><span class="co">#&gt; 2   I02 group  3.234919      0.242365       FALSE</span></span>
+<span><span class="co">#&gt; 3   I03 group  0.172138      0.855993       FALSE</span></span>
+<span><span class="co">#&gt; 4   I04 group  0.412059      0.855993       FALSE</span></span>
+<span><span class="co">#&gt; 5   I05 group  3.694811      0.242365       FALSE</span></span>
+<span><span class="co">#&gt; 6   I06 group 18.647136      0.000191        TRUE</span></span>
+<span><span class="co">#&gt; 7   I07 group  0.611468      0.855993       FALSE</span></span>
+<span><span class="co">#&gt; 8   I08 group  0.008686      0.925785       FALSE</span></span>
+<span><span class="co">#&gt; 9   I09 group  0.138649      0.855993       FALSE</span></span>
+<span><span class="co">#&gt; 10  I10 group  0.085278      0.855993       FALSE</span></span></code></pre></div>
 <p>Only I06 carries a significant group term after the
 Benjamini-Hochberg adjustment across items; the other nine are quiet, as
 invariant items should be. The analysis of variance answers
@@ -356,7 +356,7 @@ to <code>dif_anova</code>.</p>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/Logic.html" class="external-link">isTRUE</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">uniform_DIF</span><span class="op">[</span><span class="va">s</span><span class="op">$</span><span class="va">item</span> <span class="op">==</span> <span class="st">"I04"</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="op">}</span>, <span class="fu"><a href="https://rdrr.io/r/base/logical.html" class="external-link">logical</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">flagged</span><span class="op">)</span>                       <span class="co"># proportion of runs that flagged I04</span></span>
-<span><span class="co">#&gt; [1] 0.6</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 0.5</span></span></code></pre></div>
 <p>The estimate is the proportion of the ten runs in which the planted
 item was flagged after adjustment. A shift of 0.8 logits split over two
 groups of 200 is detected in a majority of runs but by no means all: a

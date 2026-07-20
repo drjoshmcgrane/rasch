@@ -79,5 +79,5 @@ colnames(X) <- paste0("I", 1:8)
 fit <- rasch(data.frame(X, grp = g), factors = "grp")
 resolve_dif(fit)$splits
 #>   order item factor       eta2 magnitude
-#> 1     1   I3    grp 0.05891164  1.110898
+#> 1     1   I3    grp 0.05389885  1.110898
 ```

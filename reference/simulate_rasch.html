@@ -15,7 +15,7 @@ true parameters attached as attr(x, &quot;truth&quot;)."><meta property="og:imag
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -43,7 +43,7 @@ true parameters attached as attr(x, &quot;truth&quot;)."><meta property="og:imag
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.svg" class="logo" alt=""><h1>Simulate person-by-item Rasch data with dial-in misfit</h1>
-      <small class="dont-index">Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/v1.11.7/R/simulate.R" class="external-link"><code>R/simulate.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/R/simulate.R" class="external-link"><code>R/simulate.R</code></a></small>
       <div class="d-none name"><code>simulate_rasch.Rd</code></div>
     </div>
 
@@ -216,19 +216,19 @@ is added when &gt; 1, for DIF).</p></dd>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 11  I11 1.0341611 0.9823771</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 12  I12 0.9830431 0.7799822</span>
 <span class="r-in"><span><span class="fu"><a href="dif_anova.html">dif_anova</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">$</span><span class="va">summary</span>                           <span class="co"># item 6 flags</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    item  term    F_uniform    p_uniform p_uniform_adj eta2_uniform uniform_DIF</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1   I01 group 5.082696e+00 2.472428e-02  1.260422e-01 1.296333e-02       FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2   I02 group 1.642277e+00 2.007806e-01  4.818734e-01 4.225678e-03       FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3   I03 group 8.616147e-04 9.765980e-01  9.765980e-01 2.226390e-06       FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4   I04 group 1.021790e+00 3.127264e-01  6.254528e-01 2.633331e-03       FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5   I05 group 7.166981e-01 3.977523e-01  6.277044e-01 1.848510e-03       FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6   I06 group 2.534273e+01 7.369718e-07  8.843661e-06 6.146035e-02        TRUE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 7   I07 group 2.515649e+00 1.135379e-01  3.406138e-01 6.458402e-03       FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 8   I08 group 2.415922e-01 6.233371e-01  7.480045e-01 6.238799e-04       FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 9   I09 group 5.211716e-01 4.707783e-01  6.277044e-01 1.344885e-03       FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 10  I10 group 5.272120e-01 4.682203e-01  6.277044e-01 1.360452e-03       FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 11  I11 group 4.658721e+00 3.151055e-02  1.260422e-01 1.189485e-02       FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 12  I12 group 1.336436e-01 7.148835e-01  7.798729e-01 3.452130e-04       FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    item  term   F_uniform    p_uniform p_uniform_adj eta2_uniform uniform_DIF</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1   I01 group  4.83171573 2.853237e-02  1.151575e-01 1.233110e-02       FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2   I02 group  1.83782166 1.759971e-01  3.519941e-01 4.726448e-03       FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3   I03 group  0.03257713 8.568613e-01  8.930004e-01 8.417155e-05       FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4   I04 group  2.03757803 1.542602e-01  3.519941e-01 5.237484e-03       FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5   I05 group  0.86937693 3.517092e-01  5.935165e-01 2.241417e-03       FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6   I06 group 25.47500950 6.910514e-07  8.292617e-06 6.176134e-02        TRUE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 7   I07 group  3.26266938 7.165039e-02  2.149512e-01 8.360188e-03       FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 8   I08 group  0.08509096 7.706696e-01  8.930004e-01 2.198249e-04       FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 9   I09 group  0.72302977 3.956776e-01  5.935165e-01 1.864810e-03       FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 10  I10 group  0.50867110 4.761445e-01  6.348594e-01 1.312670e-03       FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 11  I11 group  4.81605772 2.878939e-02  1.151575e-01 1.229163e-02       FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 12  I12 group  0.01811637 8.930004e-01  8.930004e-01 4.681013e-05       FALSE</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    F_nonuniform p_nonuniform p_nonuniform_adj eta2_nonuniform nonuniform_DIF</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1    1.54966116   0.17347796        0.5204339    0.0196284713          FALSE</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 2    0.01997421   0.99983670        0.9998367    0.0002579982          FALSE</span>

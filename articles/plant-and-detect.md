@@ -140,16 +140,16 @@ fit3 <- rasch(d3, id = "id", factors = "group")
 da   <- dif_anova(fit3)
 da$summary[, c("item", "term", "F_uniform", "p_uniform_adj", "uniform_DIF")]
 #>    item  term F_uniform p_uniform_adj uniform_DIF
-#> 1   I01 group 1.167e-01     9.430e-01       FALSE
-#> 2   I02 group 3.053e+00     2.707e-01       FALSE
-#> 3   I03 group 2.886e-01     9.430e-01       FALSE
-#> 4   I04 group 3.798e-01     9.430e-01       FALSE
-#> 5   I05 group 3.617e+00     2.707e-01       FALSE
-#> 6   I06 group 2.135e+01     4.917e-05        TRUE
-#> 7   I07 group 7.175e-02     9.430e-01       FALSE
-#> 8   I08 group 4.865e-06     9.982e-01       FALSE
-#> 9   I09 group 3.645e-02     9.430e-01       FALSE
-#> 10  I10 group 4.046e-02     9.430e-01       FALSE
+#> 1   I01 group  0.164009      0.855993       FALSE
+#> 2   I02 group  3.234919      0.242365       FALSE
+#> 3   I03 group  0.172138      0.855993       FALSE
+#> 4   I04 group  0.412059      0.855993       FALSE
+#> 5   I05 group  3.694811      0.242365       FALSE
+#> 6   I06 group 18.647136      0.000191        TRUE
+#> 7   I07 group  0.611468      0.855993       FALSE
+#> 8   I08 group  0.008686      0.925785       FALSE
+#> 9   I09 group  0.138649      0.855993       FALSE
+#> 10  I10 group  0.085278      0.855993       FALSE
 ```
 
 Only I06 carries a significant group term after the Benjamini-Hochberg
@@ -316,7 +316,7 @@ flagged <- vapply(batch, function(dd) {
   isTRUE(s$uniform_DIF[s$item == "I04"])
 }, logical(1))
 mean(flagged)                       # proportion of runs that flagged I04
-#> [1] 0.6
+#> [1] 0.5
 ```
 
 The estimate is the proportion of the ten runs in which the planted item

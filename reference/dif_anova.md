@@ -77,11 +77,24 @@ dif_anova(
 - id, within:
 
   Person identifier and within-subject factor names for stacked
-  repeated-measures designs. When any factor is within-subject the model
-  becomes a mixed (split-plot) analysis of variance – the class interval
-  taken at the person level, the within factors carrying a person error
-  stratum – so their terms are tested validly. Auto-detected from the
-  fit's person identifier.
+  repeated-measures designs, auto-detected from the fit's person
+  identifier. Whenever ids repeat, PERSONS are the units of analysis:
+  residuals are aggregated to one mean per person (per within-subject
+  cell), so duplicated or stacked observations cannot manufacture
+  information, and the class interval is taken at the person level.
+  Between-person terms are tested with order-invariant Type II sums of
+  squares – every term adjusted for every term not containing it, the
+  class interval always among them, so entry order cannot decide which
+  correlated factor absorbs shared or trait variance. Within-person
+  terms are tested on the person-by-cell means through orthonormal
+  contrasts with the Greenhouse-Geisser epsilon correction (Maxwell and
+  Delaney 2004), so multi-level within factors are valid without the
+  sphericity assumption; persons missing any within cell are dropped
+  from the within-stratum tests. A factor that varies within persons
+  must be declared (or auto-detected) as within-subject; treating it as
+  between-subjects is refused. The BH adjustment is applied across items
+  separately within each term: each term is read as its own prespecified
+  family, not as one pooled screen across all terms.
 
 ## Value
 
@@ -120,30 +133,30 @@ colnames(X) <- paste0("I", 1:6)
 fit <- rasch(data.frame(X, g1 = g1, g2 = g2), factors = c("g1", "g2"))
 dif_anova(fit)$summary
 #>    item term  F_uniform    p_uniform p_uniform_adj eta2_uniform uniform_DIF
-#> 1    I1   g1  0.9538018 3.290852e-01  4.552104e-01 0.0013378171       FALSE
-#> 2    I1   g2  1.5766382 2.096575e-01  3.144863e-01 0.0022094868       FALSE
-#> 3    I2   g1 24.3495106 1.001290e-06  6.007742e-06 0.0330678710        TRUE
-#> 4    I2   g2  2.3546818 1.253516e-01  3.144863e-01 0.0032962362       FALSE
-#> 5    I3   g1  2.3019432 1.296561e-01  3.835307e-01 0.0032226473       FALSE
-#> 6    I3   g2  0.3761028 5.398922e-01  5.398922e-01 0.0005279554       FALSE
-#> 7    I4   g1  1.7072431 1.917653e-01  3.835307e-01 0.0023920775       FALSE
-#> 8    I4   g2  1.9239918 1.658513e-01  3.144863e-01 0.0026949533       FALSE
-#> 9    I5   g1  0.5582562 4.552104e-01  4.552104e-01 0.0007834534       FALSE
-#> 10   I5   g2  1.1221076 2.898243e-01  3.477892e-01 0.0015735139       FALSE
-#> 11   I6   g1  0.6706080 4.131137e-01  4.552104e-01 0.0009409790       FALSE
-#> 12   I6   g2  4.4021284 3.624594e-02  2.174756e-01 0.0061447729       FALSE
+#> 1    I1   g1  0.6121334 4.342458e-01  4.342458e-01 0.0008589994       FALSE
+#> 2    I1   g2  1.3413518 2.471841e-01  2.966209e-01 0.0018803785       FALSE
+#> 3    I2   g1 22.5995342 2.415245e-06  1.449147e-05 0.0307644276        TRUE
+#> 4    I2   g2  2.9308828 8.733541e-02  2.620062e-01 0.0040995331       FALSE
+#> 5    I3   g1  2.6226689 1.057899e-01  2.632076e-01 0.0036700052       FALSE
+#> 6    I3   g2  0.3236896 5.695781e-01  5.695781e-01 0.0004544136       FALSE
+#> 7    I4   g1  2.2787190 1.316038e-01  2.632076e-01 0.0031902378       FALSE
+#> 8    I4   g2  1.4279983 2.324893e-01  2.966209e-01 0.0020016012       FALSE
+#> 9    I5   g1  0.8332442 3.616451e-01  4.342458e-01 0.0011689189       FALSE
+#> 10   I5   g2  1.3836032 2.398815e-01  2.966209e-01 0.0019394940       FALSE
+#> 11   I6   g1  0.6800322 4.098518e-01  4.342458e-01 0.0009541900       FALSE
+#> 12   I6   g2  3.9539511 4.714388e-02  2.620062e-01 0.0055226333       FALSE
 #>    F_nonuniform p_nonuniform p_nonuniform_adj eta2_nonuniform nonuniform_DIF
-#> 1     0.4640075  0.762182811       0.76218281    0.0026000063          FALSE
+#> 1     0.4714642  0.756715172       0.75671517    0.0026416781          FALSE
 #> 2     0.1169713  0.976504536       0.97650454    0.0006567108          FALSE
-#> 3     2.5582202  0.037591977       0.11277593    0.0141683953          FALSE
+#> 3     2.5711448  0.036798473       0.11039542    0.0142389570          FALSE
 #> 4     0.2242190  0.924909281       0.97650454    0.0012580724          FALSE
-#> 5     1.1295688  0.341325851       0.68265170    0.0063058758          FALSE
+#> 5     1.2157323  0.302694888       0.60538978    0.0067836248          FALSE
 #> 6     0.5819722  0.675793611       0.97650454    0.0032588521          FALSE
-#> 7     0.8257136  0.508957578       0.69635131    0.0046174207          FALSE
+#> 7     0.8410808  0.499308707       0.66662317    0.0047029510          FALSE
 #> 8     1.5816798  0.177323408       0.69062571    0.0088075791          FALSE
-#> 9     0.7172319  0.580292761       0.69635131    0.0040132219          FALSE
+#> 9     0.7539858  0.555519305       0.66662317    0.0042180085          FALSE
 #> 10    0.3857592  0.818903711       0.97650454    0.0021624998          FALSE
-#> 11    3.3737483  0.009529991       0.05717994    0.0186010839          FALSE
+#> 11    3.5440568  0.007116541       0.04269925    0.0195217452           TRUE
 #> 12    1.4061183  0.230208570       0.69062571    0.0078376275          FALSE
 #>    superseded
 #> 1       FALSE
