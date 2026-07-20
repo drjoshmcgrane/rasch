@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,15 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.12.1" id="rasch-1121">rasch 1.12.1<a class="anchor" aria-label="anchor" href="#rasch-1121"></a></h2>
+<p>Eleventh review round on the rebuilt DIF engine: five findings, all verified and closed. Development branch only; the CRAN submission of 1.11.7 is untouched.</p>
+<ul><li>Multi-within contrast alignment. <code><a href="https://rdrr.io/r/base/interaction.html" class="external-link">interaction()</a></code> orders cells with the FIRST factor fastest while the Kronecker contrast matrices assume the LAST fastest; with two within factors a pure w1 effect therefore loaded onto w1:w2 (F 7.4 on the interaction, 3.2 on w1). The within cells are now built in Kronecker order; the same effect reads F = 16.9 on w1 and 0.35 on the interaction.</li>
+<li>Comparable between-person margins. Person means for the between tests are computed on within-cell-centred residuals: with a common occasion effect and one group missing 80% of an occasion, raw means reported group DIF at F = 37.6 (p = 2e-9); centred margins give F = 0.29 while the occasion effect stays on the occasion term.</li>
+<li>Tukey follow-ups in mixed designs run on the person-level between-factor aov (one row per person); ordinary Tukey on repeated within cells is no longer offered.</li>
+<li>An NA in a between factor no longer flips it to within-subject (detection counts distinct non-missing values).</li>
+<li>The Greenhouse-Geisser correction is fully reported: <code>terms</code> carries <code>df_denom</code> and <code>gg_epsilon</code>, the p-value is exactly pf(F, eps<em>df, eps</em>df_denom), and the stale “sums of squares are sequential” sentence is replaced by the Type II description.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.12.0" id="rasch-1120">rasch 1.12.0<a class="anchor" aria-label="anchor" href="#rasch-1120"></a></h2>
 <p>The multi-factor DIF ANOVA engine rebuilt for statistical validity (tenth review round; three P1 findings, every one reproduced before fixing). This release is on the development branch only – it does NOT supersede the CRAN submission of 1.11.7.</p>

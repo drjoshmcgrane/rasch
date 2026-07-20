@@ -1,5 +1,33 @@
 # Changelog
 
+## rasch 1.12.1
+
+Eleventh review round on the rebuilt DIF engine: five findings, all
+verified and closed. Development branch only; the CRAN submission of
+1.11.7 is untouched.
+
+- Multi-within contrast alignment.
+  [`interaction()`](https://rdrr.io/r/base/interaction.html) orders
+  cells with the FIRST factor fastest while the Kronecker contrast
+  matrices assume the LAST fastest; with two within factors a pure w1
+  effect therefore loaded onto w1:w2 (F 7.4 on the interaction, 3.2 on
+  w1). The within cells are now built in Kronecker order; the same
+  effect reads F = 16.9 on w1 and 0.35 on the interaction.
+- Comparable between-person margins. Person means for the between tests
+  are computed on within-cell-centred residuals: with a common occasion
+  effect and one group missing 80% of an occasion, raw means reported
+  group DIF at F = 37.6 (p = 2e-9); centred margins give F = 0.29 while
+  the occasion effect stays on the occasion term.
+- Tukey follow-ups in mixed designs run on the person-level
+  between-factor aov (one row per person); ordinary Tukey on repeated
+  within cells is no longer offered.
+- An NA in a between factor no longer flips it to within-subject
+  (detection counts distinct non-missing values).
+- The Greenhouse-Geisser correction is fully reported: `terms` carries
+  `df_denom` and `gg_epsilon`, the p-value is exactly pf(F, eps*df,
+  eps*df_denom), and the stale “sums of squares are sequential” sentence
+  is replaced by the Type II description.
+
 ## rasch 1.12.0
 
 The multi-factor DIF ANOVA engine rebuilt for statistical validity
