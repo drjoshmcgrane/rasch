@@ -124,10 +124,29 @@
   mk <- function(tl, resp) stats::as.formula(paste(
     resp, "~", if (length(tl)) paste(tl, collapse = " + ") else "1"))
   out <- list(); resid_pool <- 0; resid_df <- 0
+  na_row <- function(tt) data.frame(
+    term = tt, df = NA_real_, df_denom = NA_real_, gg_epsilon = NA_real_,
+    sum_sq = NA_real_, mean_sq = NA_real_, F_value = NA_real_, p = NA_real_,
+    resid_ss = NA_real_, stringsAsFactors = FALSE)
+  # between design for the scores: only terms whose factors survive the
+  # complete-panel filtering with at least two levels (a group observed at
+  # a single occasion pattern can lose every complete panel; its
+  # interactions are then non-estimable and are reported NA rather than
+  # crashing lm with a one-level factor)
+  pdat <- droplevels(pdat)
+  ok_var <- vapply(names(pdat), function(cn)
+    !is.factor(pdat[[cn]]) || nlevels(pdat[[cn]]) >= 2L, TRUE)
+  bad_vars <- names(pdat)[!ok_var]
+  bt_full <- bterms_all[!vapply(bterms_all, function(u)
+    any(.term_vars(u) %in% bad_vars), TRUE)]
   for (tt in within_terms) {
     tv <- .term_vars(tt)
     w_t <- intersect(tv, names(wlv))
     b_t <- setdiff(tv, w_t)
+    if (any(b_t %in% bad_vars)) {         # non-estimable after filtering
+      out[[length(out) + 1L]] <- na_row(tt)
+      next
+    }
     Cm <- matrix(1, 1, 1)
     for (wf in names(wlv)) {
       k <- wlv[[wf]]
@@ -135,8 +154,6 @@
     }
     S <- Y %*% Cm
     m <- ncol(S)
-    # between design for the scores: all between-stratum terms
-    bt_full <- bterms_all
     fits_j <- lapply(seq_len(m), function(j) {
       dd <- pdat; dd$s_ <- S[, j]
       stats::lm(mk(bt_full, "s_"), data = dd)
@@ -161,7 +178,9 @@
       # balanced grand mean and genuinely separable.
       Xb <- if (length(bt_full)) {
         fml <- stats::as.formula(paste("~", paste(bt_full, collapse = " + ")))
-        fac_cols <- names(pdat)[vapply(pdat, is.factor, TRUE)]
+        used <- unique(unlist(lapply(bt_full, .term_vars)))
+        fac_cols <- intersect(
+          names(pdat)[vapply(pdat, is.factor, TRUE)], used)
         ctr <- stats::setNames(
           rep(list("contr.sum"), length(fac_cols)), fac_cols)
         stats::model.matrix(fml, data = pdat, contrasts.arg = ctr)
@@ -456,8 +475,20 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     # missing an occasion masqueraded as group DIF at F = 37.6); centring
     # each within cell at its all-person mean removes the common within
     # effects from the between comparison.
-    cellmean <- tapply(ag$z, ag$wcell, mean)
-    zc <- ag$z - as.numeric(cellmean[as.character(ag$wcell)])
+    # centring must remove within effects that VARY BY TRAIT LEVEL too: a
+    # common occasion-by-class-interval structure plus differential
+    # missingness otherwise masquerades as non-uniform group DIF (observed
+    # F = 214.7 on grp:ci with no group effect). Centre each within cell
+    # within each class interval; empty combinations fall back to the
+    # cell's overall mean.
+    cellci <- interaction(ag$wcell, ag$ci, drop = TRUE)
+    m_cellci <- tapply(ag$z, cellci, mean)
+    m_cell <- tapply(ag$z, ag$wcell, mean)
+    ctr <- as.numeric(m_cellci[as.character(cellci)])
+    miss_ctr <- is.na(ctr)
+    if (any(miss_ctr))
+      ctr[miss_ctr] <- as.numeric(m_cell[as.character(ag$wcell)[miss_ctr]])
+    zc <- ag$z - ctr
     pkey <- factor(ag$pid)
     pz <- tapply(zc, pkey, mean)
     pfirst <- which(!duplicated(pkey))
@@ -547,7 +578,11 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     # group terms only; and no comparisons for a two-level main effect,
     # where the F test is already the only contrast
     keep_t <- !vapply(cand$term, function(tt) "ci" %in% .term_vars(tt), TRUE) &
-      !(cand$df == 1L & !grepl(":", cand$term, fixed = TRUE))
+      !(cand$df == 1L & !grepl(":", cand$term, fixed = TRUE)) &
+      # within-subject terms have no place in an ordinary Tukey HSD (the
+      # follow-up aov is person-level and between-factors only)
+      !vapply(cand$term, function(tt)
+        any(.term_vars(tt) %in% wsafe), TRUE)
     cand <- cand$term[keep_t]
     if (!length(cand)) next
     # TukeyHSD has no method for the multi-stratum aov of a mixed design;
@@ -647,9 +682,19 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
   if (!is.null(size_tab) && nrow(size_tab))
     size_tab$term <- relabel(size_tab$term)
 
+  notes <- character(0)
+  if (incomplete_note > 0L)
+    notes <- c(notes, sprintf(
+      "%d person-by-item panel(s) missing a within-subject cell were dropped from the within-person tests (their between-person information is retained)",
+      incomplete_note))
+  if (mixed && any(is.na(terms$F_value) & terms$term != "Residuals"))
+    notes <- c(notes, paste(
+      "term(s) reported NA were non-estimable after complete-panel",
+      "filtering (a between level lost all its complete within panels)"))
   out <- list(summary = summary_tab, terms = terms, tukey = tukey,
               n_groups = nlevels(as.factor(ci)), within = within,
-              effects = effects, alpha = alpha, p_adjust = p_adjust)
+              effects = effects, alpha = alpha, p_adjust = p_adjust,
+              notes = notes)
   if (!is.null(tukey_note)) out$tukey_note <- tukey_note
   if (isTRUE(sizes)) out$sizes <- size_tab
   class(out) <- "rasch_dif"

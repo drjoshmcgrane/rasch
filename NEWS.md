@@ -1,3 +1,25 @@
+# rasch 1.12.2
+
+Twelfth review round: the incomplete-panel edges of the DIF engine.
+Development branch only; the CRAN submission of 1.11.7 is untouched.
+
+* Between-person margins are centred within each within-cell BY CLASS
+  INTERVAL (falling back to the cell mean where a combination is
+  empty): cell-only centring removed common occasion effects but not
+  occasion-by-trait structure, which with differential missingness
+  masqueraded as non-uniform group DIF at F = 214.7; it now reads
+  F = 0.01 with the occasion terms intact.
+* A between level that loses every complete within panel (for example
+  a group observed only at baseline) no longer crashes lm() with a
+  one-level factor: its within-stratum interactions are reported NA
+  with an explanatory note, and every other test proceeds.
+* Tukey candidates are filtered to between-only terms, so a
+  significant multilevel within term can no longer reach TukeyHSD and
+  crash on its empty result.
+* Transparency: the count of person panels dropped from the
+  within-person tests is returned in `notes`, alongside the
+  non-estimable-term note.
+
 # rasch 1.12.1
 
 Eleventh review round on the rebuilt DIF engine: five findings, all

@@ -391,3 +391,75 @@ test_that("an NA in a between factor does not flip it to within-subject", {
   expect_length(d$within, 0L)
   expect_gt(nrow(d$summary), 0L)
 })
+
+# --- DIF ANOVA round 12: incomplete-panel edges ---------------------------
+
+test_that("trait-dependent within effects with differential missingness give no group DIF", {
+  skip_on_cran()
+  set.seed(13)
+  np <- 240; L <- 6; b <- seq(-1, 1, length.out = L)
+  g <- rep(c("A", "B"), each = np / 2)
+  th0 <- rnorm(np); rows <- list()
+  for (k in 1:2) {
+    th <- th0 + rnorm(np, 0, 0.3)
+    X <- matrix(0L, np, L, dimnames = list(NULL, paste0("I", 1:L)))
+    for (j in 1:L)
+      X[, j] <- rbinom(np, 1, plogis(th - b[j] +
+        ifelse(j == 3 & k == 2, -0.5 - 0.6 * th0, 0)))
+    keep <- if (k == 2) (g == "A") | (runif(np) < 0.2) else rep(TRUE, np)
+    rows[[k]] <- data.frame(X, occ = paste0("t", k), grp = g,
+                            pid = sprintf("P%03d", 1:np))[keep, ]
+  }
+  f <- rasch(do.call(rbind, rows), factors = c("occ", "grp"), id = "pid",
+             items = paste0("I", 1:L))
+  s <- dif_anova(f)$summary
+  gU <- s$F_uniform[s$item == "I3" & s$term == "grp"]
+  gN <- s$F_nonuniform[s$item == "I3" & s$term == "grp"]
+  # cell-only centring reported non-uniform group DIF at F = 214.7 here
+  expect_true(is.na(gU) || gU < 8)
+  expect_true(is.na(gN) || gN < 8)
+})
+
+test_that("a between level with no complete panels yields NA terms, not a crash", {
+  set.seed(14)
+  np <- 160; L <- 6; b <- seq(-1, 1, length.out = L)
+  g <- rep(c("A", "B"), each = np / 2); th0 <- rnorm(np); rows <- list()
+  for (k in 1:4) {
+    th <- th0 + rnorm(np, 0, 0.3)
+    X <- matrix(0L, np, L, dimnames = list(NULL, paste0("I", 1:L)))
+    for (j in 1:L) X[, j] <- rbinom(np, 1, plogis(th - b[j]))
+    keep <- if (k == 1) rep(TRUE, np) else g == "B"
+    rows[[k]] <- data.frame(X, occ = paste0("t", k), grp = g,
+                            pid = sprintf("P%03d", 1:np))[keep, ]
+  }
+  f <- rasch(do.call(rbind, rows), factors = c("occ", "grp"), id = "pid",
+             items = paste0("I", 1:L))
+  expect_s3_class(dif_anova(f), "rasch_dif")
+  df <- dif_anova(f, effects = "factorial")
+  expect_true(any(is.na(df$terms$F_value[df$terms$term == "occ:grp"])))
+  expect_true(any(grepl("non-estimable", df$notes)))
+  expect_true(any(grepl("dropped from the within-person", df$notes)))
+})
+
+test_that("significant multilevel within terms never reach ordinary Tukey", {
+  set.seed(15)
+  np <- 150; L <- 6; b <- seq(-1, 1, length.out = L)
+  rows <- list(); th0 <- rnorm(np)
+  gg <- rep(c("x", "y"), length.out = np)
+  for (k in 1:4) {
+    th <- th0 + rnorm(np, 0, 0.3)
+    X <- matrix(0L, np, L, dimnames = list(NULL, paste0("I", 1:L)))
+    for (j in 1:L)
+      X[, j] <- rbinom(np, 1, plogis(th - b[j] +
+                                       ifelse(j == 3 & k == 4, -1.2, 0)))
+    keep <- (gg == "x") | (runif(np) < 0.7)
+    rows[[k]] <- data.frame(X, occ = paste0("t", k), grp = gg,
+                            pid = sprintf("P%03d", 1:np))[keep, ]
+  }
+  f <- rasch(do.call(rbind, rows), factors = c("occ", "grp"), id = "pid",
+             items = paste0("I", 1:L))
+  d <- dif_anova(f)
+  expect_s3_class(d, "rasch_dif")
+  # any Tukey rows present concern between terms only
+  if (nrow(d$tukey)) expect_false(any(grepl("occ", d$tukey$term)))
+})
