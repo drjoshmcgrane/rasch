@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,20 @@
       <small>Source: <a href="https://github.com/drjoshmcgrane/rasch/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.11.3" id="rasch-1113">rasch 1.11.3<a class="anchor" aria-label="anchor" href="#rasch-1113"></a></h2>
+<p>Fifth review round: seven findings, all verified and closed.</p>
+<ul><li>Every public estimator now rejects fractional scores before integer coercion could truncate them: <code><a href="../reference/pcml.html">pcml()</a></code>, <code><a href="../reference/pcml_pc.html">pcml_pc()</a></code>, and <code><a href="../reference/rasch_mfrm.html">rasch_mfrm()</a></code> truncated 1.9 to 1 silently, and graded <code><a href="../reference/btl.html">btl()</a></code> rounded it; only <code><a href="../reference/rasch.html">rasch()</a></code> rejected. One shared guard serves all entry points.</li>
+<li>
+<code><a href="../reference/item_moments.html">item_moments()</a></code> is overflow-stable (log-sum-exp): a 31-category item, or wide categories with a large discrimination, overflowed the uncentred exponent and turned every <code><a href="../reference/person_wle.html">person_wle()</a></code> location NA.</li>
+<li>When the judge-clustered covariance is rank-deficient (clusters &lt;= parameters) the OSI is withheld as NA – understated SEs would overstate the separation reliability – and the note now spells out how to read the marginal SEs and dependence tests. The SEs themselves stay reported: they are consistent estimates whose understatement is disclosed, which is standard few-cluster practice.</li>
+<li>
+<code><a href="../reference/btl_efrm.html">btl_efrm()</a></code> rejects a judge assigned to more than one panel (a panel is a judge attribute; the judge bootstrap would otherwise silently reclassify rows).</li>
+<li>Undefined diagnostics are NA, not numbers: Cronbach’s alpha under zero total-score variance (was -Inf), and the omnibus item-trait test when no item is testable (was chi-square 0 on 0 df with p = 1).</li>
+<li>
+<code><a href="../reference/simulate_rasch.html">simulate_rasch()</a></code>’s secondary trait keeps the requested mean and sd (combining two mean-mu components had shifted the mean by the factor rho + sqrt(1 - rho^2)) and is returned in the truth metadata.</li>
+<li>The MLE score-table root drops the common discrimination, which cancels from the ML equation exactly as it does from Warm’s (ordinary unit-discrimination fits were unaffected).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.11.2" id="rasch-1112">rasch 1.11.2<a class="anchor" aria-label="anchor" href="#rasch-1112"></a></h2>
 <p>Edge cases from the fourth review round, verified and closed:</p>

@@ -27,7 +27,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.11.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -102,9 +102,10 @@ that made it.</p>
 <span><span class="co">#&gt; Model-conforming (no departures planted).</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">d</span>, <span class="st">"truth"</span><span class="op">)</span><span class="op">)</span>            <span class="co"># the truth travels with the data</span></span>
 <span><span class="co">#&gt;  [1] "layout"         "description"    "model"          "n_persons"     </span></span>
-<span><span class="co">#&gt;  [5] "n_items"        "theta"          "difficulty"     "thresholds"    </span></span>
-<span><span class="co">#&gt;  [9] "discrimination" "guessing"       "groups"         "dim_items"     </span></span>
-<span><span class="co">#&gt; [13] "dif_items"      "careless_idx"   "style_idx"      "planted"</span></span></code></pre></div>
+<span><span class="co">#&gt;  [5] "n_items"        "theta"          "theta2"         "difficulty"    </span></span>
+<span><span class="co">#&gt;  [9] "thresholds"     "discrimination" "guessing"       "groups"        </span></span>
+<span><span class="co">#&gt; [13] "dim_items"      "dif_items"      "careless_idx"   "style_idx"     </span></span>
+<span><span class="co">#&gt; [17] "planted"</span></span></code></pre></div>
 <p>With no departures requested the data conform to the model, and the
 print method says so. The rest of this vignette plants one fault at a
 time and runs the diagnostic built to find it. The diagnostics

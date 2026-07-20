@@ -30,9 +30,10 @@ d                                   # the print method reports the plant
 #> Model-conforming (no departures planted).
 names(attr(d, "truth"))            # the truth travels with the data
 #>  [1] "layout"         "description"    "model"          "n_persons"     
-#>  [5] "n_items"        "theta"          "difficulty"     "thresholds"    
-#>  [9] "discrimination" "guessing"       "groups"         "dim_items"     
-#> [13] "dif_items"      "careless_idx"   "style_idx"      "planted"
+#>  [5] "n_items"        "theta"          "theta2"         "difficulty"    
+#>  [9] "thresholds"     "discrimination" "guessing"       "groups"        
+#> [13] "dim_items"      "dif_items"      "careless_idx"   "style_idx"     
+#> [17] "planted"
 ```
 
 With no departures requested the data conform to the model, and the

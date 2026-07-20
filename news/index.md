@@ -1,5 +1,47 @@
 # Changelog
 
+## rasch 1.11.3
+
+Fifth review round: seven findings, all verified and closed.
+
+- Every public estimator now rejects fractional scores before integer
+  coercion could truncate them:
+  [`pcml()`](https://drjoshmcgrane.github.io/rasch/reference/pcml.md),
+  [`pcml_pc()`](https://drjoshmcgrane.github.io/rasch/reference/pcml_pc.md),
+  and
+  [`rasch_mfrm()`](https://drjoshmcgrane.github.io/rasch/reference/rasch_mfrm.md)
+  truncated 1.9 to 1 silently, and graded
+  [`btl()`](https://drjoshmcgrane.github.io/rasch/reference/btl.md)
+  rounded it; only
+  [`rasch()`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md)
+  rejected. One shared guard serves all entry points.
+- [`item_moments()`](https://drjoshmcgrane.github.io/rasch/reference/item_moments.md)
+  is overflow-stable (log-sum-exp): a 31-category item, or wide
+  categories with a large discrimination, overflowed the uncentred
+  exponent and turned every
+  [`person_wle()`](https://drjoshmcgrane.github.io/rasch/reference/person_wle.md)
+  location NA.
+- When the judge-clustered covariance is rank-deficient (clusters \<=
+  parameters) the OSI is withheld as NA – understated SEs would
+  overstate the separation reliability – and the note now spells out how
+  to read the marginal SEs and dependence tests. The SEs themselves stay
+  reported: they are consistent estimates whose understatement is
+  disclosed, which is standard few-cluster practice.
+- [`btl_efrm()`](https://drjoshmcgrane.github.io/rasch/reference/btl_efrm.md)
+  rejects a judge assigned to more than one panel (a panel is a judge
+  attribute; the judge bootstrap would otherwise silently reclassify
+  rows).
+- Undefined diagnostics are NA, not numbers: Cronbach’s alpha under zero
+  total-score variance (was -Inf), and the omnibus item-trait test when
+  no item is testable (was chi-square 0 on 0 df with p = 1).
+- [`simulate_rasch()`](https://drjoshmcgrane.github.io/rasch/reference/simulate_rasch.md)’s
+  secondary trait keeps the requested mean and sd (combining two mean-mu
+  components had shifted the mean by the factor rho + sqrt(1 - rho^2))
+  and is returned in the truth metadata.
+- The MLE score-table root drops the common discrimination, which
+  cancels from the ML equation exactly as it does from Warm’s (ordinary
+  unit-discrimination fits were unaffected).
+
 ## rasch 1.11.2
 
 Edge cases from the fourth review round, verified and closed:
