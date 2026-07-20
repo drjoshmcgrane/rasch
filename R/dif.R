@@ -94,13 +94,15 @@
     ss_t <- max(sum(stats::resid(m0)^2) - sum(stats::resid(m1)^2), 0)
     Fv <- (ss_t / df_t) / mse
     out[[length(out) + 1L]] <- data.frame(
-      term = tt, df = df_t, sum_sq = ss_t, mean_sq = ss_t / df_t,
+      term = tt, df = df_t, df_denom = df_res, gg_epsilon = NA_real_,
+      sum_sq = ss_t, mean_sq = ss_t / df_t,
       F_value = Fv, p = stats::pf(Fv, df_t, df_res, lower.tail = FALSE),
       resid_ss = rss_full, stringsAsFactors = FALSE)
   }
   if (!length(out)) return(NULL)
   rbind(do.call(rbind, out),
-        data.frame(term = "Residuals", df = df_res, sum_sq = rss_full,
+        data.frame(term = "Residuals", df = df_res, df_denom = NA_real_,
+                   gg_epsilon = NA_real_, sum_sq = rss_full,
                    mean_sq = mse, F_value = NA_real_, p = NA_real_,
                    resid_ss = NA_real_, stringsAsFactors = FALSE))
 }
@@ -189,8 +191,13 @@
       df_t <- m * df_t1
     }
     Fv <- (ss_t / df_t) / (rss_f / df_err)
+    # the p-value is computed at the Greenhouse-Geisser corrected degrees
+    # of freedom (eps * df, eps * df_denom); the nominal df, the
+    # denominator df, and epsilon are all returned so the test is
+    # reproducible and reportable
     out[[length(out) + 1L]] <- data.frame(
-      term = tt, df = df_t, sum_sq = ss_t, mean_sq = ss_t / df_t,
+      term = tt, df = df_t, df_denom = df_err, gg_epsilon = eps,
+      sum_sq = ss_t, mean_sq = ss_t / df_t,
       F_value = Fv,
       p = stats::pf(Fv, eps * df_t, eps * df_err, lower.tail = FALSE),
       resid_ss = rss_f, stringsAsFactors = FALSE)
@@ -198,7 +205,8 @@
   }
   if (!length(out)) return(NULL)
   rbind(do.call(rbind, out),
-        data.frame(term = "Residuals", df = resid_df, sum_sq = resid_pool,
+        data.frame(term = "Residuals", df = resid_df, df_denom = NA_real_,
+                   gg_epsilon = NA_real_, sum_sq = resid_pool,
                    mean_sq = if (resid_df > 0) resid_pool / resid_df else
                      NA_real_, F_value = NA_real_, p = NA_real_,
                    resid_ss = NA_real_, stringsAsFactors = FALSE))
@@ -251,7 +259,9 @@
 #' Probabilities are adjusted across items within each term
 #' (Benjamini-Hochberg by default). Tukey HSD comparisons are returned for
 #' each significant, non-superseded group term. Sums of squares are
-#' sequential (factors in the order given, class interval last).
+#' Type II (each term adjusted for every term not containing it, the
+#' class interval always among them), so results do not depend on the
+#' order factors are given.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param factors A vector (one factor), a data frame of person factors, or a
@@ -350,8 +360,8 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
       stop("within-subject factors need repeated person ids (each id ",
            "observed more than once); no id repeats here")
     varies <- vapply(within, function(fn)
-      any(tapply(as.character(factors[[fn]]), id,
-                 function(v) length(unique(v)) > 1L)), TRUE)
+      any(tapply(as.character(factors[[fn]]), id, function(v)
+        length(unique(v[!is.na(v)])) > 1L), na.rm = TRUE), TRUE)
     if (any(!varies))
       stop("factor(s) declared within-subject never vary within any id: ",
            paste(within[!varies], collapse = ", "))
@@ -360,8 +370,8 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     # between-subjects (the old row-level treatment pseudo-replicated)
     other <- setdiff(names(factors), within)
     ovaries <- vapply(other, function(fn)
-      any(tapply(as.character(factors[[fn]]), id,
-                 function(v) length(unique(v)) > 1L)), TRUE)
+      any(tapply(as.character(factors[[fn]]), id, function(v)
+        length(unique(v[!is.na(v)])) > 1L), na.rm = TRUE), TRUE)
     if (length(other) && any(ovaries))
       stop("factor(s) vary within persons but are not declared in ",
            "`within`: ", paste(other[ovaries], collapse = ", "),
@@ -371,8 +381,8 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
   }
   if (is.null(within) && repeated) {
     within <- names(factors)[vapply(names(factors), function(fn)
-      any(tapply(as.character(factors[[fn]]), id,
-                 function(v) length(unique(v)) > 1L)), TRUE)]
+      any(tapply(as.character(factors[[fn]]), id, function(v)
+        length(unique(v[!is.na(v)])) > 1L), na.rm = TRUE), TRUE)]
   }
   if (is.null(within)) within <- character(0)
   within <- intersect(within, names(factors))
@@ -413,20 +423,43 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
       length(unique(d[[s]])) < 2, TRUE))) next
 
     # aggregate to one mean residual per person per within-cell (persons
-    # without repeats aggregate to themselves)
-    wcell <- if (mixed) interaction(d[wsafe], drop = FALSE) else
-      factor(rep("all", nrow(d)))
+    # without repeats aggregate to themselves). Within cells are ordered
+    # with the LAST within factor varying fastest, matching the Kronecker
+    # construction of the contrast matrices -- interaction()'s
+    # first-fastest order silently rotated multi-within effects into the
+    # wrong subspaces (a pure w1 effect flagged w1:w2).
+    if (mixed) {
+      wl0 <- lapply(wsafe, function(sn)
+        sort(unique(as.character(d[[sn]]))))
+      names(wl0) <- wsafe
+      grid <- expand.grid(rev(wl0), stringsAsFactors = FALSE,
+                          KEEP.OUT.ATTRS = FALSE)
+      grid <- grid[, rev(seq_along(wl0)), drop = FALSE]
+      names(grid) <- wsafe
+      cell_levels <- do.call(paste, c(grid, list(sep = "\r")))
+      wcell <- factor(do.call(paste, c(lapply(wsafe, function(sn)
+        as.character(d[[sn]])), list(sep = "\r"))), levels = cell_levels)
+    } else wcell <- factor(rep("all", nrow(d)))
     key <- interaction(d$pid, wcell, drop = TRUE)
     agz <- tapply(d$z, key, mean)
     firsts <- which(!duplicated(key))
     ag <- d[firsts[match(levels(key), as.character(key[firsts]))],
             c("pid", "ci", safe), drop = FALSE]
     ag$z <- as.numeric(agz)
+    ag$wcell <- wcell[firsts[match(levels(key),
+                                   as.character(key[firsts]))]]
 
     # person-level frame for the between stratum: one row per person, the
-    # mean over that person's within cells
+    # mean over that person's OCCASION-ADJUSTED within-cell values. With
+    # differentially incomplete within panels, raw person means are not
+    # comparable between groups (a common occasion effect plus one group
+    # missing an occasion masqueraded as group DIF at F = 37.6); centring
+    # each within cell at its all-person mean removes the common within
+    # effects from the between comparison.
+    cellmean <- tapply(ag$z, ag$wcell, mean)
+    zc <- ag$z - as.numeric(cellmean[as.character(ag$wcell)])
     pkey <- factor(ag$pid)
-    pz <- tapply(ag$z, pkey, mean)
+    pz <- tapply(zc, pkey, mean)
     pfirst <- which(!duplicated(pkey))
     pdat <- ag[pfirst[match(levels(pkey), as.character(pkey[pfirst]))],
                c("pid", "ci", bsafe), drop = FALSE]
@@ -440,8 +473,7 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
       # are exactly the murky territory this engine replaces)
       wl <- lapply(wsafe, function(sn) sort(unique(as.character(ag[[sn]]))))
       names(wl) <- wsafe
-      Ywide <- tapply(ag$z, list(factor(ag$pid),
-                                 interaction(ag[wsafe], drop = FALSE)), mean)
+      Ywide <- tapply(ag$z, list(factor(ag$pid), ag$wcell), mean)
       complete <- rowSums(is.na(Ywide)) == 0L
       incomplete_note <- incomplete_note + sum(!complete)
       if (sum(complete) >= 6L) {
@@ -455,12 +487,15 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     }
     ft <- rbind(ft_b, ft_w)
     if (is.null(ft)) next
-    # a person-level aov (class interval first) retained solely for the
-    # Tukey HSD follow-ups: cell means and the error MS are what Tukey
-    # needs, and they do not depend on the sum-of-squares type
-    fits[[i]] <- tryCatch(stats::aov(stats::as.formula(paste(
-      "z ~ ci + (", paste(safe, collapse = op), ")")), data = ag),
-      error = function(e) NULL)
+    # a person-level aov (class interval first, BETWEEN factors only, one
+    # row per person) retained solely for the Tukey HSD follow-ups: cell
+    # means and the between-person error MS are what Tukey needs. Within
+    # factors are excluded -- ordinary Tukey on repeated cells would treat
+    # them as independent, so within-term follow-ups are not offered.
+    fits[i] <- list(if (length(bsafe)) tryCatch(stats::aov(
+      stats::as.formula(paste("z ~ ci + (",
+                              paste(bsafe, collapse = op), ")")),
+      data = pdat), error = function(e) NULL) else NULL)
     rows[[length(rows) + 1L]] <- data.frame(item = colnames(Z)[i], ft)
   }
   if (!length(rows)) stop("no item yielded an estimable factorial ANOVA")
@@ -1052,8 +1087,8 @@ dif_contrasts <- function(fit, factors = NULL, items = NULL, within = NULL,
       id %in% names(fit$factors)) id <- fit$factors[[id]]
   if (is.null(within) && !is.null(id) && anyDuplicated(id)) {
     within <- names(factors)[vapply(names(factors), function(fn)
-      any(tapply(as.character(factors[[fn]]), id,
-                 function(v) length(unique(v)) > 1L)), TRUE)]
+      any(tapply(as.character(factors[[fn]]), id, function(v)
+        length(unique(v[!is.na(v)])) > 1L), na.rm = TRUE), TRUE)]
   }
   if (is.null(within)) within <- character(0)
   within <- intersect(within, names(factors))

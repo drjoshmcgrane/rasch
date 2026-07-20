@@ -102,7 +102,9 @@ interpret the highest-order significant terms.
 Probabilities are adjusted across items within each term
 (Benjamini-Hochberg by default). Tukey HSD comparisons are returned for
 each significant, non-superseded group term. Sums of squares are
-sequential (factors in the order given, class interval last).
+Type II (each term adjusted for every term not containing it, the
+class interval always among them), so results do not depend on the
+order factors are given.
 }
 \examples{
 set.seed(1); n <- 800

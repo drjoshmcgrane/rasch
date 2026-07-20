@@ -322,3 +322,72 @@ test_that("multi-level within DIF is GG-calibrated and has power", {
   }
   expect_gte(hits, 3)
 })
+
+# --- DIF ANOVA round 11: multi-within alignment, incomplete panels --------
+
+test_that("multi-within contrasts align: a pure w1 effect loads on w1", {
+  skip_on_cran()
+  set.seed(5)
+  np <- 150; L <- 6; b <- seq(-1, 1, length.out = L)
+  rows <- list(); th0 <- rnorm(np)
+  for (i1 in c("a1", "a2")) for (i2 in c("b1", "b2", "b3")) {
+    th <- th0 + rnorm(np, 0, 0.3)
+    X <- matrix(0L, np, L, dimnames = list(NULL, paste0("I", 1:L)))
+    for (j in 1:L)
+      X[, j] <- rbinom(np, 1, plogis(th - b[j] +
+                                       ifelse(j == 3 & i1 == "a2", -0.9, 0)))
+    rows[[length(rows) + 1]] <- data.frame(X, w1 = i1, w2 = i2,
+                                           pid = sprintf("P%03d", 1:np))
+  }
+  f <- rasch(do.call(rbind, rows), factors = c("w1", "w2"), id = "pid",
+             items = paste0("I", 1:L))
+  tt <- dif_anova(f, effects = "factorial")$terms
+  i3 <- tt[tt$item == "I3", ]
+  # interaction()'s first-fastest cell order silently rotated this into
+  # w1:w2 (F 7.4 on the interaction, 3.2 on w1)
+  expect_gt(i3$F_value[i3$term == "w1"], 10)
+  expect_lt(i3$F_value[i3$term == "w1:w2"], 4)
+  expect_lt(i3$F_value[i3$term == "w2"], 4)
+  # GG metadata reproducible: p == pf(F, eps*df, eps*df_denom)
+  r <- i3[i3$term == "w1", ]
+  expect_equal(r$p, pf(r$F_value, r$gg_epsilon * r$df,
+                       r$gg_epsilon * r$df_denom, lower.tail = FALSE),
+               tolerance = 1e-12)
+})
+
+test_that("differentially incomplete within panels give no false group DIF", {
+  skip_on_cran()
+  set.seed(9)
+  np <- 200; L <- 6; b <- seq(-1, 1, length.out = L)
+  g <- rep(c("A", "B"), each = np / 2)
+  th0 <- rnorm(np); rows <- list()
+  for (k in 1:2) {
+    th <- th0 + rnorm(np, 0, 0.3)
+    X <- matrix(0L, np, L, dimnames = list(NULL, paste0("I", 1:L)))
+    for (j in 1:L)
+      X[, j] <- rbinom(np, 1, plogis(th - b[j] +
+                                       ifelse(j == 3 & k == 2, -0.9, 0)))
+    keep <- if (k == 2) (g == "A") | (runif(np) < 0.2) else rep(TRUE, np)
+    rows[[k]] <- data.frame(X, occ = paste0("t", k), grp = g,
+                            pid = sprintf("P%03d", 1:np))[keep, ]
+  }
+  f <- rasch(do.call(rbind, rows), factors = c("occ", "grp"), id = "pid",
+             items = paste0("I", 1:L))
+  s <- dif_anova(f)$summary
+  gF <- s$F_uniform[s$item == "I3" & s$term == "grp"]
+  # raw person means over unmatched cells reported group F = 37.6 here
+  expect_true(is.na(gF) || gF < 8)
+})
+
+test_that("an NA in a between factor does not flip it to within-subject", {
+  set.seed(2)
+  b <- seq(-1, 1, length.out = 6)
+  X <- matrix(rbinom(200 * 6, 1, plogis(outer(rnorm(200), b, "-"))), 200, 6,
+              dimnames = list(NULL, paste0("I", 1:6)))
+  gg <- rep(c("a", "b"), 100); gg[5] <- NA
+  f <- rasch(data.frame(X, g = gg, pid = sprintf("P%03d", 1:200)),
+             factors = "g", id = "pid", items = paste0("I", 1:6))
+  d <- dif_anova(f)
+  expect_length(d$within, 0L)
+  expect_gt(nrow(d$summary), 0L)
+})
