@@ -768,3 +768,72 @@ test_that("btl_efrm refuses panels that observe disjoint object pairs", {
              se_method = "conditional", min_link = 5)),
     "panel")
 })
+
+test_that("dif_size withholds magnitude and significance on a weak category", {
+  # one group's response on the target item sits almost entirely in a
+  # near-empty category, so its resolved location rests on a weak threshold
+  set.seed(101)
+  N <- 400; L <- 5
+  d <- seq(-1.5, 1.5, length.out = L)
+  X <- matrix(rbinom(N * L, 1, plogis(outer(rnorm(N), d, "-"))), N, L)
+  colnames(X) <- paste0("I", 1:L)
+  grp <- factor(rep(c("a", "b"), each = N / 2))
+  # make item I3 a 0/1/2 item; group a populates category 2 normally, but
+  # group b reaches it in only 2 responses -- a near-empty category whose
+  # threshold split_items() flags weak (se = NA)
+  X3 <- X[, 3] + rbinom(N, 1, ifelse(grp == "a", 0.45, 0))
+  X3[X3 > 2] <- 2L
+  brows <- which(grp == "b")
+  X3[brows] <- pmin(X3[brows], 1L)          # group b capped at category 1
+  X3[brows[1:2]] <- 2L                       # exactly two b responses in cat 2
+  X[, 3] <- X3
+  fit <- rasch(data.frame(X, grp = grp, check.names = FALSE),
+               model = "PCM", factors = "grp")
+  ds <- dif_size(fit, "I3", by = "grp")
+  # the weak level is flagged and its SE/verdict withheld, not fabricated
+  expect_true(any(ds$levels$weak))
+  expect_true(is.na(ds$levels$se[ds$levels$weak]))
+  expect_true(all(is.na(ds$pairs$se)))
+  expect_true(all(is.na(ds$pairs$significant)))
+  expect_true(any(grepl("weakly identified|withheld", ds$notes)))
+})
+
+test_that("resolve_dif does not split a uniform flag driven by a thin cell", {
+  set.seed(102)
+  N <- 600; L <- 6
+  d <- seq(-1.5, 1.5, length.out = L)
+  th <- rnorm(N)
+  X <- matrix(rbinom(N * L, 1, plogis(outer(th, d, "-"))), N, L)
+  colnames(X) <- paste0("I", 1:L)
+  sex <- factor(sample(c("F", "M"), N, TRUE))
+  # a real uniform DIF on I5 by sex (so resolve_dif has something genuine)
+  p5 <- plogis(th - d[5] + ifelse(sex == "M", 0.9, 0))
+  X[, 5] <- rbinom(N, 1, p5)
+  # age_band: a tiny 'old' cell (n=15) that will drive a spurious ANOVA flag
+  age <- factor(c(rep("young", 300), rep("mid", 285), rep("old", 15)))
+  fit <- rasch(data.frame(X, sex = sex, age_band = age, check.names = FALSE),
+               factors = c("sex", "age_band"))
+  rr <- resolve_dif(fit, factors = c("sex", "age_band"))
+  # the genuine sex DIF is resolved; the thin-cell age flag is not chased
+  split_key <- paste(rr$splits$item, rr$splits$factor)
+  expect_false(any(grepl("age_band", rr$splits$factor)))
+})
+
+test_that("btl marks subset separation as non-convergence, not a boundary fit", {
+  # graded cross-block comparisons all at the ceiling category, with one
+  # near-ceiling concession that makes the win graph strongly connected:
+  # the {A,B}-vs-{C,D} contrast is (quasi-)separated
+  mk <- function(a, b, n, x) data.frame(a = rep(a, n), b = rep(b, n), resp = x)
+  within1 <- mk("A", "B", 40, rep(c(0, 1, 2, 3, 4), 8))
+  within2 <- mk("C", "D", 40, rep(c(0, 1, 2, 3, 4), 8))
+  cross <- rbind(mk("A", "C", 400, rep(4, 400)), mk("A", "D", 400, rep(4, 400)),
+                 mk("B", "C", 400, rep(4, 400)), mk("B", "D", 399, rep(4, 399)),
+                 data.frame(a = "B", b = "D", resp = 3))
+  fit <- btl(rbind(within1, within2, cross), "a", "b", response = "resp")
+  expect_false(fit$converged)
+  expect_true(any(is.na(fit$objects$se)))
+  expect_true(any(grepl("run to the location boundary", fit$notes)))
+  # equating refuses a non-converged calibration
+  fit2 <- fit
+  expect_error(btl_equate(fit, fit2), "did not converge")
+})

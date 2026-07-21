@@ -108,6 +108,16 @@
 btl_equate <- function(fit1, fit2, alpha = 0.05, p_adjust = "holm") {
   if (!inherits(fit1, "rasch_btl"))
     stop("`fit1` must be a paired-comparison (btl) fit")
+  # equating a non-converged calibration carries its unidentified locations
+  # and understated covariance straight into the drift table: refuse it
+  for (nm in c("fit1", "fit2")) {
+    f <- get(nm)
+    if (inherits(f, "rasch_btl") && isFALSE(f$converged))
+      stop("`", nm, "` did not converge (its comparison design does not ",
+           "identify some object locations); resolve that before equating -- ",
+           "the drift statistics would inherit boundary estimates and ",
+           "understated standard errors", call. = FALSE)
+  }
   cur <- data.frame(object = as.character(fit1$objects$object),
                     location = fit1$objects$location,
                     se = fit1$objects$se, stringsAsFactors = FALSE)

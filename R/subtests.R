@@ -193,13 +193,15 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "BH",
                  paste(.term_vars(t), collapse = "+"), ""),
                eta2 = pmax(ifelse(s$uniform_DIF, s$eta2_uniform, 0),
                            ifelse(s$nonuniform_DIF, s$eta2_nonuniform, 0)),
+               uniform = s$uniform_DIF, nonuniform = s$nonuniform_DIF,
                stringsAsFactors = FALSE)
   }
   # the original item a (possibly resolved) column belongs to
   base_of <- function(nm) sub(" \\(.*$", "", nm)
 
   cur <- fit
-  splits <- list(); done <- character(0); stopped <- "no significant DIF remains"
+  splits <- list(); done <- character(0); skipped <- character(0)
+  stopped <- "no significant DIF remains"
   repeat {
     fl <- flagged(cur)
     if (is.null(fl) || !nrow(fl)) break
@@ -221,9 +223,27 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "BH",
     by_vars <- strsplit(pick$vars, "+", fixed = TRUE)[[1]]
     grp <- if (length(by_vars) == 1L) cur$factors[[by_vars]] else
       interaction(cur$factors[by_vars], sep = ":", drop = TRUE)
-    # DIF magnitude in logits for the item about to be resolved
-    mag <- tryCatch(max(abs(dif_size(cur, pick$item, by = grp)$pairs$difference)),
-                    error = function(e) NA_real_)
+    # confirm a UNIFORM flag with dif_size before splitting: dif_size drops
+    # thin cells (min_n) and withholds weak categories, so if it can no
+    # longer see the DIF the ANOVA flag rested on a near-empty cell, not on
+    # real differential functioning -- splitting on it chases noise. Only
+    # gate uniform-only flags: dif_size measures location (uniform) DIF, so
+    # it cannot confirm or deny a nonuniform effect and must not suppress it.
+    ds <- tryCatch(dif_size(cur, pick$item, by = grp), error = function(e) NULL)
+    if (!is.null(ds) && isTRUE(pick$uniform) && !isTRUE(pick$nonuniform)) {
+      n_grp_lev <- nlevels(droplevels(as.factor(grp)))
+      reduced <- nrow(ds$levels) < n_grp_lev || isTRUE(any(ds$levels$weak))
+      if (reduced && !isTRUE(any(ds$pairs$significant, na.rm = TRUE))) {
+        skipped <- c(skipped, paste(pick$item, pick$vars))
+        done <- c(done, paste(pick$item, pick$vars))
+        next
+      }
+    }
+    # DIF magnitude in logits, over the trustworthy (non-weak) pairs only
+    mag <- if (!is.null(ds)) {
+      d <- abs(ds$pairs$difference[!is.na(ds$pairs$se)])
+      if (length(d)) max(d) else NA_real_
+    } else NA_real_
     refit <- tryCatch(split_items(cur, pick$item, by = grp),
                       error = function(e) NULL)
     if (is.null(refit)) { done <- c(done, paste(pick$item, pick$vars)); next }
@@ -240,8 +260,11 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "BH",
                eta2 = numeric(), magnitude = numeric())
   rownames(split_df) <- NULL
   final_dif <- tryCatch(flagged(cur), error = function(e) NULL)
+  notes <- if (length(skipped))
+    sprintf("%d flagged item-factor(s) not split: DIF attributable to a near-empty category, not real differential functioning (%s)",
+            length(skipped), paste(skipped, collapse = "; ")) else character(0)
   out <- list(fit = cur, splits = split_df, n_splits = nrow(split_df),
-              stopped = stopped,
+              stopped = stopped, notes = notes,
               n_remaining_dif = if (is.null(final_dif)) 0L else nrow(final_dif))
   class(out) <- "rasch_resolve_dif"
   out

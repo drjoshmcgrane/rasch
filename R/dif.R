@@ -878,7 +878,7 @@ dif_size <- function(fit, item, by, p_adjust = "holm", alpha = 0.05,
     rs <- .dif_resolve(fit, item, grp, min_n)
     if (is.null(rs))
       stop("could not resolve item ", item, " (too little data per level)")
-    levs <- rs$levs; loc <- rs$loc; vloc <- rs$vloc
+    levs <- rs$levs; loc <- rs$loc; vloc <- rs$vloc; weak_lev <- rs$weak
     notes <- c(notes, rs$notes)
   } else {
     refit <- split_items(fit, item, by = grp)
@@ -896,24 +896,34 @@ dif_size <- function(fit, item, by, p_adjust = "holm", alpha = 0.05,
     vloc <- matrix(NA_real_, length(levs), length(levs))
     for (a in seq_along(levs)) for (b in seq_along(levs))
       vloc[a, b] <- mean(cv[block[[a]], block[[b]], drop = FALSE])
+    weak_lev <- .dif_weak_levels(refit, as.list(idx)); names(weak_lev) <- levs
+    if (any(weak_lev))
+      notes <- c(notes, sprintf(
+        "location(s) for level(s) %s rest on a near-empty category and are weakly identified; their DIF magnitude and significance are withheld",
+        paste(levs[weak_lev], collapse = ", ")))
   }
   n_item <- as.integer(table(grp[obs_i & !is.na(grp)])[levs])
+  lev_se <- sqrt(pmax(diag(vloc), 0)); lev_se[weak_lev] <- NA_real_
   levels_df <- data.frame(level = levs, location = loc,
-                          se = sqrt(pmax(diag(vloc), 0)), n = n_item)
+                          se = lev_se, weak = unname(weak_lev), n = n_item)
 
   pr <- t(utils::combn(seq_along(levs), 2))
+  pair_weak <- weak_lev[pr[, 1]] | weak_lev[pr[, 2]]
   pairs <- data.frame(
     level_a = levs[pr[, 1]], level_b = levs[pr[, 2]],
     difference = loc[pr[, 1]] - loc[pr[, 2]],
     se = sqrt(pmax(diag(vloc)[pr[, 1]] + diag(vloc)[pr[, 2]] -
                    2 * vloc[cbind(pr[, 1], pr[, 2])], 1e-12)))
+  # a pair touching a weakly-identified level carries no trustworthy
+  # magnitude: withhold its SE and every SE-derived verdict
+  pairs$se[pair_weak] <- NA_real_
   pairs$z <- pairs$difference / pairs$se
   pairs$p <- 2 * pnorm(-abs(pairs$z))
   pairs$p_adj <- p.adjust(pairs$p, method = p_adjust)
   pairs$lower <- pairs$difference - qnorm(0.975) * pairs$se
   pairs$upper <- pairs$difference + qnorm(0.975) * pairs$se
-  pairs$significant <- pairs$p_adj < alpha
-  pairs$practical <- abs(pairs$difference) >= flag_logits
+  pairs$significant <- ifelse(pair_weak, NA, pairs$p_adj < alpha)
+  pairs$practical <- ifelse(pair_weak, NA, abs(pairs$difference) >= flag_logits)
 
   out <- list(item = item, by = paste(names(factors), collapse = ":"),
               levels = levels_df, pairs = pairs, alpha = alpha,
@@ -950,6 +960,24 @@ print.rasch_dif_size <- function(x, ...) {
 # ---------------------------------------------------------------------------
 
 # Resolve one item over grouping cells: locations and sandwich covariance.
+# A resolved level is weakly identified when its split copy rests on a
+# near-empty category: split_items() already flags such thresholds
+# (weak = TRUE, se = NA) and leaves the item-location SE NA. A location
+# built on such a threshold is a boundary artefact, so its DIF magnitude
+# and significance must be withheld rather than recomputed from the ridged
+# covariance -- otherwise dif_size()/dif_contrasts() report a fabricated
+# finite SE and a spurious 'significant'/'practical' verdict. item_rows is
+# a list, one entry per level, of the refit$items row-index(es) whose
+# thresholds back that level's location.
+.dif_weak_levels <- function(refit, item_rows) {
+  wk <- refit$thresholds$weak
+  se <- refit$items$se
+  vapply(item_rows, function(ks) any(vapply(ks, function(k) {
+    (!is.null(wk) && isTRUE(any(wk[refit$thresholds$item == k], na.rm = TRUE))) ||
+      (!is.null(se) && k <= length(se) && is.na(se[k]))
+  }, logical(1))), logical(1))
+}
+
 .dif_resolve <- function(fit, item, grp, min_n) {
   # an UNDERLYING MFRM item resolves at the virtual level: every one of
   # its facet cells is split by the groups in one joint unstructured
@@ -1015,7 +1043,15 @@ print.rasch_dif_size <- function(x, ...) {
           mean(cv[blocks[[ca]][[a]], blocks[[cb]][[b]], drop = FALSE])
       vloc[a, b] <- acc
     }
-    return(list(levs = levs, loc = loc, vloc = vloc, notes = notes))
+    weak_lev <- .dif_weak_levels(refit, lapply(seq_along(levs),
+                                               function(a) idx_m[, a]))
+    names(weak_lev) <- levs
+    if (any(weak_lev))
+      notes <- c(notes, sprintf(
+        "%s: location(s) for level(s) %s rest on a near-empty category and are weakly identified; their DIF magnitude and significance are withheld",
+        item, paste(levs[weak_lev], collapse = ", ")))
+    return(list(levs = levs, loc = loc, vloc = vloc, weak = weak_lev,
+                notes = notes))
   }
   i <- .item_idx(fit, item)
   item <- fit$items$item[i]
@@ -1040,7 +1076,12 @@ print.rasch_dif_size <- function(x, ...) {
   vloc <- matrix(NA_real_, length(levs), length(levs))
   for (a in seq_along(levs)) for (b in seq_along(levs))
     vloc[a, b] <- mean(cv[block[[a]], block[[b]], drop = FALSE])
-  list(levs = levs, loc = loc, vloc = vloc, notes = notes)
+  weak_lev <- .dif_weak_levels(refit, as.list(idx)); names(weak_lev) <- levs
+  if (any(weak_lev))
+    notes <- c(notes, sprintf(
+      "%s: location(s) for level(s) %s rest on a near-empty category and are weakly identified; their DIF magnitude and significance are withheld",
+      item, paste(levs[weak_lev], collapse = ", ")))
+  list(levs = levs, loc = loc, vloc = vloc, weak = weak_lev, notes = notes)
 }
 
 # A factor is treated as ordered when declared ordered or when its levels
@@ -1312,8 +1353,11 @@ dif_contrasts <- function(fit, factors = NULL, items = NULL, within = NULL,
       if (!is.null(rs)) {
         w <- w_full[rs$levs]
         w[is.na(w)] <- 0
+        # a contrast placing weight on a weakly-identified level rests on a
+        # boundary-artefact location: withhold its estimate and SE
+        touches_weak <- !is.null(rs$weak) && any(w != 0 & rs$weak)
         if (sum(w > 0) > 0 && sum(w < 0) > 0 &&
-            abs(sum(abs(w)) - 2) < 0.5) {   # cells mostly intact
+            abs(sum(abs(w)) - 2) < 0.5 && !touches_weak) {   # cells mostly intact
           w <- .dif_norm(w)
           est <- sum(w * rs$loc)
           se <- sqrt(max(drop(t(w) %*% rs$vloc %*% w), 1e-12))

@@ -889,6 +889,30 @@ plot_btl <- function(fit, band = 2.5) {
   # summed score w * (x - E) is exactly right and nothing is rescaled)
   if (is.null(jd)) Gm <- Gm / sqrt(w)
   H <- gh$H
+  # Identification of the free-parameter information. Two failure modes:
+  #  (i) genuine singularity (duplicate/degenerate objects, an exactly
+  #      zero-information direction): rcond collapses to ~0 -- refuse.
+  #  (ii) (quasi-)separation of a SUBSET of objects: a cluster linked to
+  #      the rest by too few informative comparisons (e.g. cross-divide
+  #      comparisons all at the ceiling category, with one near-ceiling
+  #      concession that makes the win graph strongly connected so Ford
+  #      passes). The between-cluster contrast is then near-flat and its
+  #      location runs to the trust-region boundary while the ridged
+  #      inverse reports plausible-looking SEs. Unlike (i) the information
+  #      is only mildly ill-conditioned (the ceiling observations inject a
+  #      little curvature), so no single rcond threshold separates it from
+  #      a legitimately sparse design without risking false refusals. The
+  #      robust signature is the CONJUNCTION of an ill-conditioned
+  #      direction and a location driven to the boundary along it; report
+  #      it as non-convergence with the affected SEs withheld, per the
+  #      standard remedy for a boundary estimate.
+  rc <- tryCatch(rcond(H), error = function(e) 0)
+  if (!(is.finite(rc) && rc > 1e-8))
+    stop("the information matrix is singular (reciprocal condition number ",
+         format(rc, digits = 3), "): an object location is not identified ",
+         "-- typically duplicate objects or a comparison design with a ",
+         "zero-information direction. Add comparisons that place the ",
+         "affected object(s), or anchor them", call. = FALSE)
   Hi <- solve(H)
   # CR1 small-sample factor: with G clusters the empirical meat understates
   # by ~G/(G-1); the correction is standard practice and matters exactly
@@ -913,6 +937,23 @@ plot_btl <- function(fit, band = 2.5) {
   # structurally zero (se == 0): the location is a fixed constant, not an estimate
   cov_beta <- Bmat %*% covth[1:nb, 1:nb, drop = FALSE] %*% t(Bmat)
   se <- sqrt(pmax(diag(cov_beta), 0))
+  # (quasi-)separation of an object subset: the conjunction of an
+  # ill-conditioned information direction (rc below 1e-2) and a location
+  # driven to the boundary along it (|location| >= 3, ~20:1 odds). Neither
+  # signal alone is decisive -- a legitimately sparse design is mildly
+  # ill-conditioned but not at the boundary, and a genuinely dominant
+  # object is at a large location but well-conditioned -- so only their
+  # conjunction marks a location the data cannot place. Report it as
+  # non-convergence with the affected SEs withheld, rather than a boundary
+  # estimate dressed in a plausible-looking SE.
+  sep_run <- rc < 1e-2 & abs(beta) >= 3
+  if (any(sep_run)) {
+    converged <- FALSE
+    se[sep_run] <- NA_real_
+    notes <- c(notes, sprintf(
+      "object(s) %s have run to the location boundary and the design does not identify them (a cluster linked to the rest by too few informative comparisons -- e.g. cross-divide comparisons all at an extreme category); their standard errors are withheld and the fit is marked not converged. Add comparisons that place them, or anchor them",
+      paste(objs[sep_run], collapse = ", ")))
+  }
   dependence <- NULL
   if (pz) {
     zi <- (nb + q + 1L):np
