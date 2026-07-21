@@ -235,6 +235,18 @@ print.rasch_btl_transitivity <- function(x, ...) {
 #' estimation noise in the parameters -- adequate for the screening use
 #' here, slightly liberal in tiny designs.
 #'
+#' Important caveat when \code{order} is modelled. The order-aware reference
+#' is trustworthy only when the comparison order varies across judges. If
+#' every judge is given the SAME fixed comparison sequence (a standard
+#' printed booklet, a fixed competition running order), a real within-judge
+#' order effect is confounded with the object locations: the fitted order
+#' coefficient is attenuated toward zero, the locations absorb the
+#' structured order signal, and the reference -- built from those biased
+#' point estimates -- reads the residue as a second dimension (a high
+#' false-positive rate). Randomise the comparison order across judges before
+#' trusting a second-dimension flag from an order-modelled fit; with a
+#' shared fixed order, treat the dimensionality result as unreliable.
+#'
 #' @param fit A paired-comparison fit from \code{\link{btl}}.
 #' @param reps Model-simulated replicates for the noise reference.
 #' @return A list of class \code{"rasch_btl_dim"}: \code{bimensions} (per

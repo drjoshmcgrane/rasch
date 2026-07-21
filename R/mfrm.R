@@ -167,10 +167,19 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
       for (cn in factors)
         long[[cn]] <- rep(as.character(data[[cn]]), length(items))
     } else if (is.data.frame(factors)) {
-      if (nrow(factors) != nrow(data))
-        stop("`factors` data frame needs one row per data row")
-      fac_pass <- factors[rep(seq_len(nrow(data)), length(items)), ,
-                          drop = FALSE]
+      persons_row <- as.character(data[[person]])
+      pu <- unique(persons_row)
+      if (nrow(factors) == nrow(data)) {
+        row_idx <- seq_len(nrow(data))
+      } else if (nrow(factors) == length(pu)) {
+        # documented alternative: one row per unique person -- map each
+        # data row to its person's factor row
+        row_idx <- match(persons_row, pu)
+      } else {
+        stop("`factors` data frame needs one row per data row (", nrow(data),
+             ") or one per unique person (", length(pu), ")")
+      }
+      fac_pass <- factors[rep(row_idx, length(items)), , drop = FALSE]
       rownames(fac_pass) <- NULL
     }
     return(rasch_mfrm(long, person = "..person", item = "..item",

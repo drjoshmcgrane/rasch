@@ -30,3 +30,4 @@ local_audit/
 Rplots.pdf
 docs
 tests/testthat/_problems/
+figure/

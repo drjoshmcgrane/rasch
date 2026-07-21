@@ -875,3 +875,44 @@ test_that("weak-category honesty reaches MFRM, EFRM, and average anchoring", {
   expect_true(any(mf$est$thr$weak))
   expect_true(all(is.na(mf$est$thr$se[mf$est$thr$weak])))
 })
+
+test_that("item infit/outfit exclude extreme-score persons", {
+  # extreme persons have boundary measures and near-zero residuals that
+  # deflate the mean-squares; excluding them raises an item's outfit toward
+  # its honest value (matching the log-of-mean-square residual convention)
+  set.seed(77); N <- 600; L <- 6
+  d <- seq(-1.2, 1.2, length.out = L)
+  X <- matrix(rbinom(N * L, 1, plogis(outer(rnorm(N, 0, 1.6), d, "-"))), N, L)
+  colnames(X) <- paste0("I", 1:L)
+  f <- rasch(as.data.frame(X))
+  th <- f$person$theta; ex <- f$person$extreme
+  expect_true(any(ex))                       # design has extreme persons
+  mo <- .moment_arrays(th, lapply(seq_len(L), function(j)
+    f$thresholds$tau[f$thresholds$item == j]), disc = NULL)
+  Z <- (X - mo$E) / sqrt(mo$V); colnames(Z) <- colnames(X)
+  # the package's own item-fit, with and without the extreme mask, using the
+  # exact mean-square formula: the reported values are the excluded ones
+  excl <- .item_fit(X, Z, mo, extreme = ex)
+  incl <- .item_fit(X, Z, mo, extreme = rep(FALSE, N))
+  expect_equal(f$items$outfit_ms, excl$outfit_ms, tolerance = 1e-8)
+  expect_false(isTRUE(all.equal(excl$outfit_ms, incl$outfit_ms)))
+})
+
+test_that("sim_recovery reports NA bias for origin-identified parameters", {
+  skip_on_cran()
+  d <- simulate_rasch(400, 10, difficulty = c(-1, 2), seed = 5)
+  r <- sim_recovery(rasch(d), d)
+  expect_true(all(is.na(r$summary$bias)))       # locations: not identifiable
+  expect_true(all(r$summary$correlation > 0.7, na.rm = TRUE))
+})
+
+test_that("sim_apply is resilient to per-replicate failures", {
+  batch <- sim_replicate(simulate_rasch, 6, n_persons = 200, n_items = 6,
+                         seed = 1)
+  i <- 0
+  out <- sim_apply(batch, function(d) {
+    i <<- i + 1; if (i %% 2 == 0) stop("boom") else rasch(d)$psi$PSI })
+  expect_equal(attr(out, "n_failed"), 3L)
+  expect_equal(sum(is.na(out)), 3L)
+  expect_true(any(grepl("boom", attr(out, "failure_messages"))))
+})

@@ -290,8 +290,11 @@ distractor_rescore <- function(fit, items = NULL, min_n = 20, z = 1.96) {
       base <- th[ok & r %in% d$option[others]]
       xj <- th[ok & r == d$option[j]]
       if (length(base) < 2 || length(xj) < 2) next
-      sep <- (mean(xj) - mean(base)) /
-        sqrt(var(xj) / length(xj) + var(base) / length(base))
+      den <- sqrt(var(xj) / length(xj) + var(base) / length(base))
+      # zero spread in both groups (every chooser at the same location)
+      # gives a 0/0 separation z: leave it NA rather than NaN
+      if (!is.finite(den) || den <= 0) next
+      sep <- (mean(xj) - mean(base)) / den
       d$z_sep[j] <- sep
       if (sep > z && mean(xj) < d$mean_location[key_row]) credited <- c(credited, j)
     }

@@ -52,6 +52,19 @@ replicate, so it carries sampling noise in the responses but not
 estimation noise in the parameters -- adequate for the screening use
 here, slightly liberal in tiny designs.
 }
+\details{
+Important caveat when \code{order} is modelled. The order-aware reference
+is trustworthy only when the comparison order varies across judges. If
+every judge is given the SAME fixed comparison sequence (a standard
+printed booklet, a fixed competition running order), a real within-judge
+order effect is confounded with the object locations: the fitted order
+coefficient is attenuated toward zero, the locations absorb the
+structured order signal, and the reference -- built from those biased
+point estimates -- reads the residue as a second dimension (a high
+false-positive rate). Randomise the comparison order across judges before
+trusting a second-dimension flag from an order-modelled fit; with a
+shared fixed order, treat the dimensionality result as unreliable.
+}
 \examples{
 set.seed(1); objs <- LETTERS[1:6]; beta <- setNames(seq(-1.5, 1.5, len = 6), objs)
 pr <- t(utils::combn(objs, 2))

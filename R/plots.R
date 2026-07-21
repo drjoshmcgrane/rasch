@@ -85,14 +85,22 @@ plot_icc <- function(fit, item, group = NULL, n_groups = NULL,
       .dif_n_groups(fit, group)
   Ecurve <- vapply(grid, function(th)
     item_moments(th, tau_i, disc = .disc_of(fit, i))$E, 0)
-  th <- fit$person$theta; x <- fit$X[, i]; ok <- !is.na(th) & !is.na(x)
+  th <- fit$person$theta; x <- fit$X[, i]
+  # the observed points use the SAME class intervals as the fit's item-trait
+  # test: extreme-score persons excluded, and tied locations kept together
+  # so the allocation is order-invariant (a plain rank/cut split ties by row
+  # order and would move points when the data are merely reordered)
+  ex <- if (!is.null(fit$person$extreme)) fit$person$extreme else
+    rep(FALSE, length(th))
+  ci_full <- .class_intervals(ifelse(is.na(x), NA_real_, th), ex, n_groups)
+  ok <- !is.na(ci_full)
+  ci <- ci_full[ok]
   op <- .rr_canvas(range(grid), c(0, mmax), "Person location (logits)",
                    "Expected score",
                    sprintf("%s  (location %.3f)", fit$items$item[i],
                            fit$items$location[i]))
   on.exit(par(op))
   lines(grid, Ecurve, lwd = 3, col = .rr$ink)
-  ci <- cut(rank(th[ok], ties.method = "first"), n_groups, labels = FALSE)
   if (is.null(group)) {
     obsTh <- tapply(th[ok], ci, mean); obsX <- tapply(x[ok], ci, mean)
     points(obsTh, obsX, pch = 21, bg = .rr$blue, col = "white", cex = 1.5, lwd = 1.2)
@@ -464,9 +472,14 @@ plot_tif <- function(fit, grid = seq(-6, 6, 0.05)) {
           col = paste0(.rr$blue, "22"), border = NA)
   lines(ti$theta, ti$info, lwd = 3, col = .rr$blue)
   sem <- ti$sem; sem[!is.finite(sem)] <- NA
-  scl <- max(ti$info) * 1.05 / max(sem[ti$theta > -4 & ti$theta < 4], na.rm = TRUE)
+  # the SEM axis is scaled over the central range; if the plotting grid lies
+  # entirely outside it, fall back to the whole grid rather than max() over
+  # an empty selection (which returns -Inf)
+  inr <- ti$theta > -4 & ti$theta < 4
+  if (!any(inr & is.finite(sem))) inr <- is.finite(sem)
+  scl <- max(ti$info) * 1.05 / max(sem[inr], na.rm = TRUE)
   lines(ti$theta, sem * scl, lwd = 2.2, col = .rr$red, lty = 5)
-  sem_ticks <- pretty(c(0, max(sem[ti$theta > -4 & ti$theta < 4], na.rm = TRUE)))
+  sem_ticks <- pretty(c(0, max(sem[inr], na.rm = TRUE)))
   sem_ticks <- sem_ticks[sem_ticks * scl <= max(ti$info) * 1.1]
   axis(4, at = sem_ticks * scl, labels = sem_ticks,
        col = .rr$grid, col.ticks = .rr$soft, col.axis = .rr$red, cex.axis = 0.8)

@@ -95,7 +95,7 @@ test_that("compare_fits withholds ICs for an unconverged fit", {
   X <- matrix(rbinom(N * L, 1, plogis(outer(rnorm(N), d, "-"))), N, L)
   colnames(X) <- paste0("I", 1:L)
   good <- rasch(as.data.frame(X))
-  bad <- rasch(as.data.frame(X), maxit = 1L)     # forced non-convergence
+  bad <- suppressWarnings(rasch(as.data.frame(X), maxit = 1L))  # non-convergence
   expect_false(isTRUE(bad$est$converged))
   cmp <- compare_fits(good = good, bad = bad)
   expect_true("converged" %in% names(cmp))

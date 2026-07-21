@@ -190,6 +190,10 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
   .factors_sym <- substitute(factors)
   .factors_label <- if (is.name(.factors_sym)) as.character(.factors_sym) else "factor"
   model <- match.arg(model)
+  # adjust_N rescales the item-trait chi-square by (reference N / classified
+  # N); a non-positive reference would zero or negate every statistic
+  if (!is.na(adjust_N) && (!is.numeric(adjust_N) || adjust_N <= 0))
+    stop("`adjust_N` must be a positive reference sample size")
   if (!is.null(pc_components)) {
     if (model != "PCM")
       stop("pc_components applies to the PCM only")
@@ -375,8 +379,19 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
   colnames(Z) <- colnames(X)
 
   # --- fit statistics ------------------------------------------------------
-  ifit <- .item_fit(X, Z, mo, disc = if (is.null(disc)) NULL else disc_v)
-  pfit <- .person_fit(X, Z, mo, disc = if (is.null(disc)) NULL else disc_v)
+  # an item scored at its floor or ceiling by every non-extreme person has
+  # no finite location; exclude it from person fit as extreme persons are
+  # excluded from item fit
+  m_i <- if (!is.null(est$m)) est$m else apply(X, 2, max, na.rm = TRUE)
+  item_extreme <- vapply(seq_len(ncol(X)), function(j) {
+    col <- X[!person$extreme, j]
+    tot <- sum(col, na.rm = TRUE); nn <- sum(!is.na(col))
+    nn == 0 || tot == 0 || tot == nn * m_i[j]
+  }, logical(1))
+  ifit <- .item_fit(X, Z, mo, disc = if (is.null(disc)) NULL else disc_v,
+                    extreme = person$extreme)
+  pfit <- .person_fit(X, Z, mo, disc = if (is.null(disc)) NULL else disc_v,
+                      item_extreme = item_extreme)
   n_par <- if (is.null(est$n_parameters)) nrow(est$thr) - 1L else est$n_parameters
   rf <- .fitres(Z, mo, person$extreme, n_par)
   ng_req <- n_groups                       # NULL = the automatic rule

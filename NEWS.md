@@ -1,3 +1,85 @@
+# rasch 1.14.0
+
+Full-package adversarial audit (2026-07-21): a multi-agent sweep of every
+subsystem plus a cross-feature interaction round, each finding
+reproduced by an executed probe before fixing. Development branch only;
+the CRAN submission of 1.11.7 is untouched. The confirmed defects fell
+into a few root causes, several of which one fix closes across files.
+
+Identification and honesty (the recurring review theme -- refuse or
+declare, never fabricate):
+
+* The weak-category NA-SE honesty now reaches the DIF consumers.
+  `dif_size()` and `.dif_resolve()` detect a resolved level whose split
+  copy rests on a near-empty category (already flagged weak, se = NA by
+  `split_items()`) and withhold that level's SE, significance, and
+  practical flag instead of recomputing a fabricated finite SE from the
+  ridged covariance. `resolve_dif()` confirms a uniform flag with
+  `dif_size()` before splitting, so it no longer chases a thin-cell
+  ANOVA artifact into an item split (nonuniform flags are untouched).
+* The weak-category guard also now runs on the MFRM, EFRM, and
+  average-anchoring estimation paths, which previously reported a
+  covariance-based SE for a threshold backed by one or two responses.
+  Average anchoring (k = NA) no longer suppresses the flag for an item's
+  still-free thresholds.
+* `btl()` refuses a genuinely singular information matrix and, for
+  subset (quasi-)separation (an ill-conditioned direction with a
+  location driven to the boundary), marks the fit not converged and
+  withholds the affected SEs rather than reporting boundary locations
+  with plausible SEs. `btl_equate()` refuses a non-converged calibration.
+* `btl_efrm()` detects (quasi-)complete cross-set separation directly
+  from the fitted probabilities and refuses it on both the conditional
+  and bootstrap paths, instead of reporting a boundary alpha/kappa with
+  a fabricated tiny bootstrap SE.
+
+Comparison, simulation, and diagnostics:
+
+* `compare_fits()` withholds the information criteria and two_delta_ll
+  for a fit that did not converge (new `converged` column), compares the
+  actual response data in `same_data` (not just item names, maxima, and
+  person count), and reports the real underlying item count for
+  MFRM/EFRM rather than the virtual column count.
+* `sim_recovery()` reports `bias` as NA for parameters identified only up
+  to an origin/scale convention (its mean bias was structurally zero, not
+  informative), and now recovers EFRM person-group units (phi), not only
+  the set units.
+* New `sim_apply()` runs a statistic across a `sim_replicate()` batch
+  resiliently: a replicate the estimator refuses contributes NA and is
+  counted, so one refusal does not abort a Monte-Carlo run.
+* Item infit/outfit mean-squares (and their ZSTD) now exclude
+  extreme-score persons, and person fit excludes extreme items --
+  matching the convention the log-of-mean-square fit residual already
+  used, and standard Rasch fit reporting. This raises an item's
+  mean-squares toward their honest value (extreme persons' boundary
+  residuals no longer deflate them). Textbook item-fit agreement is
+  preserved.
+* `plot_icc()`'s observed class-interval overlay uses the same
+  order-invariant, extreme-excluding allocation as the fit's item-trait
+  test (a plain rank/cut split ties by row order and included extremes).
+* `btl_dimensionality()`: documented explicitly that the order-aware
+  reference is unreliable when every judge shares one fixed comparison
+  order (the order effect is then confounded with the object locations);
+  randomise the order across judges before trusting a second-dimension
+  flag.
+
+Input handling (silent coercion and collision -> informative errors):
+
+* `rasch()`: an `items=` that collides with an id/factor column errors
+  (a positional `items = 1:k` over an id-first layout no longer scores
+  the id as an item), a duplicated item column errors, a
+  length-mismatched `id`/`factors` errors, and a `factors=` grouping
+  vector passed by value is captured (its identical data column excluded)
+  instead of ignored. `adjust_N` must be positive.
+* `btl()`: `count=`/`order=` read through labels (a factor column no
+  longer becomes level codes), and any `anchors` name matching no object
+  errors instead of being silently dropped.
+* `rasch_mfrm()`: a colon in an item/facet label errors (reserved key
+  separator); a data-frame `factors=` again accepts the documented
+  one-row-per-unique-person form (a 1.13.0 regression).
+* Multiple-choice scoring refuses an NA key, warns on unmatched key
+  items; `distractor_rescore()` leaves an undefined separation z as NA
+  rather than NaN.
+
 # rasch 1.13.3
 
 Sixteenth review round: two identification edge cases beneath the

@@ -6,7 +6,11 @@ test_that("simulate_rasch plants misfit the Rasch diagnostics detect", {
   d <- simulate_rasch(600, 11, discrimination = c(rep(1, 5), 3, rep(1, 5)),
                       seed = 1)
   f <- rasch(d)
-  expect_lt(f$items$outfit_ms[6], 0.7)
+  # the over-discriminating item overfits: its outfit is the lowest and
+  # clearly below expectation (extreme persons are excluded from item fit,
+  # so the mean-square is not deflated by their boundary residuals)
+  expect_lt(f$items$outfit_ms[6], 0.75)
+  expect_equal(which.min(f$items$outfit_ms), 6L)
   expect_s3_class(d, "rasch_sim")
 
   # DIF flags the planted item and (essentially) nothing else
@@ -122,7 +126,9 @@ test_that("sim_replicate and sim_recovery support Monte Carlo and recovery", {
   expect_gt(s$correlation[s$parameter == "item difficulty"], 0.95)
   # person ability is noisier (WLE precision from only 12 items limits it)
   expect_gt(s$correlation[s$parameter == "person ability"], 0.75)
-  expect_lt(abs(s$bias[s$parameter == "item difficulty"]), 0.1)
+  # bias is not identifiable for an origin-centred location parameter, so it
+  # is reported NA rather than a structurally-zero value
+  expect_true(is.na(s$bias[s$parameter == "item difficulty"]))
   pdf(NULL); on.exit(dev.off()); expect_no_error(plot_recovery(rec))
 
   # recovery across the other layouts
@@ -166,10 +172,13 @@ test_that("audit fixes hold: PCM structure, truth honesty, recovery centring", {
   expect_false(anyNA(attr(d, "truth")$halo))
 
   # person ability is centred in recovery: an asymmetric difficulty range
-  # must not masquerade as person-ability bias
+  # must not masquerade as person-ability bias. Bias is not identifiable
+  # up to the origin, so it is reported NA; the alignment shows instead as
+  # a high correlation with no residual scale error
   d <- simulate_rasch(400, 10, difficulty = c(0, 3), seed = 2)
   r <- sim_recovery(rasch(d), d)
-  expect_lt(abs(r$summary$bias[r$summary$parameter == "person ability"]), 0.1)
+  expect_true(is.na(r$summary$bias[r$summary$parameter == "person ability"]))
+  expect_gt(r$summary$correlation[r$summary$parameter == "person ability"], 0.75)
   # MFRM recovery reports item difficulties from the item margins
   d <- simulate_mfrm(60, 5, 5, seed = 1)
   mf <- rasch_mfrm(d, person = "person", item = "item", score = "score",

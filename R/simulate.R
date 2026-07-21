@@ -656,14 +656,53 @@ simulate_efrm <- function(n_per_group = 300, items_per_set = 8, n_sets = 2,
 #' batch <- sim_replicate(simulate_rasch, 20, n_persons = 400, n_items = 10,
 #'                        dif = list(items = "I05", uniform = 0.8), n_groups = 2,
 #'                        seed = 1)
-#' mean(vapply(batch, function(d)
-#'   dif_anova(rasch(d, id = "id", factors = "group"))$summary$uniform_DIF[5], TRUE))
+#' # sim_apply() is resilient: a replicate the estimator refuses (e.g. a
+#' # small or disconnected draw) contributes NA instead of aborting the run
+#' flagged <- sim_apply(batch, function(d)
+#'   dif_anova(rasch(d, id = "id", factors = "group"))$summary$uniform_DIF[5])
+#' mean(flagged, na.rm = TRUE)
 #' @export
 sim_replicate <- function(FUN, n, ..., seed = NULL) {
   base <- if (is.null(seed)) sample.int(1e6, 1L) else as.integer(seed)
   reps <- lapply(seq_len(n), function(k) FUN(..., seed = base + k - 1L))
   structure(reps, class = "rasch_sim_batch", n = as.integer(n),
             layout = attr(reps[[1]], "truth")$layout)
+}
+
+#' Apply a statistic across a simulation batch, resiliently
+#'
+#' Applies \code{FUN} to each replicate of a \code{\link{sim_replicate}}
+#' batch, catching replicates on which \code{FUN} errors -- for example a
+#' small or disconnected draw the estimator refuses as unidentified -- so a
+#' single failure does not abort the whole Monte-Carlo run. Failed
+#' replicates contribute \code{NA}; the number of failures and the distinct
+#' error messages are attached as attributes.
+#'
+#' @param batch A \code{"rasch_sim_batch"} from \code{\link{sim_replicate}}
+#'   (or any list of datasets).
+#' @param FUN A function of one dataset returning a scalar statistic.
+#' @param ... Further arguments passed to \code{FUN}.
+#' @return A vector of the per-replicate statistics (\code{NA} where
+#'   \code{FUN} failed), with attributes \code{n_failed} and
+#'   \code{failure_messages}.
+#' @examples
+#' batch <- sim_replicate(simulate_rasch, 10, n_persons = 300, n_items = 8,
+#'                        seed = 1)
+#' psi <- sim_apply(batch, function(d) rasch(d)$psi$PSI)
+#' mean(psi, na.rm = TRUE)
+#' @export
+sim_apply <- function(batch, FUN, ...) {
+  res <- lapply(batch, function(d)
+    tryCatch(list(ok = TRUE, v = FUN(d, ...)),
+             error = function(e) list(ok = FALSE, v = NA, msg = conditionMessage(e))))
+  ok <- vapply(res, `[[`, logical(1), "ok")
+  vals <- lapply(res, function(r) {
+    v <- r$v; if (is.null(v) || length(v) != 1L) NA else v[[1]]
+  })
+  out <- tryCatch(unlist(vals, use.names = FALSE),
+                  error = function(e) vals)
+  msgs <- unique(vapply(res[!ok], function(r) r$msg, ""))
+  structure(out, n_failed = sum(!ok), failure_messages = msgs)
 }
 
 #' @export
@@ -698,7 +737,7 @@ print.rasch_sim_batch <- function(x, ...) {
 sim_recovery <- function(fit, sim) {
   tr <- attr(sim, "truth")
   if (is.null(tr)) stop("`sim` carries no simulation truth")
-  pieces <- list()
+  pieces <- list(); centred <- list()
   add <- function(name, true, est, label = NULL, centre = FALSE) {
     true <- as.numeric(true); est <- as.numeric(est)
     keep <- is.finite(true) & is.finite(est)
@@ -706,6 +745,7 @@ sim_recovery <- function(fit, sim) {
     if (centre) {                       # location-type: identified up to origin
       true <- true - mean(true[keep]); est <- est - mean(est[keep])
     }
+    centred[[name]] <<- isTRUE(centre)
     pieces[[name]] <<- data.frame(
       parameter = name,
       label = if (is.null(label)) NA_character_ else as.character(label)[keep],
@@ -741,14 +781,29 @@ sim_recovery <- function(fit, sim) {
     # log scale (a ratio); the planted alpha is normalised the same way
     add("set unit (log)", log(tr$alpha), log(at$alpha[match(
       sprintf("set%d", seq_along(tr$alpha)), at$set)]),
-      sprintf("set%d", seq_along(tr$alpha)))
+      sprintf("set%d", seq_along(tr$alpha)), centre = TRUE)
+    # the person-group units phi are a fitted, reported quantity too --
+    # recover them, not only the set units
+    if (!is.null(tr$phi) && !is.null(fit$phi_table)) {
+      glab <- if (!is.null(names(tr$phi))) names(tr$phi) else
+        sprintf("g%d", seq_along(tr$phi))
+      ephi <- fit$phi_table$phi[match(glab, fit$phi_table$group)]
+      add("group unit (log)", log(tr$phi), log(ephi), glab, centre = TRUE)
+    }
   } else stop("unsupported layout: ", lay)
 
-  summ <- do.call(rbind, lapply(pieces, function(d) data.frame(
-    parameter = d$parameter[1], n = nrow(d),
+  # bias after centring is structurally zero for any parameter identified
+  # only up to an origin/scale convention: it is not identifiable, so report
+  # NA rather than a misleading ~0. Correlation and RMSE (scatter about the
+  # aligned scale) remain meaningful.
+  summ <- do.call(rbind, lapply(pieces, function(d) {
+    nm <- d$parameter[1]
+    data.frame(
+    parameter = nm, n = nrow(d),
     correlation = if (nrow(d) > 2) stats::cor(d$true, d$estimated) else NA_real_,
     rmse = sqrt(mean((d$estimated - d$true)^2)),
-    bias = mean(d$estimated - d$true), stringsAsFactors = FALSE)))
+    bias = if (isTRUE(centred[[nm]])) NA_real_ else mean(d$estimated - d$true),
+    stringsAsFactors = FALSE)}))
   rownames(summ) <- NULL
   structure(list(summary = summ, pieces = pieces, layout = lay),
             class = "rasch_recovery")

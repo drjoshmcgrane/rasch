@@ -111,14 +111,19 @@
   out
 }
 
-# Item fit from per-person model moments (observed cells only).
-.item_fit <- function(X, Z, mo, disc = NULL) {
+# Item fit from per-person model moments (observed cells only). Extreme-score
+# persons are excluded: their measures are at a boundary, so their residuals
+# are structurally near zero and would deflate the mean-squares toward
+# apparent fit -- the same convention the log-of-mean-square fit residual and
+# the item-fit ANOVA already use, and standard in Rasch fit reporting.
+.item_fit <- function(X, Z, mo, disc = NULL, extreme = NULL) {
   L <- ncol(X)
+  if (is.null(extreme)) extreme <- rep(FALSE, nrow(X))
   E2 <- .z2_expectation(mo, Z, disc)
   out <- data.frame(item = colnames(X), infit_ms = NA_real_, outfit_ms = NA_real_,
                     infit_z = NA_real_, outfit_z = NA_real_, n = NA_integer_)
   for (i in seq_len(L)) {
-    ok <- which(!is.na(Z[, i]))
+    ok <- which(!is.na(Z[, i]) & !extreme)
     if (length(ok) < 3) next
     z2 <- Z[ok, i]^2
     V <- mo$V[ok, i]; C4 <- mo$M4[ok, i]; n <- length(ok)
@@ -135,14 +140,18 @@
 }
 
 # Person fit residuals: each person's standardised residuals across their
-# observed items, summarised exactly as for items.
-.person_fit <- function(X, Z, mo, disc = NULL) {
+# observed items, summarised exactly as for items. Items with an extreme
+# (minimum- or maximum-possible) total are excluded, mirroring the exclusion
+# of extreme persons from item fit: their locations are at a boundary and
+# their residuals are structurally near zero.
+.person_fit <- function(X, Z, mo, disc = NULL, item_extreme = NULL) {
   N <- nrow(X)
+  if (is.null(item_extreme)) item_extreme <- rep(FALSE, ncol(X))
   E2 <- .z2_expectation(mo, Z, disc)
   out <- data.frame(infit_ms = rep(NA_real_, N), outfit_ms = NA_real_,
                     outfit_z = NA_real_)
   for (n in seq_len(N)) {
-    ok <- which(!is.na(Z[n, ]))
+    ok <- which(!is.na(Z[n, ]) & !item_extreme)
     if (length(ok) < 3) next
     z2 <- Z[n, ok]^2
     V <- mo$V[n, ok]; C4 <- mo$M4[n, ok]; k <- length(ok)
