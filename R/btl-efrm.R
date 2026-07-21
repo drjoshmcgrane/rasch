@@ -317,10 +317,21 @@
   # flat direction that loads on a kappa column means the set cannot be
   # PLACED at all: that is a structural failure of the cross-set design.
   alpha_unident <- setNames(rep(FALSE, nf), free)
-  rank_ok <- TRUE
+  rank_ok <- TRUE; separated <- FALSE
+  # Complete / quasi-complete separation of the cross-set comparisons:
+  # every outcome is fitted at the boundary (p -> 0 or 1), so the
+  # likelihood is unbounded and kappa / log-alpha run to the trust region
+  # while the observed information stays finite -- the eigenvalue and rcond
+  # checks below cannot see it (nothing is singular at the stopping point).
+  # Detect it directly from the fitted probabilities: near-deterministic
+  # prediction of essentially every cross-set outcome means the sets are
+  # ordered by an unbounded margin and cannot be placed on a common scale.
+  if (length(y) && mean(pmin(cur$p, 1 - cur$p) < 1e-4) > 0.99) {
+    separated <- TRUE; rank_ok <- FALSE
+  }
   eh <- eigen(oi$H, symmetric = TRUE)
   flat <- abs(eh$values) < max(abs(eh$values)) * 1e-10
-  if (any(flat)) {
+  if (!separated && any(flat)) {
     V <- eh$vectors[, flat, drop = FALSE]
     la_load <- sqrt(rowSums(V[seq_len(nf), , drop = FALSE]^2))
     ka_load <- sqrt(rowSums(V[nf + seq_len(nf), , drop = FALSE]^2))
@@ -367,7 +378,7 @@
        se_log_alpha = se_la,
        se_kappa = setNames(se[nf + seq_len(nf)], free),
        free = free, converged = conv, rank_ok = rank_ok,
-       alpha_unident = alpha_unident)
+       separated = separated, alpha_unident = alpha_unident)
 }
 
 # pooled log-of-mean-square fit residual over a set of comparisons, using the
@@ -796,6 +807,7 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     se_log_alpha <- setNames(rep(NA_real_, S), sets_u)
     se_kappa <- setNames(rep(NA_real_, S), sets_u)
     cov2 <- NULL; s2_conv <- TRUE; ll_cross <- 0; s2_rank_ok <- TRUE
+    s2_separated <- FALSE
     p_all <- within_p
     if (S > 1L) {
       st2 <- .btlef_stage2(a[cross], b[cross], yy[cross], phi[pan[cross]],
@@ -806,7 +818,7 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
       se_log_alpha[st2$free] <- st2$se_log_alpha
       se_kappa[st2$free] <- st2$se_kappa
       s2_conv <- st2$converged && st2$rank_ok; ll_cross <- st2$ll
-      s2_rank_ok <- st2$rank_ok
+      s2_rank_ok <- st2$rank_ok; s2_separated <- st2$separated
       p_all[cross] <- st2$p
     }
     v <- alpha_use[set_of[objs_all]] * bhat[objs_all] +
@@ -819,10 +831,18 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
          within_p = within_p, p_all = p_all,
          ll_within = ll_within, ll_cross = ll_cross,
          dropped = dropped, s2_rank_ok = s2_rank_ok,
+         s2_separated = s2_separated,
          converged = isTRUE(s1_conv && s2_conv))
   }
 
   fit0 <- fit_once(y)
+  if (S > 1L && isTRUE(fit0$s2_separated))
+    stop("the cross-set comparisons are (quasi-)completely separated: one ",
+         "set beats the other in essentially every cross-set comparison, so ",
+         "the sets are ordered by an unbounded margin and cannot be placed ",
+         "on one scale (the set units alpha and origins kappa have no finite ",
+         "estimate). Collect cross-set comparisons that some objects of the ",
+         "weaker set sometimes win", call. = FALSE)
   if (S > 1L && !isTRUE(fit0$s2_rank_ok))
     stop("the cross-set information matrix is singular or ill-conditioned: ",
          "the cross-set comparisons cannot place the sets on one scale ",

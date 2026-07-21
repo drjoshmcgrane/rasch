@@ -255,3 +255,41 @@ test_that("estimates and convergence are invariant to duplicating the data", {
   expect_equal(f2$alpha_table$alpha, f1$alpha_table$alpha, tolerance = 1e-6)
   expect_equal(f2$objects$v, f1$objects$v, tolerance = 1e-6)
 })
+
+test_that("btl_efrm refuses (quasi-)complete cross-set separation", {
+  set.seed(3)
+  K <- 5
+  o1 <- sprintf("S1O%02d", seq_len(K)); o2 <- sprintf("S2O%02d", seq_len(K))
+  judges <- sprintf("J%03d", 1:8)
+  gen_within <- function(objs, beta, reps) {
+    pr <- t(combn(objs, 2)); aa <- bb <- character(0)
+    for (r in seq_len(nrow(pr))) {
+      aa <- c(aa, rep(pr[r, 1], reps)); bb <- c(bb, rep(pr[r, 2], reps)) }
+    p <- plogis(beta[aa] - beta[bb])
+    data.frame(object_a = aa, object_b = bb,
+               winner = ifelse(runif(length(aa)) < p, aa, bb),
+               stringsAsFactors = FALSE)
+  }
+  b1 <- setNames(as.numeric(scale(seq_len(K))), o1)
+  b2 <- setNames(as.numeric(scale(seq_len(K))), o2)
+  w1 <- gen_within(o1, b1, 20); w2 <- gen_within(o2, b2, 20)
+  # every set2 object beats every set1 object, always: perfect separation
+  grid <- expand.grid(oa = o1, ob = o2, stringsAsFactors = FALSE)
+  c12 <- data.frame(object_a = rep(grid$oa, 25), object_b = rep(grid$ob, 25),
+                    winner = rep(grid$ob, 25), stringsAsFactors = FALSE)
+  d <- rbind(w1, w2, c12)
+  d$judge <- sample(judges, nrow(d), TRUE); d$panel <- "panel1"
+  os <- list(set1 = o1, set2 = o2)
+  # both the conditional and the default bootstrap path must refuse, not
+  # report a boundary alpha/kappa with a fabricated SE
+  expect_error(suppressWarnings(
+    btl_efrm(d, "object_a", "object_b", "winner", judge = "judge",
+             panels = "panel", object_sets = os,
+             se_method = "conditional", min_link = 20)),
+    "separated")
+  expect_error(suppressWarnings(
+    btl_efrm(d, "object_a", "object_b", "winner", judge = "judge",
+             panels = "panel", object_sets = os,
+             se_method = "bootstrap", boot_reps = 40, min_link = 20)),
+    "separated")
+})
