@@ -351,6 +351,13 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
   sol <- .pcml_solve(Xv, thr_v, m_v, B, rep(0, P), maxit = maxit, tol = tol)
 
   thr_v$tau <- sol$tau; thr_v$se <- sol$se_tau; thr_v$anchored <- FALSE
+  # a virtual item threshold resting on a near-empty category is a boundary
+  # artefact: flag it and report its SE as NA, the same honesty rasch()/
+  # pcml() apply -- the facet decomposition does not exempt it
+  weak <- .pcml_weak_thresholds(Xv, m_v, thr_v, colnames(Xv))
+  thr_v$weak <- weak$flag
+  thr_v$se[weak$flag] <- NA_real_
+  if (length(weak$notes)) notes <- c(notes, weak$notes)
   est <- list(model = "MFRM", thr = thr_v, cov_tau = sol$cov_tau,
               loglik = sol$loglik, iterations = sol$iterations,
               converged = sol$converged, m = m_v, anchors = NULL,

@@ -818,6 +818,13 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
   cov_tau <- cov_delta[drow, drow, drop = FALSE]
   thr_v$se <- sqrt(pmax(diag(cov_tau), 0))
   thr_v$anchored <- FALSE
+  # a virtual item threshold on a near-empty category is a boundary
+  # artefact here too: flag it and report NA rather than a covariance-based
+  # number, the same honesty rasch()/pcml()/rasch_mfrm() apply
+  weak <- .pcml_weak_thresholds(Xv, m_v, thr_v, colnames(Xv))
+  thr_v$weak <- weak$flag
+  thr_v$se[weak$flag] <- NA_real_
+  if (length(weak$notes)) notes <- c(notes, weak$notes)
   est <- list(model = "EFRM", thr = thr_v, cov_tau = cov_tau,
               loglik = sol$loglik, iterations = sol$iterations,
               converged = sol$converged, m = m_v, anchors = NULL,
@@ -913,10 +920,16 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
   fit$set_table <- data.frame(set = sets_u, mu = unname(mu),
                               alpha = unname(alpha),
                               n_items = as.integer(table(set_of)[sets_u]))
+  # a distinct threshold is weak if any virtual threshold folded into it
+  # rests on a near-empty category; carry that to the common-unit tables
+  weak_d <- logical(length(delta))
+  agg_w <- tapply(weak$flag, drow, any)
+  weak_d[as.integer(names(agg_w))] <- as.logical(agg_w)
+  se_arb <- sqrt(pmax(diag(cov_delta), 0)); se_arb[weak_d] <- NA_real_
   fit$thresholds_arbitrary <- data.frame(item = items_o[thr_items$item],
                                          set = set_of_drow,
                                          k = thr_items$k, delta = delta,
-                                         se = sqrt(pmax(diag(cov_delta), 0)))
+                                         se = se_arb, weak = weak_d)
   fit$item_arbitrary <- do.call(rbind, lapply(seq_along(items_o), function(i) {
     rows <- which(thr_items$item == i)
     data.frame(item = items_o[i], set = set_of[items_o[i]],

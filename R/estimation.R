@@ -412,7 +412,12 @@ pcml <- function(X, model = c("PCM", "RSM"), anchors = NULL,
                        maxit = maxit, tol = tol, pairs = pairs)
     thr$tau <- sol$tau; thr$se <- sol$se_tau; thr$se[a_id] <- 0
     thr$anchored <- seq_len(M) %in% a_id | thr$item %in% mean_items
-    thr$weak <- weak$flag & !thr$anchored
+    # average anchoring (k = NA) fixes only an item's MEAN location; its
+    # individual thresholds stay free and estimated. Only genuinely fixed
+    # thresholds (a_id) may suppress the weak-category flag -- a
+    # mean-anchored item's free threshold sitting on a near-empty category
+    # is still a boundary artefact and must keep weak = TRUE / se = NA
+    thr$weak <- weak$flag & !(seq_len(M) %in% a_id)
     thr$se[thr$weak] <- NA_real_
     return(list(model = model, thr = thr, cov_tau = sol$cov_tau,
                 loglik = sol$loglik, iterations = sol$iterations,

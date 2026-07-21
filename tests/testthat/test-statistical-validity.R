@@ -837,3 +837,41 @@ test_that("btl marks subset separation as non-convergence, not a boundary fit", 
   fit2 <- fit
   expect_error(btl_equate(fit, fit2), "did not converge")
 })
+
+test_that("weak-category honesty reaches MFRM, EFRM, and average anchoring", {
+  # a near-empty category must yield weak = TRUE / se = NA on every path
+  # that builds its own estimate, not only rasch()/pcml()
+  set.seed(303)
+  # --- average anchoring (k = NA) keeps free thresholds' weak flag ---
+  N <- 300; L <- 5
+  simP <- function(th, tau) { x <- 0:length(tau)
+    p <- exp(x * th - c(0, cumsum(tau))); p / sum(p) }
+  th <- rnorm(N)
+  taus <- list(c(-1, 0, 1), c(-1, 0, 1), c(-1, 0, 1), c(-1, 0, 1), c(-1, 0, 1))
+  X <- sapply(taus, function(tt) vapply(th, function(t)
+    sample(0:3, 1, prob = simP(t, tt)), 0L))
+  colnames(X) <- paste0("I", 1:L)
+  # force I1 category 1 to two responses
+  i1 <- which(X[, 1] == 1); keep <- i1[1:2]; X[setdiff(i1, keep), 1] <- 0L
+  r_free <- pcml(X)
+  r_anch <- pcml(X, anchors = data.frame(item = "I1", k = NA, tau = 0))
+  w_free <- r_free$thr$weak[r_free$thr$item == 1]
+  w_anch <- r_anch$thr$weak[r_anch$thr$item == 1]
+  expect_true(any(w_free))
+  expect_equal(w_anch, w_free)              # average anchor does not hide it
+  expect_true(all(is.na(r_anch$thr$se[r_anch$thr$item == 1 & r_anch$thr$weak])))
+
+  # --- MFRM virtual item on a near-empty category ---
+  persons <- sprintf("P%03d", 1:200)
+  d <- expand.grid(person = persons, item = c("A", "B"),
+                   rater = c("R1", "R2"), stringsAsFactors = FALSE)
+  d$score <- sample(0:2, nrow(d), replace = TRUE)
+  # make virtual item A:R2 reach category 2 only once
+  sel <- d$item == "A" & d$rater == "R2"
+  d$score[sel] <- 0L; d$score[which(sel)[1]] <- 2L; d$score[which(sel)[2]] <- 1L
+  mf <- rasch_mfrm(d, person = "person", item = "item", score = "score",
+                   facets = "rater")
+  expect_true("weak" %in% names(mf$est$thr))
+  expect_true(any(mf$est$thr$weak))
+  expect_true(all(is.na(mf$est$thr$se[mf$est$thr$weak])))
+})
