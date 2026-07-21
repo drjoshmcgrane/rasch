@@ -239,15 +239,30 @@ btl <- function(data, object_a, object_b, winner = NULL, response = NULL,
   a <- trimws(as.character(data[[object_a]]))
   b <- trimws(as.character(data[[object_b]]))
   jd <- if (is.null(judge)) NULL else as.character(data[[judge]])
-  w <- if (is.null(count)) rep(1, nrow(data)) else as.numeric(data[[count]])
-  ord <- if (is.null(order)) NULL else as.numeric(data[[order]])
+  # count/order must be read as their labelled values: as.numeric() on a
+  # factor returns level codes (1..k in label order), silently replacing
+  # the real counts/positions -- coerce through the character labels and
+  # refuse anything non-numeric
+  .num_col <- function(x, what) {
+    v <- suppressWarnings(as.numeric(if (is.factor(x)) as.character(x) else x))
+    if (any(is.na(v) & !is.na(x)))
+      stop("`", what, "` has non-numeric value(s); it must be numeric")
+    v
+  }
+  w <- if (is.null(count)) rep(1, nrow(data)) else .num_col(data[[count]], count)
+  ord <- if (is.null(order)) NULL else .num_col(data[[order]], order)
   notes <- character(0)
   if (!is.null(anchors)) {
     if (!is.numeric(anchors) || is.null(names(anchors)) ||
         any(!nzchar(names(anchors))))
       stop("`anchors` must be a named numeric vector (names = object names)")
-    if (sum(names(anchors) %in% unique(c(a, b))) < 1L)
-      stop("no `anchors` name matches an object in the data")
+    # every anchor name must match an object: a misspelled name silently
+    # dropped would leave the intended object free (se != 0) while the user
+    # believes it is fixed -- refuse and name the offenders
+    bad_anch <- setdiff(names(anchors), unique(c(a, b)))
+    if (length(bad_anch))
+      stop("`anchors` name(s) do not match any object in the data: ",
+           paste(bad_anch, collapse = ", "))
   }
   # a constant, object_a-oriented covariate for the first-position advantage;
   # appended to the dependence design (alone, or beside exposure/carry-over)

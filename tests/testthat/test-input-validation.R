@@ -450,3 +450,79 @@ test_that("EFRM removes data-frame factor columns from the item matrix", {
                   factors = data.frame(sex = X$sex))
   expect_setequal(unique(f$thresholds_arbitrary$item), paste0("v", 1:8))
 })
+
+test_that("rasch refuses items= that collide with id/factor columns", {
+  set.seed(12); n <- 200; L <- 5
+  d <- seq(-2, 2, length.out = L)
+  X <- matrix(rbinom(n * L, 1, plogis(outer(rnorm(n), d, "-"))), n, L)
+  colnames(X) <- paste0("I", 1:L)
+  df <- data.frame(id = sample(1:4, n, TRUE), X, check.names = FALSE)
+  # positional items = 1:5 over an id-first layout would score id as an item
+  expect_error(rasch(df, model = "PCM", id = "id", items = 1:5),
+               "id/factor column")
+  # naming the same column twice
+  expect_error(rasch(as.data.frame(X), model = "PCM",
+                     items = c("I1", "I1", "I3", "I4", "I5")),
+               "named more than once")
+})
+
+test_that("rasch captures a by-value factors vector and excludes its column", {
+  set.seed(7); n <- 200; L <- 6
+  d <- seq(-2, 2, length.out = L)
+  X <- matrix(rbinom(n * L, 1, plogis(outer(rnorm(n), d, "-"))), n, L)
+  colnames(X) <- paste0("I", 1:L)
+  grp <- rep(c(1L, 2L), each = n / 2)
+  df <- data.frame(X, group = grp, check.names = FALSE)
+  f <- rasch(df, model = "PCM", factors = grp)
+  expect_false(is.null(f$factors))
+  expect_false("group" %in% colnames(f$X))
+  expect_equal(ncol(f$X), L)
+})
+
+test_that("rasch errors on length-mismatched id / factors", {
+  set.seed(16); n <- 200; L <- 6
+  d <- seq(-2, 2, length.out = L)
+  X <- matrix(rbinom(n * L, 1, plogis(outer(rnorm(n), d, "-"))), n, L)
+  colnames(X) <- paste0("I", 1:L)
+  expect_error(rasch(as.data.frame(X), model = "PCM", id = paste0("P", 1:190)),
+               "190 entries")
+  expect_error(rasch(X, model = "PCM",
+                     factors = data.frame(g = factor(rep(c("A", "B"), each = 90)))),
+               "rows")
+})
+
+test_that("btl reads count/order through labels and refuses bad anchors", {
+  set.seed(7); objs <- LETTERS[1:6]
+  beta <- setNames(seq(-1.5, 1.5, length.out = 6), objs)
+  pr <- t(utils::combn(objs, 2))
+  d <- data.frame(a = pr[, 1], b = pr[, 2])
+  d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b]), d$a, d$b)
+  set.seed(8); d$n <- sample(c(5, 10, 20, 50), nrow(d), TRUE)
+  d$n_factor <- factor(d$n)
+  f_num <- btl(d, "a", "b", "win", count = "n")
+  f_fac <- btl(d, "a", "b", "win", count = "n_factor")
+  # a factor count column must read as its labelled values, not level codes
+  expect_equal(f_num$n_comparisons, f_fac$n_comparisons)
+  expect_equal(f_num$objects$location, f_fac$objects$location, tolerance = 1e-8)
+})
+
+test_that("rasch_mfrm refuses colon-bearing item/facet labels", {
+  set.seed(202)
+  d <- expand.grid(person = sprintf("P%03d", 1:60),
+                   item = c("A", "A:B", "Q2"),
+                   rater = c("R1", "R2"), stringsAsFactors = FALSE)
+  d$score <- sample(0:1, nrow(d), replace = TRUE)
+  expect_error(rasch_mfrm(d, person = "person", item = "item",
+                          score = "score", facets = "rater"),
+               "':' separator|reserved")
+})
+
+test_that("mc scoring refuses NA keys and warns on unmatched key items", {
+  set.seed(3); n <- 100
+  X <- data.frame(I1 = sample(c("A", "B", "C", "D"), n, TRUE),
+                  I2 = sample(c("A", "B", "C", "D"), n, TRUE),
+                  stringsAsFactors = FALSE)
+  expect_error(rasch(X, key = c(I1 = "A", I2 = NA)), "missing \\(NA\\) key")
+  expect_warning(rasch(X, key = c(I1 = "A", I2 = "B", I99 = "C")),
+                 "no matching data column")
+})

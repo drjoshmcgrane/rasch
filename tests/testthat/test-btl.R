@@ -930,7 +930,12 @@ test_that("anchored estimation reproduces the free scale and equates panels", {
 
   # guard rails
   expect_error(btl(d, "a", "b", winner = "win", anchors = c(ZZ = 1)),
-               "no `anchors` name")
+               "do not match any object")
+  # a single misspelled name among valid ones must also error, not be
+  # silently dropped leaving that object free
+  expect_error(btl(d, "a", "b", winner = "win",
+                   anchors = c(A = -1, Z_typo = 0.5)),
+               "do not match any object")
   expect_error(btl(d, "a", "b", winner = "win", anchors = c(1, 2)),
                "named numeric")
   # an anchored boundary object is an error, not silent removal

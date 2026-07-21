@@ -186,6 +186,9 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
                   items = NULL, n_groups = NULL, adjust_N = NA, anchors = NULL,
                   na_codes = -1, key = NULL, pc_components = NULL,
                   maxit = 60, tol = 1e-8) {
+  # name for a factors= vector passed by value (not by column name)
+  .factors_sym <- substitute(factors)
+  .factors_label <- if (is.name(.factors_sym)) as.character(.factors_sym) else "factor"
   model <- match.arg(model)
   if (!is.null(pc_components)) {
     if (model != "PCM")
@@ -204,14 +207,43 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
       if (!id %in% nm)
         stop("id column '", id, "' not found in the data")
       id_vec <- data[[id]]
-    } else if (!is.null(id) && length(id) == nrow(data)) id_vec <- id
+    } else if (!is.null(id)) {
+      # a supplied id vector must line up with the data; a length mismatch
+      # (e.g. a stale upstream vector) must error, not be silently dropped
+      if (length(id) != nrow(data))
+        stop("`id` has ", length(id), " entries but the data has ",
+             nrow(data), " rows")
+      id_vec <- id
+    }
     if (is.character(factors)) {
       miss <- setdiff(factors, nm)
       if (length(miss))
         stop("factor column(s) not found in the data: ",
              paste(miss, collapse = ", "))
       fac_df <- data[, factors, drop = FALSE]
-    } else if (is.data.frame(factors) && nrow(factors) == nrow(data)) fac_df <- factors
+    } else if (is.data.frame(factors)) {
+      if (nrow(factors) != nrow(data))
+        stop("`factors` data frame has ", nrow(factors), " rows but the data ",
+             "has ", nrow(data), " rows")
+      fac_df <- factors
+    } else if (!is.null(factors)) {
+      # a factors= grouping vector passed by VALUE (not by column name):
+      # accept it when it lines up, rather than silently ignoring it and
+      # leaving any same-named data column to be treated as an item
+      if (!is.atomic(factors) || length(factors) != nrow(data))
+        stop("`factors` must be column name(s) in the data, a data frame ",
+             "with one row per data row, or a vector with one entry per row")
+      fac_df <- stats::setNames(data.frame(factors, stringsAsFactors = FALSE),
+                                .factors_label)
+    }
+    # a data column whose values are identical to a by-value factors vector
+    # is almost certainly that same variable: exclude it so it is not also
+    # scored as a numeric item
+    val_factor_cols <- if (!is.null(factors) && is.atomic(factors) &&
+                           !is.character(factors))
+      nm[vapply(data, function(col)
+        length(col) == length(factors) && isTRUE(all.equal(
+          as.character(col), as.character(factors))), logical(1))] else NULL
     drop_cols <- c(if (is.character(id)) id else NULL,
                    if (is.character(factors)) factors else NULL,
                    # an externally supplied factor data frame whose column
@@ -219,7 +251,8 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
                    # those columns: without this they would silently become
                    # numeric ITEMS
                    if (is.data.frame(factors))
-                     intersect(names(factors), nm) else NULL)
+                     intersect(names(factors), nm) else NULL,
+                   val_factor_cols)
     item_cols <- if (is.null(items)) setdiff(nm, drop_cols)
     else if (is.character(items)) {
       miss <- setdiff(items, nm)
@@ -228,11 +261,41 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
              paste(miss, collapse = ", "))
       items
     } else nm[items]
+    # an explicit items= must not silently pull in an id/factor column (a
+    # positional items = 1:k over an id-first layout would score the id as
+    # an item and drop a real one), nor name the same column twice
+    if (!is.null(items)) {
+      clash <- intersect(item_cols, drop_cols)
+      if (length(clash))
+        stop("items= includes id/factor column(s): ",
+             paste(clash, collapse = ", "),
+             " -- name only item columns, or drop them from id=/factors=")
+    }
+    dup <- item_cols[duplicated(item_cols)]
+    if (length(dup))
+      stop("item column(s) named more than once: ",
+           paste(unique(dup), collapse = ", "))
     X <- as.matrix(data[, item_cols, drop = FALSE])
   } else {
     X <- as.matrix(data)
-    if (!is.null(id) && length(id) == nrow(X)) id_vec <- id
-    if (is.data.frame(factors) && nrow(factors) == nrow(X)) fac_df <- factors
+    if (!is.null(id)) {
+      if (length(id) != nrow(X))
+        stop("`id` has ", length(id), " entries but the data has ",
+             nrow(X), " rows")
+      id_vec <- id
+    }
+    if (is.data.frame(factors)) {
+      if (nrow(factors) != nrow(X))
+        stop("`factors` data frame has ", nrow(factors), " rows but the data ",
+             "has ", nrow(X), " rows")
+      fac_df <- factors
+    } else if (!is.null(factors)) {
+      if (!is.atomic(factors) || length(factors) != nrow(X))
+        stop("`factors` must be a data frame with one row per data row, or ",
+             "a vector with one entry per row")
+      fac_df <- stats::setNames(data.frame(factors, stringsAsFactors = FALSE),
+                                .factors_label)
+    }
   }
   if (is.null(id_vec)) id_vec <- seq_len(nrow(X))
 

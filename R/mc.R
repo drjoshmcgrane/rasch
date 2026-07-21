@@ -43,6 +43,12 @@
     key <- setNames(as.character(key$key), as.character(key$item))
   }
   if (is.null(names(key))) stop("the key must be named by item")
+  # a missing key value cannot score its item: without this it would
+  # zero-score every response and the item would be dropped as constant
+  # under a misleading message
+  if (anyNA(key))
+    stop("missing (NA) key value for item(s): ",
+         paste(names(key)[is.na(key)], collapse = ", "))
   lapply(setNames(trimws(toupper(as.character(key))), names(key)),
          function(k) {
            opts <- trimws(strsplit(k, "/", fixed = TRUE)[[1]])
@@ -65,6 +71,12 @@
 .score_mc <- function(X, map) {
   keyed <- intersect(names(map), colnames(X))
   if (!length(keyed)) stop("no key item matches an item column")
+  # a key entry naming no item column is almost always a typo: surface it
+  # rather than drop it silently
+  unmatched <- setdiff(names(map), colnames(X))
+  if (length(unmatched))
+    warning("key item(s) with no matching data column (ignored): ",
+            paste(unmatched, collapse = ", "), call. = FALSE)
   raw <- matrix(trimws(toupper(as.character(X[, keyed]))), nrow(X),
                 length(keyed), dimnames = list(NULL, keyed))
   raw[raw %in% c("", "NA", "-1")] <- NA

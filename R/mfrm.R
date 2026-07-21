@@ -236,6 +236,16 @@ rasch_mfrm <- function(data, person, item = NULL, score = NULL, facets,
     item_m[it] <- length(sort(unique(sc[sel]))) - 1L
   }
 
+  # virtual items are keyed and displayed as item:facet:...; a literal
+  # colon in an item or facet-level label would make two structurally
+  # different combinations collide on one key (and one virtual item),
+  # silently pooling unrelated responses -- refuse it and name the culprit
+  colon_lab <- c(grep(":", items_u, value = TRUE),
+                 unlist(lapply(fac, function(v) grep(":", unique(v), value = TRUE))))
+  if (length(colon_lab))
+    stop("item or facet label(s) contain the ':' separator used to key ",
+         "virtual items: ", paste(unique(colon_lab), collapse = ", "),
+         " -- rename them (':' is reserved)")
   # virtual items: item x facet-level combinations present in the data
   fkey <- do.call(paste, c(fac, list(sep = ":")))
   vkey <- paste(itm, fkey, sep = ":")
