@@ -1,3 +1,20 @@
+# rasch 1.14.1
+
+Completes the audit follow-up: the one finding deferred in 1.14.0.
+
+* `btl_dimensionality()` now detects a shared fixed comparison order --
+  where a within-judge order effect is confounded with the object
+  locations -- and withholds the second-dimension verdict
+  (`above_reference` = NA, with a note) instead of reporting the
+  confounded false positive (previously flagged a second dimension in
+  ~93%% of such designs). Detection is from the concentration of pairs
+  at each sequence position across judges; when the order varies across
+  judges the fixed-estimate reference is well calibrated and the verdict
+  is given as before (that path is unchanged). Refitting the reference
+  per replicate -- the other candidate remedy -- was implemented and
+  rejected: it inflates the reference and destroys power even for
+  randomised orders.
+
 # rasch 1.14.0
 
 Full-package adversarial audit (2026-07-21): a multi-agent sweep of every

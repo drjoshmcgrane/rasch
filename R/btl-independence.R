@@ -235,17 +235,19 @@ print.rasch_btl_transitivity <- function(x, ...) {
 #' estimation noise in the parameters -- adequate for the screening use
 #' here, slightly liberal in tiny designs.
 #'
-#' Important caveat when \code{order} is modelled. The order-aware reference
-#' is trustworthy only when the comparison order varies across judges. If
-#' every judge is given the SAME fixed comparison sequence (a standard
-#' printed booklet, a fixed competition running order), a real within-judge
-#' order effect is confounded with the object locations: the fitted order
-#' coefficient is attenuated toward zero, the locations absorb the
-#' structured order signal, and the reference -- built from those biased
-#' point estimates -- reads the residue as a second dimension (a high
-#' false-positive rate). Randomise the comparison order across judges before
-#' trusting a second-dimension flag from an order-modelled fit; with a
-#' shared fixed order, treat the dimensionality result as unreliable.
+#' Shared comparison order and \code{order} effects. The order-aware
+#' reference is trustworthy only when the comparison order varies across
+#' judges. If every judge is given the SAME fixed comparison sequence (a
+#' standard printed booklet, a fixed competition running order), a real
+#' within-judge order effect is confounded with the object locations -- the
+#' fitted order coefficient attenuates, the locations absorb the structured
+#' order signal, and the reference reads the residue as a second dimension.
+#' This is detected automatically (from the concentration of pairs at each
+#' sequence position across judges) and the second-dimension verdict is
+#' WITHHELD (\code{above_reference} is \code{NA}, with a note), because the
+#' design does not identify a second dimension separately from the order
+#' effect. Randomise the comparison order across judges to test
+#' dimensionality with an order effect present.
 #'
 #' @param fit A paired-comparison fit from \code{\link{btl}}.
 #' @param reps Model-simulated replicates for the noise reference.
@@ -345,6 +347,32 @@ btl_dimensionality <- function(fit, reps = 50L) {
     Pcat_pair <- if (m == 1L) NULL else
       vapply(d_pair, function(dd) item_moments(dd, tau)$P, numeric(m + 1L))
   }
+  # Shared fixed comparison order confounds the dimensionality test. When
+  # every judge is given the same comparison sequence, a real within-judge
+  # order effect cannot be separated from the object locations (the fitted
+  # order coefficient attenuates, the locations absorb the structured order
+  # signal), and the fixed-estimate reference cannot reproduce that
+  # bias-induced residual structure -- so the observed matrix clears it in
+  # almost every unidimensional draw, a false second dimension. Refitting
+  # the reference per replicate does not rescue this: it inflates the
+  # reference and destroys power even for randomised orders. The honest
+  # course is to detect the shared order and withhold the second-dimension
+  # verdict, since the design does not identify it. When the order varies
+  # across judges the fixed-estimate reference is well calibrated.
+  shared_order <- FALSE
+  if (!is.null(seq_sim)) {
+    dd <- fit$dependence_data
+    pk <- paste(pmin(match(dd$object_a, objs), match(dd$object_b, objs)),
+                pmax(match(dd$object_a, objs), match(dd$object_b, objs)))
+    posfrac <- unlist(tapply(seq_along(dd$order), dd$judge, function(ix) {
+      o <- rank(dd$order[ix], ties.method = "first")
+      if (length(o) > 1L) (o - 1) / (length(o) - 1) else 0
+    }), use.names = FALSE)[order(order(dd$judge, dd$order))]
+    # a pair's position varies as ~Uniform(0,1) across judges under random
+    # order (variance ~1/12); near-zero variance means a shared fixed order
+    pv <- tapply(posfrac, pk, stats::var)
+    shared_order <- isTRUE(mean(pv, na.rm = TRUE) < (1 / 12) * 0.25)
+  }
   lead_ref <- vapply(seq_len(reps), function(r) {
     if (is.null(seq_sim)) {
       resp <- if (m == 1L)
@@ -367,12 +395,23 @@ btl_dimensionality <- function(fit, reps = 50L) {
 
   nb <- length(bm$strength)
   prop <- 2 * bm$strength^2 / bm$total
+  # under a shared fixed order the verdict is not identifiable: withhold it
+  # (NA) rather than report a confounded flag
+  lead_flag <- if (shared_order) NA else bm$strength[1] > ref_p95
   bimensions <- data.frame(
     bimension = seq_len(nb), strength = bm$strength,
     prop_residual = prop,
     ref_mean = c(ref_mean, rep(NA_real_, nb - 1L)),
     ref_p95 = c(ref_p95, rep(NA_real_, nb - 1L)),
-    above_reference = c(bm$strength[1] > ref_p95, rep(NA, nb - 1L)))
+    above_reference = c(lead_flag, rep(NA, nb - 1L)))
+  if (shared_order)
+    notes <- c(notes, paste0(
+      "every judge shares (nearly) the same comparison order, so the ",
+      "within-judge order effect is confounded with the object locations ",
+      "and a second dimension cannot be separated from it: the ",
+      "second-dimension verdict is withheld. Randomise the comparison ",
+      "order across judges to test dimensionality with an order effect ",
+      "present"))
 
   coords <- data.frame(object = objs, location = unname(beta),
                        x = bm$coord[, "x"], y = bm$coord[, "y"])

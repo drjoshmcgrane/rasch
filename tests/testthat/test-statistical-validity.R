@@ -916,3 +916,40 @@ test_that("sim_apply is resilient to per-replicate failures", {
   expect_equal(sum(is.na(out)), 3L)
   expect_true(any(grepl("boom", attr(out, "failure_messages"))))
 })
+
+test_that("btl_dimensionality withholds the verdict under a shared fixed order", {
+  skip_on_cran()
+  objs <- LETTERS[1:6]
+  beta <- setNames(seq(-1.2, 1.2, length.out = 6), objs)
+  fixed_seq <- t(combn(objs, 2)); nj <- 12; carry <- 1.5
+  gen <- function(shared) {
+    rows <- list()
+    for (j in 1:nj) {
+      seqp <- if (shared) fixed_seq else fixed_seq[sample(nrow(fixed_seq)), ]
+      last <- NA
+      for (r in seq_len(nrow(seqp))) {
+        a <- seqp[r, 1]; b <- seqp[r, 2]; lp <- beta[a] - beta[b]
+        if (!is.na(last) && last == a) lp <- lp + carry
+        if (!is.na(last) && last == b) lp <- lp - carry
+        w <- ifelse(runif(1) < plogis(lp), a, b); last <- w
+        rows[[length(rows) + 1]] <- data.frame(a = a, b = b, win = w,
+                                               judge = sprintf("J%02d", j),
+                                               seq = r)
+      }
+    }
+    do.call(rbind, rows)
+  }
+  set.seed(1)
+  # shared fixed order: the order effect is confounded, verdict withheld
+  fs <- suppressWarnings(btl(gen(TRUE), "a", "b", "win", judge = "judge",
+                             order = "seq"))
+  ds <- suppressWarnings(btl_dimensionality(fs, reps = 30))
+  expect_true(is.na(ds$bimensions$above_reference[1]))
+  expect_true(any(grepl("shares", ds$notes) | grepl("withheld", ds$notes)))
+  # randomised order: the confound detector does NOT fire, a verdict is given
+  fr <- suppressWarnings(btl(gen(FALSE), "a", "b", "win", judge = "judge",
+                             order = "seq"))
+  dr <- suppressWarnings(btl_dimensionality(fr, reps = 30))
+  expect_false(is.na(dr$bimensions$above_reference[1]))
+  expect_false(any(grepl("withheld", dr$notes)))
+})
