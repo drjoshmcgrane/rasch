@@ -32,7 +32,8 @@ scale).}
 carried through to the person estimates.}
 
 \item{factors}{Optional character vector of person-factor column names in
-\code{data} (for DIF analysis), or a data frame of factors.}
+\code{data} (for DIF analysis), a data frame of factors, or one grouping
+vector with one entry per data row.}
 
 \item{items}{Optional character vector naming the item columns; by default
 every column not named in \code{id} or \code{factors}.}

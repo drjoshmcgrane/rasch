@@ -838,6 +838,24 @@ test_that("btl marks subset separation as non-convergence, not a boundary fit", 
   expect_error(btl_equate(fit, fit2), "did not converge")
 })
 
+test_that("btl separation diagnosis is invariant to an anchored origin", {
+  # Two densely observed balanced blocks joined by a sparse but balanced
+  # bridge are weakly conditioned, not separated. Translating the anchor is
+  # a pure change of origin and must not change convergence or any free SE.
+  mk <- function(a, b, n)
+    data.frame(a = rep(a, n), b = rep(b, n),
+               win = rep(c(a, b), length.out = n))
+  d <- rbind(mk("A", "B", 1000), mk("C", "D", 1000), mk("A", "C", 10))
+  f0 <- btl(d, "a", "b", "win", anchors = c(A = 0))
+  f100 <- btl(d, "a", "b", "win", anchors = c(A = 100))
+  expect_true(f0$converged)
+  expect_true(f100$converged)
+  expect_equal(f100$objects$location, f0$objects$location + 100,
+               tolerance = 1e-8)
+  expect_equal(f100$objects$se, f0$objects$se, tolerance = 1e-8)
+  expect_equal(f100$objects$se[f100$objects$object == "A"], 0)
+})
+
 test_that("weak-category honesty reaches MFRM, EFRM, and average anchoring", {
   # a near-empty category must yield weak = TRUE / se = NA on every path
   # that builds its own estimate, not only rasch()/pcml()
@@ -945,6 +963,8 @@ test_that("btl_dimensionality withholds the verdict under a shared fixed order",
                              order = "seq"))
   ds <- suppressWarnings(btl_dimensionality(fs, reps = 30))
   expect_true(is.na(ds$bimensions$above_reference[1]))
+  expect_true(is.na(ds$leading_structured))
+  expect_true(any(grepl("withheld", capture.output(print(ds)))))
   expect_true(any(grepl("shares", ds$notes) | grepl("withheld", ds$notes)))
   # randomised order: the confound detector does NOT fire, a verdict is given
   fr <- suppressWarnings(btl(gen(FALSE), "a", "b", "win", judge = "judge",

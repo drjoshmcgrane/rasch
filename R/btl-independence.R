@@ -423,7 +423,9 @@ btl_dimensionality <- function(fit, reps = 50L) {
       n_seen, choose(K, 2)))
 
   out <- list(bimensions = bimensions, coords = coords,
-              leading_structured = isTRUE(bm$strength[1] > ref_p95),
+              # keep the public verdict consistent with above_reference:
+              # TRUE/FALSE when identified, NA when shared order confounds it
+              leading_structured = lead_flag,
               reference = list(mean = ref_mean, p95 = ref_p95, reps = reps,
                                draws = lead_ref),
               residual_matrix = R, notes = notes)
@@ -434,12 +436,15 @@ btl_dimensionality <- function(fit, reps = 50L) {
 #' @export
 print.rasch_btl_dim <- function(x, ...) {
   b <- x$bimensions
+  verdict <- if (is.na(x$leading_structured))
+    "withheld (shared comparison order)"
+  else if (x$leading_structured) "structured (a second attribute)"
+  else "within noise (one scale suffices)"
   cat(sprintf("Paired-comparison residual dimensionality: %d bimension(s)\n",
               nrow(b)))
   cat(sprintf("Leading bimension strength %.3f (%.0f%% of residual; reference 95%%: %.3f) -> %s\n",
               b$strength[1], 100 * b$prop_residual[1], x$reference$p95,
-              if (x$leading_structured) "structured (a second attribute)"
-              else "within noise (one scale suffices)"))
+              verdict))
   for (n in x$notes) cat("Note:", n, "\n")
   invisible(x)
 }
@@ -515,7 +520,7 @@ plot_btl_scree <- function(x, ...) {
                    grid_x = FALSE)
   on.exit(par(op))
   rect(seq_len(k) - 0.32, 0, seq_len(k) + 0.32, b$strength,
-       col = ifelse(c(x$leading_structured, rep(FALSE, k - 1)),
+       col = ifelse(c(isTRUE(x$leading_structured), rep(FALSE, k - 1)),
                     .rr$blue, .rr$soft), border = NA)
   # noise reference: mean line with a shaded band up to the 95th percentile
   rect(0.5, ref_m, k + 0.5, ref_p, col = "#dc262622", border = NA)

@@ -230,7 +230,16 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "BH",
     # gate uniform-only flags: dif_size measures location (uniform) DIF, so
     # it cannot confirm or deny a nonuniform effect and must not suppress it.
     ds <- tryCatch(dif_size(cur, pick$item, by = grp), error = function(e) NULL)
-    if (!is.null(ds) && isTRUE(pick$uniform) && !isTRUE(pick$nonuniform)) {
+    if (isTRUE(pick$uniform) && !isTRUE(pick$nonuniform)) {
+      # Failure to obtain a magnitude is itself a failed confirmation. This
+      # most often means min_n removed a thin level and fewer than two usable
+      # levels remain; proceeding would recreate exactly the thin-cell split
+      # this gate is intended to prevent.
+      if (is.null(ds)) {
+        skipped <- c(skipped, paste(pick$item, pick$vars))
+        done <- c(done, paste(pick$item, pick$vars))
+        next
+      }
       n_grp_lev <- nlevels(droplevels(as.factor(grp)))
       reduced <- nrow(ds$levels) < n_grp_lev || isTRUE(any(ds$levels$weak))
       if (reduced && !isTRUE(any(ds$pairs$significant, na.rm = TRUE))) {

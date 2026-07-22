@@ -120,19 +120,26 @@ compare_fits <- function(..., reference = 1) {
     stop("no such reference fit")
 
   if (all(is_btl)) {
-    # fingerprint the actual comparison outcomes, not just the object set
-    # and count, so genuinely different comparison data are not treated as
-    # the same for the two_delta_ll
+    # Compare the actual comparison records exactly after canonicalising
+    # orientation and row order. A scalar checksum can collide, and a
+    # row-position-weighted checksum treats a harmless reorder as new data.
+    # Weight and judge allocation are part of the composite data too: they
+    # determine the likelihood contribution and independent clusters.
     sig <- function(f) {
       cmp <- f$comparisons
-      resp <- if (is.null(cmp) || is.null(cmp$response)) 0 else cmp$response
-      crc <- if (is.null(cmp)) NA_real_ else
-        sum(seq_len(nrow(cmp)) *
-              (as.numeric(factor(cmp$object_a)) * 131 +
-               as.numeric(factor(cmp$object_b)) * 17 + resp + 1), na.rm = TRUE)
-      list(objects = sort(f$objects$object), n = f$n_comparisons,
-           judges = if (is.null(f$judges)) 0L else nrow(f$judges),
-           outcomes = crc)
+      if (is.null(cmp)) return(NULL)
+      ca <- as.character(cmp$object_a); cb <- as.character(cmp$object_b)
+      swap <- ca > cb
+      lo <- ifelse(swap, cb, ca); hi <- ifelse(swap, ca, cb)
+      resp <- as.numeric(cmp$response)
+      resp[swap] <- max(f$m) - resp[swap]
+      z <- data.frame(object_a = lo, object_b = hi, response = resp,
+                      weight = as.numeric(cmp$weight),
+                      judge = as.character(cmp$judge),
+                      stringsAsFactors = FALSE)
+      z <- z[do.call(order, c(z, list(na.last = TRUE))), , drop = FALSE]
+      rownames(z) <- NULL
+      list(objects = sort(f$objects$object), comparisons = z)
     }
     ref_sig <- sig(fits[[reference]])
     rows <- lapply(seq_along(fits), function(i) {

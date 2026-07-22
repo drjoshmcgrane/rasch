@@ -115,7 +115,8 @@
 #' @param id Optional name of an ID column in \code{data}, or a vector of IDs;
 #'   carried through to the person estimates.
 #' @param factors Optional character vector of person-factor column names in
-#'   \code{data} (for DIF analysis), or a data frame of factors.
+#'   \code{data} (for DIF analysis), a data frame of factors, or one grouping
+#'   vector with one entry per data row.
 #' @param items Optional character vector naming the item columns; by default
 #'   every column not named in \code{id} or \code{factors}.
 #' @param n_groups Number of class intervals for the item-trait chi-square
@@ -205,9 +206,10 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
   id_vec <- NULL; fac_df <- NULL
   if (is.data.frame(data)) {
     nm <- names(data)
+    id_is_col <- is.character(id) && length(id) == 1L
     # a misspelled column name must be an error, never a silent fallback:
     # dropping it quietly produces a valid-looking analysis of the wrong data
-    if (is.character(id) && length(id) == 1L) {
+    if (id_is_col) {
       if (!id %in% nm)
         stop("id column '", id, "' not found in the data")
       id_vec <- data[[id]]
@@ -219,7 +221,16 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
              nrow(data), " rows")
       id_vec <- id
     }
-    if (is.character(factors)) {
+    # Character input is ambiguous: all existing column names means the
+    # documented column-name form; a row-length character vector is a
+    # grouping vector passed by value. A short non-matching character input
+    # remains a misspelled-column error rather than silently changing modes.
+    factors_are_cols <- is.character(factors) &&
+      (length(factors) == 0L || all(factors %in% nm) ||
+         length(factors) != nrow(data))
+    factors_by_value <- !is.null(factors) && is.atomic(factors) &&
+      !factors_are_cols
+    if (factors_are_cols) {
       miss <- setdiff(factors, nm)
       if (length(miss))
         stop("factor column(s) not found in the data: ",
@@ -230,7 +241,7 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
         stop("`factors` data frame has ", nrow(factors), " rows but the data ",
              "has ", nrow(data), " rows")
       fac_df <- factors
-    } else if (!is.null(factors)) {
+    } else if (factors_by_value) {
       # a factors= grouping vector passed by VALUE (not by column name):
       # accept it when it lines up, rather than silently ignoring it and
       # leaving any same-named data column to be treated as an item
@@ -239,17 +250,23 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
              "with one row per data row, or a vector with one entry per row")
       fac_df <- stats::setNames(data.frame(factors, stringsAsFactors = FALSE),
                                 .factors_label)
+    } else if (!is.null(factors)) {
+      stop("`factors` must be column name(s) in the data, a data frame ",
+           "with one row per data row, or a vector with one entry per row")
     }
     # a data column whose values are identical to a by-value factors vector
     # is almost certainly that same variable: exclude it so it is not also
     # scored as a numeric item
-    val_factor_cols <- if (!is.null(factors) && is.atomic(factors) &&
-                           !is.character(factors))
+    val_factor_cols <- if (factors_by_value)
       nm[vapply(data, function(col)
         length(col) == length(factors) && isTRUE(all.equal(
           as.character(col), as.character(factors))), logical(1))] else NULL
-    drop_cols <- c(if (is.character(id)) id else NULL,
-                   if (is.character(factors)) factors else NULL,
+    val_id_cols <- if (!is.null(id) && !id_is_col)
+      nm[vapply(data, function(col)
+        length(col) == length(id) && isTRUE(all.equal(
+          as.character(col), as.character(id))), logical(1))] else NULL
+    drop_cols <- c(if (id_is_col) id else val_id_cols,
+                   if (factors_are_cols) factors else NULL,
                    # an externally supplied factor data frame whose column
                    # names also appear in `data` almost certainly refers to
                    # those columns: without this they would silently become

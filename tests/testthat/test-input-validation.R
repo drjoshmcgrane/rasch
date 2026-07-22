@@ -477,6 +477,19 @@ test_that("rasch captures a by-value factors vector and excludes its column", {
   expect_false(is.null(f$factors))
   expect_false("group" %in% colnames(f$X))
   expect_equal(ncol(f$X), L)
+
+  # Character group labels are values, not a long list of column names.
+  grp_chr <- rep(c("A", "B"), each = n / 2)
+  df$group_chr <- grp_chr
+  fc <- rasch(df, model = "PCM", factors = grp_chr)
+  expect_equal(names(fc$factors), "grp_chr")
+  expect_false("group_chr" %in% colnames(fc$X))
+
+  # A by-value ID copied from a data column must exclude that column too.
+  df$id <- seq_len(n)
+  fi <- rasch(df[, c("id", paste0("I", 1:L))], id = df$id)
+  expect_equal(fi$person$id, df$id)
+  expect_equal(colnames(fi$X), paste0("I", 1:L))
 })
 
 test_that("rasch errors on length-mismatched id / factors", {

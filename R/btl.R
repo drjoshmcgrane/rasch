@@ -952,16 +952,38 @@ plot_btl <- function(fit, band = 2.5) {
   # structurally zero (se == 0): the location is a fixed constant, not an estimate
   cov_beta <- Bmat %*% covth[1:nb, 1:nb, drop = FALSE] %*% t(Bmat)
   se <- sqrt(pmax(diag(cov_beta), 0))
-  # (quasi-)separation of an object subset: the conjunction of an
-  # ill-conditioned information direction (rc below 1e-2) and a location
-  # driven to the boundary along it (|location| >= 3, ~20:1 odds). Neither
-  # signal alone is decisive -- a legitimately sparse design is mildly
-  # ill-conditioned but not at the boundary, and a genuinely dominant
-  # object is at a large location but well-conditioned -- so only their
-  # conjunction marks a location the data cannot place. Report it as
-  # non-convergence with the affected SEs withheld, rather than a boundary
-  # estimate dressed in a plausible-looking SE.
-  sep_run <- rc < 1e-2 & abs(beta) >= 3
+  # (quasi-)separation of an object subset: inspect the weak eigendirections
+  # of the information and ask whether the fitted locations have run at
+  # least 3 logits ALONG one of those directions. Absolute locations cannot
+  # be used here: on an anchored scale a pure translation (anchors 0 -> 100)
+  # changes every beta but changes neither the likelihood nor identification.
+  # Mapping the weak parameter directions through Bmat also prevents a weak
+  # threshold/dependence direction from spuriously condemning a large but
+  # well-placed object. Anchored rows have zero loading and can never be
+  # labelled as estimates that ran away.
+  sep_run <- rep(FALSE, K)
+  if (rc < 1e-2) {
+    eh <- eigen((H + t(H)) / 2, symmetric = TRUE)
+    ev_max <- max(abs(eh$values))
+    weak_dir <- if (is.finite(ev_max) && ev_max > 0)
+      which(abs(eh$values) / ev_max < 1e-2) else integer(0)
+    beta_rel <- beta - if (length(anch_idx)) mean(beta[anch_idx]) else mean(beta)
+    for (jj in weak_dir) {
+      loc_dir <- drop(Bmat %*% eh$vectors[seq_len(nb), jj])
+      ld2 <- sum(loc_dir^2)
+      if (!is.finite(ld2) || ld2 < 1e-10) next
+      run_coef <- sum(loc_dir * beta_rel) / ld2
+      run_loc <- run_coef * loc_dir
+      # Require an actual three-logit displacement in object-location
+      # space, not merely a large coefficient caused by a direction whose
+      # location loading is numerically tiny.
+      if (all(is.finite(run_loc)) && max(abs(run_loc)) >= 3) {
+        affected <- abs(run_loc) >= 0.25 * max(abs(run_loc))
+        if (length(anch_idx)) affected[anch_idx] <- FALSE
+        sep_run <- sep_run | affected
+      }
+    }
+  }
   if (any(sep_run)) {
     converged <- FALSE
     se[sep_run] <- NA_real_

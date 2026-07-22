@@ -2,6 +2,24 @@
 
 Completes the audit follow-up: the one finding deferred in 1.14.0.
 
+Post-audit verification also closed five edge cases in the 1.14 changes:
+
+* BTL subset-separation detection now evaluates movement along weak
+  information directions and is invariant to a translated anchor origin;
+  fixed anchors can no longer be labelled as runaway estimates.
+* `resolve_dif()` treats an unavailable `dif_size()` result as failed
+  confirmation of uniform-only DIF, so a level removed by `min_n` cannot
+  still trigger a split with an unknown magnitude.
+* Under shared fixed comparison order, all dimensionality verdict fields,
+  printing, and scree colouring consistently represent the verdict as
+  withheld.
+* BTL `compare_fits()` comparability uses the exact canonicalised comparison
+  records (including weights and judge allocation), eliminating checksum
+  collisions and making harmless row reordering invariant.
+* `rasch()` accepts character grouping vectors passed by value and excludes
+  data columns matching by-value IDs, as well as matching factor columns,
+  from the item matrix.
+
 * `btl_dimensionality()` now detects a shared fixed comparison order --
   where a within-judge order effect is confounded with the object
   locations -- and withholds the second-dimension verdict

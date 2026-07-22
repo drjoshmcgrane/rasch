@@ -347,6 +347,21 @@ test_that("resolve_dif splits DIF items by effect size and protects anchors", {
   expect_gte(10L - length(unique(rp$splits$item)), 3L)
 })
 
+test_that("resolve_dif does not split a uniform flag that thin cells cannot confirm", {
+  set.seed(2); n_a <- 400; n_b <- 12; n <- n_a + n_b
+  grp <- factor(c(rep("A", n_a), rep("B", n_b)))
+  th <- rnorm(n); d <- seq(-1.5, 1.5, length.out = 8)
+  X <- matrix(rbinom(n * 8, 1, plogis(outer(th, d, "-"))), n, 8)
+  X[grp == "B", 3] <- rbinom(n_b, 1, 0.95)
+  colnames(X) <- paste0("I", 1:8)
+  fit <- rasch(data.frame(X, grp = grp), factors = "grp")
+  expect_error(dif_size(fit, "I3", by = "grp"),
+               "fewer than two usable levels")
+  rr <- resolve_dif(fit, max_splits = 1, min_anchors = 3)
+  expect_equal(rr$n_splits, 0L)
+  expect_match(rr$notes, "not split")
+})
+
 test_that("mixed-design DIF survives missing data (strata dedup)", {
   # missing responses unbalance the design and aov then projects the within
   # terms onto the between-person stratum as well as their own; the flatten
