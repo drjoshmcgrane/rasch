@@ -73,6 +73,100 @@ item_moments <- function(theta, tau_i, disc = 1) {
   (1 / sqrt(V)) / disc
 }
 
+# Search on the response-function scale. The curve is shared across all
+# sufficient scores for an administered item pattern. Evaluating its moments
+# in batches keeps a multiple-root search inexpensive on ordinary banks.
+.person_wle_curve <- function(tau_list, disc, weights = NULL) {
+  disc <- rep_len(disc, length(tau_list))
+  scale <- max(disc)
+  origin <- mean(range(unlist(tau_list)))
+  rp <- disc / scale
+  q <- if (is.null(weights)) rep(1, length(disc)) else weights / max(weights)
+  interval <- (.person_root_interval(tau_list, disc) - origin) * scale
+  if (any(!is.finite(interval)) || any(rp == 0))
+    stop("the range of model units is too large for stable person scoring")
+  ct <- lapply(seq_along(disc), function(j)
+    c(0, cumsum((tau_list[[j]] - origin) * disc[j])))
+  evaluate <- function(u) {
+    E <- H <- J <- Hprime <- psi <- numeric(length(u))
+    for (j in seq_along(disc)) {
+      k <- seq_along(ct[[j]]) - 1L
+      lp <- outer(u, k * rp[j])
+      lp <- sweep(lp, 2L, ct[[j]], "-")
+      top <- apply(lp, 1L, max)
+      P <- exp(lp - top)
+      den <- rowSums(P); P <- P / den
+      ej <- drop(P %*% k)
+      dev <- matrix(k, length(u), length(k), byrow = TRUE) - ej
+      vj <- rowSums(P * dev^2)
+      mj <- rowSums(P * dev^3)
+      E <- E + q[j] * rp[j] * ej
+      H <- H + q[j] * rp[j]^2 * vj
+      J <- J + q[j]^2 * rp[j]^2 * vj
+      Hprime <- Hprime + q[j] * rp[j]^3 * mj
+      psi <- psi + q[j] * (top + log(den))
+    }
+    cbind(base = E - (J / H) * (Hprime / H) / 2,
+          psi = psi, info = H)
+  }
+  if (diff(interval) <= 160) {
+    grid <- seq(interval[1], interval[2], length.out =
+      max(3L, ceiling(diff(interval) / .25) + 1L))
+  } else {
+    # Long gaps need no enormous regular mesh. Include every category-line
+    # crossing, not just the adjacent thresholds: disordered thresholds can
+    # make non-adjacent categories the dominant pair.
+    grid <- interval
+    for (j in seq_along(ct)) {
+      n <- length(ct[[j]])
+      pairs <- utils::combn(seq_len(n), 2L)
+      crossings <- (ct[[j]][pairs[2, ]] - ct[[j]][pairs[1, ]]) /
+        ((pairs[2, ] - pairs[1, ]) * rp[j])
+      offsets <- c(-30, -16, seq(-8, 8, by = .25), 16, 30) / rp[j]
+      grid <- c(grid, as.vector(outer(crossings, offsets, "+")))
+    }
+    grid <- sort(unique(grid[is.finite(grid) & grid >= interval[1] &
+                               grid <= interval[2]]))
+  }
+  list(evaluate = evaluate, grid = grid, values = evaluate(grid),
+       origin = origin, scale = scale, ordinary = all(q == 1))
+}
+
+.person_wle_maximum <- function(curve, score) {
+  g <- score - curve$values[, "base"]
+  # A maximum crosses from positive to negative. Include exact grid roots
+  # too; comparing objectives also rejects any stationary minimum among them.
+  a <- seq_len(length(g) - 1L)
+  cross <- a[is.finite(g[a]) & is.finite(g[a + 1L]) &
+               g[a] > 0 & g[a + 1L] < 0]
+  gf <- function(u) score - curve$evaluate(u)[, "base"]
+  roots <- c(curve$grid[is.finite(g) & g == 0],
+    vapply(cross, function(i) tryCatch(
+      stats::uniroot(gf, curve$grid[c(i, i + 1L)], tol = 1e-10)$root,
+      error = function(e) NA_real_), 0))
+  roots <- sort(unique(roots[is.finite(roots)]))
+  if (!length(roots)) return(NA_real_)
+  if (curve$ordinary) {
+    v <- curve$evaluate(roots)
+    objective <- score * roots - v[, "psi"] + log(v[, "info"]) / 2
+  } else {
+    # With externally imposed weights the Warm correction is not generally
+    # one half log information. Its antiderivative, rather than that ordinary
+    # WLE objective, ranks competing roots of the weighted equation.
+    objective <- vapply(roots, function(u) {
+      if (u == roots[1L]) return(0)
+      tryCatch(stats::integrate(gf, roots[1L], u, rel.tol = 1e-9,
+        subdivisions = 1000L)$value, error = function(e) NA_real_)
+    }, 0)
+  }
+  if (any(!is.finite(objective))) return(NA_real_)
+  best <- max(objective)
+  # Equal maxima have no unique WLE. Use the lower maximizer consistently;
+  # never average maxima, since their midpoint can be a likelihood minimum.
+  take <- which(best - objective <= 1e-10)[1L]
+  curve$origin + roots[take] / curve$scale
+}
+
 #' Warm's weighted likelihood estimates by raw score
 #'
 #' Computes the weighted likelihood estimate (WLE) of person location for every
@@ -85,6 +179,9 @@ item_moments <- function(theta, tau_i, disc = 1) {
 #' \eqn{\mu_3(\theta)} be the sums of the item expected scores, variances, and
 #' third central moments. The estimate solves Warm's weighted score equation
 #' \deqn{R-E(\theta)+\frac{\mu_3(\theta)}{2V(\theta)}=0.}
+#' When the equation has several solutions, competing maxima are compared
+#' using log likelihood plus one half log information. Equal maxima use the
+#' lower location; their average need not maximize the weighted likelihood.
 #' With common discrimination \eqn{d}, its explicit multiplier cancels from
 #' this equation, although the moments are evaluated under \eqn{d}. The
 #' reported standard error is
@@ -98,6 +195,9 @@ item_moments <- function(theta, tau_i, disc = 1) {
 #' @references
 #' Warm, T. A. (1989). Weighted likelihood estimation of ability in item
 #' response theory. Psychometrika, 54(3), 427--450.
+#'
+#' Zhang, J. (2005). Bias correction for the maximum likelihood estimate of
+#' ability. ETS Research Report RR-05-15.
 #' @seealso \code{\link{score_table}} and \code{\link{person_extrapolated}}.
 #' @examples
 #' person_wle(list(c(-1, 0), c(-0.5, 0.5), c(0, 1)))
@@ -116,23 +216,9 @@ person_wle <- function(tau_list, disc = 1) {
          "WLE requires a common discrimination")
   Smax <- sum(vapply(tau_list, length, 1L))
   theta <- se <- setNames(rep(NA_real_, Smax + 1L), as.character(0:Smax))
-  interval <- .person_root_interval(tau_list, disc)
+  curve <- .person_wle_curve(tau_list, disc)
   for (R in 0:Smax) {
-    g <- function(th) {
-      mo <- lapply(tau_list, item_moments, theta = th, disc = disc)
-      E  <- sum(vapply(mo, `[[`, 0, "E"));  V <- sum(vapply(mo, `[[`, 0, "V"))
-      m3 <- sum(vapply(mo, `[[`, 0, "mu3"))
-      # Warm's weighted score is disc*(R - E) + disc^3 mu3 / (2 disc^2 V):
-      # the discrimination cancels throughout, so the correction carries NO
-      # disc factor (a stray disc here biased WLEs by up to 0.26 logits at
-      # disc = 0.5; the vector-disc EFRM path was already correct)
-      (R - E) + m3 / (2 * V)
-    }
-    # Accuracy is measured on the response-function scale, disc * theta.
-    # A fixed logit tolerance can exceed the entire root interval after a
-    # change of unit and return its endpoint instead of a WLE.
-    root <- tryCatch(uniroot(g, interval, tol = 1e-9 / disc)$root,
-                     error = function(e) NA_real_)
+    root <- .person_wle_maximum(curve, R)
     theta[as.character(R)] <- root
     if (!is.na(root)) {
       se[as.character(R)] <- .common_person_se(root, tau_list, disc)
@@ -157,6 +243,10 @@ person_wle <- function(tau_list, disc = 1) {
 #' \deqn{\sum_i q_i a_i\{x_i-E_i(\theta)\}+
 #' \frac{J(\theta)\sum_i q_i a_i^3\mu_{3i}(\theta)}
 #' {2H(\theta)^2}=0.}
+#' Competing maxima are ranked by the integral of this estimating score.
+#' With equal weights this reduces to the ordinary weighted log likelihood;
+#' unequal external weights require their own correction. Equal maxima use
+#' the lower location.
 #' Its standard error is the sandwich form
 #' \deqn{\operatorname{SE}(\hat\theta)=
 #' \frac{\{\sum_iq_i^2a_i^2V_i(\hat\theta)\}^{1/2}}
@@ -378,26 +468,13 @@ weighted_person_estimates <- function(fit, weights,
     rp <- disc[cols] / unit_scale
     pattern_score <- as.numeric(X[who_pat, cols, drop = FALSE] %*%
                                  (qp * rp))
+    curve <- .person_wle_curve(fit$tau_list[cols], disc[cols], qp)
     # Equal weighted totals have the same estimating equation within a
     # missingness pattern. Do not round them for caching: distinct totals can
     # be arbitrarily close when external weights are highly unequal.
     for (Wu in unique(pattern_score)) {
       who <- who_pat[pattern_score == Wu]
-      score <- function(th) {
-        mo <- lapply(cols, function(j)
-          item_moments(th, fit$tau_list[[j]], disc = disc[j]))
-        E <- vapply(mo, `[[`, 0, "E")
-        V <- vapply(mo, `[[`, 0, "V")
-        m3 <- vapply(mo, `[[`, 0, "mu3")
-        H <- sum(qp * rp^2 * V)
-        J <- sum(qp^2 * rp^2 * V)
-        sum(qp * rp * (X[who[1L], cols] - E)) +
-          (J / H) * (sum(qp * rp^3 * m3) / H) / 2
-      }
-      interval <- .person_root_interval(fit$tau_list[cols], disc[cols])
-      root <- tryCatch(stats::uniroot(score, interval,
-                                     tol = 1e-9 / unit_scale)$root,
-                       error = function(e) NA_real_)
+      root <- .person_wle_maximum(curve, Wu)
       theta[who] <- root
       if (is.finite(root)) {
         V <- vapply(cols, function(j)
@@ -428,7 +505,7 @@ weighted_person_estimates <- function(fit, weights,
                           stringsAsFactors = FALSE)
   attr(out, "weighting") <- weighting
   attr(out, "by") <- by
-  attr(out, "algorithm") <- "pattern-unit-wle-2"
+  attr(out, "algorithm") <- "pattern-max-wle-3"
   out
 }
 

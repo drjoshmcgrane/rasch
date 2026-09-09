@@ -31,7 +31,8 @@ person.}
 At least 90 per cent, and no fewer than 30, must yield the complete set
 of comparisons.}
 
-\item{seed}{Optional bootstrap seed.}
+\item{seed}{Optional bootstrap seed. See \code{\link{rasch_rng}} for
+generator support.}
 }
 \value{
 An object of class \code{"rasch_frame_invariance"}. The

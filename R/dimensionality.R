@@ -398,7 +398,8 @@ residual_pca <- function(fit, n_components = 10) {
 #'   \code{parallel = TRUE}. Larger values give a more stable upper-tail
 #'   reference.
 #' @param seed Optional non-negative whole-number seed. The caller's random-
-#'   number state is restored when the calculation finishes.
+#'   number state is restored when the calculation finishes; see
+#'   \code{\link{rasch_rng}} for generator support.
 #' @param result Optional result returned by an earlier call. Supplying it
 #'   redraws that analysis without repeating the simulations.
 #' @return Called for its plotting side effect; invisibly the eigen table. With
@@ -595,7 +596,9 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 50,
 #'   unit whose thresholds were estimated directly.
 #' @param workers Number of parallel workers for the bootstrap refits.
 #' @param seed Optional integer seed for the bootstrap; the replicates are
-#'   reproducible for a given seed whatever the worker count.
+#'   reproducible for a given seed whatever the worker count. The bootstrap
+#'   does not support Box--Muller, including when \code{seed = NULL};
+#'   see \code{\link{rasch_rng}}.
 #' @return A list with the proportion of significant tests, its
 #'   Clopper--Pearson confidence interval, the sample sizes (\code{n} used,
 #'   \code{n_excluded_extreme}), the item split and its source, a
@@ -924,6 +927,7 @@ print.rasch_dimensionality_test <- function(x, ...) {
                            workers, seed) {
   .require_refittable_calibration(fit)
   workers <- min(as.integer(workers), .rasch_available_workers())
+  .sim_seed_check()
   if (!is.null(seed)) {
     seed <- .check_whole(seed, "seed", 0)
     old <- .sim_seed_capture()

@@ -52,7 +52,9 @@ unit whose thresholds were estimated directly.}
 \item{workers}{Number of parallel workers for the bootstrap refits.}
 
 \item{seed}{Optional integer seed for the bootstrap; the replicates are
-reproducible for a given seed whatever the worker count.}
+reproducible for a given seed whatever the worker count. The bootstrap
+does not support Box--Muller, including when \code{seed = NULL};
+see \code{\link{rasch_rng}}.}
 }
 \value{
 A list with the proportion of significant tests, its

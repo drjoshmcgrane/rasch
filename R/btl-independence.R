@@ -187,34 +187,18 @@ print.rasch_btl_transitivity <- function(x, ...) {
   invisible(x)
 }
 
-# object-by-object residual log-odds matrix (skew-symmetric): observed
-# pairwise log-odds minus the model difference beta_i - beta_j, with a
-# continuity correction for extreme cells and zero where a pair is unseen.
-.btl_resid_matrix <- function(ia, ib, resp, w, m, K, beta) {
+# Pool observed and fitted expected points over the same oriented pairs.
+# For ordered responses logit(E[X]/m) is not the object-location gap;
+# fitted frame and history effects also change the pooled expectation.
+# The same half-point correction on both sides keeps extreme cells finite
+# without creating a residual when observed and expected points agree.
+.btl_resid_matrix_expected <- function(ia, ib, resp, w, K, expected_a,
+                                        m = 1L) {
   S <- .btl_scores(ia, ib, resp, w, m, K)
-  tot <- S + t(S)
-  P <- (S + 0.5) / (tot + 1)
-  L <- qlogis(P); L[tot == 0] <- 0
-  R <- L - outer(beta, beta, "-"); R[tot == 0] <- 0
-  (R - t(R)) / 2                                     # enforce skew-symmetry
-}
-
-# Residual log-odds when the fitted expectation varies within an object pair,
-# as it does across panel-by-set frames. The observed pair logit is compared
-# with the pooled fitted probability for that same allocation.
-.btl_resid_matrix_expected <- function(ia, ib, resp, w, K, expected_a) {
-  S <- .btl_scores(ia, ib, resp, w, 1L, K)
-  E <- matrix(0, K, K)
-  add <- function(rows, cols, val) {
-    idx <- (cols - 1L) * K + rows
-    ag <- rowsum(val, idx)
-    E[as.integer(rownames(ag))] <<- E[as.integer(rownames(ag))] + ag[, 1]
-  }
-  add(ia, ib, w * expected_a)
-  add(ib, ia, w * (1 - expected_a))
+  E <- .btl_scores(ia, ib, expected_a, w, m, K)
   tot <- S + t(S)
   Pobs <- (S + .5) / (tot + 1)
-  Pexp <- pmin(pmax(E / pmax(tot, 1e-12), 1e-8), 1 - 1e-8)
+  Pexp <- (E + .5) / (tot + 1)
   R <- stats::qlogis(Pobs) - stats::qlogis(Pexp)
   R[tot == 0] <- 0
   (R - t(R)) / 2
@@ -234,7 +218,19 @@ print.rasch_btl_transitivity <- function(x, ...) {
        coord = cbind(x = Re(v), y = Im(v)))
 }
 
-.btl_dimensionality_efrm <- function(fit, reps, seed = NULL) {
+.btl_dimensionality_scope_note <- function(independent_comparisons) {
+  if (independent_comparisons) paste(
+    "the simulated reference assumes conditionally independent comparison",
+    "outcomes given the fitted probabilities and any modeled history;",
+    "it is not cluster-robust") else paste(
+    "dimensionality inference is withheld because independent comparison",
+    "outcomes were not assumed; judge-clustered calibration does not supply",
+    "a cluster-robust simulated reference. Set independent_comparisons = TRUE",
+    "only for a conditional independent-comparison sensitivity analysis")
+}
+
+.btl_dimensionality_efrm <- function(fit, reps, seed = NULL,
+                                    independent_comparisons = FALSE) {
   objs <- fit$objects$object; K <- length(objs)
   if (K < 3L) stop("need at least three objects")
   cmp <- fit$comparisons
@@ -253,13 +249,13 @@ print.rasch_btl_transitivity <- function(x, ...) {
     s <- .btl_bimensions(rr)$strength
     if (length(s)) s[1] else 0
   }, 0)
-  inference <- if (complete_pairs)
+  inference <- if (complete_pairs && independent_comparisons)
     .sim_upper_family(bm$strength[1], matrix(lead_ref, ncol = 1L)) else NULL
   ref_mean <- if (is.null(inference)) NA_real_ else inference$mean[1L]
   ref_p95 <- if (is.null(inference)) NA_real_ else inference$critical[1L]
   nb <- length(bm$strength)
   prop <- 2 * bm$strength^2 / bm$total
-  lead_flag <- if (complete_pairs) inference$significant[1L] else NA
+  lead_flag <- if (is.null(inference)) NA else inference$significant[1L]
   bimensions <- data.frame(
     bimension = seq_len(nb), strength = bm$strength,
     prop_residual = prop,
@@ -271,6 +267,7 @@ print.rasch_btl_transitivity <- function(x, ...) {
   notes <- paste(
     "the simulated reference retains each comparison's fitted panel-by-set",
     "probability and the observed frame allocation")
+  notes <- c(notes, .btl_dimensionality_scope_note(independent_comparisons))
   if (!complete_pairs)
     notes <- c(notes, sprintf(
       paste0("%d of %d pairs compared; unseen pairs contribute no residual ",
@@ -286,10 +283,12 @@ print.rasch_btl_transitivity <- function(x, ...) {
                      n_used = length(lead_ref),
                      alpha = if (is.null(inference)) 0.05 else inference$alpha,
                      inference_available = !is.null(inference),
+                     independent_comparisons = independent_comparisons,
                      draws = lead_ref,
                      method = if (is.null(inference)) NA_character_ else
                        inference$method, seed = seed),
-    residual_matrix = R, notes = notes)
+    residual_matrix = R, residual_method = "pooled-expected-score-1",
+    notes = notes)
   attr(out, "fit_signature") <- .fit_boot_signature(fit)
   class(out) <- "rasch_btl_dim"
   attr(out, "result_signature") <- .fit_boot_md5(out)
@@ -313,9 +312,17 @@ print.rasch_btl_transitivity <- function(x, ...) {
 .validate_btl_dimensionality <- function(result, fit) {
   if (is.null(result)) return(invisible(NULL))
   .authenticate_btl_dimensionality(result, fit)
+  .require_current_btl_residuals(result)
   if (.btl_dimensionality_unsupported_reference(result, fit))
     stop("`dimensionality` retains an inferential reference despite its ",
          "unsupported comparison design; recompute it with btl_dimensionality()")
+  invisible(result)
+}
+
+.require_current_btl_residuals <- function(result) {
+  if (!identical(result$residual_method, "pooled-expected-score-1"))
+    stop("this dimensionality result uses an earlier residual definition; ",
+         "recompute it with btl_dimensionality()", call. = FALSE)
   invisible(result)
 }
 
@@ -332,6 +339,8 @@ print.rasch_btl_transitivity <- function(x, ...) {
     result$bimensions$ref_p95)))
   if (!finite_reference) return(FALSE)
   if (!.btl_dimensionality_has_inference(result)) return(TRUE)
+  if ((isTRUE(fit$clustered) || inherits(fit, "rasch_btl_efrm")) &&
+      !isTRUE(result$reference$independent_comparisons)) return(TRUE)
   # Earlier frame results could retain a TRUE/FALSE flag despite unseen
   # pairs. Check the actual retained-object design, not that legacy flag.
   tab <- fit$objects
@@ -401,10 +410,21 @@ print.rasch_btl_transitivity <- function(x, ...) {
 #'
 #' This is an experimental diagnostic. The reference is conditional on the
 #' fitted point estimates because the model is not re-estimated in each
-#' replicate. Ordered-response fits use the same points-proportion residual in
-#' the data and simulations. Fits with exposure or carry-over effects simulate
-#' those effects through each judge's observed sequence. The fitted model must
+#' replicate. Observed and fitted expected points are pooled over each object
+#' pair before their proportions are compared on the logit scale. A half-point
+#' correction is applied to both totals. This retains category thresholds,
+#' frame units and fitted position or history effects in the expectation.
+#' The same calculation is used in the simulations; exposure and carry-over
+#' expectations follow each draw's generated history. The fitted model must
 #' have converged.
+#'
+#' This reference assumes conditionally independent comparison outcomes given
+#' the fitted probabilities and any modeled history. It is not cluster-robust:
+#' clustered calibration standard errors do not make this simulated reference
+#' valid under general within-judge dependence. Judge-clustered and frame fits
+#' therefore return a descriptive decomposition by default. Explicitly set
+#' \code{independent_comparisons = TRUE} to request the model-conditional
+#' independent-comparison reference as a sensitivity analysis.
 #'
 #' Inference is withheld if any object pair is unobserved, or if an
 #' ordered analysis contains count-weighted rows whose within-row sequence is
@@ -421,7 +441,13 @@ print.rasch_btl_transitivity <- function(x, ...) {
 #' @param reps Model-simulated replicates for the noise reference; at least 20.
 #'   Larger values give a more stable upper-tail reference.
 #' @param seed Optional non-negative whole-number seed. The caller's random-
-#'   number state is restored when the calculation finishes.
+#'   number state is restored when the calculation finishes; see
+#'   \code{\link{rasch_rng}} for generator support.
+#' @param independent_comparisons Logical or \code{NULL}. Declare whether
+#'   conditionally independent comparison outcomes may be assumed for the
+#'   simulated reference. The default \code{NULL} assumes independence only
+#'   for an unclustered ordinary BTL fit. \code{FALSE} withholds inference;
+#'   \code{TRUE} explicitly enables the reference, subject to design guards.
 #' @return A list of class \code{"rasch_btl_dim"}: \code{bimensions} (per
 #'   bimension: strength and share of residual size; the reference mean, 5%
 #'   upper critical value, and the clears-the-reference flag are reported for the
@@ -430,8 +456,9 @@ print.rasch_btl_transitivity <- function(x, ...) {
 #'   the residual map); \code{leading_structured} (whether bimension 1 clears
 #'   its reference); \code{reference} (the simulated mean, finite-simulation
 #'   5% critical value and upper-tail probability, calculated as one plus the
-#'   exceedance count divided by one plus \code{reps}); \code{residual_matrix}; and
-#'   \code{notes}.
+#'   exceedance count divided by one plus \code{reps}, together with the
+#'   effective \code{independent_comparisons} assumption); \code{residual_matrix}; and
+#'   \code{notes}. \code{residual_method} identifies the residual definition.
 #' @references Gower, J. C. (1977). The analysis of asymmetry and orthogonality.
 #'   In J. R. Barra et al. (Eds.), \emph{Recent Developments in Statistics}
 #'   (pp. 109-123). North-Holland.
@@ -442,11 +469,21 @@ print.rasch_btl_transitivity <- function(x, ...) {
 #' d$win <- ifelse(runif(nrow(d)) < plogis(beta[d$a] - beta[d$b]), d$a, d$b)
 #' btl_dimensionality(btl(d, "a", "b", "win"), reps = 20)
 #' @export
-btl_dimensionality <- function(fit, reps = 200L, seed = NULL) {
+btl_dimensionality <- function(fit, reps = 200L, seed = NULL,
+                               independent_comparisons = NULL) {
   if (!inherits(fit, "rasch_btl")) stop("not a paired-comparison (btl) fit")
   if (!isTRUE(fit$converged))
     stop("the paired-comparison calibration did not converge; dimensionality inference is unavailable")
   reps <- .check_whole(reps, "reps", 20)
+  if (!is.null(independent_comparisons) &&
+      (!is.logical(independent_comparisons) ||
+       length(independent_comparisons) != 1L ||
+       is.na(independent_comparisons) || is.object(independent_comparisons) ||
+       !is.null(dim(independent_comparisons))))
+    stop("`independent_comparisons` must be TRUE, FALSE, or NULL")
+  if (is.null(independent_comparisons))
+    independent_comparisons <- !isTRUE(fit$clustered) &&
+      !inherits(fit, "rasch_btl_efrm")
   if (!is.null(seed)) {
     seed <- .check_whole(seed, "seed", 0)
     old_seed <- .sim_seed_capture()
@@ -454,7 +491,8 @@ btl_dimensionality <- function(fit, reps = 200L, seed = NULL) {
     set.seed(seed)
   }
   if (inherits(fit, "rasch_btl_efrm"))
-    return(.btl_dimensionality_efrm(fit, reps, seed = seed))
+    return(.btl_dimensionality_efrm(fit, reps, seed = seed,
+      independent_comparisons = independent_comparisons))
   tab <- fit$objects
   if ("extreme" %in% names(tab)) tab <- tab[!(tab$extreme %in% TRUE), ]
   objs <- tab$object; K <- length(objs); m <- fit$m
@@ -463,12 +501,13 @@ btl_dimensionality <- function(fit, reps = 200L, seed = NULL) {
   cmp <- fit$comparisons
   ia <- match(cmp$object_a, objs); ib <- match(cmp$object_b, objs)
   w <- cmp$weight
-  notes <- character(0)
+  notes <- .btl_dimensionality_scope_note(independent_comparisons)
   S_seen <- .btl_scores(ia, ib, cmp$response, w, m, K)
   n_seen <- sum(((S_seen + t(S_seen)) > 0)[upper.tri(diag(K))])
   complete_pairs <- n_seen == choose(K, 2)
 
-  R <- .btl_resid_matrix(ia, ib, cmp$response, w, m, K, beta)
+  expected <- .btl_fitted_moments(fit, cmp)$E
+  R <- .btl_resid_matrix_expected(ia, ib, cmp$response, w, K, expected, m)
   bm <- .btl_bimensions(R)
   if (!length(bm$strength)) stop("no residual structure to decompose")
 
@@ -512,7 +551,7 @@ btl_dimensionality <- function(fit, reps = 200L, seed = NULL) {
                                        stringsAsFactors = FALSE))
       key_b <- .factor_keys(data.frame(judge = sjd, object = sb,
                                        stringsAsFactors = FALSE))
-      resp <- numeric(length(sa))
+      resp <- expected <- numeric(length(sa))
       for (r in seq_along(sa)) {
         ka <- key_a[r]; kb <- key_b[r]
         na_ <- gets(cnt, ka); nb_ <- gets(cnt, kb)
@@ -523,10 +562,13 @@ btl_dimensionality <- function(fit, reps = 200L, seed = NULL) {
         lp <- beta[sa[r]] - beta[sb[r]] + coef_exp * z_exp + coef_cry * z_cry +
               coef_pos
         nr <- as.integer(round(sw[r]))
-        x <- if (m == 1L)
-          stats::rbinom(1L, nr, stats::plogis(lp)) / nr
-        else {
-          cc <- stats::rmultinom(1L, nr, item_moments(lp, tau)$P)
+        x <- if (m == 1L) {
+          expected[r] <- stats::plogis(lp)
+          stats::rbinom(1L, nr, expected[r]) / nr
+        } else {
+          moments <- item_moments(lp, tau)
+          expected[r] <- moments$E
+          cc <- stats::rmultinom(1L, nr, moments$P)
           sum((0:m) * cc) / nr
         }
         resp[r] <- x
@@ -534,7 +576,7 @@ btl_dimensionality <- function(fit, reps = 200L, seed = NULL) {
         tot[[ka]] <- gets(tot, ka) + sw[r] * (2 * x / m - 1)
         tot[[kb]] <- gets(tot, kb) + sw[r] * (2 * (m - x) / m - 1)
       }
-      resp
+      list(response = resp, expected = expected)
     }
   }
   # the model-based reference simulates at the PAIR level: n_ij physical
@@ -555,6 +597,8 @@ btl_dimensionality <- function(fit, reps = 200L, seed = NULL) {
     d_pair <- beta[u_lo] - beta[u_hi]
     Pcat_pair <- if (m == 1L) NULL else
       vapply(d_pair, function(dd) item_moments(dd, tau)$P, numeric(m + 1L))
+    expected_pair <- if (m == 1L) stats::plogis(d_pair) else
+      drop((0:m) %*% Pcat_pair)
   }
   # Shared fixed comparison order confounds the dimensionality test. When
   # every judge is given the same comparison sequence, a real within-judge
@@ -566,8 +610,9 @@ btl_dimensionality <- function(fit, reps = 200L, seed = NULL) {
   # the reference per replicate does not rescue this: it inflates the
   # reference and destroys power even for randomised orders. The honest
   # course is to detect the shared order and withhold the second-dimension
-  # verdict, since the design does not identify it. When the order varies
-  # across judges the fixed-estimate reference is well calibrated.
+  # verdict, since the design does not identify it. Varying order removes
+  # this particular confounding; it does not establish the conditional
+  # independence assumption required separately below.
   shared_order <- FALSE
   replicated_order <- TRUE
   # A static first-position term is not a sequence effect. Shared comparison
@@ -590,17 +635,18 @@ btl_dimensionality <- function(fit, reps = 200L, seed = NULL) {
         cnt <- stats::rmultinom(1L, n_pair[k], Pcat_pair[, k])
         sum((0:m) * cnt) / n_pair[k]
       }, 0)
-      Rr <- .btl_resid_matrix(u_lo, u_hi, resp, n_pair, m, K, beta)
+      Rr <- .btl_resid_matrix_expected(u_lo, u_hi, resp, n_pair, K,
+                                      expected_pair, m)
     } else {
-      resp <- seq_sim()
-      Rr <- .btl_resid_matrix(match(fit$dependence_data$object_a, objs),
-                              match(fit$dependence_data$object_b, objs),
-                              resp, fit$dependence_data$weight, m, K, beta)
+      draw <- seq_sim()
+      Rr <- .btl_resid_matrix_expected(sa, sb, draw$response, sw, K,
+                                      draw$expected, m)
     }
     s <- .btl_bimensions(Rr)$strength
     if (length(s)) s[1] else 0
   }, 0)
-  inference <- if (length(lead_ref) && complete_pairs && !shared_order)
+  inference <- if (length(lead_ref) && complete_pairs && !shared_order &&
+                    independent_comparisons)
     .sim_upper_family(bm$strength[1], matrix(lead_ref, ncol = 1L)) else NULL
   ref_mean <- if (is.null(inference)) NA_real_ else inference$mean[1L]
   ref_p95 <- if (is.null(inference)) NA_real_ else inference$critical[1L]
@@ -609,8 +655,7 @@ btl_dimensionality <- function(fit, reps = 200L, seed = NULL) {
   prop <- 2 * bm$strength^2 / bm$total
   # under a shared fixed order the verdict is not identifiable: withhold it
   # (NA) rather than report a confounded flag
-  lead_flag <- if (reference_unavailable || shared_order || !complete_pairs) NA else
-    inference$significant[1L]
+  lead_flag <- if (is.null(inference)) NA else inference$significant[1L]
   bimensions <- data.frame(
     bimension = seq_len(nb), strength = bm$strength,
     prop_residual = prop,
@@ -662,10 +707,12 @@ btl_dimensionality <- function(fit, reps = 200L, seed = NULL) {
                 n_used = length(lead_ref),
                 alpha = if (is.null(inference)) 0.05 else inference$alpha,
                 inference_available = !is.null(inference),
+                independent_comparisons = independent_comparisons,
                 draws = lead_ref,
                 method = if (is.null(inference)) NA_character_ else
                   inference$method, seed = seed),
-              residual_matrix = R, notes = notes)
+              residual_matrix = R, residual_method = "pooled-expected-score-1",
+              notes = notes)
   attr(out, "fit_signature") <- .fit_boot_signature(fit)
   class(out) <- "rasch_btl_dim"
   attr(out, "result_signature") <- .fit_boot_md5(out)
@@ -674,6 +721,7 @@ btl_dimensionality <- function(fit, reps = 200L, seed = NULL) {
 
 #' @export
 print.rasch_btl_dim <- function(x, ...) {
+  .require_current_btl_residuals(x)
   b <- x$bimensions
   available <- .btl_dimensionality_has_inference(x)
   verdict <- if (!available)
@@ -765,8 +813,8 @@ plot_btl_transitivity <- function(x, by = c("auto", "judge", "object"), ...) {
 #'
 #' Bimension strengths against the model-simulated noise reference (its mean
 #' and finite-simulation 5% upper reference band), when that reference is
-#' available. A leading bar clearing the band is structured residual
-#' dependence -- a likely second attribute.
+#' available. A leading bar clearing the band suggests residual structure
+#' beyond the fitted model under that reference.
 #'
 #' @param x A \code{"rasch_btl_dim"} object.
 #' @param ... Unused.
@@ -782,6 +830,7 @@ plot_btl_transitivity <- function(x, by = c("auto", "judge", "object"), ...) {
 plot_btl_scree <- function(x, ...) {
   if (!inherits(x, "rasch_btl_dim"))
     stop("`x` must be a result from btl_dimensionality()", call. = FALSE)
+  .require_current_btl_residuals(x)
   b <- x$bimensions; k <- nrow(b)
   ref_m <- x$reference$mean; ref_p <- x$reference$p95
   has_ref <- .btl_dimensionality_has_inference(x) &&
@@ -810,10 +859,10 @@ plot_btl_scree <- function(x, ...) {
 
 #' Residual map of the leading paired-comparison bimension
 #'
-#' Objects placed in the leading bimension plane. Reading round the swirl, an
-#' object sits \dQuote{upstream} of those it over-beats relative to the fitted
-#' locations; a clear rotational arrangement is the second attribute, a
-#' formless blob near the origin is noise. Point size grows with the object's
+#' Objects placed in the leading bimension plane to show the pattern of
+#' residual comparisons. The coordinates describe the pattern, not its
+#' magnitude or significance; use \code{\link{plot_btl_scree}} to compare its
+#' strength with the conditional reference. Point size grows with the object's
 #' location on the primary scale.
 #'
 #' @param x A \code{"rasch_btl_dim"} object.
@@ -830,6 +879,7 @@ plot_btl_scree <- function(x, ...) {
 plot_btl_dim_map <- function(x, ...) {
   if (!inherits(x, "rasch_btl_dim"))
     stop("`x` must be a result from btl_dimensionality()", call. = FALSE)
+  .require_current_btl_residuals(x)
   d <- x$coords
   r <- max(sqrt(d$x^2 + d$y^2), 1e-9)
   lim <- c(-r, r) * 1.25
@@ -1010,7 +1060,10 @@ print.rasch_btl_judge <- function(x, ...) {
 #' with a negative residual whose adjusted probability passes the level
 #' represented by \code{flag_z}. The fitted model must have converged.
 #' An adequately sampled matchup with unavailable residual inference remains
-#' in the adjustment family.
+#' in the adjustment family. Locations within \eqn{10^{-10}} logits are treated
+#' as tied: neither object is called stronger, the two-sided residual probability
+#' remains descriptive and in the Holm family, and \code{surprise} is false.
+#' A tied row is oriented toward its non-negative residual for display only.
 #'
 #' @param fit A paired-comparison fit from \code{\link{btl}} with judges.
 #' @param judge The judge to profile.
@@ -1019,8 +1072,10 @@ print.rasch_btl_judge <- function(x, ...) {
 #'   flagging level; 1.96 corresponds to an adjusted two-sided probability
 #'   of approximately 0.05.
 #' @return A list of class \code{"rasch_btl_judge_pairs"}: \code{pairs} (per
-#'   matchup: the stronger and weaker object and their locations, the location
-#'   \code{gap}, times met \code{n}, residual \code{z}, approximate \code{p},
+#'   matchup: the stronger and weaker object and their locations when
+#'   \code{tied} is false (at a tie these columns only orient the row), the
+#'   location \code{gap}, tie indicator \code{tied}, times met \code{n},
+#'   residual \code{z}, approximate \code{p},
 #'   Holm-adjusted \code{p_adj}, the \code{net_winner}, and the
 #'   \code{surprise} flag); \code{all_locations}; the \code{judge} and settings.
 #' @examples
@@ -1056,11 +1111,25 @@ judge_pair_surprise <- function(fit, judge, min_n = 1L, flag_z = 1.96) {
   d <- cmp[sel, , drop = FALSE]
   mo <- .btl_fitted_moments(fit, d)
   ia <- match(d$object_a, objs); ib <- match(d$object_b, objs)
+  tie_tolerance <- 1e-10
   rows <- list()
   for (i in seq_len(K - 1L)) for (j in (i + 1L):K) {
-    hi <- if (beta[i] >= beta[j]) i else j; lo <- if (hi == i) j else i
-    take <- (ia == hi & ib == lo) | (ia == lo & ib == hi)
+    take <- (ia == i & ib == j) | (ia == j & ib == i)
     if (!any(take)) next
+    # At an estimated location tie there is no favourite or underdog.  Use
+    # the direction of the residual only to orient the stored row (and hence
+    # report a non-negative descriptive z); object order must not decide
+    # whether the same judgement is called a directional surprise.
+    i_first <- ia[take] == i
+    obs_i <- sum(d$weight[take] * ifelse(
+      i_first, d$response[take], m - d$response[take]))
+    exp_i <- sum(d$weight[take] * ifelse(
+      i_first, mo$E[take], m - mo$E[take]))
+    tied <- abs(beta[i] - beta[j]) <= tie_tolerance
+    hi <- if (tied) {
+      if (is.finite(obs_i - exp_i) && obs_i - exp_i < 0) j else i
+    } else if (beta[i] > beta[j]) i else j
+    lo <- if (hi == i) j else i
     hi_first <- ia[take] == hi
     obs_r <- ifelse(hi_first, d$response[take], m - d$response[take])
     exp_r <- ifelse(hi_first, mo$E[take], m - mo$E[take])
@@ -1071,7 +1140,7 @@ judge_pair_surprise <- function(fit, judge, min_n = 1L, flag_z = 1.96) {
     rows[[length(rows) + 1L]] <- data.frame(
       object_hi = objs[hi], object_lo = objs[lo],
       loc_hi = unname(beta[hi]), loc_lo = unname(beta[lo]),
-      gap = dd, n = n, z = zed,
+      gap = abs(dd), tied = tied, n = n, z = zed,
       net_winner = if (obs >= n * m / 2) objs[hi] else objs[lo],
       stringsAsFactors = FALSE)
   }
@@ -1086,7 +1155,7 @@ judge_pair_surprise <- function(fit, judge, min_n = 1L, flag_z = 1.96) {
     p$p_adj[eligible] <- stats::p.adjust(p$p[eligible], method = "holm",
                                          n = sum(planned))
   family_alpha <- 2 * stats::pnorm(-flag_z)
-  p$surprise <- eligible & p$z < 0 & p$p_adj <= family_alpha
+  p$surprise <- eligible & !p$tied & p$z < 0 & p$p_adj <= family_alpha
   p <- p[order(p$z), ]; rownames(p) <- NULL
   structure(list(judge = judge, pairs = p, all_locations = beta,
                  n_comparisons = sum(cmp$weight[sel]), flag_z = flag_z,
@@ -1116,12 +1185,12 @@ print.rasch_btl_judge_pairs <- function(x, ...) {
 #'
 #' The judge counterpart of the kidmap, drawn matchup by matchup. Each pair the
 #' judge met is a segment on the consensus location axis, spanning its two
-#' objects, positioned horizontally by how surprising the verdict was: at zero
-#' (the dashed line, inside the unadjusted z-reference band) the stronger object won as its
-#' lead predicts; to the left the judge backed the underdog. A filled dot marks
-#' the object the judge's verdict favoured, hollow the other -- so an upset is a
-#' red segment on the left with its filled dot at the lower end. The rug marks
-#' every object's location.
+#' objects, positioned horizontally by its standardised residual. For a
+#' non-tied pair, a negative residual means the stronger object under-performed.
+#' A tied pair has no directional interpretation and is oriented to a
+#' non-negative residual for display only. A filled dot marks the object the
+#' judge's verdict favoured and a hollow dot the other. The rug marks every
+#' object's location.
 #'
 #' @param fit A paired-comparison fit from \code{\link{btl}} with judges.
 #' @param judge The judge to map.
@@ -1144,7 +1213,7 @@ plot_btl_judge_map <- function(fit, judge, min_n = 1L, flag_z = 1.96, ...) {
   yr <- range(jp$all_locations)
   op <- .rr_canvas(c(-xr, xr) * 1.08,
                    yr + c(-1, 1) * (0.12 * diff(yr) + 0.2),
-                   "Matchup residual   (backed the underdog  <-  0  ->  as expected)",
+                   "Matchup residual",
                    "Object location (logits)",
                    main = sprintf("Judge %s  \u00b7  %d matchups",
                                   jp$judge, nrow(p)))
@@ -1170,7 +1239,7 @@ plot_btl_judge_map <- function(fit, judge, min_n = 1L, flag_z = 1.96, ...) {
          sprintf("%s-%s", s$object_hi, s$object_lo), pos = 2, offset = 0.4,
          cex = 0.7, col = .rr$red)
   }
-  .rr_legend("bottomright", c("backed the underdog", "as expected"),
+  .rr_legend("bottomright", c("Directional surprise", "Not flagged"),
              lwd = c(2.4, 1), col = c(.rr$red, .rr$soft))
   invisible(jp)
 }

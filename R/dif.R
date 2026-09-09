@@ -218,27 +218,34 @@
 # sphericity, and a nonspherical 4-level null rejected at ~9% nominal 5%.
 # ---------------------------------------------------------------------------
 .dif_type2 <- function(d, term_labels, resp = "z",
-                       variance = c("classical", "hc3"), robust_terms = NULL) {
+                       variance = c("classical", "hc3", "cr3"),
+                       robust_terms = NULL, cluster = NULL,
+                       weights = NULL, report_terms = term_labels) {
   variance <- match.arg(variance)
+  d$.dif_weights <- if (is.null(weights)) rep(1, nrow(d)) else weights
   mk <- function(tl) stats::as.formula(paste(
     resp, "~", if (length(tl)) paste(tl, collapse = " + ") else "1"))
-  full <- tryCatch(stats::lm(mk(term_labels), data = d),
+  fit_model <- function(tl) stats::lm(mk(tl), data = d,
+                                      weights = d$.dif_weights)
+  full <- tryCatch(fit_model(term_labels),
                    error = function(e) NULL)
   if (is.null(full)) return(NULL)
-  rss_full <- sum(stats::resid(full)^2)
-  df_res <- stats::df.residual(full)
+  rss <- function(m) sum(stats::weighted.residuals(m)^2)
+  rss_full <- rss(full)
+  df_res <- if (variance == "cr3") length(unique(cluster)) - full$rank else
+    stats::df.residual(full)
   if (df_res < 1 || rss_full <= 0) return(NULL)
   mse <- rss_full / df_res
   out <- list()
-  for (tt in term_labels) {
+  for (tt in report_terms) {
     tv <- .term_vars(tt)
     not_cont <- term_labels[!vapply(term_labels, function(u)
       all(tv %in% .term_vars(u)), TRUE)]
-    m0 <- stats::lm(mk(not_cont), data = d)
-    m1 <- stats::lm(mk(c(not_cont, tt)), data = d)
+    m0 <- fit_model(not_cont)
+    m1 <- fit_model(c(not_cont, tt))
     df_t <- stats::df.residual(m0) - stats::df.residual(m1)
     if (df_t < 1) next
-    ss_t <- max(sum(stats::resid(m0)^2) - sum(stats::resid(m1)^2), 0)
+    ss_t <- max(rss(m0) - rss(m1), 0)
     Fv <- (ss_t / df_t) / mse
     p_t <- stats::pf(Fv, df_t, df_res, lower.tail = FALSE)
     df_denom <- df_res
@@ -248,21 +255,40 @@
     # reported as an F with the model residual denominator; the separate
     # cell-support guard below avoids presenting this small-sample
     # approximation where a factor level has too few independent judges.
-    if (variance == "hc3" && (is.null(robust_terms) || tt %in% robust_terms)) {
+    if (variance == "cr3" ||
+        (variance == "hc3" && (is.null(robust_terms) || tt %in% robust_terms))) {
       Fv <- p_t <- NA_real_
       X <- stats::model.matrix(m1)
       asg <- attr(X, "assign")
       labs <- attr(stats::terms(m1), "term.labels")
-      ti <- match(tt, labs)
+      ti <- which(vapply(labs, function(lab)
+        setequal(.term_vars(tt), .term_vars(lab)), TRUE))
       jj <- which(asg == ti)
+      X <- X * sqrt(d$.dif_weights)
       qrX <- qr(X)
       if (length(jj) && qrX$rank == ncol(X)) {
         Xi <- tryCatch(solve(crossprod(X)), error = function(e) NULL)
         if (!is.null(Xi)) {
-          h <- pmin(stats::hatvalues(m1), 1 - 1e-8)
-          ae <- stats::residuals(m1) / pmax(1 - h, 1e-8)
-          meat <- crossprod(X * ae)
-          Vr <- Xi %*% meat %*% Xi
+          if (variance == "cr3") {
+            # CR3 is the cluster analogue of HC3. Weighted rows sum to one
+            # per person; delete-person leverage accounts for the jointly
+            # estimated occasion adjustment as well as the group effects.
+            er <- stats::weighted.residuals(m1)
+            blocks <- split(seq_len(nrow(X)), cluster)
+            scores <- lapply(blocks, function(ii) {
+              Xg <- X[ii, , drop = FALSE]
+              A <- diag(length(ii)) - Xg %*% Xi %*% t(Xg)
+              if (!is.finite(rcond(A)) || rcond(A) < 1e-10) return(NULL)
+              drop(crossprod(Xg, solve(A, er[ii])))
+            })
+            Vr <- if (any(vapply(scores, is.null, TRUE)))
+              matrix(NA_real_, ncol(X), ncol(X)) else
+                Xi %*% crossprod(do.call(rbind, scores)) %*% Xi
+          } else {
+            h <- pmin(stats::hatvalues(m1), 1 - 1e-8)
+            ae <- stats::weighted.residuals(m1) / pmax(1 - h, 1e-8)
+            Vr <- Xi %*% crossprod(X * ae) %*% Xi
+          }
           Vt <- Vr[jj, jj, drop = FALSE]
           bt <- stats::coef(m1)[jj]
           Wr <- if (.covariance_is_psd(Vt))
@@ -443,6 +469,24 @@
   invisible(NULL)
 }
 
+# Automatic follow-ups must use the exact normalized factor design from the
+# omnibus analysis.  This stamp is deliberately separate from the mixed-panel
+# algorithm stamp: a result may have the current omnibus adjustment while its
+# stored post-hoc estimates still come from the older name-only hand-off.
+.dif_followup_algorithm <- "normalized-design-1"
+
+.dif_followups_current <- function(dif) {
+  if (!is.list(dif)) return(FALSE)
+  present <- intersect(c("sizes", "posthoc"), names(dif))
+  # This compatibility helper may also be used while restoring projects, so
+  # malformed follow-up fields must never be mistaken for an empty analysis.
+  if (length(present) &&
+      any(!vapply(dif[present], is.data.frame, logical(1)))) return(FALSE)
+  has_followups <- any(vapply(dif[present], nrow, integer(1)) > 0L)
+  !has_followups ||
+    identical(dif$followup_algorithm, .dif_followup_algorithm)
+}
+
 #' Differential item functioning by residual analysis of variance
 #'
 #' Tests uniform and non-uniform DIF by analysing each item's standardised
@@ -472,12 +516,18 @@
 #' more than two levels. Persons missing a required cell are excluded from the
 #' corresponding within-person test. Required cells include every combination
 #' of the within-person factor levels, even when a combination or level has
-#' no observations for an item. In incomplete mixed designs, within-cell
-#' effects are removed before the between-person analysis. Uniform
+#' no observations for an item. Uniform
 #' between-person factor terms use HC3 covariance so unequal group sizes,
 #' leverage, and differing precision of person means do not impose a common
 #' residual variance. Class-interval interactions retain the residual-ANOVA
 #' reference used to test non-uniform DIF.
+#' In incomplete mixed designs, the between-person tests instead fit the
+#' declared occasion and person-factor model jointly to person-by-cell means.
+#' Each person has total weight one. All between-person terms then use
+#' person-cluster CR3 covariance, including uncertainty in the occasion
+#' adjustment, with an approximate F reference whose denominator degrees of
+#' freedom are the number of persons minus the full model rank. This branch
+#' does not use marginal occasion means to adjust the residuals.
 #' For between-person design matrix \eqn{X}, residuals \eqn{e_i}, and leverages
 #' \eqn{h_i},
 #' \deqn{\widehat{V}_{\mathrm{HC3}}=(X^{\mathsf T}X)^{-1}X^{\mathsf T}
@@ -541,6 +591,9 @@
 #'   together over the opened follow-up family.}
 #'   \item{\code{posthoc_family_n}}{When \code{sizes = TRUE}, the number of
 #'   planned questions in that family, including unavailable comparisons.}
+#'   \item{\code{followup_algorithm}}{When \code{sizes = TRUE}, records that
+#'   stored contrasts used the same normalized factor values as the omnibus
+#'   analysis.}
 #'   \item{\code{between_covariance}}{The covariance reference used for
 #'   uniform between-person terms.}
 #' }
@@ -752,6 +805,7 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
 
   rows <- list()
   incomplete_note <- 0L
+  joint_between_items <- character(0)
   for (i in seq_len(L)) {
     d <- data.frame(z = Z[, i], ci = ci)
     d$pid <- if (is.null(id)) sprintf("p%06d", seq_len(nrow(d))) else id
@@ -778,19 +832,10 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     ag$wcell <- wcell[firsts[match(levels(key),
                                    as.character(key[firsts]))]]
 
-    # person-level frame for the between stratum: one row per person, the
-    # mean over that person's OCCASION-ADJUSTED within-cell values. With
-    # differentially incomplete within panels, raw person means are not
-    # comparable between groups (a common occasion effect plus one group
-    # missing an occasion masqueraded as group DIF at F = 37.6); centring
-    # each within cell at its all-person mean removes the common within
-    # effects from the between comparison.
-    # centring must remove within effects that VARY BY TRAIT LEVEL too: a
-    # common occasion-by-class-interval structure plus differential
-    # missingness otherwise masquerades as non-uniform group DIF (observed
-    # F = 214.7 on grp:ci with no group effect). Centre each within cell
-    # within each class interval; empty combinations fall back to the
-    # cell's overall mean.
+    # Complete panels retain the person-mean between stratum, centred by
+    # within cell and class interval. Every person then contributes the same
+    # within-cell composition. This marginal adjustment is not valid for
+    # unequal panels; the joint model below replaces it for those items.
     cellci <- .factor_cells(data.frame(wcell = ag$wcell, ci = ag$ci),
                             sep = "\r")
     m_cellci <- tapply(ag$z, cellci, mean)
@@ -814,6 +859,18 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
       "ci" %in% .term_vars(tt), TRUE)]
     ft_b <- .dif_type2(pdat, bterms, variance = "hc3",
                        robust_terms = robust_terms)
+    if (mixed && any(table(ag$pid) < nlevels(ag$wcell))) {
+      # Unequal panels must be adjusted jointly. Marginal centring of z
+      # alone transfers differences in between-factor composition into the
+      # occasion adjustment and can manufacture group DIF. Fit the declared
+      # model to person-by-cell means, weighting each person's total as one.
+      # CR3 retains person clustering for every between term in this branch.
+      np <- table(ag$pid)
+      ft_b <- .dif_type2(ag, all_terms, variance = "cr3",
+        cluster = ag$pid, weights = 1 / as.numeric(np[ag$pid]),
+        report_terms = bterms)
+      joint_between_items <- c(joint_between_items, colnames(Z)[i])
+    }
     ft_w <- NULL
     if (mixed && length(wterms)) {
       # complete within-cell matrix per person; incomplete persons are
@@ -950,7 +1007,14 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
         stop("the planned DIF follow-up family is too large to adjust",
              call. = FALSE)
       dp <- tryCatch(dif_posthoc(
-        fit, it, term = by_user, factors = fnames,
+        # `factors` may be an externally supplied, normalized design rather
+        # than the columns retained in the fit.  Passing only `fnames` here
+        # makes .dif_factors() resolve those names back to fit$factors and
+        # silently runs the follow-up on stale group assignments.  Hand the
+        # exact normalized data frame used by the omnibus analysis through
+        # to the refit so replacement values, external factors, and
+        # incomplete/within designs remain aligned.
+        fit, it, term = by_user, factors = factors,
         within = fnames[match(wsafe, safe)],
         id = if (fitted_id) NULL else id,
         p_adjust = p_adjust, alpha = alpha),
@@ -1044,6 +1108,12 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     notes <- c(notes, sprintf(
       "%d person-by-item panel(s) missing a within-subject cell were dropped from the within-person tests (their between-person information is retained)",
       incomplete_note))
+  if (length(joint_between_items))
+    notes <- c(notes, paste(
+      "Incomplete panels use joint occasion and person-factor adjustment",
+      "with equal total weight per person and person-cluster CR3 covariance",
+      "for all between-person terms; F references are approximate. Items:",
+      paste(joint_between_items, collapse = ", ")))
   if (n_unavailable_terms > 0L)
     notes <- c(notes, sprintf(
       "%d requested item-term test(s) were not estimable and remain in the adjusted-probability family",
@@ -1057,8 +1127,11 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
               term_ids = term_ids,
               summary_term_ids = summary_term_ids,
               n_groups = nlevels(as.factor(ci)), within = within,
+              algorithm = "joint-between-1",
               factor_names = fnames,
-              between_covariance = "HC3 for uniform factor terms",
+              between_covariance = if (length(joint_between_items))
+                "HC3 for uniform factor terms; CR3 for incomplete panels" else
+                "HC3 for uniform factor terms",
               effects = effects, alpha = alpha, p_adjust = p_adjust,
               notes = notes,
               fit_signature = .fit_boot_signature(fit),
@@ -1073,6 +1146,7 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     out$sizes <- size_tab
     out$posthoc <- posthoc_tab
     out$posthoc_family_n <- as.integer(posthoc_family_n)
+    out$followup_algorithm <- .dif_followup_algorithm
   }
   out <- .tag_tables(out)
   out$result_signature <- .fit_boot_md5(out)
@@ -1240,6 +1314,12 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
   if (!.fit_boot_signature_matches(dif$fit_signature, fit))
     stop("`dif` was computed from a different fitted model")
   .validate_primary_dif_tables(dif, "item", c("Residuals", "ci"), ":ci")
+  if (length(dif$within) && !identical(dif$algorithm, "joint-between-1"))
+    stop("`dif` predates joint adjustment for incomplete panels; recompute it",
+         call. = FALSE)
+  if (!.dif_followups_current(dif))
+    stop("`dif` follow-ups may use earlier factor values; recompute the DIF analysis",
+         call. = FALSE)
   invisible(NULL)
 }
 
@@ -1255,7 +1335,9 @@ print.rasch_dif <- function(x, ...) {
               if (length(x$within))
                 sprintf("; within-subject: %s", paste(x$within, collapse = ", "))
               else ""))
-  cat("Uniform between-person terms use HC3 covariance; class-interval interactions retain the residual-ANOVA reference.\n")
+  cat("Uniform between-person terms use HC3 covariance; class-interval interactions retain the residual-ANOVA reference for complete panels.\n")
+  if (grepl("CR3", x$between_covariance %||% "", fixed = TRUE))
+    cat("Incomplete panels use joint adjustment and person-cluster CR3 covariance for all between-person terms.\n")
   show <- s[, c("item", "term", "F_uniform", "p_uniform_adj", "uniform_DIF",
                 "F_nonuniform", "p_nonuniform_adj", "nonuniform_DIF")]
   print(.fmt_df(show), row.names = FALSE)

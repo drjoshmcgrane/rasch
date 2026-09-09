@@ -102,7 +102,8 @@
 #'   when that floor is at or above 0.05 (the procedure declares significance
 #'   only below 0.05, so detection would be impossible).
 #' @param seed Optional non-negative whole-number seed for the person
-#'   bootstrap. The caller's random-number state is restored on exit.
+#'   bootstrap. The caller's random-number state is restored on exit; see
+#'   \code{\link{rasch_rng}} for generator support.
 #' @return A list of class \code{"rasch_tailored"}: \code{tailored},
 #'   \code{origin_equated}, and \code{anchored} fits, the comparison
 #'   \code{table} (initial, tailored, origin-equated locations, the

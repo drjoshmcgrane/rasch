@@ -105,6 +105,88 @@
   src
 }
 
+# Response columns and person factors occupy separate public namespaces for
+# matrix fits, so both may legitimately carry the same name. Structural refits
+# temporarily assemble them in one data frame; give only the factor copy a
+# private replay name, then restore the public name on the returned fit. This
+# keeps role identity without renaming an item or changing any factor values.
+.structural_factor_aliases <- function(factors, reserved) {
+  if (is.null(factors)) return(list(
+    data = NULL, original = character(0), replay = character(0)))
+  factors <- as.data.frame(factors, check.names = FALSE,
+                           stringsAsFactors = FALSE)
+  original <- names(factors)
+  replay <- original
+  taken <- unique(c(reserved, original))
+  for (j in which(replay %in% reserved)) {
+    # The trailing delimiter prevents numeric prefix collisions (1 versus 11).
+    # Also keep the complete private token out of every public factor name, so
+    # later factorial-label restoration cannot rewrite an unchanged label that
+    # merely contains the generated alias as a substring.
+    candidate <- paste0(".rasch_refit_factor_", j, "__")
+    while (candidate %in% taken ||
+           any(vapply(original, function(x)
+             grepl(candidate, x, fixed = TRUE), logical(1))))
+      candidate <- paste0(candidate, ".")
+    replay[j] <- candidate
+    taken <- c(taken, candidate)
+  }
+  names(factors) <- replay
+  list(data = factors, original = original, replay = replay)
+}
+
+.restore_structural_factor_names <- function(fit, aliases,
+                                             frame_names = NULL) {
+  replay <- aliases$replay
+  original <- aliases$original
+  if (!is.null(frame_names) && !is.null(fit$frame_group) &&
+      length(frame_names) == length(fit$frame_group)) {
+    # With crossed frames rasch_efrm() generates the primary cell name from
+    # the component selectors. Include that generated name in the restoration
+    # map, not only the component aliases supplied directly.
+    replay <- c(replay, fit$frame_group)
+    original <- c(original, frame_names)
+  }
+  restore <- function(x) {
+    if (is.null(x) || !length(replay)) return(x)
+    pos <- match(names(x), replay)
+    hit <- !is.na(pos)
+    names(x)[hit] <- original[pos[hit]]
+    x
+  }
+  fit$factors <- restore(fit$factors)
+  fit$person <- restore(fit$person)
+  if (!is.null(frame_names)) {
+    # Factorial tables are labelled from the replay component names. Translate
+    # any private aliases there as well; estimates and covariance are unchanged.
+    changed <- which(aliases$replay != aliases$original)
+    display <- vapply(aliases$original[changed], function(x) {
+      if (grepl("[:`]", x))
+        paste0("`", gsub("`", "``", x, fixed = TRUE), "`") else x
+    }, character(1))
+    for (table in c("phi_factorial", "phi_factorial_tests")) {
+      if (length(changed) && is.data.frame(fit[[table]]) &&
+          "term" %in% names(fit[[table]])) {
+        # Protect longer aliases first (.rasch_refit_factor_11 contains the
+        # prefix .rasch_refit_factor_1), and use placeholders so an original
+        # display name cannot itself be rewritten by a later substitution.
+        ord <- changed[order(nchar(aliases$replay[changed]), decreasing = TRUE)]
+        placeholder <- paste0("\034rasch_factor_", seq_along(ord), "\035")
+        term <- fit[[table]]$term
+        for (j in seq_along(ord))
+          term <- gsub(aliases$replay[ord[j]], placeholder[j], term,
+                       fixed = TRUE)
+        display_ord <- display[match(ord, changed)]
+        for (j in seq_along(ord))
+          term <- gsub(placeholder[j], display_ord[j], term, fixed = TRUE)
+        fit[[table]]$term <- term
+      }
+    }
+  }
+  if (!is.null(frame_names)) fit$frame_group <- frame_names
+  fit
+}
+
 .efrm_refit <- function(fit, source, set_of, boot_reps = NULL,
                         ids = fit$person$id, factors = fit$factors,
                         se_method = NULL, score_max = NULL) {
@@ -125,7 +207,12 @@
   taken <- unique(c(colnames(source), names(factors)))
   id_name <- ".rasch_id"
   while (id_name %in% taken) id_name <- paste0(id_name, ".")
-  d <- data.frame(ids, source, factors[, need, drop = FALSE],
+  aliases <- .structural_factor_aliases(
+    factors[, need, drop = FALSE], c(id_name, colnames(source)))
+  replay_name <- stats::setNames(aliases$replay, aliases$original)
+  group_replay <- unname(replay_name[group_vars])
+  extra_replay <- unname(replay_name[extra])
+  d <- data.frame(ids, source, aliases$data,
                   check.names = FALSE, stringsAsFactors = FALSE)
   names(d)[1L] <- id_name
   reps <- if (is.null(boot_reps)) spec$boot_reps else boot_reps
@@ -139,8 +226,9 @@
   }
   out <- do.call(rasch_efrm, list(
     data = d, item_sets = split(names(set_of), unname(set_of)),
-    groups = group_vars, id = id_name,
-    factors = if (length(extra)) extra else NULL, items = colnames(source),
+    groups = group_replay, id = id_name,
+    factors = if (length(extra_replay)) extra_replay else NULL,
+    items = colnames(source),
     n_groups = .refit_n_groups(fit),
     # Source scores are reconstructed from the fitted response matrix; raw
     # missing codes have already been removed, and may now be valid scores.
@@ -150,6 +238,12 @@
     se_method = se_method %||% spec$se_method %||% fit$se_method,
     boot_reps = reps, workers = spec$workers %||% 1L,
     seed = spec$seed %||% NULL))
+  out <- .restore_structural_factor_names(out, aliases, fit$frame_group)
+  # The fit correctly records the temporary selectors that produced it.
+  # Replace those private names before another structural operation replays the
+  # result, including the component selectors of a crossed frame.
+  out$refit_spec$groups <- group_vars
+  out$refit_spec$factors <- extra
   # A global maximum cannot detect category collapse confined to one frame.
   # Reconstruct the scored source so every observed response must retain its
   # score and frame-specific missingness after refitting.
@@ -210,10 +304,12 @@
            "fitted scale origin; retain an anchor or refit explicitly")
     if (!nrow(anchors)) anchors <- NULL
   }
+  aliases <- .structural_factor_aliases(fit$factors, names(source))
   out <- do.call(rasch, list(
     data = source, model = model %||% spec$model %||% fit$model,
+    items = names(source),
     id = fit$person$id,
-    factors = fit$factors, n_groups = .refit_n_groups(fit),
+    factors = aliases$data, n_groups = .refit_n_groups(fit),
     anchors = anchors,
     # Both the prepared scores and retained raw keyed answers already use
     # NA for missing responses. Applying the source file's codes again can
@@ -221,6 +317,7 @@
     na_codes = integer(0), key = key,
     pc_components = spec$pc_components,
     maxit = spec$maxit %||% 60, tol = spec$tol %||% 1e-8))
+  out <- .restore_structural_factor_names(out, aliases)
   .require_fitted_score_structure(out, score_max)
   out
 }

@@ -886,7 +886,8 @@ test_that("btl_dimensionality reference honours fitted dependence effects", {
                       seed = 300 + s)
     bt <- btl(d, "object_a", "object_b", winner = "winner", judge = "judge",
               order = "order")
-    btl_dimensionality(bt, reps = 50)$leading_structured
+    btl_dimensionality(bt, reps = 50,
+                       independent_comparisons = TRUE)$leading_structured
   }, logical(1))
   # The simulator randomises order separately by judge, so this is an
   # identified test rather than four withheld results that happen to count

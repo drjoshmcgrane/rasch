@@ -4,8 +4,11 @@ test_that("CJ DIF code reproduces the displayed judge maps after metadata edits"
     skip_if_not_installed(pkg)
 
   e <- new.env(parent = globalenv())
+  app_path <- test_path("..", "..", "inst", "shiny", "app.R")
+  if (!file.exists(app_path))
+    app_path <- system.file("shiny", "app.R", package = "rasch")
   suppressWarnings(sys.source(
-    test_path("..", "..", "inst", "shiny", "app.R"), envir = e))
+    app_path, envir = e))
   d <- as.data.frame(simulate_btl(4, 40, 160, seed = 782))
   judge_number <- as.integer(sub("J", "", d$judge))
   d$judge_alias <- d$judge
@@ -93,11 +96,13 @@ test_that("CJ DIF code reproduces the displayed judge maps after metadata edits"
       datapath = data_path, name = "new-judge-metadata.csv",
       size = file.info(data_path)$size, type = "text/csv"))
     session$flushReact()
-    expect_error(bdif_factor_maps(), "column not found: training")
+    # A genuine upload replaces the source; the previous calibration and its
+    # downstream DIF result are invalidated before the new columns are used.
+    expect_null(btl_fit())
+    expect_null(bdif_res())
+    expect_error(bdif_factor_maps(), "run a Comparative Judgement analysis first")
     session$setInputs(bdif_factors = "judge group")
     session$flushReact()
-    new_maps <- bdif_factor_maps()
-    expect_false(identical(new_maps, maps))
-    expect_identical(unname(new_maps[["judge group"]]["J2"]), "A")
+    expect_error(bdif_factor_maps(), "run a Comparative Judgement analysis first")
   })
 })

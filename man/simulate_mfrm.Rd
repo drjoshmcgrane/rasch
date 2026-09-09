@@ -45,7 +45,8 @@ fit residual and the item-by-rater interaction). Its requested count
 must fit among the non-erratic raters and leave an ordinary rater.
 A positive halo proportion requires \code{item_sd > 0}.}
 
-\item{seed}{Optional non-negative whole-number RNG seed.}
+\item{seed}{Optional non-negative whole-number RNG seed. See
+\code{\link{rasch_rng}} for generator support.}
 }
 \value{
 A long data frame of class \code{"rasch_sim"} (\code{person},

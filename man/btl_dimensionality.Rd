@@ -4,7 +4,12 @@
 \alias{btl_dimensionality}
 \title{Experimental residual dimensionality of paired comparisons}
 \usage{
-btl_dimensionality(fit, reps = 200L, seed = NULL)
+btl_dimensionality(
+  fit,
+  reps = 200L,
+  seed = NULL,
+  independent_comparisons = NULL
+)
 }
 \arguments{
 \item{fit}{A paired-comparison fit from \code{\link{btl}}.}
@@ -13,7 +18,14 @@ btl_dimensionality(fit, reps = 200L, seed = NULL)
 Larger values give a more stable upper-tail reference.}
 
 \item{seed}{Optional non-negative whole-number seed. The caller's random-
-number state is restored when the calculation finishes.}
+number state is restored when the calculation finishes; see
+\code{\link{rasch_rng}} for generator support.}
+
+\item{independent_comparisons}{Logical or \code{NULL}. Declare whether
+conditionally independent comparison outcomes may be assumed for the
+simulated reference. The default \code{NULL} assumes independence only
+for an unclustered ordinary BTL fit. \code{FALSE} withholds inference;
+\code{TRUE} explicitly enables the reference, subject to design guards.}
 }
 \value{
 A list of class \code{"rasch_btl_dim"}: \code{bimensions} (per
@@ -24,8 +36,9 @@ A list of class \code{"rasch_btl_dim"}: \code{bimensions} (per
   the residual map); \code{leading_structured} (whether bimension 1 clears
   its reference); \code{reference} (the simulated mean, finite-simulation
   5% critical value and upper-tail probability, calculated as one plus the
-  exceedance count divided by one plus \code{reps}); \code{residual_matrix}; and
-  \code{notes}.
+  exceedance count divided by one plus \code{reps}, together with the
+  effective \code{independent_comparisons} assumption); \code{residual_matrix}; and
+  \code{notes}. \code{residual_method} identifies the residual definition.
 }
 \description{
 Decomposes the skew-symmetric matrix of observed-minus-expected pair
@@ -37,10 +50,21 @@ model using the observed comparison counts.
 \details{
 This is an experimental diagnostic. The reference is conditional on the
 fitted point estimates because the model is not re-estimated in each
-replicate. Ordered-response fits use the same points-proportion residual in
-the data and simulations. Fits with exposure or carry-over effects simulate
-those effects through each judge's observed sequence. The fitted model must
+replicate. Observed and fitted expected points are pooled over each object
+pair before their proportions are compared on the logit scale. A half-point
+correction is applied to both totals. This retains category thresholds,
+frame units and fitted position or history effects in the expectation.
+The same calculation is used in the simulations; exposure and carry-over
+expectations follow each draw's generated history. The fitted model must
 have converged.
+
+This reference assumes conditionally independent comparison outcomes given
+the fitted probabilities and any modeled history. It is not cluster-robust:
+clustered calibration standard errors do not make this simulated reference
+valid under general within-judge dependence. Judge-clustered and frame fits
+therefore return a descriptive decomposition by default. Explicitly set
+\code{independent_comparisons = TRUE} to request the model-conditional
+independent-comparison reference as a sensitivity analysis.
 
 Inference is withheld if any object pair is unobserved, or if an
 ordered analysis contains count-weighted rows whose within-row sequence is

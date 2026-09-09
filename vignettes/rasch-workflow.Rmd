@@ -512,6 +512,12 @@ figures and an HTML, Word or PDF report. The same menu holds the simulation
 designs of the plant-and-detect vignette and the model comparison that
 `compare_fits()` and `lr_test()` produce.
 
+Older projects are checked against the current person-scoring algorithm.
+If their scores differ, the app asks for a refit and leaves the original
+file unchanged. The source data remain accessible with `readRDS(file)$data`.
+Superseded DIF results are omitted with a warning; rerun those analyses
+before reporting them.
+
 ```{r app-export, echo = FALSE, out.width = "100%", fig.alt = "The Export panel, offering the tables, figures and report formats an analysis can be written out as."}
 knitr::include_graphics("figures/app-export.png")
 ```

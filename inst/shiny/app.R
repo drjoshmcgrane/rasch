@@ -221,6 +221,13 @@ NONE_CH <- c(None = "(none)")
   .rasch_internal(".validate_frame_invariance")
 .sim_explanatory_departure <-
   .rasch_internal(".sim_explanatory_departure")
+.has_repeated_residual_units <-
+  .rasch_internal(".has_repeated_residual_units")
+.fit_boot_signature <- .rasch_internal(".fit_boot_signature")
+.fit_boot_signature_matches <-
+  .rasch_internal(".fit_boot_signature_matches")
+.fit_boot_md5 <- .rasch_internal(".fit_boot_md5")
+.sim_planted_count <- .rasch_internal(".sim_planted_count")
 
 # Controls that determine the fitted analysis. Project files retain these
 # separately from display-only choices so reopening an analysis also restores
@@ -334,6 +341,43 @@ NONE_CH <- c(None = "(none)")
        count = column("bt_count", optional = TRUE),
        response = column("bt_response", optional = TRUE),
        margin = column("bt_margin", optional = TRUE), ties = ties)
+}
+
+# Judge-group DIF is a downstream calculation on a fitted comparison design.
+# A changed sidebar column is safe only when it carries exactly the same judge
+# IDs, in the same row order, as the role used by the calibration.  This keeps
+# equivalent metadata aliases usable while refusing a permuted or replacement
+# judge role that would silently regroup the old comparisons.
+.app_btl_dif_judge_role <- function(source, current_data, current_col) {
+  if (is.null(source))
+    stop(paste("the Comparative Judgement calibration predates saved run",
+               "metadata; refit it before running judge-group DIF"),
+         call. = FALSE)
+  settings <- source$settings
+  fitted_col <- settings[["bt_judge"]]
+  absent <- is.null(fitted_col) || identical(fitted_col, NONE) ||
+    (is.character(fitted_col) && length(fitted_col) == 1L &&
+       !is.na(fitted_col) && !nzchar(fitted_col))
+  if (absent || length(fitted_col) != 1L || !is.character(fitted_col) ||
+      is.na(fitted_col) || !nzchar(fitted_col) ||
+      !fitted_col %in% names(source$data))
+    stop("the fitted Comparative Judgement calibration has no valid judge role",
+         call. = FALSE)
+  if (length(current_col) != 1L || !is.character(current_col) ||
+      is.na(current_col) || !nzchar(current_col) ||
+      identical(current_col, NONE) || !current_col %in% names(current_data))
+    stop("judge-group DIF needs the judge column nominated on the Data page",
+         call. = FALSE)
+  fitted_ids <- as.character(source$data[[fitted_col]])
+  current_ids <- as.character(current_data[[current_col]])
+  if (length(fitted_ids) != length(current_ids) ||
+      !identical(fitted_ids, current_ids))
+    stop(paste("the selected judge column does not reproduce the fitted judge",
+               "IDs; choose an equivalent metadata column or refit the",
+               "Comparative Judgement calibration before running DIF"),
+         call. = FALSE)
+  list(fitted_col = fitted_col, current_col = current_col,
+       ids = current_ids)
 }
 
 .restore_app_settings <- function(session, settings) {
@@ -1629,7 +1673,8 @@ panel_persons <- nav_panel("Persons", value = "p_persons", icon = bs_icon("peopl
                            "Click a row to map unexpected judgements.")),
             plotCard("btl_judge_map", title = "Unexpected judgements",
                      info = paste("Matchup residuals for the selected judge.",
-                                  "Red matchups favour the weaker object and pass the Holm-adjusted familywise rule."),
+                                  "Red matchups favour the weaker object and pass the Holm-adjusted familywise rule.",
+                                  "Tied locations have no directional flag."),
                      height = "460px", hover = TRUE))),
         accordion_panel(
           title = "Judge consistency",
@@ -2200,13 +2245,13 @@ panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
           title = "Residual dimensions",
           value = "btl_dim_swirl",
           accordion_info(
-            "The skew-symmetric matrix of pair residuals is decomposed into rotational planes, or bimensions (Gower 1977). The leading bimension is compared with simulations from the fitted model when the comparison sequence supports them."),
+            "Observed and fitted expected points are compared within each object pair, retaining fitted thresholds and position or history effects. Their residual log-odds matrix is decomposed into rotational planes, or bimensions (Gower 1977)."),
           layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
             plotCard("btl_scree", title = "Bimension strengths",
-                     info = "Each bimension's strength and, when available, the mean and 95th-percentile band from the fitted one-scale model. A bar that clears the band indicates structure the single scale does not explain.",
+                     info = "Each bimension's strength and, when available, the simulated mean and finite-simulation 5% upper reference. A leading bar above the reference suggests residual structure under the conditional independence assumption.",
                      height = "460px"),
             plotCard("btl_dim_map", title = "Leading residual map",
-                     info = "Objects in the leading bimension plane. A rotational arrangement is the second attribute; a formless cloud at the centre is noise. Point size grows with the object's location on the main scale.",
+                     info = "Objects in the leading residual plane. Coordinates show the pattern, not its magnitude or significance; use the scree plot for the conditional reference. Point size grows with location on the main scale.",
                      height = "460px")),
           tableCard("btl_bimensions_tbl", title = "Bimensions",
                     note = "Strength, share of the total residual, and, when available, the noise reference for the leading bimension.")),
@@ -2785,6 +2830,7 @@ server <- function(input, output, session) {
   # file clears the example selection
   observeEvent(input$demo_choice, {
     dc <- input$demo_choice
+    invalidate_source_results("The example dataset selection changed")
     if (!identical(dc, "none")) {
       sim_data(NULL); sim_truth_val(NULL); sim_code_val(NULL)
       sim_predictors_val(NULL); sim_interactions_val(character(0))
@@ -2799,6 +2845,7 @@ server <- function(input, output, session) {
     }
   }, ignoreInit = TRUE)
   observeEvent(input$file, {
+    invalidate_source_results("A new data file was uploaded")
     sim_data(NULL); sim_truth_val(NULL); sim_code_val(NULL)
     sim_predictors_val(NULL); sim_interactions_val(character(0))
     restored_project_name(NULL)
@@ -3160,7 +3207,8 @@ server <- function(input, output, session) {
     # simulated many-facet data is long (person, item, rater, score)
     if (lay == "mfrm")
       updateRadioButtons(session, "lp_layout", selected = "long")
-    sim_gen(sim_gen() + 1L)      # new simulation: any existing fit is stale
+    invalidate_source_results("A new simulation was loaded")
+    sim_gen(sim_gen() + 1L)
     sim_data(as.data.frame(d))   # plain frame -> raw_data() -> role guessing
     showNotification("Simulated data loaded. Go to Data and select Estimate.",
                      type = "message", duration = 8)
@@ -3204,6 +3252,7 @@ server <- function(input, output, session) {
     on.exit(unlink(bundle, recursive = TRUE, force = TRUE), add = TRUE)
     write_csv_plain(sim_data(), file.path(bundle, "data.csv"))
     writeLines(c("# Recreate the simulated data and its truth attribute",
+                 "library(rasch)",
                  paste0("data <- ", sim_code_val())),
                file.path(bundle, "simulation.R"))
     saveRDS(sim_truth_val(), file.path(bundle, "truth.rds"))
@@ -7614,18 +7663,18 @@ server <- function(input, output, session) {
     p <- btl_judge_pairs_res()$pairs
     req(nrow(p) > 0)
     rbind(
-      data.frame(z = p$z, y = p$loc_hi, p_adj = p$p_adj,
+      data.frame(z = p$z, y = p$loc_hi, p_adj = p$p_adj, tied = p$tied,
                 object = p$object_hi,
                 opponent = p$object_lo, stringsAsFactors = FALSE),
-      data.frame(z = p$z, y = p$loc_lo, p_adj = p$p_adj,
+      data.frame(z = p$z, y = p$loc_lo, p_adj = p$p_adj, tied = p$tied,
                 object = p$object_lo,
                 opponent = p$object_hi, stringsAsFactors = FALSE))
   }, "z", "y", function(np)
-    sprintf("%s vs %s · residual %+.2f · Holm p %s · location %.2f",
+    sprintf("%s vs %s · residual %+.2f · Holm p %s · location %.2f%s",
             np$object[1], np$opponent[1], np$z[1],
             if (is.finite(np$p_adj[1]))
               format.pval(np$p_adj[1], digits = 3, eps = 0.001) else "NA",
-            np$y[1]))
+            np$y[1], if (isTRUE(np$tied[1])) " · tied locations" else ""))
   register_plot("btl_plot", function() plot_btl(bfit()),
                 code = function() "# bt from the Data page\nplot_btl(bt)")
   # object characteristic curve: model expected response against opponent
@@ -7933,6 +7982,21 @@ server <- function(input, output, session) {
   # only after checking the defining requirement: a judge has at most one
   # observed value of each factor. The observed judges come from the fitted
   # comparisons, so rows omitted from the analysis cannot add spurious names.
+  bdif_fit_source <- function(fit = NULL) {
+    f <- fit %||% tryCatch(bfit(), error = function(e) NULL)
+    source <- if (!is.null(f)) .app_fit_source(f) else NULL
+    # Structural CJ refits may not carry attributes through their returned
+    # object. Their comparison design is still downstream of the original
+    # calibration, whose authenticated source metadata remains authoritative.
+    if (is.null(source)) {
+      base <- tryCatch(btl_fit(), error = function(e) NULL)
+      source <- if (!is.null(base)) .app_fit_source(base) else NULL
+    }
+    source
+  }
+  bdif_judge_role <- function(fit, df, jc) {
+    .app_btl_dif_judge_role(bdif_fit_source(fit), df, jc)
+  }
   bdif_factor_maps <- function() {
     if (is.null(btl_fit()))
       stop("run a Comparative Judgement analysis first")
@@ -7943,7 +8007,8 @@ server <- function(input, output, session) {
     jc <- input$bt_judge
     if (is.null(jc) || identical(jc, NONE) || !jc %in% names(df))
       stop("judge-group DIF needs the judge column nominated on the Data page")
-    jd <- as.character(df[[jc]])
+    role <- bdif_judge_role(btl_fit(), df, jc)
+    jd <- role$ids
     judges <- unique(as.character(btl_fit()$comparisons$judge))
     judges <- judges[!is.na(judges)]
     # The saved calibration data may predate a correction to judge metadata.
@@ -8047,6 +8112,17 @@ server <- function(input, output, session) {
     }
     fcs <- input$bdif_factors %||% "factor"
     jc <- input$bt_judge %||% "judge"
+    source <- bdif_fit_source()
+    if (is.null(source))
+      stop("the fitted Comparative Judgement calibration has no saved source metadata; refit it before generating judge-factor code")
+    if (!is.null(source) && is.list(source$settings) &&
+        is.character(source$settings$bt_judge) &&
+        length(source$settings$bt_judge) == 1L &&
+        !is.na(source$settings$bt_judge) &&
+        nzchar(source$settings$bt_judge))
+      # Before a run, emit code for the fitted role even if the live sidebar
+      # has been edited. A completed run emits its own frozen maps above.
+      jc <- source$settings$bt_judge
     one <- function(fc) sprintf("%s = judge_factor(dat$%s, %s)",
                                 bq(fc), bq(fc), qstr(fc))
     paste0(
@@ -8124,7 +8200,9 @@ server <- function(input, output, session) {
       bdif_meta(NULL)
     } else {
       bdif_res(r)
-      bdif_meta(list(judge_col = input$bt_judge))
+      role <- bdif_judge_role(active_bt, raw_data(), input$bt_judge)
+      bdif_meta(list(judge_col = input$bt_judge,
+                     fitted_judge_col = role$fitted_col))
     }
   })
   observeEvent(input$bdif_boot_run, {
@@ -9606,6 +9684,53 @@ server <- function(input, output, session) {
   # are grouped by family around whichever one the reference belongs to;
   # kept fits of the other family are set aside (n_other) rather than shown
   kept_fit_code <- reactiveVal(list())
+
+  # A new source is not merely a pending set of controls: it changes the
+  # observations to which every fit and downstream result refers.  Drop the
+  # active analysis before the new source can be displayed, cancel workers,
+  # and advance the context token so a worker that races the change cannot
+  # repopulate an old result. Kept fits are deliberate comparison snapshots,
+  # so they remain available even though the active fit is cleared. Project
+  # restoration is the one exception: its
+  # source inputs are assigned before the authenticated fit and results are
+  # reinstated later in the same flush cycle.
+  invalidate_source_results <- function(reason) {
+    if (isTRUE(restoring_project())) return(invisible(FALSE))
+    try(cancel_efrm_job(), silent = TRUE)
+    try(cancel_btlef_job(), silent = TRUE)
+    try(cancel_boot_job(), silent = TRUE)
+    advance_analysis_context()
+    clear_analysis_steps()
+    clear_btl_analysis_steps()
+    fit_val(NULL)
+    btl_fit(NULL)
+    rcode_str(NULL)
+    fitted_sim_gen(NULL)
+    person_weight_state(NULL)
+    restored_dimensionality(NULL)
+    restored_subtest(NULL)
+    restored_invariance(NULL)
+    resolve_res(NULL)
+    lr_res(NULL)
+    rescore_res(NULL)
+    contr_res(NULL)
+    bdif_res(NULL)
+    bdif_meta(NULL)
+    btlef_res(NULL)
+    dim_subsets(NULL)
+    dim_computed(NULL)
+    dm_res(NULL)
+    dep_res(NULL)
+    spread_res(NULL)
+    guess_res(NULL)
+    boot_val(NULL)
+    dif_boot_val(NULL)
+    showNotification(
+      paste0(reason, ". The previous fit and its results were cleared; ",
+             "run Estimate again."),
+      type = "warning", duration = 8)
+    invisible(TRUE)
+  }
   fit_code_block <- function(code, value, target) {
     indented <- paste0("  ", gsub("\n", "\n  ", code %||% ""))
     paste0(target, " <- local({\n", indented, "\n  ", value, "\n})")
@@ -9885,7 +10010,8 @@ server <- function(input, output, session) {
         # The source calibration's role is restored on the Data page. The
         # DIF run may have used another column containing the same judge IDs;
         # the stored maps are already keyed to the fitted judges themselves.
-        judge_col = p$settings$bt_judge %||% saved_bdif_meta$judge_col,
+        judge_col = saved_bdif_meta$fitted_judge_col %||%
+          p$settings$bt_judge %||% saved_bdif_meta$judge_col,
         data = as.data.frame(p$data, check.names = FALSE),
         fit_signature = .fit_boot_signature(p$base_fit)) else NULL
       restored_project_resources(resources)

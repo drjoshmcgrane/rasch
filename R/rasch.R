@@ -325,8 +325,11 @@
 #' @param factors Optional character vector of person-factor column names in
 #'   \code{data} (for DIF analysis), a data frame of factors, or one grouping
 #'   vector with one entry per data row.
-#' @param items Optional character vector naming the item columns; by default
-#'   every column not named in \code{id} or \code{factors}.
+#' @param items Optional item column names or numeric column indices. By
+#'   default, columns named in \code{id} or \code{factors} are excluded.
+#'   A separate factor data frame may share item names when \code{items} is
+#'   explicit. Without it, matching names exclude columns whose values agree;
+#'   conflicting values are refused.
 #' @param n_groups Number of class intervals for the item-trait chi-square
 #'   and ANOVA item fit. The default \code{NULL} applies the rule of Andrich
 #'   and Marais (2019, ch. 15): as
@@ -564,11 +567,13 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
            "to a role must be listed in items=")
     drop_cols <- c(if (id_is_col) id else NULL,
                    if (factors_are_cols) factors else NULL,
-                   # an externally supplied factor data frame whose column
-                   # names also appear in `data` almost certainly refers to
-                   # those columns: without this they would silently become
-                   # numeric ITEMS
-                   if (is.data.frame(factors))
+                   # Without an explicit item selector, an externally
+                   # supplied factor data frame whose column names also
+                   # appear in `data` almost certainly refers to those
+                   # columns.  With `items=`, the separate factor frame is
+                   # unambiguous and the selected data columns are genuine
+                   # items; selected in-data roles remain guarded above.
+                   if (is.data.frame(factors) && is.null(items))
                      intersect(names(factors), nm) else NULL)
     # identifier-named columns must never be silently SCORED as items: the
     # stacked/racked reshapes emit id/row_id/time columns, and calling
@@ -999,6 +1004,7 @@ rasch <- function(data, model = c("PCM", "RSM"), id = NULL, factors = NULL,
   }, logical(1))
   out <- list(model = model, X = X, m = m, items = items_df, thresholds = thr,
               tau_list = tau_list, person = person, score_table = sc,
+              person_scoring_algorithm = "max-wle-1",
               residuals = Z, moments = mo, n_groups = n_groups,
               ci_item = ci_list,
               item_trait = it, item_anova = ia,

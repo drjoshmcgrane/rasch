@@ -487,7 +487,7 @@ test_that("rasch(pc_components) routes estimation through pcml_pc", {
   expect_true(any(grepl("principal component", fit$notes)))
   # equal spread within each item: threshold spacings constant
   for (tl in fit$tau_list) expect_lt(diff(range(diff(tl))), 1e-8)
-  # full-rank pc reproduces free estimation exactly at <= 3 thresholds
+  # full-rank pc reproduces free estimation exactly through four thresholds
   fit4 <- rasch(X, pc_components = 4)
   free <- rasch(X)
   expect_equal(fit4$thresholds$tau, free$thresholds$tau, tolerance = 1e-5)

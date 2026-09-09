@@ -17,8 +17,9 @@ A data frame ordered by adjusted probability. For item fits, a
   as weakly identified; their probabilities are withheld, since the
   departure test rests on the same sparse categories, and a note on the
   table records the withholding. The \code{converged} column identifies
-  candidate refits that converged. Statistics from a non-convergent
-  candidate are withheld, but it remains in the multiplicity family.
+  candidate refits that converged. Statistics from a failed or
+  non-convergent candidate are withheld, but it remains in the
+  multiplicity family.
 }
 \description{
 Fits each available item-location, polytomous threshold-structure or
@@ -27,5 +28,6 @@ Probabilities use Kent calibration and Holm adjustment over the complete
 candidate family. The Kent departure tests are first-order asymptotic
 comparisons and do not use the finite-person-cluster correction applied to
 individual coefficients.
-A candidate with a withheld probability remains in that family.
+A candidate with a withheld probability, including a refit that errors or
+fails to converge, remains in that family.
 }

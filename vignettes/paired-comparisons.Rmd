@@ -142,7 +142,8 @@ dim_data <- simulate_btl(
 )
 dim_fit <- btl(dim_data, object_a = "object_a", object_b = "object_b",
                winner = "winner", judge = "judge")
-dimensions <- btl_dimensionality(dim_fit, reps = 20, seed = 2026)
+dimensions <- btl_dimensionality(dim_fit, reps = 20, seed = 2026,
+                                independent_comparisons = TRUE)
 dimensions
 ```
 
@@ -154,9 +155,17 @@ plot_btl_transitivity(tr)
 plot_btl_scree(dimensions)
 ```
 
-The shaded area runs from the simulated mean to the finite-simulation 5% upper
-limit. The example uses twenty replicates to keep the vignette quick; a final
-analysis should use enough replicates to stabilise the reference distribution.
+The decomposition compares observed and fitted expected points within each
+object pair. For ordered responses this includes the category thresholds;
+fitted position and history effects also enter the expectation.
+
+The simulated comparisons in this example are independent, so the call
+explicitly requests that reference. For judge-clustered data, the default
+shows only the residual decomposition: clustered repetition can look like
+dimensional structure against an independent-comparison reference.
+The shaded area runs from the simulated mean to the finite-simulation 5%
+upper limit. Twenty replicates keep this example quick; a final sensitivity
+analysis needs enough replicates to stabilise the reference distribution.
 An ordered analysis needs one row per comparison:
 a replication count does not retain the sequence needed to construct exposure
 and carry-over histories, so `btl()` refuses that combination.

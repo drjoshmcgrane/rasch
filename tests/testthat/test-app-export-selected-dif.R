@@ -2,8 +2,10 @@
   for (package in c("shiny", "bslib", "DT", "bsicons"))
     skip_if_not_installed(package)
   env <- new.env(parent = globalenv())
-  suppressWarnings(sys.source(testthat::test_path(
-    "..", "..", "inst", "shiny", "app.R"), envir = env))
+  app_path <- testthat::test_path("..", "..", "inst", "shiny", "app.R")
+  if (!file.exists(app_path))
+    app_path <- system.file("shiny", "app.R", package = "rasch")
+  suppressWarnings(sys.source(app_path, envir = env))
   env
 }
 

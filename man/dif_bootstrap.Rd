@@ -99,5 +99,5 @@ Testing: Examples and Methods for p-Value Adjustment}. Wiley.
 }
 \seealso{
 \code{\link{dif_anova}}, \code{\link{btl_dif}},
-  \code{\link{fit_bootstrap}}
+  \code{\link{fit_bootstrap}}, \code{\link{rasch_rng}}
 }

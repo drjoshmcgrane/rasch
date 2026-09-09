@@ -931,7 +931,8 @@ test_that("btl_transitivity and btl_dimensionality read one-D vs a swirl", {
   }
   # one-dimensional: consistent, leading bimension within the noise band
   f1 <- mk(0, 2)
-  t1 <- btl_transitivity(f1); d1 <- btl_dimensionality(f1, reps = 40)
+  t1 <- btl_transitivity(f1)
+  d1 <- btl_dimensionality(f1, reps = 40, independent_comparisons = TRUE)
   expect_lt(t1$summary$circular_rate, 0.1)
   expect_gt(t1$summary$consistency, 0.6)
   expect_false(d1$leading_structured)
@@ -953,7 +954,8 @@ test_that("btl_transitivity and btl_dimensionality read one-D vs a swirl", {
   expect_true(any(grepl("adjusted p unavailable", old_print, fixed = TRUE)))
 
   # a cyclic swirl: leading bimension clears the reference, most of residual
-  f2 <- mk(1.6, 2); d2 <- btl_dimensionality(f2, reps = 40)
+  f2 <- mk(1.6, 2)
+  d2 <- btl_dimensionality(f2, reps = 40, independent_comparisons = TRUE)
   expect_true(d2$leading_structured)
   expect_gt(d2$bimensions$strength[1], d2$reference$p95)
   expect_identical(d2$leading_structured, d2$reference$p_adj <= 0.05)
@@ -1109,12 +1111,14 @@ test_that("btl_dimensionality is calibrated and powered on non-cyclic 2-D data",
     btl(d, "a", "b", "win", judge = "judge")
   }
   # genuine 2-D structure is flagged, with the leading bimension dominant
-  d2 <- btl_dimensionality(sim(1, TRUE, 2.4, 70), reps = 80)
+  d2 <- btl_dimensionality(sim(1, TRUE, 2.4, 70), reps = 80,
+                          independent_comparisons = TRUE)
   expect_true(d2$leading_structured)
   expect_gt(d2$bimensions$strength[1], d2$reference$p95)
   expect_gt(d2$bimensions$prop_residual[1], 0.5)
   # a single-attribute (truly 1-D) fit is not flagged, even well separated
-  d1 <- btl_dimensionality(sim(7, FALSE, 1.6, 40), reps = 80)
+  d1 <- btl_dimensionality(sim(7, FALSE, 1.6, 40), reps = 80,
+                          independent_comparisons = TRUE)
   expect_false(d1$leading_structured)
 })
 

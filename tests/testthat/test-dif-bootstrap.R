@@ -243,6 +243,12 @@ test_that("Comparative Judgement DIF uses the fitted-outcome null", {
   d <- simulate_btl(n_objects = 5, n_judges = 20, reps_per_pair = 40,
                     seed = 5117)
   fit <- btl(d, "object_a", "object_b", winner = "winner", judge = "judge")
+  source_settings <- list(model_type = "btl", bt_a = "object_a",
+                           bt_b = "object_b", bt_win = "winner",
+                           bt_judge = "judge")
+  attr(fit, "rasch_app_source") <- list(
+    data = as.data.frame(d), settings = source_settings,
+    resources = list(), simulation = list())
   judges <- unique(fit$comparisons$judge)
   group <- setNames(rep(c("A", "B"), length.out = length(judges)), judges)
   da <- btl_dif(fit, group, objects = "O3", min_n = 10)
@@ -262,8 +268,9 @@ test_that("Comparative Judgement DIF uses the fitted-outcome null", {
   project <- .seal_app_project(list(
     format = "rasch-shiny-project", schema = 2L,
     data = d, model_type = "btl", base_fit = fit,
-    rasch_steps = list(), btl_steps = list(), settings = list(),
+    rasch_steps = list(), btl_steps = list(), settings = source_settings,
     results = list(btl_dif = da,
+      btl_dif_meta = list(judge_col = "judge", fitted_judge_col = "judge"),
       dif_bootstrap = list(db = db, B = 1L, seed = 5118L, kind = "bdif"))))
   expect_no_error(.validate_app_project(project))
 

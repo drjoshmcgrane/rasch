@@ -172,7 +172,11 @@ number must exceed the free directions in the largest covariance block used by
 the fit. The stored bootstrap row contains several constrained blocks and is not
 treated as one covariance. Once estimation begins, the linking covariance needs
 at least 30 usable replicates and a majority of those requested; otherwise the
-fit stops. The alpha--phi cross-covariance has the same usable-draw rule and is
+fit stops. A numerical failure or non-convergence on any supported link
+invalidates the whole replicate. Pairs without enough informative common
+persons can be omitted only if the remaining links connect all sets.
+Full-bootstrap refits with unidentified group units are also discarded.
+The alpha--phi cross-covariance has the same usable-draw rule and is
 withheld if it cannot be estimated. A full bootstrap that falls below its
 minimum returns hybrid standard errors instead, retaining its attempted, usable
 and failed counts in `full_boot_reps_*`.
@@ -193,12 +197,13 @@ its calibration likelihood uses within-set pairs, whereas ordinary PCM also
 uses cross-set pairs. The matched group-unit comparison is retained in
 `fit$efrm_vs_rasch`.
 Probabilities require at least 50 persons or effective persons in every group
-and at least 50 informative common persons on every set-link edge. A person
+and a path between each pair of sets whose links each have at least 50
+informative common persons. A person
 at the same extreme tail in both sets remains in the likelihood but does not
 count as link support. Sparse designs retain the unit estimates without an
 inferential probability.
 
-Simulation under normal, bimodal and deliberately different group
+Two-set simulations under normal, bimodal and deliberately different group
 distributions gave set-unit bias within 0.004 log-units, empirical-to-reported
 SE ratios from 0.97 to 1.05, and null rejection from 4.0 to 5.0 per cent for
 the hybrid method. The complete person bootstrap was mildly conservative in

@@ -97,6 +97,11 @@
 #' with the difference in parameter counts; this is descriptive (composite
 #' likelihood), and most meaningful for nested structures such as RSM inside
 #' PCM.
+#' Paired-comparison data identity is evaluated separately for each fit
+#' against the reference, including sequence fields shared by that pair.
+#' Order values are compared through their within-judge ranks, so relabelling
+#' that preserves order and ties does not change identity.
+#' Adding another model does not change an existing pair's compatibility.
 #'
 #' The calibrated comparison is carried by the composite-likelihood
 #' information criteria \code{cl_aic} (Varin and Vidoni 2005) and
@@ -201,14 +206,28 @@ compare_fits <- function(..., reference = 1) {
     # determine the likelihood contribution and independent clusters.
     seq_names <- function(f) intersect(c("exposure", "carry_over", "order"),
                                       names(f$comparisons))
-    use_presented <- any(vapply(fits, function(f)
+    has_presented <- function(f)
       !is.null(f$dependence) ||
         length(intersect(c("exposure", "carry_over", "position"),
-                         names(f$comparisons))) > 0L, TRUE))
-    # only sequence columns every compared fit carries can distinguish them
-    seq_cols <- Reduce(intersect, lapply(fits, seq_names))
-    if (is.null(seq_cols)) seq_cols <- character(0)
-    sig <- function(f) {
+                         names(f$comparisons))) > 0L
+    canonical_order <- function(x, judge) {
+      # btl() uses a sequence only through order(judge, order).  Retain that
+      # ordering (and any tie pattern in a legacy object), rather than making
+      # arbitrary numeric labels part of data identity.  Current sequence
+      # fits have a non-missing judge for every row; preserve the literal
+      # values for older/malformed objects where within-judge ranks cannot be
+      # recovered safely.
+      if (length(x) != length(judge) || anyNA(judge))
+        return(as.character(x))
+      out <- rep(NA_character_, length(x))
+      blocks <- split(seq_along(x), judge)
+      for (ii in blocks) {
+        r <- rank(x[ii], ties.method = "min", na.last = "keep")
+        out[ii] <- ifelse(is.na(r), NA_character_, paste0("rank:", r))
+      }
+      out
+    }
+    sig <- function(f, use_presented, seq_cols) {
       cmp <- f$comparisons
       if (is.null(cmp)) return(NULL)
       ca <- as.character(cmp$object_a); cb <- as.character(cmp$object_b)
@@ -223,12 +242,17 @@ compare_fits <- function(..., reference = 1) {
       # is the right fingerprint. It stops being arbitrary once any compared
       # fit models position or sequence: there the presented order enters
       # the likelihood, and two presentation designs would otherwise compare
-      # as the same data. The decision is made across ALL the fits, so a
+      # as the same data. The decision is made for the candidate/reference pair, so a
       # plain fit and a position-effect fit of the SAME comparisons still
       # match; the derived position column is a fitted covariate, not a
       # datum, so it never enters.
       if (use_presented) { z$presented_a <- ca; z$presented_b <- cb }
-      for (cn in seq_cols) z[[cn]] <- as.character(cmp[[cn]])
+      judge <- as.character(cmp$judge)
+      for (cn in seq_cols) {
+        z[[cn]] <- if (identical(cn, "order"))
+          canonical_order(cmp[[cn]], judge)
+        else as.character(cmp[[cn]])
+      }
       row_keys <- function(d, omit = character(0)) {
         x <- d[, setdiff(names(d), omit), drop = FALSE]
         vapply(seq_len(nrow(x)), function(i) {
@@ -256,7 +280,6 @@ compare_fits <- function(..., reference = 1) {
       block_key <- function(d)
         paste(format(serialize(canonical_rows(d), NULL, version = 3L)),
               collapse = "")
-      judge <- as.character(cmp$judge)
       if (all(is.na(judge))) {
         ia <- f$independent_allocation
         if (is.data.frame(ia) && nrow(ia) == nrow(z) &&
@@ -302,7 +325,14 @@ compare_fits <- function(..., reference = 1) {
       list(objects = sort(f$objects$object), m = as.integer(f$m),
            comparisons = allocation)
     }
-    ref_sig <- sig(fits[[reference]])
+    same_btl_data <- function(candidate, ref) {
+      # A third fit lacking sequence fields must not erase known differences
+      # between this candidate and its reference (or introduce orientation
+      # requirements into a comparison between two plain BTL models).
+      presented <- has_presented(candidate) || has_presented(ref)
+      columns <- intersect(seq_names(candidate), seq_names(ref))
+      identical(sig(candidate, presented, columns), sig(ref, presented, columns))
+    }
     rows <- lapply(seq_along(fits), function(i) {
       f <- fits[[i]]
       conv <- isTRUE(f$converged)
@@ -331,7 +361,7 @@ compare_fits <- function(..., reference = 1) {
         loglik = if (conv) f$loglik else NA_real_,
         eff_params = unname(ic["eff"]), cl_aic = unname(ic["aic"]),
         cl_bic = unname(ic["bic"]),
-        same_data = identical(sig(f), ref_sig),
+        same_data = same_btl_data(f, fits[[reference]]),
         two_delta_ll = NA_real_, delta_parameters = NA_integer_,
         chisq_per_df = if (is.finite(f$total_df) && f$total_df > 0)
           f$total_chisq / f$total_df else NA_real_,

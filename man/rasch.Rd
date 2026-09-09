@@ -39,8 +39,11 @@ above then apply to person clusters rather than response rows.}
 \code{data} (for DIF analysis), a data frame of factors, or one grouping
 vector with one entry per data row.}
 
-\item{items}{Optional character vector naming the item columns; by default
-every column not named in \code{id} or \code{factors}.}
+\item{items}{Optional item column names or numeric column indices. By
+default, columns named in \code{id} or \code{factors} are excluded.
+A separate factor data frame may share item names when \code{items} is
+explicit. Without it, matching names exclude columns whose values agree;
+conflicting values are refused.}
 
 \item{n_groups}{Number of class intervals for the item-trait chi-square
 and ANOVA item fit. The default \code{NULL} applies the rule of Andrich

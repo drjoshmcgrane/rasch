@@ -502,6 +502,12 @@ test_that("CJ results and background work remain tied to their launching fit", {
   d1 <- simulate_btl(5, 12, 8, seed = 91)
   d2 <- simulate_btl(5, 12, 8, seed = 92)
   bt1 <- btl(d1, "object_a", "object_b", "winner", judge = "judge")
+  attr(bt1, "rasch_app_source") <- list(
+    data = as.data.frame(d1),
+    settings = list(model_type = "btl", bt_a = "object_a",
+                    bt_b = "object_b", bt_win = "winner",
+                    bt_judge = "judge"),
+    resources = list(), simulation = list())
   bt2 <- btl(d2, "object_a", "object_b", "winner", judge = "judge")
   judges <- unique(bt1$comparisons$judge)
   group <- setNames(rep(c("A", "B"), length.out = length(judges)), judges)
@@ -516,7 +522,13 @@ test_that("CJ results and background work remain tied to their launching fit", {
                     bt_judge = "judge"),
     resources = list(), simulation = list(),
     results = list(btl_dif = bdif1,
-                   btl_dif_meta = list(judge_col = "judge"))))
+                   btl_dif_meta = list(judge_col = "judge",
+                                       fitted_judge_col = "judge"))))
+  no_source <- project
+  no_source$results$btl_dif_meta$fitted_judge_col <- NULL
+  no_source <- .seal_app_project(no_source)
+  expect_error(.validate_app_project(no_source),
+               "lacks authenticated fitted judge-role provenance")
   path <- tempfile(fileext = ".rasch")
   on.exit(unlink(path), add = TRUE)
   .save_app_project(project, path)
@@ -629,6 +641,39 @@ test_that("CJ results and background work remain tied to their launching fit", {
     expect_null(btlef_res())
     expect_length(btl_analysis_steps(), 0L)
   })
+})
+
+test_that("schema-2 CJ DIF without fitted judge provenance is omitted", {
+  d <- as.data.frame(simulate_btl(5, 16, 20, seed = 919))
+  j <- as.integer(sub("^J", "", d$judge))
+  d$judge_perm <- paste0("J", ifelse(j %% 16 == 0, 1, j %% 16 + 1))
+  d$group <- ifelse(j <= 8, "A", "B")
+  bt <- btl(d, "object_a", "object_b", winner = "winner", judge = "judge")
+  ids <- unique(as.character(d$judge))
+  perm_group <- setNames(vapply(ids, function(id)
+    unique(as.character(d$group[d$judge_perm == id]))[1L], character(1)), ids)
+  old_dif <- btl_dif(bt, factors = list(group = perm_group), min_n = 2)
+  project <- .seal_app_project(list(
+    format = "rasch-shiny-project", schema = 2L,
+    data = d, model_type = "btl", base_fit = bt,
+    rasch_steps = list(), btl_steps = list(), kept_fits = list(),
+    kept_fit_code = list(), settings = list(model_type = "btl",
+      bt_a = "object_a", bt_b = "object_b", bt_win = "winner",
+      bt_judge = "judge_perm"), resources = list(), simulation = list(),
+    results = list(btl_dif = old_dif,
+      btl_dif_meta = list(judge_col = "judge_perm"),
+      dif_bootstrap = list(db = list(stale = TRUE)))))
+  path <- tempfile(fileext = ".rasch")
+  on.exit(unlink(path), add = TRUE)
+  saveRDS(project, path)
+  expect_warning(restored <- .read_app_project(path),
+                 "Comparative Judgement DIF")
+  expect_null(restored$results$btl_dif)
+  expect_null(restored$results$btl_dif_meta)
+  expect_null(restored$results$dif_bootstrap)
+  expect_identical(restored$data, project$data)
+  expect_identical(restored$base_fit, project$base_fit)
+  expect_no_error(.validate_app_project(restored))
 })
 
 test_that("a failed replacement leaves the current app analysis intact", {
@@ -965,21 +1010,35 @@ test_that("app BTL DIF refuses a factor that varies within judge", {
   d$group[d$judge == "J01" & seq_len(nrow(d)) == 2L] <- "changed"
   bt_current <- btl(d, "object_a", "object_b", winner = "winner",
                     judge = "judge")
+  attr(bt_current, "rasch_app_source") <- list(
+    data = d,
+    settings = list(model_type = "btl", bt_a = "object_a",
+                    bt_b = "object_b", bt_win = "winner",
+                    bt_judge = "judge"),
+    resources = list(), simulation = list())
   path <- tempfile(fileext = ".csv")
   stable_path <- tempfile(fileext = ".csv")
   on.exit(unlink(c(path, stable_path)), add = TRUE)
   write.csv(d, path, row.names = FALSE)
   stable <- d
   stable$group[stable$judge == "J01"] <- "G1"
+  bt_stable <- btl(stable, "object_a", "object_b", winner = "winner",
+                   judge = "judge")
+  attr(bt_stable, "rasch_app_source") <- list(
+    data = stable,
+    settings = list(model_type = "btl", bt_a = "object_a",
+                    bt_b = "object_b", bt_win = "winner",
+                    bt_judge = "judge"),
+    resources = list(), simulation = list())
   write.csv(stable, stable_path, row.names = FALSE)
 
   shiny::testServer(e$server, {
-    btl_fit(bt_current)
     session$setInputs(
       file = list(datapath = path, name = "comparisons.csv",
                   size = file.info(path)$size, type = "text/csv"),
       bt_judge = "judge", bdif_factors = "group")
     session$flushReact()
+    btl_fit(bt_current)
     expect_error(bdif_factor_maps(), "varies within judge")
     expect_match(bdif_code_grp(), "judge_factor <- function", fixed = TRUE)
     expect_silent(parse(text = bdif_code_grp()))
@@ -987,6 +1046,7 @@ test_that("app BTL DIF refuses a factor that varies within judge", {
       datapath = stable_path, name = "stable.csv",
       size = file.info(stable_path)$size, type = "text/csv"))
     session$flushReact()
+    btl_fit(bt_stable)
     maps <- bdif_factor_maps()
     expect_identical(unname(maps$group["J01"]), "G1")
   })

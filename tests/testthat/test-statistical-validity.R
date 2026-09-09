@@ -1259,7 +1259,8 @@ test_that("btl_dimensionality withholds the verdict under a shared fixed order",
   # shared fixed order: the order effect is confounded, verdict withheld
   fs <- suppressWarnings(btl(gen(TRUE), "a", "b", "win", judge = "judge",
                              order = "seq"))
-  ds <- suppressWarnings(btl_dimensionality(fs, reps = 30))
+  ds <- suppressWarnings(btl_dimensionality(fs, reps = 30,
+    independent_comparisons = TRUE))
   expect_true(is.na(ds$bimensions$above_reference[1]))
   expect_true(is.na(ds$leading_structured))
   expect_true(any(grepl("withheld", capture.output(print(ds)))))
@@ -1267,7 +1268,8 @@ test_that("btl_dimensionality withholds the verdict under a shared fixed order",
   # randomised order: the confound detector does NOT fire, a verdict is given
   fr <- suppressWarnings(btl(gen(FALSE), "a", "b", "win", judge = "judge",
                              order = "seq"))
-  dr <- suppressWarnings(btl_dimensionality(fr, reps = 30))
+  dr <- suppressWarnings(btl_dimensionality(fr, reps = 30,
+    independent_comparisons = TRUE))
   expect_false(is.na(dr$bimensions$above_reference[1]))
   expect_false(any(grepl("withheld", dr$notes)))
 })
@@ -1326,7 +1328,8 @@ test_that("EFRM fits export and report despite the residual-PCA refusal", {
   colnames(X) <- sprintf("I%02d", seq_along(d))
   fit <- rasch_efrm(data.frame(X, grp = grp),
                     item_sets = list(core = colnames(X)), groups = "grp")
-  out <- file.path(tempdir(), "efrm-export-regression")
+  out <- tempfile("efrm-export-regression-")
+  on.exit(unlink(out, recursive = TRUE), add = TRUE)
   save_warnings <- character(0)
   withCallingHandlers(
     save_outputs(fit, out, formats = "png"),

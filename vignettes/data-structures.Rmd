@@ -67,7 +67,7 @@ set_of <- c(I1 = "core", I2 = "core", I3 = "extension")
 set_weights <- c(core = 2, extension = 1)
 weighted_person_estimates(fit, set_weights, by = "set", sets = set_of)
 
-save_outputs(fit, "analysis", person_weights = weighted)
+save_outputs(fit, "analysis", person_weights = weighted) # new or empty folder
 ```
 
 Only relative weights matter. The weighted estimates are supplementary; they

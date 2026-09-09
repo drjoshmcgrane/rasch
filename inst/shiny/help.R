@@ -258,7 +258,9 @@ APP_HELP <- c(
     "Summarises uniform and non-uniform DIF for the selected item and factor",
     "terms. Holm-adjusted probabilities control the complete item-by-term",
     "family by default. Uniform between-person terms use HC3 covariance;",
-    "class-interval interactions retain the residual-ANOVA reference."
+    "class-interval interactions retain the residual-ANOVA reference for",
+    "complete panels. Incomplete panels use joint adjustment and",
+    "person-cluster CR3 covariance for all between-person terms."
   ),
   dif_full_tbl = paste(
     "Contains the complete item-by-term DIF results. Uniform DIF is associated",
@@ -429,9 +431,9 @@ APP_HELP <- c(
     "identify."
   ),
   btl_bimensions_tbl = paste(
-    "Reports strengths of the rotational dimensions in the object-pair",
-    "residual matrix. The leading strength is compared with simulations from",
-    "the fitted comparative judgement model."
+    "Reports rotational dimensions of the observed-minus-expected pair logits.",
+    "Judge-clustered results are descriptive by default;",
+    "the simulated reference requires conditionally independent comparisons."
   ),
   btl_trans_tbl = paste(
     "Summarises circular triads in the observed comparisons. A high loop rate",
@@ -617,7 +619,8 @@ APP_HELP <- c(
   ),
   btl_judge_map = paste(
     "Shows one judge's observed comparison responses against their modelled",
-    "expectations. Large departures identify locally surprising judgements."
+    "expectations. Red matchups favour the weaker object and pass the Holm",
+    "familywise rule. Tied locations have no directional flag."
   ),
   btl_judge_consist = paste(
     "Displays each judge's transitivity consistency against their number of",
@@ -638,13 +641,13 @@ APP_HELP <- c(
     "Agreement with the shifted identity line indicates stable common-object linking."
   ),
   btl_scree = paste(
-    "Shows residual bimension strengths against simulations from the fitted",
-    "model when the comparison sequence supports them. A leading value above",
-    "the 5% reference band suggests structured preference cycles."
+    "Shows residual bimension strengths. A 5% reference band is shown only",
+    "when conditional independence is assumed and the design supports it;",
+    "a leading value above that band suggests structured preference cycles."
   ),
   btl_dim_map = paste(
-    "Maps objects on the leading residual bimension. The circular arrangement",
-    "shows the preference cycle represented by that residual dimension."
+    "Maps the pattern of residual comparisons, not their magnitude or significance.",
+    "Use the scree plot to compare strength with the conditional reference."
   ),
   btl_dep_plot = paste(
     "Shows observed residual departure over the selected history covariate, with",

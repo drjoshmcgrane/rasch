@@ -100,8 +100,11 @@ test_that("app automatic DIF resolution and its frozen code keep factorial effec
     skip_if_not_installed(pkg)
   f <- .resolution_interaction_fit()
   e <- new.env(parent = globalenv())
+  app_path <- test_path("..", "..", "inst", "shiny", "app.R")
+  if (!file.exists(app_path))
+    app_path <- system.file("shiny", "app.R", package = "rasch")
   suppressWarnings(sys.source(
-    test_path("..", "..", "inst", "shiny", "app.R"), envir = e))
+    app_path, envir = e))
   shiny::testServer(e$server, {
     fit_val(f)
     session$setInputs(dif_effects = "factorial", dif_alpha = .05)

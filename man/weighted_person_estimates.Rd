@@ -43,6 +43,10 @@ externally weighted Warm score equation
 \deqn{\sum_i q_i a_i\{x_i-E_i(\theta)\}+
 \frac{J(\theta)\sum_i q_i a_i^3\mu_{3i}(\theta)}
 {2H(\theta)^2}=0.}
+Competing maxima are ranked by the integral of this estimating score.
+With equal weights this reduces to the ordinary weighted log likelihood;
+unequal external weights require their own correction. Equal maxima use
+the lower location.
 Its standard error is the sandwich form
 \deqn{\operatorname{SE}(\hat\theta)=
 \frac{\{\sum_iq_i^2a_i^2V_i(\hat\theta)\}^{1/2}}

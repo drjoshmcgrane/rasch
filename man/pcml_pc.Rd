@@ -12,11 +12,9 @@ two observed categories, numbered consecutively from 0. Missing values are
 handled by pairwise deletion.}
 
 \item{n_components}{Maximum number of components per item: 1 (location
-only) up to 4 (location, spread, skewness, kurtosis; the highest
-derived by Pedler 1987). Capped per item at its own number of
-thresholds, and further wherever a component would be collinear with
-lower-order ones for that item's threshold count (kurtosis is
-unidentified, and dropped, at exactly 4 thresholds).}
+only) up to 4 (location, spread, skewness, kurtosis).
+Capped per item at its own number of thresholds. Kurtosis requires
+at least four thresholds (five response categories).}
 
 \item{maxit, tol}{Newton-Raphson iteration cap and convergence tolerance.}
 }
@@ -35,12 +33,19 @@ A list with the threshold table \code{thr} (columns \code{id},
 }
 \description{
 Re-expresses each item's thresholds as orthogonal polynomial components:
-location, spread, skewness, and kurtosis (Andrich 1978, 1985; Pedler 1987).
+location, spread, skewness, and kurtosis (Andrich and Luo 2003).
 Estimation uses the same pairwise conditional likelihood as
-\code{\link{pcml}}. With at most three thresholds per item the full
-parameterisation is exact. Items with four or more thresholds are fitted by
+\code{\link{pcml}}. With at most four thresholds per item the full
+parameterisation is exact. Items with five or more thresholds are fitted by
 a reduced-rank polynomial trend, which can stabilise sparse categories at
 the cost of restricting the threshold pattern.
+}
+\details{
+For scores \eqn{x=0,\ldots,m}, the cumulative threshold function is
+\deqn{C(x)=x\omega_1-x(m-x)\omega_2-x(m-x)(2x-m)\omega_3
+      -x(m-x)(5x^2-5mx+m^2+1)\omega_4.}
+Threshold \eqn{k} is \eqn{C(k)-C(k-1)}. The four coefficients are
+location, spread, skewness and kurtosis, respectively.
 }
 \examples{
 set.seed(1)

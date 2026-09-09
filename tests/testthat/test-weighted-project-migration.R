@@ -86,22 +86,26 @@ test_that("weighted-table migration does not bypass integrity or fit matching", 
   expect_error(.read_app_project(path), "table does not reproduce")
 })
 
-test_that("pattern-wle-1 tables migrate but unknown algorithm stamps do not", {
+test_that("older weighted algorithm stamps migrate but unknown stamps do not", {
   d <- .weighted_migration_fixture()
-  old <- .older_weighted_project(d$project, "pattern-wle-1")
   path <- tempfile(fileext = ".rasch")
   on.exit(unlink(path))
-  saveRDS(old, path)
-  expect_warning(restored <- .read_app_project(path),
-                 "weighted person estimates were recomputed")
-  expect_identical(restored$results$person_weights$table, d$table)
-  expect_identical(attr(d$table, "algorithm"), "pattern-unit-wle-2")
-  expect_identical(restored$rasch_steps, old$rasch_steps)
-  expect_no_error(.validate_app_project(restored))
-  .save_app_project(restored, path)
-  expect_no_warning(.read_app_project(path))
+  for (stamp in c("pattern-wle-1", "pattern-unit-wle-2")) {
+    old <- .older_weighted_project(d$project, stamp)
+    saveRDS(old, path)
+    expect_warning(restored <- .read_app_project(path),
+                   "weighted person estimates were recomputed")
+    expect_identical(restored$results$person_weights$table, d$table)
+    expect_identical(attr(restored$results$person_weights$table,
+                          "algorithm"), "pattern-max-wle-3")
+    expect_identical(restored$rasch_steps, old$rasch_steps)
+    expect_no_error(.validate_app_project(restored))
+    .save_app_project(restored, path)
+    expect_no_warning(.read_app_project(path))
+  }
 
   # A recognised old stamp never excuses a changed inner result signature.
+  old <- .older_weighted_project(d$project, "pattern-unit-wle-2")
   old$results$person_weights$table$theta[1L] <- 99
   saveRDS(.seal_app_project(old), path)
   expect_error(.read_app_project(path), "changed since it was calculated")

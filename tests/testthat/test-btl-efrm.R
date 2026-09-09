@@ -1,5 +1,5 @@
 # fast path for tests whose subject is not the standard errors: the
-# conditional SEs are exact for beta/phi and the estimates are identical
+# conditional path avoids bootstrapping; the point estimates are identical
 befit <- function(...) btl_efrm(..., se_method = "conditional")
 
 test_that("panel-unit reconciliation uses scale-free precision weights", {
@@ -27,6 +27,97 @@ test_that("panel-unit reconciliation uses scale-free precision weights", {
   asymmetric <- matrix(c(1, 0.5, 0, 1), 2L)
   bad <- rasch:::.btlef_wald_unit(c(0.2, -0.2), asymmetric, "unit")
   expect_true(is.na(bad$wald))
+})
+
+test_that("panel reconciliation carries cross-set judge covariance", {
+  block <- function(value, influence) {
+    influence <- matrix(influence, ncol = 1L,
+                        dimnames = list(names(influence), "B"))
+    list(ref = "A", free = "B", lrho = c(B = value),
+         cov = crossprod(influence), influence_lrho = influence)
+  }
+  base <- c(J1 = 0.5, J2 = -0.5, J3 = 0.5, J4 = -0.5)
+
+  # The established point estimate uses only the two within-set variances:
+  # weights .8 and .2 give a log-ratio of 1.4 in every case below. With all
+  # judges shared, the joint observation covariance is singular, but it is
+  # propagated rather than inverted. Cross-covariance is 2, so the fixed
+  # estimator has variance .8 + 2(.8)(.2)(2) = 1.44 before centring.
+  shared <- rasch:::.btlef_reconcile_phi(c("A", "B"), list(
+    block(1, base), block(3, 2 * base)))
+  expect_equal(unname(shared$lphi["B"] - shared$lphi["A"]), 1.4,
+               tolerance = 1e-12)
+  expect_equal(unname(shared$se_log_phi), rep(sqrt(1.44) / 2, 2),
+               tolerance = 1e-12)
+
+  # Name alignment uses only J3/J4 here: their product is 1. The remaining
+  # judges belong to only one set and therefore add no cross-set covariance.
+  partial2 <- c(J3 = 1, J4 = -1, J5 = 1, J6 = -1)
+  partial <- rasch:::.btlef_reconcile_phi(c("A", "B"), list(
+    block(1, base), block(3, partial2)))
+  expect_equal(unname(partial$se_log_phi), rep(sqrt(1.12) / 2, 2),
+               tolerance = 1e-12)
+
+  # Disjoint judge pools reproduce the old block-diagonal covariance.
+  disjoint2 <- c(K1 = 1, K2 = -1, K3 = 1, K4 = -1)
+  disjoint <- rasch:::.btlef_reconcile_phi(c("A", "B"), list(
+    block(1, base), block(3, disjoint2)))
+  expect_equal(unname(disjoint$se_log_phi), rep(sqrt(0.8) / 2, 2),
+               tolerance = 1e-12)
+
+  # Negative cross-set dependence must reduce, not inflate, the same
+  # estimator's covariance. Reversing the partially shared contributions
+  # gives cross-covariance -1 and variance .48 before centring.
+  negative <- rasch:::.btlef_reconcile_phi(c("A", "B"), list(
+    block(1, base), block(3, -partial2)))
+  expect_equal(unname(negative$se_log_phi), rep(sqrt(0.48) / 2, 2),
+               tolerance = 1e-12)
+})
+
+test_that("conditional BTL-EFRM SE retains shared-judge covariance", {
+  set.seed(831)
+  d <- simulate_btl_efrm(n_objects_per_set = 6, n_sets = 2,
+                         n_judges_per_panel = 30, n_panels = 2,
+                         reps_within = 30, reps_cross = 10, seed = 831)
+  truth <- attr(d, "truth")
+  # A persistent judge discrimination creates visible covariance between the
+  # separately estimated panel ratios without changing the sampling unit.
+  q <- setNames(exp(rnorm(length(unique(d$judge)), 0, 0.85)), unique(d$judge))
+  eta <- q[d$judge] * (truth$v[d$object_a] - truth$v[d$object_b])
+  ya <- rbinom(nrow(d), 1L, plogis(eta))
+  d$winner <- ifelse(ya == 1L, d$object_a, d$object_b)
+
+  fit <- btl_efrm(d, "object_a", "object_b", winner = "winner",
+                  judge = "judge", panels = "panel",
+                  object_sets = truth$object_sets,
+                  se_method = "conditional")
+  blocks <- lapply(names(truth$object_sets), function(s) {
+    os <- truth$object_sets[[s]]
+    rows <- d$object_a %in% os & d$object_b %in% os
+    f <- rasch:::.btlef_stage1(
+      match(d$object_a[rows], os), match(d$object_b[rows], os),
+      as.integer(d$winner[rows] == d$object_a[rows]),
+      as.character(d$panel[rows]), as.character(d$judge[rows]),
+      length(os), 60, 1e-8)
+    expect_equal(crossprod(f$influence_lrho), f$cov_lrho,
+                 tolerance = 1e-12)
+    list(ref = f$ref, free = f$free, lrho = log(f$rho[f$free]),
+         cov = f$cov_lrho, influence_lrho = f$influence_lrho)
+  })
+  joint <- rasch:::.btlef_reconcile_phi(c("panel1", "panel2"), blocks)
+  independent <- rasch:::.btlef_reconcile_phi(
+    c("panel1", "panel2"), lapply(blocks, function(z) {
+      z$influence_lrho <- NULL
+      z
+    }))
+
+  expect_equal(log(fit$phi_table$phi), unname(joint$lphi), tolerance = 1e-10)
+  expect_equal(fit$phi_table$se_log_phi, unname(joint$se_log_phi),
+               tolerance = 1e-10)
+  expect_equal(joint$lphi, independent$lphi, tolerance = 1e-12)
+  expect_gt(min(joint$se_log_phi - independent$se_log_phi), 0.01)
+  expect_equal(round(unname(independent$se_log_phi[1]), 4), 0.1011)
+  expect_equal(round(unname(joint$se_log_phi[1]), 4), 0.1189)
 })
 
 # Extended frame of reference for paired comparisons: reduction to btl(),
@@ -581,7 +672,11 @@ test_that("a set with no stable panel-ratio information is screened, not fatal",
     pnl <- if (i <= 100) "panel1" else "panel2"
     data.frame(object_a = sobj[(i %% 5) + 1],
                object_b = paste0("w", (i %% 2) + 1),
-               winner = if (i %% 3 == 0) paste0("w", (i %% 2) + 1)
+               # Preserve positive cross-set support for the reconciled
+               # weak-set ordering (w1 below w2). The former nearly equal
+               # cross rates hit alpha = 0 and silently used unit one.
+               winner = if (i %% 10 < if (i %% 2 == 0) 2 else 8)
+                          paste0("w", (i %% 2) + 1)
                         else sobj[(i %% 5) + 1],
                judge = jd_of(pnl, i), panel = pnl)
   }))
@@ -691,9 +786,8 @@ test_that("BTL-EFRM judge bootstrap reports progress and restores the RNG", {
 
 test_that("parallel BTL-EFRM judge bootstraps are seed-identical", {
   skip_on_cran()
-  skip_if_not(file.exists(file.path(system.file(package = "rasch"),
-                                    "DESCRIPTION")),
-              "parallel integration test needs an installed package")
+  skip_if_not(rasch:::.rasch_namespace_is_installed(),
+              "parallel integration test needs an installed package namespace")
   expect_true(rasch:::.rasch_namespace_is_installed())
   old_workers <- options(rasch.max_workers = 2L)
   on.exit(options(old_workers), add = TRUE)

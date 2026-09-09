@@ -1002,9 +1002,8 @@ test_that("parallel EFRM bootstraps are seed-identical to serial fits", {
   # PSOCK workers must load the same installed namespace. pkgload source-tree
   # sessions deliberately skip this integration test; R CMD check and binary
   # package tests exercise it against the installed package.
-  skip_if_not(file.exists(file.path(system.file(package = "rasch"),
-                                    "DESCRIPTION")),
-              "parallel integration test needs an installed package")
+  skip_if_not(rasch:::.rasch_namespace_is_installed(),
+              "parallel integration test needs an installed package namespace")
   expect_true(rasch:::.rasch_namespace_is_installed())
   probe <- try(parallel::makePSOCKcluster(2L), silent = TRUE)
   skip_if(inherits(probe, "try-error"), "local socket clusters unavailable")

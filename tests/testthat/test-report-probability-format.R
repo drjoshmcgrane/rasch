@@ -2,6 +2,8 @@ test_that("frame unit report probabilities are formatted before relabelling", {
   skip_if_not_installed("knitr")
   template <- testthat::test_path("..", "..", "inst", "rmarkdown",
                                  "rasch-report.Rmd")
+  if (!file.exists(template))
+    template <- system.file("rmarkdown", "rasch-report.Rmd", package = "rasch")
   lines <- readLines(template, warn = FALSE)
   start <- which(lines == "```{r setup, include=FALSE}")
   end <- which(seq_along(lines) > start & lines == "```")[1L]

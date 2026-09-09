@@ -23,12 +23,14 @@ test_that("incomplete BTL pair coverage withholds the whole inference display", 
   incomplete <- d[!removed, ]
   fit <- btl(incomplete, "object_a", "object_b", winner = "winner",
               judge = "judge")
-  result <- btl_dimensionality(fit, reps = 20L, seed = 9691)
+  result <- btl_dimensionality(fit, reps = 20L, seed = 9691,
+                              independent_comparisons = TRUE)
   check_btl_dimensionality_withheld(result, fit)
 
   complete_fit <- btl(d, "object_a", "object_b", winner = "winner",
                        judge = "judge")
-  complete <- btl_dimensionality(complete_fit, reps = 20L, seed = 9691)
+  complete <- btl_dimensionality(complete_fit, reps = 20L, seed = 9691,
+                                independent_comparisons = TRUE)
   expect_true(complete$reference$inference_available)
   expect_true(all(is.finite(unlist(complete$reference[
     c("mean", "p95", "p", "p_adj")]))))
@@ -87,7 +89,8 @@ test_that("shared comparison order cannot retain a dimensionality probability", 
               judge = "judge", order = "order")
   expect_true(.btl_order_variation(fit$dependence_data,
                                    fit$objects$object)$shared)
-  result <- btl_dimensionality(fit, reps = 20L, seed = 9691)
+  result <- btl_dimensionality(fit, reps = 20L, seed = 9691,
+                              independent_comparisons = TRUE)
   check_btl_dimensionality_withheld(result, fit)
   expect_match(paste(result$notes, collapse = " "), "confounded")
 })
@@ -101,6 +104,64 @@ test_that("BTL frame dimensionality applies the incomplete-pair guard", {
   fit <- btl_efrm(d[!removed, ], "object_a", "object_b", winner = "winner",
     judge = "judge", panels = "panel", object_sets = sets,
     se_method = "conditional", boot_reps = 0)
-  result <- btl_dimensionality(fit, reps = 20L, seed = 9691)
+  result <- btl_dimensionality(fit, reps = 20L, seed = 9691,
+                              independent_comparisons = TRUE)
   check_btl_dimensionality_withheld(result, fit)
+})
+
+test_that("judge-clustered dimensionality requires an explicit independence assumption", {
+  d <- simulate_btl(6, 30, reps_per_pair = 30, seed = 15)
+  fit <- btl(d, "object_a", "object_b", "winner", judge = "judge")
+  default <- btl_dimensionality(fit, reps = 20L, seed = 8)
+  check_btl_dimensionality_withheld(default, fit)
+  expect_false(default$reference$independent_comparisons)
+  expect_match(paste(default$notes, collapse = " "), "not supply a cluster-robust")
+
+  sensitivity <- btl_dimensionality(fit, reps = 20L, seed = 8,
+                                     independent_comparisons = TRUE)
+  expect_true(sensitivity$reference$inference_available)
+  expect_true(sensitivity$reference$independent_comparisons)
+  expect_true(is.finite(sensitivity$reference$p))
+  expect_match(paste(sensitivity$notes, collapse = " "), "not cluster-robust")
+  expect_equal(default$residual_matrix, sensitivity$residual_matrix)
+  expect_equal(default$bimensions$strength, sensitivity$bimensions$strength)
+  expect_equal(default$reference$draws, sensitivity$reference$draws)
+  expect_no_error(.validate_btl_dimensionality(sensitivity, fit))
+
+  repeated <- d[rep(seq_len(nrow(d)), each = 10L), ]
+  fit_repeated <- btl(repeated, "object_a", "object_b", "winner", judge = "judge")
+  expect_equal(fit$objects$location, fit_repeated$objects$location, tolerance = 1e-8)
+  expect_equal(fit$objects$se, fit_repeated$objects$se, tolerance = 1e-8)
+  check_btl_dimensionality_withheld(
+    btl_dimensionality(fit_repeated, reps = 20L, seed = 8), fit_repeated)
+
+  legacy <- sensitivity
+  legacy$reference$independent_comparisons <- NULL
+  attr(legacy, "result_signature") <- NULL
+  attr(legacy, "result_signature") <- .fit_boot_md5(legacy)
+  expect_error(.validate_btl_dimensionality(legacy, fit), "recompute")
+})
+
+test_that("the dimensionality assumption has a strict and reversible API", {
+  d <- simulate_btl(5, 15, reps_per_pair = 30, seed = 9681)
+  fit <- btl(d, "object_a", "object_b", "winner")
+  automatic <- btl_dimensionality(fit, reps = 20L, seed = 3)
+  expect_true(automatic$reference$inference_available)
+  expect_true(automatic$reference$independent_comparisons)
+  check_btl_dimensionality_withheld(btl_dimensionality(fit,
+    reps = 20L, seed = 3, independent_comparisons = FALSE), fit)
+  for (bad in list(NA, 1, "TRUE", c(TRUE, FALSE), logical()))
+    expect_error(btl_dimensionality(fit, reps = 20L,
+      independent_comparisons = bad), "must be TRUE, FALSE, or NULL")
+
+  frame_data <- simulate_btl_efrm(4, 2, 5, 2, 10, 10, seed = 71)
+  frame <- btl_efrm(frame_data, "object_a", "object_b", "winner", "judge",
+    "panel", object_sets = attr(frame_data, "truth")$object_sets,
+    se_method = "conditional")
+  check_btl_dimensionality_withheld(
+    btl_dimensionality(frame, reps = 20L, seed = 3), frame)
+  explicit <- btl_dimensionality(frame, reps = 20L, seed = 3,
+                                 independent_comparisons = TRUE)
+  expect_true(explicit$reference$inference_available)
+  expect_no_error(.validate_btl_dimensionality(explicit, frame))
 })

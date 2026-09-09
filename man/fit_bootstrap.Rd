@@ -31,11 +31,13 @@ an observed response. This argument does not apply to paired comparisons.}
 
 \item{workers}{Number of parallel bootstrap workers. The default is four,
 reduced when fewer physical cores are available or the R process has a
-lower system limit. Per-replicate seeds are fixed before distribution,
-so results do not depend on the worker count.}
+lower system limit. Per-replicate seeds and random-number generator
+settings are shared, so results do not depend on the worker count.}
 
 \item{seed}{Optional non-negative whole-number seed within the integer
-range. The caller's random stream is restored on exit.}
+range. The caller's random stream is restored on exit. This calculation
+does not support Box--Muller, including when \code{seed = NULL};
+see \code{\link{rasch_rng}}.}
 }
 \value{
 An object of class \code{rasch_fit_bootstrap}. For a person-by-item
@@ -138,5 +140,6 @@ Westfall, P. H. and Young, S. S. (1993). \emph{Resampling-Based Multiple
   Testing}. Wiley.
 }
 \seealso{
-\code{\link{chisq_detail}} and \code{\link{btl}}.
+\code{\link{chisq_detail}}, \code{\link{btl}},
+  \code{\link{rasch_rng}}.
 }

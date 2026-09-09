@@ -864,7 +864,11 @@ explanatory_test <- function(fit) {
 }
 
 .explanatory_addable <- function(B, D) {
-  qr(cbind(B, D), tol = 1e-10)$rank - qr(B, tol = 1e-10)$rank
+  b_scale <- .design_column_scale(B)
+  augmented <- cbind(B, D)
+  a_scale <- .design_column_scale(augmented)
+  qr(sweep(augmented, 2L, a_scale, `/`), tol = 1e-10)$rank -
+    qr(sweep(B, 2L, b_scale, `/`), tol = 1e-10)$rank
 }
 
 # Keep a stable subset of a candidate block that adds exactly its remaining
@@ -872,19 +876,51 @@ explanatory_test <- function(fit) {
 # a polytomous item's threshold block; appending the whole block would then
 # make the refit rank deficient even though a genuine departure remains.
 .explanatory_addition <- function(B, D) {
+  # Rank decisions are made after column normalisation, while the returned
+  # residuals retain the caller's units. This separates a nearly represented
+  # added direction before the refitter scales its columns. Keeping the
+  # residual in D's units also keeps the reported departure coefficient on
+  # the same scale as the requested fixed departure.
   current <- B
-  current_rank <- qr(current, tol = 1e-10)$rank
+  current_rank <- qr(sweep(current, 2L, .design_column_scale(current), `/`),
+                     tol = 1e-10)$rank
+  stable <- matrix(numeric(0), nrow = nrow(D), ncol = 0L,
+                   dimnames = list(rownames(D), NULL))
+  raw_map <- matrix(numeric(0), nrow = ncol(D), ncol = 0L)
   keep <- integer(0)
   for (j in seq_len(ncol(D))) {
-    candidate <- cbind(current, D[, j, drop = FALSE])
-    candidate_rank <- qr(candidate, tol = 1e-10)$rank
+    d <- D[, j, drop = FALSE]
+    ds <- .design_column_scale(d)[1L]
+    d_work <- d / ds
+    current_scale <- .design_column_scale(current)
+    current_work <- sweep(current, 2L, current_scale, `/`)
+    q_current <- qr(current_work, tol = 1e-10)
+    candidate_rank <- qr(cbind(current_work, d_work),
+                         tol = 1e-10)$rank
     if (candidate_rank > current_rank) {
+      # This residual spans the same augmented model as d. It is deliberately
+      # not normalised here: the coefficient remains the requested
+      # departure, while the downstream fit scales the column internally.
+      residual <- qr.resid(q_current, d)
+      coef <- qr.coef(q_current, d)
+      raw <- numeric(ncol(D)); raw[j] <- 1
+      if (ncol(raw_map)) {
+        n_active <- ncol(B)
+        previous <- coef[seq.int(n_active + 1L, length(coef))] /
+          current_scale[seq.int(n_active + 1L, length(current_scale))]
+        raw <- raw - drop(raw_map %*% previous)
+      }
+      stable <- cbind(stable, residual)
+      raw_map <- cbind(raw_map, raw)
       keep <- c(keep, j)
-      current <- candidate
+      current <- cbind(current, residual)
       current_rank <- candidate_rank
     }
   }
-  .explanatory_unique_columns(D[, keep, drop = FALSE], colnames(B))
+  colnames(stable) <- colnames(D)[keep]
+  stable <- .explanatory_unique_columns(stable, colnames(B))
+  attr(stable, "raw_map") <- raw_map
+  stable
 }
 
 #' Diagnose fixed departures from an explanatory model
@@ -895,7 +931,8 @@ explanatory_test <- function(fit) {
 #' candidate family. The Kent departure tests are first-order asymptotic
 #' comparisons and do not use the finite-person-cluster correction applied to
 #' individual coefficients.
-#' A candidate with a withheld probability remains in that family.
+#' A candidate with a withheld probability, including a refit that errors or
+#' fails to converge, remains in that family.
 #'
 #' @param fit A fitted explanatory Rasch or comparative judgement model.
 #' @param p_adjust Multiplicity adjustment over the candidate departures.
@@ -904,8 +941,9 @@ explanatory_test <- function(fit) {
 #'   as weakly identified; their probabilities are withheld, since the
 #'   departure test rests on the same sparse categories, and a note on the
 #'   table records the withholding. The \code{converged} column identifies
-#'   candidate refits that converged. Statistics from a non-convergent
-#'   candidate are withheld, but it remains in the multiplicity family.
+#'   candidate refits that converged. Statistics from a failed or
+#'   non-convergent candidate are withheld, but it remains in the
+#'   multiplicity family.
 #' @export
 explanatory_diagnostics <- function(fit, p_adjust = "holm") {
   if (!is.character(p_adjust) || length(p_adjust) != 1L ||
@@ -928,17 +966,39 @@ explanatory_diagnostics <- function(fit, p_adjust = "holm") {
       D <- (diag(length(objects)) - 1 / length(objects)) %*% D
       rownames(D) <- objects
       colnames(D) <- paste0("departure[", objects[j], "]")
-      if (qr(cbind(B, D), tol = 1e-10)$rank == qr(B, tol = 1e-10)$rank)
+      D <- tryCatch(.explanatory_addition(B, D),
+                    error = function(e) e)
+      if (inherits(D, "error")) {
+        rows[[length(rows) + 1L]] <- data.frame(
+          object = objects[j], component = "Object location",
+          parameters_added = 1L, departure = NA_real_,
+          deviance_reduction = NA_real_, df = NA_integer_, p = NA_real_,
+          converged = FALSE, stringsAsFactors = FALSE)
         next
-      cand <- .btl_explanatory_refit(fit, cbind(B, D),
-                                     fit$explanatory$relaxations)
-      converged <- isTRUE(cand$converged)
-      tst <- if (converged) .btl_explanatory_nested_test(cand, fit) else
-        list(chisq = NA_real_, df = NA_integer_, p_kent = NA_real_)
+      }
+      if (!ncol(D))
+        next
+      cand <- tryCatch(
+        .btl_explanatory_refit(fit, cbind(B, D),
+                               fit$explanatory$relaxations),
+        error = function(e) e)
+      converged <- !inherits(cand, "error") && isTRUE(cand$converged)
+      if (inherits(cand, "error")) {
+        tst <- list(chisq = NA_real_, df = NA_integer_, p_kent = NA_real_)
+      } else if (converged) {
+        tst <- tryCatch(.btl_explanatory_nested_test(cand, fit),
+                        error = function(e) {
+                          converged <<- FALSE
+                          list(chisq = NA_real_, df = NA_integer_,
+                               p_kent = NA_real_)
+                        })
+      } else {
+        tst <- list(chisq = NA_real_, df = NA_integer_, p_kent = NA_real_)
+      }
       rows[[length(rows) + 1L]] <- data.frame(
         object = objects[j], component = "Object location",
         parameters_added = 1L,
-        departure = if (converged)
+        departure = if (converged && !inherits(cand, "error"))
           utils::tail(cand$object_coefficients$estimate, 1L) else NA_real_,
         deviance_reduction = tst$chisq, df = tst$df, p = tst$p_kent,
         converged = converged, stringsAsFactors = FALSE)
@@ -954,8 +1014,9 @@ explanatory_diagnostics <- function(fit, p_adjust = "holm") {
     rownames(out) <- NULL
     attr(out, "p_adjust") <- p_adjust
     if (any(!out$converged))
-      attr(out, "note") <- paste("statistics are withheld for non-convergent",
-        "candidate refits; those candidates remain in the adjustment family")
+      attr(out, "note") <- paste("statistics are withheld for failed or",
+        "non-convergent candidate refits; those candidates remain in the",
+        "adjustment family")
     return(.tag_tables(out))
   }
   if (!inherits(fit, "rasch_explanatory"))
@@ -967,31 +1028,57 @@ explanatory_diagnostics <- function(fit, p_adjust = "holm") {
     stop("p_adjust must name a method in stats::p.adjust.methods")
   B <- fit$est$B; rows <- list()
   spec <- fit$refit_spec
+  # Candidate construction, refitting and nested testing are deliberately
+  # isolated below. One singular candidate must remain an unavailable member
+  # of the Holm family rather than aborting all later departures.
   for (item in colnames(fit$X)) for (component in c("location", "thresholds")) {
-    if (component == "thresholds" && fit$m[match(item, colnames(fit$X))] < 2L)
+    ii <- match(item, colnames(fit$X))
+    nominal_add <- if (component == "location") 1L else
+      max(fit$m[ii] - 1L, 0L)
+    if (component == "thresholds" && fit$m[ii] < 2L)
       next
-    D <- .explanatory_addition(
-      B, .explanatory_candidate(fit, item, component))
-    add <- ncol(D)
-    if (!add) next
-    candB <- cbind(B, D)
-    est <- .pcml_design(fit$X, candB, colnames(candB),
-                        maxit = spec$maxit, tol = spec$tol,
-                        cluster = fit$person$id)
-    converged <- isTRUE(est$converged)
-    tst <- if (converged) .pcml_nested_test(est, fit$est) else
-      list(chisq = NA_real_, df = NA_integer_, p_kent = NA_real_)
+    D_raw <- tryCatch(.explanatory_candidate(fit, item, component),
+      error = function(e) e)
+    D <- if (inherits(D_raw, "error")) D_raw else
+      tryCatch(.explanatory_addition(B, D_raw),
+      error = function(e) e)
+    if (inherits(D, "error")) {
+      add <- nominal_add
+      est <- D
+    } else {
+      add <- ncol(D)
+      if (!add) next
+      candB <- cbind(B, D)
+      est <- tryCatch(.pcml_design(fit$X, candB, colnames(candB),
+                                  maxit = spec$maxit, tol = spec$tol,
+                                  cluster = fit$person$id),
+                      error = function(e) e)
+    }
+    converged <- !inherits(est, "error") && isTRUE(est$converged)
+    if (inherits(est, "error")) {
+      tst <- list(chisq = NA_real_, df = NA_integer_, p_kent = NA_real_)
+    } else if (converged) {
+      tst <- tryCatch(.pcml_nested_test(est, fit$est),
+                      error = function(e) {
+                        converged <<- FALSE
+                        list(chisq = NA_real_, df = NA_integer_,
+                             p_kent = NA_real_)
+                      })
+    } else {
+      tst <- list(chisq = NA_real_, df = NA_integer_, p_kent = NA_real_)
+    }
     departure <- NA_real_
-    if (converged) {
+    if (converged && !inherits(est, "error")) {
       b <- utils::tail(est$beta, ncol(D))
-      departure <- if (component == "location") unname(b[1L]) else
-        max(abs(drop(D %*% b)))
+      raw_map <- attr(D, "raw_map")
+      b_raw <- if (is.null(raw_map)) b else drop(raw_map %*% b)
+      departure <- if (component == "location") unname(b_raw[1L]) else
+        max(abs(drop(D_raw %*% b_raw)))
     }
     # a departure test rests on the same sparse categories that made the
     # item's thresholds weak; the probability is withheld there, as the
     # threshold standard errors already are, and the departure stays
     # descriptive
-    ii <- match(item, colnames(fit$X))
     weak_item <- isTRUE(any(fit$thresholds$weak[fit$thresholds$item == ii]))
     rows[[length(rows) + 1L]] <- data.frame(
       item = item, component = if (component == "location")
@@ -1018,8 +1105,9 @@ explanatory_diagnostics <- function(fit, p_adjust = "holm") {
       "item(s) with weak thresholds:",
       paste(unique(out$item[out$weak]), collapse = ", ")))
   if (any(!out$converged))
-    notes <- c(notes, paste("statistics are withheld for non-convergent",
-      "candidate refits; those candidates remain in the adjustment family"))
+    notes <- c(notes, paste("statistics are withheld for failed or",
+      "non-convergent candidate refits; those candidates remain in the",
+      "adjustment family"))
   if (length(notes)) attr(out, "note") <- paste(notes, collapse = "; ")
   out <- out[order(out$p_adj, -out$deviance_reduction), , drop = FALSE]
   rownames(out) <- NULL

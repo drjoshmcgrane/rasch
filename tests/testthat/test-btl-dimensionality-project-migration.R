@@ -1,4 +1,7 @@
 legacy_btl_dimension_reference <- function(result, flag = result$leading_structured) {
+  # Keep this fixture current with the residual definition while making its
+  # reference metadata deliberately legacy/unsupported.
+  result$residual_method <- "pooled-expected-score-1"
   result$reference$inference_available <- NULL
   result$reference$mean <- mean(result$reference$draws)
   result$reference$p95 <- as.numeric(quantile(result$reference$draws, .95))
@@ -96,7 +99,8 @@ test_that("authenticated projects omit only unsupported legacy CJ references", {
 test_that("supported legacy CJ references survive project migration", {
   d <- simulate_btl(4, 12, reps_per_pair = 20, seed = 9711)
   fit <- btl(d, "object_a", "object_b", winner = "winner", judge = "judge")
-  old <- btl_dimensionality(fit, reps = 20L, seed = 9712)
+  old <- btl_dimensionality(fit, reps = 20L, seed = 9712,
+                            independent_comparisons = TRUE)
   old$reference$inference_available <- NULL
   attr(old, "result_signature") <- NULL
   attr(old, "result_signature") <- .fit_boot_md5(old)
@@ -109,6 +113,27 @@ test_that("supported legacy CJ references survive project migration", {
   expect_identical(restored$results$dimensionality, old)
   expect_identical(restored$binding, project$binding)
   expect_null(attr(restored, "rasch_project_legacy_dropped"))
+})
+
+test_that("clustered legacy CJ references without explicit independence are dropped", {
+  d <- simulate_btl(4, 12, reps_per_pair = 20, seed = 9721)
+  fit <- btl(d, "object_a", "object_b", winner = "winner", judge = "judge")
+  expect_true(isTRUE(fit$clustered))
+  old <- btl_dimensionality(fit, reps = 20L, seed = 9722,
+                            independent_comparisons = TRUE)
+  old$reference$independent_comparisons <- NULL
+  attr(old, "result_signature") <- NULL
+  attr(old, "result_signature") <- .fit_boot_md5(old)
+  project <- btl_dimension_project(d, fit, old)
+  path <- tempfile(fileext = ".rasch")
+  on.exit(unlink(path), add = TRUE)
+  saveRDS(project, path)
+
+  expect_warning(restored <- .read_app_project(path),
+                 "dimensionality reference.*unsupported comparison design")
+  expect_null(restored$results$dimensionality)
+  expect_identical(restored$base_fit, fit)
+  expect_no_error(.validate_app_project(restored))
 })
 
 test_that("old frame references are checked against actual pair coverage", {
@@ -134,4 +159,53 @@ test_that("old frame references are checked against actual pair coverage", {
   expect_null(restored$results$dimensionality)
   expect_identical(restored$base_fit, fit)
   expect_no_error(.validate_app_project(restored))
+})
+
+test_that("CJ dimensionality with an obsolete residual definition is omitted", {
+  d <- simulate_btl(4, 12, reps_per_pair = 20, seed = 9731)
+  fit <- btl(d, "object_a", "object_b", winner = "winner", judge = "judge")
+  current <- btl_dimensionality(fit, reps = 20L, seed = 9732)
+  # The current result is descriptive for clustered judges; no finite
+  # reference is needed to trigger this migration.
+  current$residual_method <- "pooled-expected-score-1"
+  for (method in list(NULL, "row-residuals-0")) {
+    stale <- current
+    stale$residual_method <- method
+    stale$reference$mean <- stale$reference$p95 <- NA_real_
+    stale$reference$p <- stale$reference$p_adj <- NA_real_
+    stale$bimensions$ref_mean <- stale$bimensions$ref_p95 <- NA_real_
+    attr(stale, "result_signature") <- NULL
+    attr(stale, "result_signature") <- .fit_boot_md5(stale)
+    project <- btl_dimension_project(d, fit, stale)
+    path <- tempfile(fileext = ".rasch")
+    on.exit(unlink(path), add = TRUE)
+    saveRDS(project, path)
+
+    expect_warning(restored <- .read_app_project(path),
+                   "earlier residual definition.*rerun dimensionality")
+    expect_null(restored$results$dimensionality)
+    expect_identical(restored$data, project$data)
+    expect_identical(restored$base_fit, project$base_fit)
+    expect_identical(restored$btl_steps, project$btl_steps)
+    expect_no_error(.validate_app_project(restored))
+
+    # A signed result that no longer authenticates must fail rather than be
+    # silently accepted as an obsolete result.
+    bad <- project
+    bad$results$dimensionality$residual_matrix[1L, 1L] <-
+      bad$results$dimensionality$residual_matrix[1L, 1L] + 0.01
+    saveRDS(.seal_app_project(bad), path)
+    expect_error(.read_app_project(path), "result from this fitted model")
+
+    # Schema-1 files have no enclosing binding, but a valid result signature
+    # still authenticates the old result before it is omitted.
+    project$schema <- 1L
+    project$binding <- NULL
+    saveRDS(project, path)
+    expect_warning(restored <- .read_app_project(path),
+                   "schema-1.*rerun dimensionality")
+    expect_null(restored$results$dimensionality)
+    expect_identical(restored$base_fit, project$base_fit)
+    expect_no_error(.validate_app_project(restored))
+  }
 })

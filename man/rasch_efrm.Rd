@@ -88,7 +88,8 @@ a fixed seed gives the same result for any worker count. Every worker
 holds its own copy of the bootstrap state.}
 
 \item{seed}{Optional bootstrap seed. The caller's random-number state is
-restored when estimation finishes.}
+restored when estimation finishes; see \code{\link{rasch_rng}} for
+generator support.}
 }
 \value{
 An object of classes \code{"rasch_efrm"} and \code{"rasch"}.
@@ -147,7 +148,12 @@ thresholds across groups. Item sets partition the items, so set ratios
 \eqn{\alpha_s} are identified instead from persons observed in more than
 one set. The
 set-linking graph and the group-by-set frame graph must each connect to a
-common scale.
+common scale. Direct overlap between every pair of item sets is not
+required: sets can be linked through intermediate sets. Pairs without
+enough informative common persons contribute no edge; the remaining
+graph must still connect all sets. A bootstrap replicate is unusable if
+any supported link fails numerically or does not converge, even when
+other links still connect the sets.
 
 Set units use a semiparametric likelihood for persons observed in each
 linked pair of sets. For sets \eqn{a} and \eqn{b}, it maximises
@@ -189,7 +195,8 @@ person bootstrap for set linking. Each replicate jointly redraws the
 within-frame thresholds and group units, then rebuilds the link. The joint
 draws retain covariance among common-scale thresholds, set units and group
 units. With \code{se_method = "bootstrap"}, the complete model is refitted
-to each person resample.
+to each person resample. Refits that do not converge or have unidentified
+group units are discarded and counted as failed replicates.
 
 The \code{efrm_vs_rasch} component records the within-frame composite
 log-likelihood comparison between group-dependent and equal group units.

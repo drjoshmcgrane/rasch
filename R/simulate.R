@@ -18,8 +18,18 @@
 # caller's random number stream: capture the stream, seed, and restore on
 # exit, so simulate_*(seed = s) twice gives the same data while code after
 # the call draws exactly what it would have drawn anyway. Restoring an
-# absent stream means removing the one set.seed() created.
+# absent stream means removing the one set.seed() created. Box-Muller's
+# cached second normal is not stored in .Random.seed and cannot be restored.
+.sim_seed_check <- function() {
+  if (identical(RNGkind()[2L], "Box-Muller"))
+    stop("this calculation cannot preserve the Box-Muller random-number ",
+         "stream; use RNGkind(normal.kind = \"Inversion\") before setting ",
+         "your analysis seed (see ?rasch_rng)", call. = FALSE)
+  invisible(NULL)
+}
+
 .sim_seed_capture <- function() {
+  .sim_seed_check()
   if (exists(".Random.seed", envir = globalenv(), inherits = FALSE))
     get(".Random.seed", envir = globalenv(), inherits = FALSE)
   else NULL
@@ -34,6 +44,28 @@
   }
   invisible(NULL)
 }
+
+#' Random-number generation
+#'
+#' Supplying a \code{seed} makes a simulation or bootstrap reproducible and
+#' restores the caller's random-number stream on exit. Bootstrap methods
+#' that assign seeds to individual replicates also restore those local streams.
+#'
+#' These operations do not support R's Box--Muller normal generator: its
+#' cached normal value is not part of \code{.Random.seed}, so restoring that
+#' vector would change subsequent draws. They refuse before changing the
+#' stream. Direct \code{simulate_*} calls with \code{seed = NULL} can still
+#' use Box--Muller. \code{\link{sim_replicate}} assigns replicate seeds even
+#' when its own \code{seed} is \code{NULL}.
+#'
+#' The default Inversion generator is supported. To select it explicitly,
+#' use \code{RNGkind(normal.kind = "Inversion")} before setting the seed
+#' for the analysis. Changing the generator starts a different normal stream;
+#' it does not recover a previous Box--Muller stream.
+#' @name rasch_rng
+#' @seealso \code{\link[base]{Random}}, \code{\link{simulate_rasch}},
+#'   \code{\link{fit_bootstrap}}, \code{\link{dif_bootstrap}}.
+NULL
 
 .sim_count <- function(x, name, min = 1L) {
   if (length(x) != 1L || !is.numeric(x) || is.complex(x) ||
@@ -318,7 +350,8 @@
 #' @param missing Proportion of responses set missing completely at random,
 #'   drawn from cells not already missing through speededness. The requested
 #'   count must fit among those cells and leave at least one observed response.
-#' @param seed Optional non-negative whole-number RNG seed.
+#' @param seed Optional non-negative whole-number RNG seed. See
+#'   \code{\link{rasch_rng}} for generator support.
 #' @return A data frame of class \code{"rasch_sim"} (item columns
 #'   \code{I01}..., an \code{id} column, and a \code{group} column when
 #'   grouped), with \code{attr(x, "truth")} holding the generating parameters
@@ -864,7 +897,8 @@ print.rasch_sim <- function(x, ...) {
 #'   within-judge order effects (a seen-before advantage and a pull from the
 #'   judge's own earlier verdicts). Adds an \code{order} column. Feeds the
 #'   dependence effects fitted by \code{\link{btl}}.
-#' @param seed Optional non-negative whole-number RNG seed.
+#' @param seed Optional non-negative whole-number RNG seed. See
+#'   \code{\link{rasch_rng}} for generator support.
 #' @return A data frame of class \code{"rasch_sim"}: \code{object_a},
 #'   \code{object_b}, \code{winner} (or \code{response} when polytomous),
 #'   \code{judge}, and \code{order} when dependence is planted; with
@@ -1061,7 +1095,8 @@ simulate_btl <- function(n_objects = 8, n_judges = 12, reps_per_pair = 25,
 #'   fit residual and the item-by-rater interaction). Its requested count
 #'   must fit among the non-erratic raters and leave an ordinary rater.
 #'   A positive halo proportion requires \code{item_sd > 0}.
-#' @param seed Optional non-negative whole-number RNG seed.
+#' @param seed Optional non-negative whole-number RNG seed. See
+#'   \code{\link{rasch_rng}} for generator support.
 #' @return A long data frame of class \code{"rasch_sim"} (\code{person},
 #'   \code{item}, \code{rater}, \code{score}) ready for
 #'   \code{\link{rasch_mfrm}}, with the truth attached.
@@ -1221,7 +1256,8 @@ simulate_mfrm <- function(n_persons = 80, n_items = 5, n_raters = 6,
 #' @param missing Proportion of response cells set missing completely at
 #'   random after the responses are generated. It must leave at least one
 #'   observed response.
-#' @param seed Optional non-negative whole-number RNG seed.
+#' @param seed Optional non-negative whole-number RNG seed. See
+#'   \code{\link{rasch_rng}} for generator support.
 #' @return A wide data frame of class \code{"rasch_sim"}, containing an ID,
 #'   item columns, and group. Its truth attribute contains the item-set map
 #'   required by \code{\link{rasch_efrm}}.
@@ -1443,6 +1479,7 @@ simulate_efrm <- function(n_per_group = 300, items_per_set = 8, n_sets = 2,
 #' @param n Number of datasets.
 #' @param ... Arguments passed to \code{FUN} (the same each replicate).
 #' @param seed Seed of the first replicate (each subsequent one increments it).
+#'   See \code{\link{rasch_rng}} for generator support.
 #' @return A list of class \code{"rasch_sim_batch"}, one simulated dataset per
 #'   element.
 #' @examples
@@ -1459,6 +1496,7 @@ simulate_efrm <- function(n_per_group = 300, items_per_set = 8, n_sets = 2,
 sim_replicate <- function(FUN, n, ..., seed = NULL) {
   if (!is.function(FUN)) stop("FUN must be a simulation function")
   n <- .sim_count(n, "n")
+  .sim_seed_check()
   base <- if (is.null(seed)) sample.int(1e6, 1L)
           else .sim_seed(seed)
   if (base > .Machine$integer.max - n + 1L)
@@ -1754,8 +1792,16 @@ print.rasch_sim_batch <- function(x, ...) {
   .recovery_sort_records(ans, c(key_fields, "weight"))
 }
 
+.recovery_btl_source <- function(fit) {
+  # Current BTL fits retain the usable source rows before free boundary
+  # objects are set aside.  Older saved fits have only `comparisons`, so keep
+  # that representation as the compatibility fallback.
+  fit$observed_comparisons %||% fit$comparisons
+}
+
 .recovery_check_btl <- function(fit, sim) {
-  if (is.null(fit$comparisons)) return(invisible(NULL))
+  source <- .recovery_btl_source(fit)
+  if (is.null(source)) return(invisible(NULL))
   if (!is.data.frame(sim) ||
       !all(c("object_a", "object_b", "judge") %in% names(sim)))
     .recovery_mismatch("the paired-comparison source columns are unavailable")
@@ -1771,21 +1817,21 @@ print.rasch_sim_batch <- function(x, ...) {
     .recovery_mismatch("the simulated comparison outcome is unavailable")
   presented <- !is.null(fit$dependence) ||
     isTRUE((fit$refit_spec %||% list())$position)
-  ord_fit <- if (presented && "order" %in% names(fit$comparisons))
-    fit$comparisons$order else NULL
+  ord_fit <- if (presented && "order" %in% names(source))
+    source$order else NULL
   ord_sim <- if (!is.null(ord_fit) && "order" %in% names(sim)) sim$order else NULL
   if (!is.null(ord_fit) && is.null(ord_sim))
     .recovery_mismatch("the fitted comparison order is absent from the simulation")
-  panel_fit <- if ("panel" %in% names(fit$comparisons))
-    fit$comparisons$panel else NULL
+  panel_fit <- if ("panel" %in% names(source))
+    source$panel else NULL
   panel_sim <- if (!is.null(panel_fit) && "panel" %in% names(sim))
     sim$panel else NULL
   if (!is.null(panel_fit) && is.null(panel_sim))
     .recovery_mismatch("the fitted panel allocation is absent from the simulation")
   got <- .recovery_btl_records(
-    fit$comparisons$object_a, fit$comparisons$object_b,
-    fit$comparisons$response, fit$comparisons$weight,
-    fit$comparisons$judge, m, presented, ord_fit, panel_fit)
+    source$object_a, source$object_b,
+    source$response, source$weight,
+    source$judge, m, presented, ord_fit, panel_fit)
   expected <- .recovery_btl_records(
     sim$object_a, sim$object_b, response, rep(1, nrow(sim)), sim$judge,
     m, presented, ord_sim, panel_sim)
@@ -1842,7 +1888,7 @@ print.rasch_sim_batch <- function(x, ...) {
          "this simulation truth does not record judge-to-panel membership",
          call. = FALSE)
   }
-  cmp <- fit$comparisons
+  cmp <- .recovery_btl_source(fit)
   if (is.null(cmp) || !all(c("judge", "panel") %in% names(cmp)))
     stop("the fitted judge-to-panel membership is unavailable", call. = FALSE)
   fp <- split(.role_text_values(cmp$panel), .role_text_values(cmp$judge))
@@ -2339,7 +2385,8 @@ plot_recovery <- function(x, ...) {
 #' @param erratic_judges Proportion of judges who choose between the two
 #'   objects at random. At least one judge in every panel must retain
 #'   model-based comparisons.
-#' @param seed Optional non-negative whole-number RNG seed.
+#' @param seed Optional non-negative whole-number RNG seed. See
+#'   \code{\link{rasch_rng}} for generator support.
 #' @return A data frame of class \code{"rasch_sim"} with columns
 #'   \code{object_a}, \code{object_b}, \code{winner}, \code{judge} and
 #'   \code{panel}, and \code{attr(x, "truth")} holding the common-scale values

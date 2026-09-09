@@ -858,6 +858,7 @@
   workers <- .check_whole(workers, "workers", 1)
   if (!is.null(seed)) seed <- .check_whole(seed, "seed", 0)
   workers <- min(workers, .rasch_available_workers())
+  .sim_seed_check()
   if (!is.null(seed)) {
     old <- .sim_seed_capture(); on.exit(.sim_seed_restore(old), add = TRUE)
     set.seed(seed)
@@ -1169,10 +1170,12 @@
 #'   an observed response. This argument does not apply to paired comparisons.
 #' @param workers Number of parallel bootstrap workers. The default is four,
 #'   reduced when fewer physical cores are available or the R process has a
-#'   lower system limit. Per-replicate seeds are fixed before distribution,
-#'   so results do not depend on the worker count.
+#'   lower system limit. Per-replicate seeds and random-number generator
+#'   settings are shared, so results do not depend on the worker count.
 #' @param seed Optional non-negative whole-number seed within the integer
-#'   range. The caller's random stream is restored on exit.
+#'   range. The caller's random stream is restored on exit. This calculation
+#'   does not support Box--Muller, including when \code{seed = NULL};
+#'   see \code{\link{rasch_rng}}.
 #' @return An object of class \code{rasch_fit_bootstrap}. For a person-by-item
 #'   fit, it contains \code{items},
 #'   \code{persons}, \code{total}, \code{replicates}, adjustment metadata and
@@ -1196,7 +1199,8 @@
 #'
 #' Westfall, P. H. and Young, S. S. (1993). \emph{Resampling-Based Multiple
 #'   Testing}. Wiley.
-#' @seealso \code{\link{chisq_detail}} and \code{\link{btl}}.
+#' @seealso \code{\link{chisq_detail}}, \code{\link{btl}},
+#'   \code{\link{rasch_rng}}.
 #' @examples
 #' set.seed(1)
 #' d <- seq(-1.5, 1.5, length.out = 6)
@@ -1240,6 +1244,7 @@ fit_bootstrap <- function(fit, B = 200,
   theta <- match.arg(theta)
   workers <- .check_whole(workers, "workers", 1)
   workers <- min(workers, .rasch_available_workers())
+  .sim_seed_check()
 
   if (!is.null(seed)) {
     seed <- .check_whole(seed, "seed", 0)

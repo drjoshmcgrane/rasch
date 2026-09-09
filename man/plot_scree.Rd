@@ -29,7 +29,8 @@ adjustment covers these components.}
 reference.}
 
 \item{seed}{Optional non-negative whole-number seed. The caller's random-
-number state is restored when the calculation finishes.}
+number state is restored when the calculation finishes; see
+\code{\link{rasch_rng}} for generator support.}
 
 \item{result}{Optional result returned by an earlier call. Supplying it
 redraws that analysis without repeating the simulations.}

@@ -39,7 +39,8 @@ frame unit scaling the whole exponent as in the dichotomous case.}
 must be positive when more than one item set is generated because relative
 set units are identified from person variation shared across sets.}
 
-\item{seed}{Optional non-negative whole-number RNG seed.}
+\item{seed}{Optional non-negative whole-number RNG seed. See
+\code{\link{rasch_rng}} for generator support.}
 
 \item{item_drift}{Optional \code{list(items=, group=, shift=)}. The named
 item or items move by \code{shift} logits in one generated person group,

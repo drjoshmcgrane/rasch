@@ -365,14 +365,48 @@
 
 .dif_boot_refit_efrm <- function(X, fit, design) {
   spec <- fit$refit_spec %||% list()
-  frame_name <- fit$frame_group[1L]
-  group <- fit$factors[[frame_name]]
-  if (is.null(group)) return(.fit_boot_failure("error"))
   base <- tryCatch(.dif_efrm_matrix(X, fit),
                    error = function(e) .fit_boot_failure("error"))
   if (inherits(base, "rasch_fit_boot_failure")) return(base)
+
+  # A by-value frame gets a default name, which must not replace the original
+  # role names when DIF is tested. Retain the frame components and ordinary
+  # factors independently of the response matrix's item names.
+  frame_names <- spec$groups
+  if (is.null(frame_names)) {
+    frame_names <- if (length(fit$frame_group) > 1L)
+      fit$frame_group[-1L] else fit$frame_group[1L]
+  }
+  frame_names <- as.character(frame_names)
+  frame_group <- as.character(fit$frame_group %||% character(0))
+  factor_names <- spec$factors
+  if (is.null(factor_names))
+    factor_names <- setdiff(names(fit$factors %||% data.frame()), frame_group)
+  factor_names <- as.character(factor_names)
+  role_names <- unique(c(frame_names, factor_names))
+  fac <- fit$factors
+  primary_frame <- frame_group[1L]
+  if (is.null(fac) || !is.data.frame(fac) ||
+      !length(frame_names) || anyNA(role_names) ||
+      !length(primary_frame) || !primary_frame %in% names(fac) ||
+      any(!frame_names %in% names(fac)) ||
+      any(!factor_names %in% names(fac)) ||
+      any(vapply(fac[unique(c(frame_group, factor_names))], length,
+                 integer(1)) != nrow(base)))
+    return(.fit_boot_failure("error"))
+  item_names <- colnames(base)
+  if (is.null(item_names))
+    return(.fit_boot_failure("error"))
+  # Keep the reduced response matrix's item names intact.  Supplying the
+  # combined frame by value avoids a collision when an external ordinary
+  # factor happens to use an item name; explicit items= still makes that
+  # distinction unambiguous.  The original role metadata is restored below.
+  factor_data <- if (length(factor_names)) fac[factor_names] else NULL
   bf <- tryCatch(rasch_efrm(
-    base, item_sets = fit$set_of, groups = group, id = fit$person$id,
+    base, item_sets = fit$set_of, groups = fac[[primary_frame]],
+    id = fit$person$id,
+    factors = factor_data,
+    items = item_names,
     n_groups = .refit_n_groups(fit),
     maxit = spec$maxit %||% 50L, tol = spec$tol %||% 1e-7,
     min_link_persons = spec$min_link_persons %||% 30L,
@@ -380,6 +414,10 @@
     error = function(e) .fit_boot_failure("error"))
   if (inherits(bf, "rasch_fit_boot_failure")) return(bf)
   if (!isTRUE(bf$est$converged)) return(.fit_boot_failure("nonconverged"))
+  bf$frame_group <- fit$frame_group
+  bf$factors <- fac[unique(c(frame_group, factor_names)), , drop = FALSE]
+  bf$refit_spec$groups <- frame_names
+  bf$refit_spec$factors <- factor_names
   if (!identical(as.character(bf$virtual_map$vkey),
                  as.character(fit$virtual_map$vkey)) ||
       !identical(as.integer(bf$m), as.integer(fit$m)))
@@ -509,7 +547,7 @@
 #'   probabilities; the requested, usable, non-converged and
 #'   failed counts are recorded separately.
 #' @seealso \code{\link{dif_anova}}, \code{\link{btl_dif}},
-#'   \code{\link{fit_bootstrap}}
+#'   \code{\link{fit_bootstrap}}, \code{\link{rasch_rng}}
 #' @references
 #' Andrich, D. and Marais, I. (2019). \emph{A Course in Rasch Measurement
 #' Theory}. Springer.
@@ -598,6 +636,7 @@ dif_bootstrap <- function(fit, dif = NULL, B = 999, workers = 4L,
   # A minimum-p probability has resolution 1/(B+1), irrespective of family
   # size.  Ninety-nine draws are still only a one-percentage-point grid, so
   # label smaller runs as exploratory rather than pretending to precision.
+  .sim_seed_check()
   K <- nrow(obs)
   if (B < 99L)
     warning("B = ", B, " gives a coarse minimum-p reference for ", K,

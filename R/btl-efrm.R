@@ -78,6 +78,36 @@
   vapply(seq_len(n), find, 1L)
 }
 
+# Strong components of a directed within-set win graph.  This is deliberately
+# evaluated after pooling the set over panels: panels may cover different pairs,
+# and the stage-one object locations are estimated from their joint design.
+# Requiring every panel's own graph to be strongly connected would reject valid
+# incomplete panel allocations.
+.btlef_strong_components <- function(adj) {
+  n <- nrow(adj)
+  reachable <- function(start, graph = adj) {
+    seen <- rep(FALSE, n); seen[start] <- TRUE; front <- start
+    while (length(front)) {
+      next_nodes <- which(colSums(graph[front, , drop = FALSE]) > 0 & !seen)
+      seen[next_nodes] <- TRUE
+      front <- next_nodes
+    }
+    seen
+  }
+  # Almost every usable bootstrap draw has a single component. Two graph
+  # searches establish that; enumerate components only for a refused draw.
+  if (all(reachable(1L)) && all(reachable(1L, t(adj))))
+    return(rep.int(1L, n))
+  reach <- vapply(seq_len(n), reachable, logical(n))
+  mutual <- reach & t(reach)
+  component <- integer(n); label <- 0L
+  for (i in seq_len(n)) if (!component[i]) {
+    label <- label + 1L
+    component[mutual[, i]] <- label
+  }
+  component
+}
+
 # Stage 1 bilinear solve for ONE frame set (or for the pooled single-unit
 # model, called with one panel). Objects are indexed 1..K; panel is a
 # character vector per comparison; the most-used panel is the reference
@@ -158,8 +188,17 @@
   Sc <- rowsum(Sr, jd)
   nc <- nrow(Sc)
   cluster_ok <- nc >= 10L && nc > np
+  # Keep the CR1-scaled influence contribution of each named judge.  Sets are
+  # fitted separately, but a judge can contribute to several sets; retaining
+  # these rows lets the reconciliation recover their cross-set covariance.
+  # Scaling each block before alignment preserves its existing CR1 marginal
+  # covariance even when sets contain only partially overlapping judge pools.
+  influence_theta <- Sc %*% bread
+  if (nc > 1L)
+    influence_theta <- influence_theta * sqrt(nc / (nc - 1))
+  else influence_theta[,] <- NA_real_
   cov_theta <- if (nc > 1L) {
-    bread %*% (crossprod(Sc) * nc / (nc - 1)) %*% bread
+    crossprod(influence_theta)
   } else {
     matrix(NA_real_, np, np)
   }
@@ -176,16 +215,21 @@
   rho_p <- if (is.null(rho_fixed)) setNames(rep(1, length(present)), present)
            else rho_fixed[present]
   cov_lrho <- matrix(0, Gf, Gf, dimnames = list(free, free))
+  influence_lrho <- matrix(numeric(0), nc, Gf,
+    dimnames = list(rownames(Sc), free))
   if (Gf) {
     li <- (K - 1L) + seq_len(Gf)
     rho_p[free] <- exp(theta[li])
     cov_lrho <- cov_theta[li, li, drop = FALSE]
+    influence_lrho <- influence_theta[, li, drop = FALSE]
+    dimnames(influence_lrho) <- list(rownames(Sc), free)
     if (!cluster_ok) cov_lrho[] <- NA_real_
     dimnames(cov_lrho) <- list(free, free)
   }
   list(beta = cur$beta, se_beta = se_beta, p = cur$p, ll = cur$ll,
        ref = ref, panels = present, rho = rho_p, free = free,
-       cov_lrho = cov_lrho, converged = conv, rank_ok = rank_ok,
+       cov_lrho = cov_lrho, influence_lrho = influence_lrho,
+       converged = conv, rank_ok = rank_ok,
        n_clusters = nc, n_parameters = np, cluster_ok = cluster_ok)
 }
 
@@ -193,10 +237,11 @@
 # geometric mean one, by generalised least squares on the panel graph. Each
 # set contributes the observations log rho_{gs} = log phi_g - log phi_{ref(s)}
 # for its free panels g, with the within-set covariance of those log-ratios
-# carried across from stage 1; the observations are independent between sets,
-# so the full observation covariance is block-diagonal by set. GLS on this
-# gives both the precision-weighted point estimate (the reconciliation over
-# the sets where a panel appears) and correctly correlated standard errors.
+# carried across from stage 1. The point estimate retains these within-set
+# precision weights. Its covariance additionally aligns the stage-one judge
+# influence rows across sets, because one judge can contribute comparisons to
+# several sets. This produces the joint cluster sandwich without requiring its
+# possibly singular full covariance to be inverted.
 # Errors informatively when the panels are not connected through shared sets.
 .btlef_reconcile_phi <- function(panels_u, blocks) {
   G <- length(panels_u)
@@ -206,12 +251,14 @@
                 lphi = setNames(0, panels_u),
                 cov_log_phi = matrix(0, 1L, 1L,
                   dimnames = list(panels_u, panels_u))))
-  # flatten the per-set blocks into one observation vector, design and
-  # block-diagonal covariance
+  # Flatten the per-set blocks into one observation vector and the
+  # block-diagonal covariance retained for point-estimate precision weights.
   y <- numeric(0); pan <- ref <- character(0)
   Cov <- matrix(0, 0, 0)
+  influence_blocks <- list()
   for (bk in blocks) {
     if (!length(bk$free)) next
+    pos <- length(y) + seq_along(bk$free)
     y <- c(y, bk$lrho[bk$free]); pan <- c(pan, bk$free)
     ref <- c(ref, rep(bk$ref, length(bk$free)))
     cb <- bk$cov[bk$free, bk$free, drop = FALSE]
@@ -227,6 +274,21 @@
     if (nrow(Cov)) Z[seq_len(nrow(Cov)), seq_len(ncol(Cov))] <- Cov
     Z[nrow(Cov) + seq_len(nrow(cb)), ncol(Cov) + seq_len(ncol(cb))] <- cb
     Cov <- Z
+    infl <- bk$influence_lrho
+    if (!is.null(infl)) {
+      if (!is.matrix(infl) || !is.numeric(infl) || is.null(rownames(infl)) ||
+          anyDuplicated(rownames(infl)) || any(!is.finite(infl)))
+        stop("stage-one judge influence contributions are malformed")
+      if (!is.null(colnames(infl))) {
+        if (any(!bk$free %in% colnames(infl)))
+          stop("stage-one judge influence contributions omit a panel ratio")
+        infl <- infl[, bk$free, drop = FALSE]
+      } else if (ncol(infl) != length(bk$free)) {
+        stop("stage-one judge influence contributions have the wrong dimension")
+      }
+      influence_blocks[[length(influence_blocks) + 1L]] <-
+        list(pos = pos, influence = infl)
+    }
   }
   if (!length(y))
     stop("the panels cannot be linked: no set contains comparisons from more ",
@@ -248,10 +310,33 @@
   W <- solve(Cov)                                          # GLS weight
   XtW <- t(X) %*% W
   covred <- solve(XtW %*% X)
-  bred <- covred %*% (XtW %*% y)
+  reconcile <- covred %*% XtW
+  bred <- reconcile %*% y
+  # Cov remains block diagonal because it defines the established point
+  # estimator's within-set precision weights. Add only the cross-set cluster
+  # products for covariance propagation. Disjoint judge pools contribute zero;
+  # partially shared pools are aligned by judge name. We never invert this
+  # joint covariance, so exact shared-judge directions may be singular.
+  Cov_joint <- Cov
+  if (length(influence_blocks) > 1L) {
+    for (i in seq_len(length(influence_blocks) - 1L)) {
+      one <- influence_blocks[[i]]
+      for (j in seq.int(i + 1L, length(influence_blocks))) {
+        two <- influence_blocks[[j]]
+        shared <- intersect(rownames(one$influence), rownames(two$influence))
+        if (!length(shared)) next
+        cij <- crossprod(one$influence[shared, , drop = FALSE],
+                         two$influence[shared, , drop = FALSE])
+        Cov_joint[one$pos, two$pos] <- cij
+        Cov_joint[two$pos, one$pos] <- t(cij)
+      }
+    }
+  }
+  cov_bred <- reconcile %*% Cov_joint %*% t(reconcile)
+  cov_bred <- (cov_bred + t(cov_bred)) / 2
   lphi <- setNames(numeric(G), panels_u); lphi[cols] <- bred
   cov_full <- matrix(0, G, G, dimnames = list(panels_u, panels_u))
-  cov_full[cols, cols] <- covred
+  cov_full[cols, cols] <- cov_bred
   A <- diag(G) - matrix(1 / G, G, G)                       # centre to geo-mean 1
   lphi_c <- as.numeric(A %*% lphi)
   cov_c <- A %*% cov_full %*% t(A)
@@ -265,7 +350,8 @@
 # Newton on the cross-set comparison likelihood. Standard errors are the
 # inverse observed information, conditional on stage 1 (the stage-1
 # uncertainty is not propagated -- see the roxygen note).
-.btlef_stage2 <- function(a, b, y, phg, sa, sb, bhat, sets_u, maxit, tol) {
+.btlef_stage2 <- function(a, b, y, phg, sa, sb, bhat, sets_u, maxit, tol,
+                          set_of = NULL) {
   S <- length(sets_u); free <- sets_u[-1L]; nf <- S - 1L; np <- 2L * nf
   ba <- bhat[a]; bb <- bhat[b]
   fa <- match(sa, free); fb <- match(sb, free)             # NA on the reference set
@@ -328,18 +414,23 @@
     list(H = H, D = D, u = u)
   }
 
-  cur <- solve_masked(rep(TRUE, np))
+  # A unit can be fixed by convention only when its stage-one locations
+  # really have no spread. Vanishing log-alpha curvature is not evidence
+  # for that: a positive unit driven toward zero has the same numerical
+  # signature, but replacing it by one changes the fitted linking model.
+  if (is.null(set_of)) {
+    set_of <- stats::setNames(c(sa, sb), c(a, b))
+    set_of <- set_of[!duplicated(names(set_of))]
+  }
+  alpha_unident <- stats::setNames(vapply(free, function(s) {
+    z <- bhat[names(set_of)[set_of == s]]
+    length(z) > 1L && all(is.finite(z)) &&
+      diff(range(z)) <= 1e-12 * max(1, abs(z))
+  }, logical(1)), free)
+  kept <- which(!c(alpha_unident, rep(FALSE, nf)))
+  cur <- solve_masked(seq_len(np) %in% kept)
   oi <- obs_info(cur)
 
-  # identification, classified by WHERE the information fails. A flat
-  # direction confined to log-alpha columns is the degenerate-unit case:
-  # the set's within-set locations are (near) indistinguishable, so its
-  # unit has nothing to scale, but its origin kappa -- and with it the
-  # placement of its objects -- is still identified. Refit with those
-  # units fixed at the conventional 1 and report their alpha as NA. A
-  # flat direction that loads on a kappa column means the set cannot be
-  # PLACED at all: that is a structural failure of the cross-set design.
-  alpha_unident <- setNames(rep(FALSE, nf), free)
   rank_ok <- TRUE; separated <- FALSE
   # Complete / quasi-complete separation of the cross-set comparisons:
   # every outcome is fitted at the boundary (p -> 0 or 1), so the
@@ -352,34 +443,30 @@
   if (length(y) && mean(pmin(cur$p, 1 - cur$p) < 1e-4) > 0.99) {
     separated <- TRUE; rank_ok <- FALSE
   }
-  eh <- eigen(oi$H, symmetric = TRUE)
-  flat <- abs(eh$values) < max(abs(eh$values)) * 1e-10
-  if (!separated && any(flat)) {
-    V <- eh$vectors[, flat, drop = FALSE]
-    la_load <- sqrt(rowSums(V[seq_len(nf), , drop = FALSE]^2))
-    ka_load <- sqrt(rowSums(V[nf + seq_len(nf), , drop = FALSE]^2))
-    if (any(ka_load > 1e-2)) rank_ok <- FALSE
-    else {
-      alpha_unident[la_load > 1e-2] <- TRUE
-      mask <- rep(TRUE, np); mask[which(alpha_unident)] <- FALSE
-      cur <- solve_masked(mask)
-      oi <- obs_info(cur)
-      kept <- which(mask)
-      rc <- tryCatch(rcond(oi$H[kept, kept, drop = FALSE]),
-                     error = function(e) 0)
-      if (!(is.finite(rc) && rc > 1e-10)) rank_ok <- FALSE
-    }
-  }
-  if (rank_ok) {
-    rc <- tryCatch(rcond(oi$H), error = function(e) 0)
-    if (!any(alpha_unident) && !(is.finite(rc) && rc > 1e-10))
-      rank_ok <- FALSE
-  }
+  Hkept <- oi$H[kept, kept, drop = FALSE]
+  ev <- eigen((Hkept + t(Hkept)) / 2, symmetric = TRUE,
+               only.values = TRUE)$values
+  rc <- tryCatch(rcond(Hkept), error = function(e) 0)
+  if (!(is.finite(rc) && rc > 1e-10) ||
+      !all(is.finite(ev)) || max(abs(ev)) == 0 ||
+      min(ev) <= max(abs(ev)) * 1e-10)
+    rank_ok <- FALSE
+
+  # Check stationarity in natural alpha coordinates as well. The gradient
+  # in log(alpha) vanishes automatically at alpha -> 0 even when the
+  # likelihood still has a nonzero slope in alpha. Normalise each column so
+  # this check does not depend on the stage-one location unit.
+  Dnatural <- design(list(alpha = stats::setNames(rep(1, S), sets_u)))
+  natural_scale <- pmax(apply(abs(Dnatural), 2L, max), 1e-12)
+  natural_score <- drop(crossprod(Dnatural, oi$u)) / natural_scale
+  alpha_boundary <- !alpha_unident &
+    cur$alpha[free] * natural_scale[seq_len(nf)] < 1e-5 &
+    natural_score[seq_len(nf)] < -1e-6 * R
+  if (any(alpha_boundary)) rank_ok <- FALSE
 
   # covariance over the estimated parameters; fixed-by-convention units
   # carry zero rows (their uncertainty is not defined, and the reported
   # se_log_alpha is NA)
-  kept <- which(!c(alpha_unident, rep(FALSE, nf)))
   cov <- matrix(0, np, np)
   cov[kept, kept] <- tryCatch(solve(oi$H[kept, kept, drop = FALSE]),
     error = function(e) {
@@ -388,8 +475,7 @@
       solve(crossprod(Dk, Dk * av) + diag(1e-8, length(kept)))
     })
   # scale-free per-comparison gradient criterion (see .btlef_stage1)
-  conv <- isTRUE(max(abs(crossprod(oi$D[, kept, drop = FALSE], oi$u))) <
-                   1e-6 * length(y))
+  conv <- isTRUE(max(abs(natural_score[kept])) < 1e-6 * R)
   se <- sqrt(pmax(diag(cov), 0))
   if (!rank_ok) se[] <- NA_real_
   alpha_rep <- cur$alpha
@@ -401,7 +487,8 @@
        se_log_alpha = se_la,
        se_kappa = setNames(se[nf + seq_len(nf)], free),
        free = free, converged = conv, rank_ok = rank_ok,
-       separated = separated, alpha_unident = alpha_unident)
+       separated = separated, alpha_unident = alpha_unident,
+       alpha_boundary = alpha_boundary)
 }
 
 # pooled log-of-mean-square fit residual over a set of comparisons, using the
@@ -581,7 +668,11 @@
 #'
 #' Estimation has two stages. Within-set comparisons estimate object locations
 #' and panel-unit ratios. Weighted least squares reconciles the ratios over the
-#' panel-by-set linking graph. Cross-set comparisons then estimate the set
+#' panel-by-set linking graph, using each set's covariance for its precision
+#' weight. The analytic covariance of the reconciled panel units is a joint
+#' judge-cluster sandwich: influence contributions with the same judge label
+#' are aligned across sets, while disjoint judge pools have zero cross-set
+#' covariance. Cross-set comparisons then estimate the set
 #' units and origins. Unlike the person-by-item EFRM, this linking step uses
 #' only comparison outcomes and does not require a distribution of persons.
 #' The paired-comparison form is an extension of Humphry's model implemented in
@@ -600,7 +691,12 @@
 #' because judges are the sampling units and contribute repeated comparisons.
 #'
 #' With one set, the model contains panel units only. With one set and one
-#' panel, it reduces to \code{\link{btl}}. Omnibus Wald probabilities are
+#' panel, its likelihood and finite interior estimates reduce to
+#' \code{\link{btl}}. Boundary handling differs: \code{btl()} can set aside an
+#' undefeated or winless object and report an extrapolated location, whereas
+#' \code{btl_efrm()} treats every declared object as part of the frame design
+#' and refuses a within-set outcome separation rather than deleting or
+#' extrapolating an object. Omnibus Wald probabilities are
 #' Holm-adjusted across the panel-unit, set-unit and set-origin families.
 #' Individual estimated units form a separate Holm-adjusted follow-up family
 #' across all three parameter types. Structurally fixed reference coordinates
@@ -618,6 +714,12 @@
 #' Set-unit estimates can also be attenuated when each object pair has little
 #' comparison information. In simulation, log-unit bias declined from about
 #' -0.11 with 10 repetitions per pair to less than -0.01 with 100 repetitions.
+#' A set whose within-set locations have no numerical spread has an
+#' unidentified unit: its reported unit is \code{NA}, and the conventional
+#' unit one is used only to place its objects. In contrast, a positive linking
+#' unit driven to zero by the cross-set outcomes is an unsupported boundary
+#' link and raises an error. Such boundary links are also rejected in
+#' bootstrap refits; they are never replaced by unit one.
 #'
 #' @param data A data frame with one comparison per row.
 #' @param object_a,object_b Names of the columns holding the two compared
@@ -647,7 +749,9 @@
 #'   dependence among a judge's comparisons. \code{"bootstrap"} instead
 #'   draws independent outcomes from fitted probabilities. Both stages are
 #'   refitted. \code{"conditional"} uses
-#'   analytic stage-one standard errors for \code{beta} and \code{phi}, and
+#'   analytic stage-one standard errors for \code{beta} and \code{phi}; the
+#'   panel-unit covariance retains dependence across sets judged by the same
+#'   people. It uses
 #'   inverse observed information for \code{alpha} and \code{kappa}
 #'   conditional on the stage-one estimates. It is faster, but does not
 #'   propagate stage-one uncertainty into the linking parameters; unit
@@ -1035,10 +1139,42 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
                  collapse = "} and {"), "}")
   }
 
+  # Ford's finite-MLE condition applies to the pooled stage-one object
+  # calibration as well as ordinary BTL. Without this explicit outcome check,
+  # an undefeated object runs down the separated likelihood until the
+  # information degenerates and is then misreported as a disconnected or
+  # otherwise unidentified design. Do not inspect panels separately: their
+  # comparison allocations may be incomplete while the pooled stage-one graph
+  # is valid and identified. Run this inside every fit_once() so a separated
+  # bootstrap draw is refused by the same substantive condition.
+  check_within_separation <- function(yy) for (s in sets_u) {
+    rows_s <- which(within & sa == s)
+    os_s <- sort(names(set_of)[set_of == s])
+    ia_s <- match(a[rows_s], os_s); ib_s <- match(b[rows_s], os_s)
+    wins <- matrix(FALSE, length(os_s), length(os_s))
+    for (r in seq_along(rows_s)) {
+      winner <- if (yy[rows_s[r]] == 1L) ia_s[r] else ib_s[r]
+      loser <- if (yy[rows_s[r]] == 1L) ib_s[r] else ia_s[r]
+      wins[winner, loser] <- TRUE
+    }
+    strong_s <- .btlef_strong_components(wins)
+    if (length(unique(strong_s)) > 1L) {
+      groups <- split(os_s, strong_s)
+      stop("within-set outcomes are separated in set '", s, "': the directed ",
+           "win graph is not strongly connected, so a finite stage-one ",
+           "maximum does not exist (Ford 1957). Outcome components: ",
+           paste(vapply(groups, paste, "", collapse = ", "), collapse = " | "),
+           ". btl_efrm() refuses this boundary instead of deleting or ",
+           "extrapolating a declared frame object. Review the comparison ",
+           "and frame design", call. = FALSE)
+    }
+  }
+
   # --- the two-stage estimator, callable on any outcome vector ---------------
   # (one function for the observed data and for every bootstrap replicate, so
   # the resampled pipeline is identical to the reported one)
   fit_once <- function(yy) {
+    check_within_separation(yy)
     bhat <- setNames(rep(NA_real_, length(objs_all)), objs_all)
     se_bhat <- bhat
     ref_of_set <- setNames(rep(NA_character_, S), sets_u)
@@ -1084,7 +1220,8 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
              "objects")
       blocks[[s]] <- list(ref = fit1$ref, free = fit1$free,
                           lrho = setNames(lr, fit1$free),
-                          cov = fit1$cov_lrho)
+                          cov = fit1$cov_lrho,
+                          influence_lrho = fit1$influence_lrho)
     }
     rec <- tryCatch(.btlef_reconcile_phi(panels_u, blocks), error = function(e) {
       if (length(dropped))
@@ -1127,10 +1264,13 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     se_kappa <- setNames(rep(NA_real_, S), sets_u)
     cov2 <- NULL; s2_conv <- TRUE; ll_cross <- 0; s2_rank_ok <- TRUE
     s2_separated <- FALSE
+    s2_alpha_boundary <- stats::setNames(rep(FALSE, length(sets_u[-1L])),
+                                         sets_u[-1L])
     p_all <- within_p
     if (S > 1L) {
       st2 <- .btlef_stage2(a[cross], b[cross], yy[cross], phi[pan[cross]],
-                           sa[cross], sb[cross], bhat, sets_u, maxit, tol)
+                           sa[cross], sb[cross], bhat, sets_u, maxit, tol,
+                           set_of = set_of)
       alpha <- st2$alpha; alpha_use <- st2$alpha_use
       kappa <- st2$kappa; cov2 <- st2$cov
       s2_alpha_unident <- st2$alpha_unident
@@ -1138,6 +1278,7 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
       se_kappa[st2$free] <- st2$se_kappa
       s2_conv <- st2$converged && st2$rank_ok; ll_cross <- st2$ll
       s2_rank_ok <- st2$rank_ok; s2_separated <- st2$separated
+      s2_alpha_boundary <- st2$alpha_boundary
       p_all[cross] <- st2$p
     }
     v <- alpha_use[set_of[objs_all]] * bhat[objs_all] +
@@ -1152,12 +1293,20 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
          ll_within = ll_within, ll_cross = ll_cross,
          dropped = dropped, s2_rank_ok = s2_rank_ok,
          s2_separated = s2_separated,
+         s2_alpha_boundary = s2_alpha_boundary,
          converged = isTRUE(s1_conv && s2_conv))
   }
 
   report("two-stage fit", 0L, 1L)
   fit0 <- fit_once(y)
   report("two-stage fit", 1L, 1L)
+  if (any(fit0$s2_alpha_boundary))
+    stop("set unit(s) reached the zero boundary: ",
+         paste(names(which(fit0$s2_alpha_boundary)), collapse = ", "),
+         ". The cross-set outcomes do not support a positive unit for the ",
+         "estimated within-set ordering; the link cannot be replaced by ",
+         "unit one. Inspect the cross-set comparisons or revise the frame ",
+         "design", call. = FALSE)
   if (S > 1L && isTRUE(fit0$s2_separated))
     stop("the cross-set comparisons are (quasi-)completely separated: one ",
          "set beats the other in essentially every cross-set comparison, so ",

@@ -75,7 +75,8 @@ test_that("frame_invariance results print without scientific notation", {
   expect_false(any(grepl("e[-+][0-9]", capture.output(print(inv$locations)))))
   # the returned elements match what the documentation claims
   expect_setequal(names(inv), c("locations", "discrimination", "summary",
-                                "excluded", "alpha", "adjust", "se_method",
+                                "excluded", "algorithm", "alpha", "adjust",
+                                "se_method",
                                 "family_n", "boot_reps", "boot_reps_used",
                                 "boot_reps_nonconverged", "boot_reps_errors",
                                 "boot_minimum_usable", "bootstrap_stratified",

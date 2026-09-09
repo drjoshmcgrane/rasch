@@ -475,14 +475,24 @@
 # link remains practical inside the person bootstrap.
 .efrm_npml_pair <- function(Xm, vmap, tau_v, disc_v, sets_u, a, b, idx,
                             init_log_ratio, init_offset,
-                            min_link_persons, grid_n = 61L) {
+                            min_link_persons, grid_n = 61L,
+                            report_support = FALSE) {
+  # A missing edge does not make a connected set graph unidentified. Keep
+  # insufficient response support distinct from a numerical link failure so
+  # the graph solver can omit only the former. Direct numerical callers
+  # retain the historical NULL result for an unavailable pair.
+  unsupported <- function(reason) {
+    if (!report_support) return(NULL)
+    structure(list(reason = reason), class = "rasch_efrm_unlinked_pair")
+  }
   ca <- which(vmap$set == sets_u[a]); cb <- which(vmap$set == sets_u[b])
   Xa <- Xm[idx, ca, drop = FALSE]; Xb <- Xm[idx, cb, drop = FALSE]
   oa <- !is.na(Xa); ob <- !is.na(Xb)
   keep <- rowSums(oa) > 0L & rowSums(ob) > 0L
   Xa <- Xa[keep, , drop = FALSE]; Xb <- Xb[keep, , drop = FALSE]
   oa <- oa[keep, , drop = FALSE]; ob <- ob[keep, , drop = FALSE]
-  if (nrow(Xa) < min_link_persons) return(NULL)
+  if (nrow(Xa) < min_link_persons)
+    return(unsupported("too few common persons"))
 
   da <- disc_v[ca]; db <- disc_v[cb]
   score_a <- rowSums(sweep(Xa, 2L, da, "*"), na.rm = TRUE)
@@ -508,7 +518,8 @@
     score_a, max_a, score_b, max_b, 1e-8)
   informative <- count * (range_a >= 4L & range_b >= 4L & !extreme_both)
   n_informative <- sum(informative)
-  if (n_informative < min_link_persons) return(NULL)
+  if (n_informative < min_link_persons)
+    return(unsupported("too few informative common score patterns"))
   # Group membership is observed and the person populations need not have the
   # same location, spread or shape. Keep one nonparametric margin per observed
   # group while estimating a common set transformation. A single pooled margin
@@ -678,9 +689,9 @@
   .rasch_min_boot_success(boot_reps, n_quantities)
 }
 
-# Apply deterministic bootstrap jobs either serially or on a persistent
-# socket cluster. Random draws are made by the caller before this function is
-# entered, so changing the worker count cannot change the simulated samples.
+# Apply bootstrap jobs either serially or on a persistent socket cluster.
+# The caller supplies random draws or per-replicate seeds before dispatch;
+# workers use the coordinator's RNG settings when generating from those seeds.
 # Small batches retain useful progress and cancellation checkpoints without
 # repeatedly starting worker processes.
 .rasch_available_workers <- function() {
@@ -761,9 +772,8 @@
   cl <- tryCatch(parallel::makePSOCKcluster(workers),
                  error = function(e) e)
   if (inherits(cl, "error")) {
-    # a machine that cannot open sockets (some sandboxes, some checks) can
-    # still do the work; every random draw was made before dispatch, so the
-    # serial result is identical to the parallel one
+    # A machine that cannot open sockets can still run the same jobs. The
+    # supplied draws or replicate seeds give the same serial result.
     warning("could not start ", label, " workers (",
             conditionMessage(cl), "); running serially", call. = FALSE)
     for (ids in batches) {
@@ -775,13 +785,26 @@
   }
   on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
   paths <- unique(c(dirname(package_dir), .libPaths()))
-  setup_worker <- function(paths) {
+  # A replicate's integer seed identifies the same draws only under the same
+  # uniform, normal and sampling generators. Socket workers start with R's
+  # defaults rather than inheriting RNGkind() from the coordinator.
+  rng_kind <- RNGkind()
+  setup_worker <- function(paths, rng_kind) {
     .libPaths(paths)
-    loadNamespace("rasch")
+    ns <- loadNamespace("rasch")
+    if (!identical(normalizePath(getNamespaceInfo(ns, "path")),
+                   normalizePath(file.path(paths[1L], "rasch"))))
+      stop("bootstrap worker loaded a different rasch installation; ",
+           "restart R with the analysis library first on .libPaths()")
+    do.call(RNGkind, as.list(rng_kind))
     invisible(NULL)
   }
+  # Kept source references can carry the package namespace into the socket
+  # message. Strip them before dispatch, or unserialisation may load another
+  # installed rasch before this callback can set the coordinator's library.
+  setup_worker <- utils::removeSource(setup_worker)
   environment(setup_worker) <- baseenv()
-  parallel::clusterCall(cl, setup_worker, paths)
+  parallel::clusterCall(cl, setup_worker, paths, rng_kind)
   holder <- list2env(list(.rasch_boot_fun = fun), parent = emptyenv())
   parallel::clusterExport(cl, ".rasch_boot_fun", envir = holder)
   worker_call <- function(i)
@@ -856,11 +879,12 @@
           stop("too little true person variance to link sets '", sets_u[a],
                "' and '", sets_u[b], "'")
         }
-        next
+        return(NULL)
       }
       np <- NULL
       if (!is.null(pair_fun)) {
         np <- pair_fun(a, b, idx, ls, off)
+        if (inherits(np, "rasch_efrm_unlinked_pair")) next
         if (is.null(np)) {
           if (hard)
             stop("the semiparametric likelihood link failed for sets '",
@@ -869,12 +893,13 @@
                  "score range of at least 4 is required within each set), ",
                  "or the finite transformation did not pass its numerical ",
                  "and grid-boundary checks")
-          next
+          return(NULL)
         }
         # Retain a usable point estimate with an explicit warning, but do not
-        # admit a link that missed its numerical tolerance to a bootstrap
-        # covariance calculation.
-        if (!hard && !isTRUE(np$converged)) next
+        # admit a replicate with a failed supported link to the covariance.
+        # A redundant edge still belongs to the fitted statistic; deleting it
+        # would silently substitute a different linking graph for that draw.
+        if (!hard && !isTRUE(np$converged)) return(NULL)
         ls <- np$log_ratio; off <- np$offset
       }
       edges[[length(edges) + 1L]] <- c(a, b)
@@ -1099,7 +1124,7 @@
     if (!length(cols)) next
     sel <- which(pat == key)
     r <- disc[cols]; tl <- tau_list[cols]
-    interval <- .person_root_interval(tl, r)
+    curve <- .person_wle_curve(tl, r)
     # Work with relative units in the score equation and its moments;
     # probabilities retain the fitted units. This removes a common scale
     # factor without changing the root, and avoids powers of extreme units.
@@ -1110,16 +1135,7 @@
     # different response patterns when frame units are highly unequal.
     for (Wu in unique(pattern_score)) {
       who <- sel[pattern_score == Wu]
-      g <- function(th) {
-        mo <- lapply(seq_along(cols), function(j)
-          item_moments(th, tl[[j]], disc = r[j]))
-        E  <- vapply(mo, `[[`, 0, "E");  V <- vapply(mo, `[[`, 0, "V")
-        m3 <- vapply(mo, `[[`, 0, "mu3")
-        sum(rp * (X[who[1L], cols] - E)) +
-          sum(rp^3 * m3) / (2 * sum(rp^2 * V))
-      }
-      root <- tryCatch(uniroot(g, interval, tol = 1e-9 / unit_scale)$root,
-                       error = function(e) NA_real_)
+      root <- .person_wle_maximum(curve, Wu)
       theta[who] <- root
       if (!is.na(root)) {
         V <- vapply(seq_along(cols), function(j)
@@ -1243,7 +1259,12 @@
 #' \eqn{\alpha_s} are identified instead from persons observed in more than
 #' one set. The
 #' set-linking graph and the group-by-set frame graph must each connect to a
-#' common scale.
+#' common scale. Direct overlap between every pair of item sets is not
+#' required: sets can be linked through intermediate sets. Pairs without
+#' enough informative common persons contribute no edge; the remaining
+#' graph must still connect all sets. A bootstrap replicate is unusable if
+#' any supported link fails numerically or does not converge, even when
+#' other links still connect the sets.
 #'
 #' Set units use a semiparametric likelihood for persons observed in each
 #' linked pair of sets. For sets \eqn{a} and \eqn{b}, it maximises
@@ -1285,7 +1306,8 @@
 #' within-frame thresholds and group units, then rebuilds the link. The joint
 #' draws retain covariance among common-scale thresholds, set units and group
 #' units. With \code{se_method = "bootstrap"}, the complete model is refitted
-#' to each person resample.
+#' to each person resample. Refits that do not converge or have unidentified
+#' group units are discarded and counted as failed replicates.
 #'
 #' The \code{efrm_vs_rasch} component records the within-frame composite
 #' log-likelihood comparison between group-dependent and equal group units.
@@ -1370,7 +1392,8 @@
 #'   a fixed seed gives the same result for any worker count. Every worker
 #'   holds its own copy of the bootstrap state.
 #' @param seed Optional bootstrap seed. The caller's random-number state is
-#'   restored when estimation finishes.
+#'   restored when estimation finishes; see \code{\link{rasch_rng}} for
+#'   generator support.
 #' @return An object of classes \code{"rasch_efrm"} and \code{"rasch"}.
 #'   Model-specific components include \code{frames}, \code{phi_table},
 #'   \code{alpha_table}, \code{set_table}, common-unit item and threshold
@@ -1632,7 +1655,11 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
            "to a role must be listed in items=")
     drop_cols <- c(if (is.character(id) && length(id) == 1L) id,
                    if (factors_are_cols) factors
-                   else if (is.data.frame(factors)) intersect(names(factors), nm),
+                   # With explicit items=, an external factor data frame is
+                   # separate from `data`, so a shared name is not a role
+                   # collision.  Actual in-data role columns remain guarded.
+                   else if (is.data.frame(factors) && is.null(items))
+                     intersect(names(factors), nm),
                    if (groups_are_cols) groups)
     item_cols <- if (is.null(items)) setdiff(nm, drop_cols)
     else if (is.character(items)) {
@@ -1989,7 +2016,7 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
       utils::getFromNamespace(".efrm_npml_pair", "rasch")(
         Xm, vmap, tau_v_link, disc_v_link, sets_u,
         a, b, idx, init_ls, init_off, min_link_persons,
-        grid_n = link_grid_n)
+        grid_n = link_grid_n, report_support = TRUE)
   }
   report("conditional calibration", 1L, 1L)
   if (S > 1L) {
@@ -2073,7 +2100,11 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
       sb <- utils::getFromNamespace(".efrm_solve", "rasch")(
         Xb, thr_v, m_v, vmap, pb, drow, A_D,
         maxit = maxit, tol = tol)
-      if (!isTRUE(sb$converged)) return(NULL)
+      # A small gradient does not establish identification: the ridged
+      # solver can converge in a flat group-unit direction. Apply the same
+      # structural refusal as the observed fit before linking or collecting
+      # this draw. Its analytic SEs are not needed for bootstrap covariance.
+      if (!isTRUE(sb$converged) || any(sb$phi_unident)) return(NULL)
       if (S > 1L) {
         pm_b <- person_mats(Xb, sb$dtilde, sb$phi)
         lb <- utils::getFromNamespace(".efrm_link_sets", "rasch")(

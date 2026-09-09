@@ -49,7 +49,8 @@ within-judge order effects (a seen-before advantage and a pull from the
 judge's own earlier verdicts). Adds an \code{order} column. Feeds the
 dependence effects fitted by \code{\link{btl}}.}
 
-\item{seed}{Optional non-negative whole-number RNG seed.}
+\item{seed}{Optional non-negative whole-number RNG seed. See
+\code{\link{rasch_rng}} for generator support.}
 
 \item{object_locations}{Optional numeric vector of generated object
 locations. It must have length \code{n_objects}; names, when supplied,

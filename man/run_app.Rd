@@ -24,6 +24,13 @@ The app's interface packages ('shiny', 'bslib', 'DT', 'bsicons', and
 required by the package. If any are missing,
 \code{run_app} lists them all and, in an interactive session, offers to
 install them before launching.
+
+Older saved analyses are checked against the current person-scoring
+algorithm. If their scores differ, refit the analysis before reopening it;
+the original file is left unchanged. Its source data can be recovered with
+\code{readRDS(file)$data}.
+Superseded DIF results, or CJ DIF without verified judge-role alignment,
+are omitted with a warning. Rerun those analyses before reporting them.
 }
 \examples{
 if (interactive()) run_app()

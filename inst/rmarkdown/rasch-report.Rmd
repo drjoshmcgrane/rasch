@@ -358,8 +358,8 @@ if (!is_btl) {
           "n_boot_fit_resid", "infit_ms_p_boot_adj", "outfit_ms_p_boot_adj"))))
     }
   }
-  if (!is.null(fit$factors) && length(names(fit$factors))) {
-    da <- attr(fit, "report_dif")
+  da <- attr(fit, "report_dif")
+  if (!is.null(da) || (!is.null(fit$factors) && length(names(fit$factors)))) {
     if (is.null(da))
       da <- tryCatch(dif_anova(fit), error = function(e) NULL)
     if (!is.null(da)) {

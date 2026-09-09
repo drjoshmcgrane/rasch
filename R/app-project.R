@@ -130,6 +130,64 @@
   project
 }
 
+# Older files did not identify their person-scoring algorithm. Check them
+# numerically without altering the saved fit or breaking signed downstream
+# results. A changed score requires a refit of all dependent diagnostics, not
+# just replacement of the person table. Current fits carry the solver stamp.
+.validate_app_person_scoring <- function(fit, label) {
+  if (!inherits(fit, "rasch") || inherits(fit, "rasch_btl"))
+    return(invisible(NULL))
+  # Scoring an old PC calibration again cannot repair a different threshold
+  # model. Fits that requested kurtosis need the corrected calibration too.
+  if (isTRUE(fit$est$n_components == 4L) && any(fit$m >= 4L) &&
+      !identical(fit$est$pc_algorithm, "guttman-four-1"))
+    stop(label, paste("predates the corrected principal-component kurtosis;",
+      "refit this analysis before reopening it. The saved file is unchanged;",
+      "recover its source data with readRDS(file)$data."), call. = FALSE)
+  stamp <- fit$person_scoring_algorithm
+  if (identical(stamp, "max-wle-1")) return(invisible(NULL))
+  fail <- function() stop(label, paste(
+    "uses superseded or unverified person scoring; refit this analysis",
+    "before reopening it. The saved file has not been changed.",
+    "Its source data can be recovered in R with readRDS(file)$data."),
+    call. = FALSE)
+  if (!is.null(stamp)) fail()
+  disc <- fit$disc %||% rep(1, ncol(fit$X))
+  if (length(disc) == 1L) disc <- rep(disc, ncol(fit$X))
+  if (!is.numeric(disc) || length(disc) != ncol(fit$X) ||
+      any(!is.finite(disc) | disc <= 0)) fail()
+  unit <- max(disc)
+  same <- function(a, b) {
+    if (!is.numeric(a) || !is.numeric(b) || length(a) != length(b) ||
+        !identical(is.na(a), is.na(b))) return(FALSE)
+    ok <- !is.na(b)
+    a <- a[ok] * unit; b <- b[ok] * unit
+    finite <- is.finite(b)
+    all(is.finite(a) == finite) &&
+      all(a[!finite] == b[!finite]) &&
+      all(abs(a[finite] - b[finite]) <= 1e-7 * pmax(1, abs(b[finite])))
+  }
+  equal <- length(unique(disc)) == 1L
+  expected <- tryCatch(if (equal)
+    .person_estimates(fit$X, fit$tau_list, disc = disc[1L]) else
+    .efrm_person_estimates(fit$X, fit$tau_list, disc),
+    error = function(e) NULL)
+  if (is.null(expected)) fail()
+  if (!isTRUE(fit$est$converged)) expected$se[] <- NA_real_
+  if (!same(fit$person$theta, expected$theta) ||
+      !same(fit$person$se, expected$se)) fail()
+  if (!is.null(fit$score_table)) {
+    if (!equal) fail()
+    sc <- person_wle(fit$tau_list, disc = disc[1L])
+    if (!isTRUE(fit$est$converged)) sc$se[] <- NA_real_
+    if (!identical(as.numeric(fit$score_table$score),
+                   as.numeric(0:sum(fit$m))) ||
+        !same(fit$score_table$theta, unname(sc$theta)) ||
+        !same(fit$score_table$se, unname(sc$se))) fail()
+  }
+  invisible(NULL)
+}
+
 .validate_app_project <- function(project) {
   fail <- function(message) stop(message, call. = FALSE)
   if (!is.list(project) || !identical(project$format, "rasch-shiny-project"))
@@ -412,6 +470,24 @@
         !btl_dif_meta$judge_col %in% data_names)
       fail("the analysis file has invalid saved Comparative Judgement DIF display metadata")
   }
+  if (is_btl && !is.null(primary_dif)) {
+    # A current CJ DIF result is keyed to the judge role used by the fit, not
+    # merely to the column selected for display. Without the source binding,
+    # a project can be signed while its maps silently refer to another role.
+    source <- attr(project$base_fit, "rasch_app_source", exact = TRUE)
+    role_ok <- is.list(source) && is.data.frame(source$data) &&
+      is.list(source$settings) && .app_scalar_text(source$settings$bt_judge) &&
+      is.list(btl_dif_meta) &&
+      identical(btl_dif_meta$fitted_judge_col, source$settings$bt_judge) &&
+      .app_scalar_text(btl_dif_meta$judge_col) &&
+      btl_dif_meta$fitted_judge_col %in% names(source$data) &&
+      btl_dif_meta$judge_col %in% data_names &&
+      identical(as.character(source$data[[btl_dif_meta$fitted_judge_col]]),
+                as.character(project$data[[btl_dif_meta$judge_col]]))
+    if (!isTRUE(role_ok))
+      fail(paste("the saved Comparative Judgement DIF lacks authenticated",
+                 "fitted judge-role provenance"))
+  }
 
   dif_bootstrap <- project$results$dif_bootstrap
   if (!is.null(dif_bootstrap)) {
@@ -485,7 +561,17 @@
   unsigned_project$binding <- NULL
   if (!.fit_boot_hash_matches(project$binding, unsigned_project))
     fail(paste("the analysis file's source data, fitted models or results have",
-               "changed since they were saved"))
+                 "changed since they were saved"))
+  # Check only after structural validation and authentication. Inspect every
+  # retained fit, including inactive history and comparison/equating fits.
+  .validate_app_person_scoring(project$base_fit, "the saved base fit")
+  for (field in c("rasch_steps", "btl_steps"))
+    for (i in seq_along(project[[field]]))
+      .validate_app_person_scoring(project[[field]][[i]]$fit,
+        sprintf("the %s history fit at entry %d", field, i))
+  for (nm in names(project$kept_fits))
+    .validate_app_person_scoring(project$kept_fits[[nm]],
+                               sprintf("the kept fit '%s'", nm))
   invisible(project)
 }
 
@@ -519,11 +605,29 @@
      !nzchar(trimws(project$results[["resolve"]]$effects)) ||
      !project$results[["resolve"]]$effects %in% c("main", "factorial"))
   old_btl_dimensionality <- FALSE
+  # The residual decomposition changed from row/count residuals to the
+  # pooled expected-score definition. A saved result without the current
+  # stamp is not comparable, even when it has no inferential reference.
+  old_btl_residual_method <- is.list(project) && is.list(project$results) &&
+    inherits(project$results$dimensionality, "rasch_btl_dim") &&
+    inherits(project$base_fit, "rasch_btl") &&
+    !identical(project$results$dimensionality$residual_method,
+               "pooled-expected-score-1")
   legacy_btl_dimension <- is.list(project) && is.list(project$results) &&
     inherits(project$results$dimensionality, "rasch_btl_dim") &&
     is.list(project$results$dimensionality$reference) &&
-    is.null(project$results$dimensionality$reference$inference_available) &&
-    inherits(project$base_fit, "rasch_btl")
+    inherits(project$base_fit, "rasch_btl") && {
+      ref <- project$results$dimensionality$reference
+      finite_reference <- any(is.finite(c(
+        ref$mean, ref$p95, ref$p, ref$p_adj,
+        project$results$dimensionality$bimensions$ref_mean,
+        project$results$dimensionality$bimensions$ref_p95)))
+      finite_reference && !isTRUE(old_btl_residual_method) &&
+        (is.null(ref$inference_available) ||
+        ((isTRUE(project$base_fit$clustered) ||
+          inherits(project$base_fit, "rasch_btl_efrm")) &&
+         !isTRUE(ref$independent_comparisons)))
+    }
   old_dim_magnitude <- !legacy && is.list(project) &&
     length(project$schema) == 1L && is.numeric(project$schema) &&
     !is.na(project$schema) && project$schema == 2L && is.list(project$results) &&
@@ -554,6 +658,41 @@
     is.list(project$results$dif_bootstrap) &&
     is.list(project$results$dif_bootstrap$db) &&
     is.null(project$results$dif_bootstrap$db$algorithm)
+  # Mixed-panel DIF results from before the joint between-person adjustment
+  # carry a finite-looking table but are rejected by the current validator.
+  # They must be authenticated against the active fit before being omitted;
+  # the saved fit/history themselves remain valid and are retained.
+  old_mixed_dif <- is.list(project) && is.list(project$results) &&
+    inherits(project$results[["dif"]], "rasch_dif") &&
+    length(project$results[["dif"]]$within) > 0L &&
+    !identical(project$results[["dif"]]$algorithm, "joint-between-1")
+  old_dif_followups <- is.list(project) && is.list(project$results) &&
+    inherits(project$results[["dif"]], "rasch_dif") &&
+    !.dif_followups_current(project$results[["dif"]])
+  # Judge-group DIF became tied to the fitted judge role after older app
+  # sessions could build maps from a changed sidebar column. A signed result
+  # remains structurally valid in that case, so require the source metadata
+  # and exact fitted/display judge-ID correspondence before restoring it.
+  old_btl_dif_role <- is.list(project) && is.list(project$results) &&
+    inherits(project$results[["btl_dif"]], "rasch_btl_dif") &&
+    inherits(project$base_fit, "rasch_btl") && {
+      meta <- project$results[["btl_dif_meta"]]
+      source <- attr(project$base_fit, "rasch_app_source", exact = TRUE)
+      role_ok <- is.list(meta) && .app_scalar_text(meta$fitted_judge_col) &&
+        .app_scalar_text(meta$judge_col) && is.list(source) &&
+        is.data.frame(source$data) && is.list(source$settings) &&
+        .app_scalar_text(source$settings$bt_judge) &&
+        identical(meta$fitted_judge_col, source$settings$bt_judge) &&
+        meta$fitted_judge_col %in% names(source$data) &&
+        meta$judge_col %in% names(project$data)
+      if (isTRUE(role_ok)) {
+        fitted_ids <- as.character(source$data[[meta$fitted_judge_col]])
+        display_ids <- as.character(project$data[[meta$judge_col]])
+        role_ok <- length(fitted_ids) == length(display_ids) &&
+          identical(fitted_ids, display_ids)
+      }
+      !isTRUE(role_ok)
+    }
   old_tailored <- !legacy && is.list(project) &&
     length(project$schema) == 1L && is.numeric(project$schema) &&
     !is.na(project$schema) && project$schema == 2L &&
@@ -578,6 +717,27 @@
   # reference bands for unsupported comparison designs. Authenticate the
   # original bundle and the result's active-fit binding before omitting only
   # that analysis. Complete, supported legacy references remain usable.
+  if (!legacy && isTRUE(old_btl_residual_method) &&
+      is.numeric(project$schema) && length(project$schema) == 1L &&
+      isTRUE(project$schema == 2L)) {
+    unsigned_project <- project
+    attr(unsigned_project, "rasch_project_legacy") <- NULL
+    attr(unsigned_project, "rasch_project_legacy_dropped") <- NULL
+    unsigned_project$binding <- NULL
+    if (!.app_scalar_text(project$binding) ||
+        !.fit_boot_hash_matches(project$binding, unsigned_project))
+      stop(paste("the analysis file's source data, fitted models or results have",
+                 "changed since they were saved"), call. = FALSE)
+    history <- project$btl_steps
+    active_fit <- if (length(history)) history[[length(history)]]$fit else
+      project$base_fit
+    .authenticate_btl_dimensionality(project$results$dimensionality,
+                                     active_fit)
+    project$results$dimensionality <- NULL
+    project <- .seal_app_project(project)
+    dropped <- c(dropped,
+                 "Comparative Judgement dimensionality (superseded residual definition; rerun dimensionality)")
+  }
   if (!legacy && isTRUE(legacy_btl_dimension) &&
       is.numeric(project$schema) && length(project$schema) == 1L &&
       isTRUE(project$schema == 2L)) {
@@ -601,6 +761,112 @@
       dropped <- c(dropped,
                    "Comparative Judgement dimensionality (unsupported reference)")
     }
+  }
+  if (!legacy && isTRUE(old_mixed_dif) && is.numeric(project$schema) &&
+      length(project$schema) == 1L && isTRUE(project$schema == 2L)) {
+    # Authenticate the enclosing bundle and the saved primary tables before
+    # omitting the obsolete result. The saved fit/history remain intact.
+    unsigned_project <- project
+    attr(unsigned_project, "rasch_project_legacy") <- NULL
+    attr(unsigned_project, "rasch_project_legacy_dropped") <- NULL
+    unsigned_project$binding <- NULL
+    if (!.app_scalar_text(project$binding) ||
+        !.fit_boot_hash_matches(project$binding, unsigned_project))
+      stop(paste("the analysis file's source data, fitted models or results have",
+                 "changed since they were saved"), call. = FALSE)
+    history <- project$rasch_steps
+    active_fit <- if (length(history)) history[[length(history)]]$fit else
+      project$base_fit
+    old_dif <- project$results[["dif"]]
+    .validate_primary_dif_tables(old_dif, "item", c("Residuals", "ci"), ":ci")
+    if (is.null(old_dif$fit_signature) ||
+        !.fit_boot_signature_matches(old_dif$fit_signature, active_fit))
+      stop("the saved mixed-panel DIF was computed from a different fitted model",
+           call. = FALSE)
+    project$results$dif <- NULL
+    project$results$dif_bootstrap <- NULL
+    project$results$resolve <- NULL
+    project <- .seal_app_project(project)
+    dropped <- c(dropped,
+                 "DIF (superseded mixed-panel adjustment)",
+                 "DIF bootstrap (dependent on superseded DIF)",
+                 "automatic DIF resolution (dependent on superseded DIF)")
+  }
+  if (isTRUE(old_dif_followups) && !isTRUE(old_mixed_dif) &&
+      is.numeric(project$schema) && length(project$schema) == 1L &&
+      isTRUE(project$schema == 2L)) {
+    unsigned_project <- project
+    attr(unsigned_project, "rasch_project_legacy") <- NULL
+    attr(unsigned_project, "rasch_project_legacy_dropped") <- NULL
+    unsigned_project$binding <- NULL
+    if (!.app_scalar_text(project$binding) ||
+        !.fit_boot_hash_matches(project$binding, unsigned_project))
+      stop(paste("the analysis file's source data, fitted models or results have",
+                 "changed since they were saved"), call. = FALSE)
+    history <- project$rasch_steps
+    active_fit <- if (length(history)) history[[length(history)]]$fit else
+      project$base_fit
+    saved_dif <- project$results[["dif"]]
+    if (!is.null(saved_dif$fit_signature)) {
+      problem <- tryCatch({
+        .validate_primary_dif_tables(saved_dif, "item", c("Residuals", "ci"), ":ci")
+        if (!.fit_boot_signature_matches(saved_dif$fit_signature, active_fit))
+          stop("`dif` was computed from a different fitted model")
+        NULL
+      }, error = function(e) conditionMessage(e))
+      if (!is.null(problem))
+        stop(paste("the saved DIF cannot be authenticated before migration:",
+                   problem), call. = FALSE)
+    }
+    has_bootstrap <- !is.null(project$results$dif_bootstrap)
+    has_resolution <- !is.null(project$results$resolve)
+    project$results$dif <- NULL
+    project$results$dif_bootstrap <- NULL
+    project$results$resolve <- NULL
+    project <- .seal_app_project(project)
+    dropped <- c(dropped,
+                 "DIF (superseded normalized-factor follow-ups)",
+                 if (has_bootstrap)
+                   "DIF bootstrap (dependent on superseded DIF)",
+                 if (has_resolution)
+                   "automatic DIF resolution (dependent on superseded DIF)")
+  }
+  if (isTRUE(old_btl_dif_role) && is.numeric(project$schema) &&
+      length(project$schema) == 1L && isTRUE(project$schema == 2L)) {
+    # Authenticate the enclosing project before omitting the old derived
+    # result. A fit-mismatched signed result is not made acceptable merely by
+    # classifying its judge metadata as obsolete; an unsigned result is simply
+    # unverifiable and is omitted with the other legacy derived results.
+    unsigned_project <- project
+    attr(unsigned_project, "rasch_project_legacy") <- NULL
+    attr(unsigned_project, "rasch_project_legacy_dropped") <- NULL
+    unsigned_project$binding <- NULL
+    if (!.app_scalar_text(project$binding) ||
+        !.fit_boot_hash_matches(project$binding, unsigned_project))
+      stop(paste("the analysis file's source data, fitted models or results have",
+                 "changed since they were saved"), call. = FALSE)
+    history <- project$btl_steps
+    active_fit <- if (length(history)) history[[length(history)]]$fit else
+      project$base_fit
+    saved_btl_dif <- project$results[["btl_dif"]]
+    if (!is.null(saved_btl_dif$fit_signature)) {
+      problem <- tryCatch({
+        .validate_btl_dif_result(saved_btl_dif, active_fit)
+        NULL
+      }, error = function(e) conditionMessage(e))
+      if (!is.null(problem))
+        stop(paste("the saved Comparative Judgement DIF cannot be",
+                   "authenticated before migration:", problem), call. = FALSE)
+    }
+    has_bootstrap <- !is.null(project$results$dif_bootstrap)
+    project$results$btl_dif <- NULL
+    project$results$btl_dif_meta <- NULL
+    project$results$dif_bootstrap <- NULL
+    project <- .seal_app_project(project)
+    dropped <- c(dropped,
+                 "Comparative Judgement DIF (missing fitted judge-role provenance)",
+                 if (has_bootstrap)
+                   "DIF bootstrap (dependent on superseded Comparative Judgement DIF)")
   }
   # Earlier planned contrasts could renormalise away unresolved weighted
   # cells. Keep the source and fitted models, but do not restore estimates
@@ -645,7 +911,8 @@
   # empirical probability. Degrees of freedom can change across sparse refits,
   # so those values are not on a common reference scale. Authenticate the
   # complete project before omitting only that derived result.
-  if (isTRUE(old_dif_bootstrap)) {
+  if (isTRUE(old_dif_bootstrap) && !isTRUE(old_mixed_dif) &&
+      !isTRUE(old_dif_followups) && !isTRUE(old_btl_dif_role)) {
     unsigned_project <- project
     attr(unsigned_project, "rasch_project_legacy") <- NULL
     attr(unsigned_project, "rasch_project_legacy_dropped") <- NULL
@@ -711,7 +978,8 @@
     project <- .seal_app_project(project)
     dropped <- c(dropped, "dimensionality magnitude (unmatched reliability samples)")
   }
-  # Earlier weighted solvers have no algorithm stamp or use pattern-wle-1.
+  # Earlier weighted solvers have no algorithm stamp, use pattern-wle-1, or
+  # use the intermediate pattern-unit-wle-2 implementation.
   # They can differ in their last bits, or fail for tiny observed weights
   # or large changes of measurement unit.
   # Authenticate the saved bundle and result before replacing that derived
@@ -720,7 +988,9 @@
     is.list(project$results$person_weights) &&
     (is.null(attr(project$results$person_weights$table, "algorithm", exact = TRUE)) ||
      identical(attr(project$results$person_weights$table, "algorithm", exact = TRUE),
-               "pattern-wle-1"))
+               "pattern-wle-1") ||
+     identical(attr(project$results$person_weights$table, "algorithm", exact = TRUE),
+               "pattern-unit-wle-2"))
   if (!legacy && isTRUE(old_weights) && is.numeric(project$schema) &&
       length(project$schema) == 1L && isTRUE(project$schema == 2L)) {
     unsigned_project <- project
@@ -755,6 +1025,39 @@
     has_signature <- function(x)
       is.list(x) && is.character(x$result_signature) &&
         length(x$result_signature) == 1L && !is.na(x$result_signature)
+    history <- if (identical(.app_fit_family(project$base_fit), "btl"))
+      project$btl_steps else
+      project$rasch_steps
+    active_fit <- if (length(history)) history[[length(history)]]$fit else
+      project$base_fit
+    # Schema 1 has no enclosing binding, but a result written by a current
+    # run can still carry an authenticated fit signature. Do not silently
+    # hide a signed result whose fit or primary tables were tampered with;
+    # only genuinely unverified legacy results are omitted below.
+    if (!isTRUE(old_mixed_dif) && isTRUE(old_dif_followups) &&
+        is.list(results$dif) && !is.null(results$dif$fit_signature)) {
+      problem <- tryCatch({
+        .validate_primary_dif_tables(results$dif, "item",
+                                     c("Residuals", "ci"), ":ci")
+        if (!.fit_boot_signature_matches(results$dif$fit_signature,
+                                         active_fit))
+          stop("`dif` was computed from a different fitted model")
+        NULL
+      }, error = function(e) conditionMessage(e))
+      if (!is.null(problem))
+        stop(paste("the saved DIF cannot be authenticated before migration:",
+                   problem), call. = FALSE)
+    }
+    if (isTRUE(old_btl_dif_role) && is.list(results$btl_dif) &&
+        !is.null(results$btl_dif$fit_signature)) {
+      problem <- tryCatch({
+        .validate_btl_dif_result(results$btl_dif, active_fit)
+        NULL
+      }, error = function(e) conditionMessage(e))
+      if (!is.null(problem))
+        stop(paste("the saved Comparative Judgement DIF cannot be",
+                   "authenticated before migration:", problem), call. = FALSE)
+    }
     if (is.list(results)) {
       if (isTRUE(old_contrasts)) {
         results$contrasts <- NULL
@@ -763,6 +1066,24 @@
       if (isTRUE(old_resolution)) {
         results$resolve <- NULL
         dropped <- c(dropped, "automatic DIF resolution")
+      }
+      if (isTRUE(old_btl_residual_method) &&
+          !is.null(results$dimensionality)) {
+        signature <- attr(results$dimensionality, "result_signature", exact = TRUE)
+        if (.app_scalar_text(signature)) {
+          problem <- tryCatch({
+            .authenticate_btl_dimensionality(results$dimensionality,
+                                             active_fit)
+            NULL
+          }, error = function(e) conditionMessage(e))
+          if (!is.null(problem))
+            stop(paste("the saved Comparative Judgement dimensionality cannot be",
+                       "authenticated before migration:", problem),
+                 call. = FALSE)
+        }
+        results$dimensionality <- NULL
+        dropped <- c(dropped,
+                     "Comparative Judgement dimensionality (superseded residual definition; rerun dimensionality)")
       }
       if (isTRUE(legacy_btl_dimension)) {
         signature <- attr(results$dimensionality, "result_signature", exact = TRUE)
@@ -784,6 +1105,29 @@
         results$person_weights <- NULL
         dropped <- c(dropped, "externally weighted person estimates")
       }
+      if (isTRUE(old_mixed_dif) && !is.null(results$dif)) {
+        results$dif <- NULL
+        results$dif_bootstrap <- NULL
+        results$resolve <- NULL
+        dropped <- c(dropped,
+                     "DIF (superseded mixed-panel adjustment)",
+                     "DIF bootstrap (dependent on superseded DIF)",
+                     "automatic DIF resolution (dependent on superseded DIF)")
+      }
+      if (isTRUE(old_dif_followups) && !isTRUE(old_mixed_dif) &&
+          !is.null(results$dif)) {
+        has_bootstrap <- !is.null(results$dif_bootstrap)
+        has_resolution <- !is.null(results$resolve)
+        results$dif <- NULL
+        results$dif_bootstrap <- NULL
+        results$resolve <- NULL
+        dropped <- c(dropped,
+                     "DIF (superseded normalized-factor follow-ups)",
+                     if (has_bootstrap)
+                       "DIF bootstrap (dependent on superseded DIF)",
+                     if (has_resolution)
+                       "automatic DIF resolution (dependent on superseded DIF)")
+      }
       if (!is.null(results$dimension_magnitude)) {
         results$dimension_magnitude <- NULL
         dropped <- c(dropped, "dimensionality magnitude")
@@ -795,6 +1139,17 @@
         dropped <- c(dropped, "fit bootstrap")
       }
       primary_dropped <- FALSE
+      if (isTRUE(old_btl_dif_role) && !is.null(results$btl_dif)) {
+        has_bootstrap <- !is.null(results$dif_bootstrap)
+        results$btl_dif <- NULL
+        results$btl_dif_meta <- NULL
+        results$dif_bootstrap <- NULL
+        dropped <- c(dropped,
+                     "Comparative Judgement DIF (missing fitted judge-role provenance)",
+                     if (has_bootstrap)
+                       "DIF bootstrap (dependent on superseded Comparative Judgement DIF)")
+        primary_dropped <- TRUE
+      }
       for (nm in c("dif", "btl_dif")) {
         if (!is.null(results[[nm]]) && !has_signature(results[[nm]])) {
           results[[nm]] <- NULL
@@ -843,7 +1198,8 @@
                   "reporting adjusted bootstrap probabilities"),
             call. = FALSE)
   }
-  if (isTRUE(old_dif_bootstrap)) {
+  if (isTRUE(old_dif_bootstrap) && !isTRUE(old_mixed_dif) &&
+      !isTRUE(old_dif_followups) && !isTRUE(old_btl_dif_role)) {
     attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
     warning(paste("the saved DIF bootstrap used the earlier raw-F marginal",
                   "reference and was omitted; recompute it before reporting",
@@ -868,12 +1224,39 @@
                   "samples and was omitted; recompute it on matched response rows"),
             call. = FALSE)
   }
+  if (!legacy && isTRUE(old_btl_residual_method)) {
+    attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
+    warning(paste("the saved Comparative Judgement dimensionality used an",
+                  "earlier residual definition and was omitted; rerun",
+                  "dimensionality before reporting its decomposition or inference"),
+            call. = FALSE)
+  }
   if (isTRUE(old_btl_dimensionality)) {
     attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
     warning(paste("the saved Comparative Judgement dimensionality reference",
                   "used an unsupported comparison design and was omitted;",
                   "recompute it to retain the observed decomposition",
                   "without unsupported inference"), call. = FALSE)
+  }
+  if (!legacy && isTRUE(old_mixed_dif)) {
+    attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
+    warning(paste("the saved mixed-panel DIF analysis predates the joint",
+                  "between-person adjustment and was omitted, along with",
+                  "its dependent bootstrap and resolution; recompute DIF",
+                  "before reporting inference"), call. = FALSE)
+  }
+  if (!legacy && isTRUE(old_dif_followups) && !isTRUE(old_mixed_dif)) {
+    attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
+    warning(paste("the saved DIF follow-ups may use earlier factor values;",
+                  "recompute the DIF analysis before reporting inference"),
+            call. = FALSE)
+  }
+  if (!legacy && isTRUE(old_btl_dif_role)) {
+    attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
+    warning(paste("the saved Comparative Judgement DIF lacked authenticated",
+                  "fitted judge-role provenance and was omitted; refit DIF",
+                  "before reporting inference"),
+            call. = FALSE)
   }
   if (!legacy && isTRUE(old_contrasts)) {
     attr(project, "rasch_project_legacy_dropped") <- unique(dropped)

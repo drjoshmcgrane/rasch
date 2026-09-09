@@ -97,7 +97,8 @@
 #' @param boot_reps Number of bootstrap replicates. At least 30 are required.
 #'   At least 90 per cent, and no fewer than 30, must yield the complete set
 #'   of comparisons.
-#' @param seed Optional bootstrap seed.
+#' @param seed Optional bootstrap seed. See \code{\link{rasch_rng}} for
+#'   generator support.
 #' @return An object of class \code{"rasch_frame_invariance"}. The
 #'   \code{locations} and \code{discrimination} tables contain the pairwise
 #'   item comparisons; \code{summary} contains set-level RMSD and RMSE
@@ -534,12 +535,8 @@ frame_invariance <- function(fit, alpha = 0.05, adjust = c("holm", "none"),
   if (se_method == "bootstrap") {
     boot_reps <- .check_whole(boot_reps, "boot_reps", 30)
     if (!is.null(seed)) {
-      old_seed <- if (exists(".Random.seed", .GlobalEnv, inherits = FALSE))
-        get(".Random.seed", .GlobalEnv) else NULL
-      on.exit(if (is.null(old_seed)) {
-        if (exists(".Random.seed", .GlobalEnv, inherits = FALSE))
-          rm(".Random.seed", envir = .GlobalEnv)
-      } else assign(".Random.seed", old_seed, envir = .GlobalEnv), add = TRUE)
+      old_seed <- .sim_seed_capture()
+      on.exit(.sim_seed_restore(old_seed), add = TRUE)
       set.seed(seed)
     }
     source <- .efrm_source_matrix(fit)

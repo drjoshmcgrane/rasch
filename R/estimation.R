@@ -1218,32 +1218,21 @@ pcml <- function(X, model = c("PCM", "RSM"), anchors = NULL,
 # constrained across items the same way pcml()'s RSM delta is. The
 # higher-order components are free per item, capped at an item's own
 # threshold count (a dichotomous item has location only). The family stops
-# at the quartic (kurtosis) term, so this reproduces pcml()'s free-PCM
-# thresholds exactly only while every item has at most 3 thresholds (location
-# + spread + skewness then span it exactly); from 4 thresholds on it is
-# necessarily a reduced-rank smoothing of the thresholds to a polynomial
-# trend across categories, however large n_components is set, because no
-# fifth component has been derived (Pedler 1987) and, at exactly 4
-# thresholds, the quartic is collinear with the cubic (see .pc_select).
+# at the quartic (kurtosis) term. With four components it spans the free PCM
+# when every item has at most four thresholds. Longer scales are restricted
+# to the four-component polynomial trend.
 # ---------------------------------------------------------------------------
 .pc_gcoefs <- function(mi) {
   x <- 0:mi
   G <- cbind(x,
              -x * (mi - x),
              -x * (mi - x) * (2 * x - mi),
-             -x * (mi - x) * (2 * x - mi) * (5 * x^2 - 5 * x * mi + mi^2 + 1))
+             -x * (mi - x) * (5 * x^2 - 5 * x * mi + mi^2 + 1))
   G[-1, , drop = FALSE] - G[-nrow(G), , drop = FALSE]
 }
 
-# The quartic (kurtosis) column is collinear with the cubic (skewness) column
-# at exactly 4 thresholds (it is the only such case up to 14 thresholds,
-# checked exhaustively): both are non-zero only at the two threshold rows
-# equidistant from the item's centre, where the quartic factor takes the same
-# value by symmetry, so kurtosis carries no information beyond skewness
-# there. Selecting components by incremental rank, rather than assuming
-# n_components - 1 of them are always identified, catches this (and any
-# other such coincidence) instead of silently returning an unidentified
-# parameter and an unstable standard error.
+# Retain only components supported by the item's threshold count. Incremental
+# rank checking also protects against numerical degeneracy in the design.
 .pc_select <- function(G, ncomp, tol = 1e-8) {
   if (ncomp < 2L) return(integer(0))
   base <- G[, 1, drop = FALSE]; r0 <- qr(base, tol = tol)$rank
@@ -1259,22 +1248,26 @@ pcml <- function(X, model = c("PCM", "RSM"), anchors = NULL,
 #' Estimate Rasch thresholds using a principal-component parameterisation
 #'
 #' Re-expresses each item's thresholds as orthogonal polynomial components:
-#' location, spread, skewness, and kurtosis (Andrich 1978, 1985; Pedler 1987).
+#' location, spread, skewness, and kurtosis (Andrich and Luo 2003).
 #' Estimation uses the same pairwise conditional likelihood as
-#' \code{\link{pcml}}. With at most three thresholds per item the full
-#' parameterisation is exact. Items with four or more thresholds are fitted by
+#' \code{\link{pcml}}. With at most four thresholds per item the full
+#' parameterisation is exact. Items with five or more thresholds are fitted by
 #' a reduced-rank polynomial trend, which can stabilise sparse categories at
 #' the cost of restricting the threshold pattern.
+#'
+#' @details For scores \eqn{x=0,\ldots,m}, the cumulative threshold function is
+#' \deqn{C(x)=x\omega_1-x(m-x)\omega_2-x(m-x)(2x-m)\omega_3
+#'       -x(m-x)(5x^2-5mx+m^2+1)\omega_4.}
+#' Threshold \eqn{k} is \eqn{C(k)-C(k-1)}. The four coefficients are
+#' location, spread, skewness and kurtosis, respectively.
 #'
 #' @param X Persons-by-items integer score matrix. Each item must have at least
 #'   two observed categories, numbered consecutively from 0. Missing values are
 #'   handled by pairwise deletion.
 #' @param n_components Maximum number of components per item: 1 (location
-#'   only) up to 4 (location, spread, skewness, kurtosis; the highest
-#'   derived by Pedler 1987). Capped per item at its own number of
-#'   thresholds, and further wherever a component would be collinear with
-#'   lower-order ones for that item's threshold count (kurtosis is
-#'   unidentified, and dropped, at exactly 4 thresholds).
+#'   only) up to 4 (location, spread, skewness, kurtosis).
+#'   Capped per item at its own number of thresholds. Kurtosis requires
+#'   at least four thresholds (five response categories).
 #' @param maxit,tol Newton-Raphson iteration cap and convergence tolerance.
 #' @return A list with the threshold table \code{thr} (columns \code{id},
 #'   \code{item}, \code{k}, \code{tau}, \code{se}), the component table
@@ -1390,7 +1383,8 @@ pcml_pc <- function(X, n_components = 4, maxit = 60, tol = 1e-8) {
     sol$cov_beta[,] <- NA_real_
   }
 
-  list(model = "PCM", n_components = n_components, thr = thr,
+  list(model = "PCM", n_components = n_components,
+       pc_algorithm = "guttman-four-1", thr = thr,
        components = comp, cov_tau = sol$cov_tau, loglik = sol$loglik,
        iterations = sol$iterations, converged = sol$converged, m = m,
        anchors = NULL, n_parameters = ncol(B), B = B,

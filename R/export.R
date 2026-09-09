@@ -27,6 +27,20 @@
   invisible(x)
 }
 
+.check_export_dir <- function(x) {
+  .check_out_path(x, "dir")
+  if (dir.exists(x)) {
+    entries <- list.files(x, all.files = TRUE, no.. = TRUE)
+    if (length(entries))
+      stop("`dir` must be a new or empty directory; refusing to overwrite ",
+           "existing export files", call. = FALSE)
+  } else if (file.exists(x)) {
+    stop("`dir` must be a new path or an existing empty directory; the ",
+         "supplied path is an existing file", call. = FALSE)
+  }
+  invisible(x)
+}
+
 .check_export_fit <- function(fit, btl = TRUE) {
   ok <- inherits(fit, "rasch") || (isTRUE(btl) && inherits(fit, "rasch_btl"))
   if (!ok)
@@ -356,7 +370,11 @@ save_person_plots <- function(fit, file, persons = NULL, level = 0.95,
       mean = ref$mean, upper_5_percent = ref$p95, p = ref$p,
       p_adj = ref$p_adj, requested = ref$reps, used = ref$n_used,
       alpha = ref$alpha, seed = ref$seed %||% NA_integer_,
-      method = ref$method), "residual_dimensionality_reference")
+      method = ref$method,
+      inference_available = .btl_dimensionality_has_inference(bd),
+      independent_comparisons = ref$independent_comparisons %||% NA,
+      note = paste(bd$notes, collapse = " ")),
+      "residual_dimensionality_reference")
   }
   if (inherits(fit, "rasch_btl_efrm")) {
     wtab(fit$phi_table, "panel_units_phi")
@@ -428,7 +446,8 @@ save_person_plots <- function(fit, file, persons = NULL, level = 0.95,
 #' analysis is unavailable and retains the other model outputs.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
-#' @param dir Output directory; created if absent.
+#' @param dir Output directory; created if absent. An existing directory must
+#'   be empty; exports refuse to overwrite files from an earlier analysis.
 #' @param formats Plot formats, any of \code{"png"} and \code{"pdf"}.
 #' @param width,height Plot size in inches.
 #' @param dpi PNG resolution.
@@ -462,7 +481,7 @@ save_person_plots <- function(fit, file, persons = NULL, level = 0.95,
 #' d <- seq(-2, 2, length.out = 6)
 #' X <- matrix(rbinom(150 * 6, 1, plogis(outer(rnorm(150), d, "-"))), 150, 6)
 #' colnames(X) <- paste0("I", 1:6)
-#' out <- file.path(tempdir(), "rasch-out")
+#' out <- tempfile("rasch-out-")
 #' save_outputs(rasch(X), out, formats = "png", item_plots = FALSE, dpi = 96)
 #' @export
 save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
@@ -492,7 +511,7 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
   # everything is checked before a directory is made or a table written: a
   # bad plot size otherwise leaves a populated folder that reads as a
   # complete export but carries no plots
-  .check_out_path(dir, "dir")
+  .check_export_dir(dir)
   .check_device_size(width, height, dpi)
   .check_flag(item_plots, "item_plots")
   if (inherits(fit, "rasch_btl"))
@@ -681,7 +700,7 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
     wtab(fit$thresholds_arbitrary, "thresholds_common_unit")
     wtab(fit$score_curves, "score_curves")
   }
-  if (!is.null(fit$factors)) {
+  if (!is.null(dif) || !is.null(fit$factors)) {
     # an analysis exported from the application carries the DIF model the
     # analyst actually chose; recomputing at defaults would export a
     # different analysis than the one on screen
@@ -1071,6 +1090,9 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
   separation_unit <- if (structural) "response-cell" else "item"
   separation_quality <- fit$separation_quality %||% fit$power_of_fit %||%
     .separation_quality(fit$psi$PSI)
+  total_p <- if (length(fit$total_chisq_p) == 1L &&
+                 is.finite(fit$total_chisq_p))
+    .fmt_p(fit$total_chisq_p) else "unavailable"
   summ <- s(
     sprintf("<p>%s %s in %d iterations. ",
             .html_escape(.estimation_label(fit)),
@@ -1078,7 +1100,7 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
             fit$est$iterations),
     sprintf("Approximate asymptotic total %s-trait chi-square %.2f on %d df (p = %s). ",
             calibration_unit, fit$total_chisq, fit$total_df,
-            .fmt_p(fit$total_chisq_p)),
+            total_p),
     sprintf("%s fit residual mean %.2f, SD %.2f; person fit residual mean %.2f, SD %.2f. ",
             fit_unit, fit$item_fit_summary$mean, fit$item_fit_summary$sd,
             fit$person_fit_summary$mean, fit$person_fit_summary$sd),
@@ -1260,7 +1282,7 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
       else
         "<p class='note'>Item shifts are descriptive; no bootstrap uncertainty was requested.</p>",
       .html_table(tailored$table)) else "",
-    if (!is.null(fit$factors)) {
+    if (!is.null(dif) || !is.null(fit$factors)) {
       da <- if (!is.null(dif)) dif
             else tryCatch(dif_anova(fit), error = function(e) NULL)
       if (!is.null(da)) s("<h2>Differential item functioning</h2>",

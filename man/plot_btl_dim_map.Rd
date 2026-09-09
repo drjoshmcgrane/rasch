@@ -15,10 +15,10 @@ plot_btl_dim_map(x, ...)
 Called for its plotting side effect.
 }
 \description{
-Objects placed in the leading bimension plane. Reading round the swirl, an
-object sits \dQuote{upstream} of those it over-beats relative to the fitted
-locations; a clear rotational arrangement is the second attribute, a
-formless blob near the origin is noise. Point size grows with the object's
+Objects placed in the leading bimension plane to show the pattern of
+residual comparisons. The coordinates describe the pattern, not its
+magnitude or significance; use \code{\link{plot_btl_scree}} to compare its
+strength with the conditional reference. Point size grows with the object's
 location on the primary scale.
 }
 \examples{

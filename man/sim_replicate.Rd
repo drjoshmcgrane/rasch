@@ -13,7 +13,8 @@ sim_replicate(FUN, n, ..., seed = NULL)
 
 \item{...}{Arguments passed to \code{FUN} (the same each replicate).}
 
-\item{seed}{Seed of the first replicate (each subsequent one increments it).}
+\item{seed}{Seed of the first replicate (each subsequent one increments it).
+See \code{\link{rasch_rng}} for generator support.}
 }
 \value{
 A list of class \code{"rasch_sim_batch"}, one simulated dataset per

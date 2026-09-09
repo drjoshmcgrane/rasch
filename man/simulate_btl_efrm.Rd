@@ -43,7 +43,8 @@ default is all zero, and \code{kappa_1} is forced to zero.}
 \item{object_sd}{Realised sample standard deviation of the within-set
 calibration locations.}
 
-\item{seed}{Optional non-negative whole-number RNG seed.}
+\item{seed}{Optional non-negative whole-number RNG seed. See
+\code{\link{rasch_rng}} for generator support.}
 
 \item{erratic_judges}{Proportion of judges who choose between the two
 objects at random. At least one judge in every panel must retain

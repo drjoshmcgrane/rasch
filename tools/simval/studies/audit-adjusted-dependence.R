@@ -6,10 +6,11 @@
 # 1,000 replicates; power is examined at two effect sizes. Set SV_CORES on a
 # Unix-like system to run independent replicates in parallel.
 
-suppressWarnings(pkgload::load_all(".", quiet = TRUE))
+suppressWarnings(pkgload::load_all(".", quiet = TRUE, compile = FALSE))
 source("tools/simval/harness.R")
 STUDY <- "audit-adjusted-dependence"
 ALPHA <- 0.05
+DIM_ONLY <- identical(Sys.getenv("SV_DIM_ONLY", "0"), "1")
 
 env_count <- function(name, default) {
   z <- suppressWarnings(as.integer(Sys.getenv(name, as.character(default))))
@@ -106,14 +107,15 @@ summarise_efrm <- function(effect, n) {
   }
 }
 
-cat(sprintf("Crossed EFRM null: %d replicates on %d core(s)\n",
-            R_E_NULL, CORES))
-rows <- list(summarise_efrm(0, R_E_NULL))
-for (effect in log(c(1.25, 1.50))) {
-  cat(sprintf("Crossed EFRM power, unit ratio %.2f: %d replicates\n",
-              exp(effect), R_E_POWER))
-  rows[[length(rows) + 1L]] <- summarise_efrm(effect, R_E_POWER)
-}
+if (!DIM_ONLY) {
+  cat(sprintf("Crossed EFRM null: %d replicates on %d core(s)\n",
+              R_E_NULL, CORES))
+  rows <- list(summarise_efrm(0, R_E_NULL))
+  for (effect in log(c(1.25, 1.50))) {
+    cat(sprintf("Crossed EFRM power, unit ratio %.2f: %d replicates\n",
+                exp(effect), R_E_POWER))
+    rows[[length(rows) + 1L]] <- summarise_efrm(effect, R_E_POWER)
+  }
 
 # BTL dependence: randomise presentation orientation, fit exposure,
 # carry-over and position jointly, and treat their adjusted probabilities as
@@ -229,29 +231,55 @@ rows[[length(rows) + 1L]] <- sv_row(
   length(corr_error), bias = max(corr_error), n_attempted = length(corr_error),
   n_refused = 0L, n_nonconv = 0L,
   notes = "4 object counts x 6 correlations x 50 seeds")
+} else {
+  # Preserve every historical row verbatim while replacing only the affected
+  # dimensionality cell. sv_bind_rows() adds newer accounting columns without
+  # altering the recorded provenance of those earlier rows.
+  previous <- utils::read.csv(
+    "tools/simval/results/audit-adjusted-dependence.csv",
+    stringsAsFactors = FALSE, check.names = FALSE)
+  previous <- previous[
+    previous$scenario != "BTL exact-orthogonal second attribute", , drop = FALSE]
+  rows <- list(previous)
+}
 
 # Re-run the strong dimensionality-power cell affected by the corrected
 # second-attribute generator. The earlier 60-replicate result used a vector
 # whose realised correlation only approached the requested value in expectation.
 one_dim <- function(r) {
+  blank <- c(hit = NA, refused = 0, nonconv = 0, error = 0, withheld = 0)
   d <- simulate_btl(15, 20, 60, object_sd = 1.5,
                     second_attribute = list(rho = 0), seed = 5100000L + r)
   f <- tryCatch(btl(d, "object_a", "object_b", winner = "winner",
-                    judge = "judge"), error = function(e) NULL)
-  if (is.null(f) || !isTRUE(f$converged)) return(NA)
-  set.seed(6100000L + r)
-  z <- tryCatch(btl_dimensionality(f, reps = 100), error = function(e) NULL)
-  if (is.null(z)) NA else isTRUE(z$leading_structured)
+                    judge = "judge"), error = identity)
+  if (inherits(f, "condition")) { blank["refused"] <- 1; return(blank) }
+  if (!isTRUE(f$converged)) { blank["nonconv"] <- 1; return(blank) }
+  z <- tryCatch(btl_dimensionality(
+    f, reps = 100, seed = 6100000L + r,
+    # Comparisons share judges. This is a model-conditional power check and
+    # does not claim that the allocation itself proves independence.
+    independent_comparisons = TRUE), error = identity)
+  if (inherits(z, "condition")) { blank["error"] <- 1; return(blank) }
+  if (is.na(z$leading_structured)) {
+    blank["withheld"] <- 1
+    return(blank)
+  }
+  blank["hit"] <- as.numeric(z$leading_structured)
+  blank
 }
 cat(sprintf("BTL dimensionality power: %d replicates\n", R_DIM))
-dim_hit <- unlist(run_reps(R_DIM, one_dim), use.names = FALSE)
-ok_dim <- !is.na(dim_hit)
+dim_result <- do.call(rbind, run_reps(R_DIM, one_dim))
+ok_dim <- is.finite(dim_result[, "hit"])
 rows[[length(rows) + 1L]] <- sv_row(
   STUDY, "BTL exact-orthogonal second attribute",
   "power of leading-structured dimensionality decision", sum(ok_dim),
-  power = mean(dim_hit[ok_dim]), n_attempted = R_DIM,
-  n_refused = R_DIM - sum(ok_dim), n_nonconv = 0L,
+  power = mean(dim_result[ok_dim, "hit"]), n_attempted = R_DIM,
+  n_refused = sum(dim_result[, "refused"]),
+  n_nonconv = sum(dim_result[, "nonconv"]),
+  n_error = sum(dim_result[, "error"]),
+  n_withheld = sum(dim_result[, "withheld"]),
   notes = paste("15 objects, 20 judges, 60 comparisons per pair, object SD 1.5,",
-                "rho 0 exactly, 100 null draws per diagnostic"))
+                "rho 0 exactly, 100 null draws per diagnostic; explicit",
+                "model-conditional independence opt-in"))
 
-sv_write(do.call(rbind, rows), STUDY)
+sv_write(do.call(sv_bind_rows, rows), STUDY)

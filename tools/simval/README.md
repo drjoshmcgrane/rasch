@@ -12,6 +12,100 @@ with `Rscript`, loading the in-tree package via `pkgload::load_all(".")`.
 
 ## Layout
 
+- `studies/efrm-full-identification.R` checks full-bootstrap group-unit
+  identification on five fixed datasets: balanced binary and polytomous
+  scales, groups of three and twelve persons alongside a group of 120,
+  and a two-set, two-group design. The recording wrappers do not alter
+  solver output. Unidentified draws must be rejected, and every reported
+  covariance block must match the accepted draws. Results are in
+  `results/efrm-full-identification.csv`, with execution-state hashes:
+  190 of 200 draws were retained and ten unidentified draws were rejected.
+  All covariance reconstructions matched exactly. The two small-group
+  cases still withhold group-unit probabilities.
+  These are numerical and accounting checks, not coverage or Type I error
+  studies. Historical full-bootstrap results predate this rejection rule;
+  analyses that included unidentified unit draws need refitting. The
+  separate `test-efrm-full-bootstrap-identification.R` checks controlled
+  failures, the usable-draw floor and the hybrid fallback, without requiring
+  analytic standard errors from an otherwise identified bootstrap refit.
+- `tests/testthat/test-btl-pair-tie-invariance.R` checks that tied CJ object
+  locations cannot acquire a directional surprise through relabelling.
+  Tied matchups retain their descriptive probabilities and their place in
+  the planned Holm family. The report-template regression in
+  `test-export-safety-and-external-dif.R` checks that externally specified
+  DIF and its bootstrap sensitivity analysis appear in rendered reports.
+- `tests/testthat/test-efrm-link-graph.R` checks indirect set linking on a
+  three-set chain, insufficient direct overlap, disconnected designs and
+  numerical-link refusal. A failed supported edge invalidates the whole
+  bootstrap replicate, even when two other edges connect all three sets.
+  Fault-injection checks verify numerical failure, non-convergence, usable
+  counts, the minimum-draw refusal and covariance computed from accepted
+  draws only. The internal moment-link fallback follows the same rule.
+  Supported direct-link estimates are unchanged.
+  A fixed-seed case exercises both hybrid and full-bootstrap uncertainty
+  with 40 requested replicates and retains failed-replicate accounting.
+  `studies/efrm-link-graph-conformance.R` adds eight end-to-end cases: two
+  sets, a complete three-set design, pairwise booklets and a three-set chain,
+  each at unit ratios 1 and 1.3 with 600 persons and five items per set.
+  All fits converged; 465 of 480 requested hybrid draws were usable and 15
+  failed. Results are in `results/efrm-link-graph-conformance.csv`, with
+  execution-state source and script hashes. Subsequent help-text edits change
+  the R-tree hash but not the estimators.
+  These are graph, numerical and accounting checks, not Type I error or
+  coverage studies. Historical multi-set hybrid results predate the corrected
+  failure handling and do not establish its calibration; affected analyses
+  need refitting. Two-set scenarios already rejected a failed sole link.
+  `test-structural-factor-roles.R` checks factor identity through structural
+  refits, including the frame-invariance bootstrap. The app simulation-bundle
+  test checks that exported code recreates the responses and truth metadata.
+- `tests/testthat/test-factor-item-name-disambiguation.R` checks explicit
+  item selectors with separately supplied, same-named person factors against
+  matrix input. `test-compare-btl-pairwise-identity.R` checks that increasing
+  within-judge sequence relabelling preserves model comparability while real
+  order changes do not. These change input handling, not estimation.
+  `test-export-safety-and-external-dif.R` checks exact DIF table exports and
+  refusal of non-empty output folders without changing existing files.
+- `tests/testthat/test-dif-factor-handoff.R` checks automatic follow-ups
+  against directly supplied factor values and refuses obsolete saved tables
+  before report creation. The app-project tests check omission of those
+  results and CJ DIF whose judge role cannot be verified, while preserving
+  the data and fitted models. These are compatibility checks; affected DIF
+  analyses must be rerun. `test-sim-recovery-boundaries.R` checks BTL recovery
+  against pre-boundary observations, including refusal of changed source
+  rows. Extreme objects remain excluded from recovery summaries. Neither
+  correction changes the fitted estimators or simulation generators.
+- `tests/testthat/test-parallel-rng.R` checks bootstrap worker parity under
+  Mersenne-Twister, L'Ecuyer-CMRG, Box-Muller and the older Rounding sampler.
+  It requires an installed package and actual socket workers; a serial
+  fallback cannot count as a passing parallel check. A public item-fit
+  bootstrap comparison also verifies replicate arrays, item and person
+  results, and preservation of the caller's RNG state. This corrects seeded
+  reproducibility under non-default generators, not the bootstrap null or
+  estimator. Earlier default-generator calibration studies remain applicable;
+  earlier non-default parallel runs need rerunning to reproduce their serial
+  counterparts.
+- `studies/joint-dif-wle-maxima.R` checks the revised incomplete-panel
+  adjustment and competing WLE maxima. `SV_PART=dif`, `public`, and `wle`
+  select its components; an unset `SV_PART` runs all three. Results are in
+  `joint-dif-residual-model.csv`, `joint-dif-public-screen.csv`, and
+  `wle-separated-bank-maxima.csv`. The principal known-residual null uses
+  3,000 replicates: uniform/non-uniform rejection is 5.7/5.3%, with MC SEs
+  0.42/0.41 percentage points. Secondary null cells use 300 replicates;
+  two effect sizes per alternative use 200. The separate 200-dataset
+  end-to-end Rasch check gave 3.0% rejection for the null A effect on an
+  item carrying B DIF (MC SE 1.21 percentage points). These are marginal
+  primary-test checks, not all-item familywise or bootstrap calibration.
+  All requested replicates were usable. No dense-grid comparison point
+  exceeded the selected WLE objective across all scores in 100 dichotomous
+  and PCM banks with easy/hard gaps up to 16 logits. This is numerical
+  conformance, not a confidence-interval coverage study or a proof about
+  arbitrary banks. Rows identify the script hash and execution-state R-tree
+  hash; later documentation and app changes need not share that tree hash.
+  Earlier incomplete-panel validation used marginal centering and does not
+  validate the revised joint adjustment. Complete-panel references are
+  unchanged. The new regression files also check zero-unit BTL-EFRM refusal,
+  pairwise comparison identity, stable explanatory candidates, app source
+  changes, saved-result migration and conditional-bootstrap replay.
 - `tests/testthat/test-btl-dimensionality-availability.R` checks that
   incomplete pair coverage and shared-order confounding withhold the whole
   CJ dimensionality reference, not just its categorical flag. It covers
@@ -241,13 +335,25 @@ with `Rscript`, loading the in-tree package via `pkgload::load_all(".")`.
   their person-clustered covariance unchanged. The ordinary item-fit
   probabilities are withheld, descriptive statistics remain available, and
   the independent-row item-fit bootstrap is refused in every replicate.
-- `results/btl-dimensionality-reference.csv` checks the finite simulated
-  upper-tail decision for BTL and BTL-EFRM. Null rejection was 2.5% and 3.6%
-  with 20 reference draws, and 2.7% and 5.2% with 200. BTL power for a planted
-  second attribute was 78.8% and 86.0%, respectively. All 6,000 datasets were
-  analysed. The study is `studies/btl-dimensionality-reference.R`; its rows
-  carry script hash `b2eff3a9139d4aff32de70689bb95ea4` and R-tree hash
-  `c49eb3933f89`.
+- `results/btl-dimensionality-reference.csv` checks the pooled observed-minus-
+  expected point residual and its finite simulated upper-tail decision.
+  Binary, ordered-response and fitted-position null cells rejected 2.5--3.5%
+  with 20 reference draws and 2.5--2.8% with 200 (1,000 datasets per cell;
+  MCSE 0.49--0.58 percentage points). These designs were conservative.
+  At 200 draws, power for a directed-cycle departure of 0.75 logits was
+  5.4%, 97.6% and 7.8%, respectively; at 1.50 logits it was 82.6%, 100%
+  and 79.0% (500 datasets per cell). Thus the binary diagnostic had little
+  power for the weaker departure in this design. The BTL-EFRM conditional
+  reference rejected 2.8% and 3.6% (250 datasets per cell; MCSE 1.04 and
+  1.18 points). This arm assumes independent outcomes within its fitted
+  design; it does not validate general within-judge dependence. All 12,500
+  analyses completed, with no refusals, non-convergence, errors or withheld
+  references. Data draws were paired across reference sizes, so these are
+  not 12,500 independent datasets. The study is
+  `studies/btl-dimensionality-reference.R`; its rows carry script hash
+  `4ca05b42c9b81f77fa975d489e719ee2` and R-tree hash `bceec205f5ba`.
+  `results/btl-dimensionality-reference-pre-pooled-expected.csv` preserves
+  the superseded results; they are not evidence for the current statistic.
 
 ## Known limitations surfaced by the battery
 
@@ -840,14 +946,16 @@ adjusted (300 replicates per condition).
   with marginal rates 5.25--5.75% and no refusals or non-convergence. The
   pooled familywise rate is 5.93% over 3,000 fits. BTL dependence familywise
   rejection was 5.9% over 1,000 fits. The simulator reproduced requested
-  finite-object correlations to 3.9e-16 and dimensionality power was 87%.
-  The scripts are `studies/audit-adjusted-dependence.R` and
-  `studies/crossed-efrm-factorial-topup.R`; their hashes are
-  `3f1af2fcb6098b5996bda3e0987763f6` and
-  `70e9130564c43819760d330e925f53b1`, and both result sets carry R-tree hash
-  `8a6cc825b06a`. The final tree differs only in the subsequent compatibility
-  change that permits an empty optional simulator list; every generating and
-  fitting path used by these studies is unchanged.
+  finite-object correlations to 3.9e-16. Those retained rows carry script
+  hash `3f1af2fcb6098b5996bda3e0987763f6`; the independent top-up carries
+  `70e9130564c43819760d330e925f53b1`. Both identify R-tree hash
+  `8a6cc825b06a`. The dimensionality cell was rerun using the pooled-expected
+  residual and explicit conditional-independence opt-in: power was 83%
+  over 100 analyses (MCSE 3.76 percentage points), with no refusals,
+  non-convergence, errors or withheld references. This replaces the earlier
+  87% claim. The new row from `studies/audit-adjusted-dependence.R` carries
+  script hash `d8c6861e23c1e23c0970a08fb8f6a43f` and R-tree hash
+  `bceec205f5ba`; the unrelated rows were preserved, not rerun.
 - `results/btl-efrm-current.csv` — current judge- and independent-outcome
   bootstrap calibration for BTL-EFRM, rerun after the reconciled-panel refit.
   Over 300 null fits, raw marginal judge-bootstrap Type I was 3.7% for panel
@@ -1297,6 +1405,37 @@ adjusted (300 replicates per condition).
   hashes remain directly verifiable.
 
 ## Conventions
+
+### Principal-component kurtosis (September 2026)
+
+`studies/pc-kurtosis.R` and `results/pc-kurtosis.csv` check the corrected
+fourth component against the published adjacent-threshold polynomials.
+Across 100 five-category datasets, the maximum difference from unrestricted
+PCM was 3.21e-8 logits for thresholds, 1.20e-9 for their covariance and
+1.28e-11 for log likelihood. All four components were identified.
+
+Fixed-truth recovery used 100 datasets at each of four, five and six
+thresholds, with 1,200 persons and six items. Mean item-wise 95% kurtosis
+coverage was 95.5%, 94.0% and 95.2% (Monte Carlo SE 0.74, 0.99 and 0.83
+percentage points). The I3 empirical-SD/mean-SE ratios were 1.06, 1.09 and
+0.83. All 300 fits converged with available estimates. These limited
+recovery checks are not a principal null-size study. Earlier PC checks
+through three thresholds did not exercise kurtosis and do not validate
+the previous fourth-component formula. Result hashes identify the code
+loaded for this run, not later unrelated edits in the working tree.
+
+### CJ panel covariance (September 2026)
+
+`studies/btl-panel-covariance.R` and `results/btl-panel-covariance.csv`
+compare conditional panel-unit variances with independently stacked
+stage-one judge scores in 50 fitted designs. These cover shared, partially
+shared and disjoint judge pools, with positive and negative cross-set
+dependence. All comparisons agreed within 1.4e-17; there were no refusals,
+non-convergences or errors. Point estimates were unchanged to numerical
+precision. The former SE divided by the corrected SE averaged .81 under
+shared positive dependence, 1.29 under shared negative dependence, and 1.00
+for disjoint pools. This is a covariance-conformance check, not a coverage
+or null-rejection study; the default judge bootstrap is unchanged.
 
 ### Repeated-person explanatory calibration (September 2026)
 

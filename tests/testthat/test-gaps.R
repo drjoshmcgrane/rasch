@@ -436,7 +436,8 @@ test_that("class-interval detail refuses an item with no classified persons", {
   anch <- data.frame(item = c("I1", "I7"), k = c(1L, 1L), tau = c(-1.5, 0))
   f <- suppressWarnings(rasch(X7, anchors = anch))
   expect_error(chisq_detail(f, "I7"), "no persons in any class interval")
-  td <- file.path(tempdir(), "gap-export")
+  td <- tempfile("gap-export-")
+  on.exit(unlink(td, recursive = TRUE), add = TRUE)
   expect_no_error(suppressWarnings(save_outputs(f, td, formats = "png",
                                                item_plots = FALSE)))
 })

@@ -19,8 +19,10 @@ of approximately 0.05.}
 }
 \value{
 A list of class \code{"rasch_btl_judge_pairs"}: \code{pairs} (per
-  matchup: the stronger and weaker object and their locations, the location
-  \code{gap}, times met \code{n}, residual \code{z}, approximate \code{p},
+  matchup: the stronger and weaker object and their locations when
+  \code{tied} is false (at a tie these columns only orient the row), the
+  location \code{gap}, tie indicator \code{tied}, times met \code{n},
+  residual \code{z}, approximate \code{p},
   Holm-adjusted \code{p_adj}, the \code{net_winner}, and the
   \code{surprise} flag); \code{all_locations}; the \code{judge} and settings.
 }
@@ -34,7 +36,10 @@ across matchups meeting \code{min_n}. A surprise is an eligible matchup
 with a negative residual whose adjusted probability passes the level
 represented by \code{flag_z}. The fitted model must have converged.
 An adequately sampled matchup with unavailable residual inference remains
-in the adjustment family.
+in the adjustment family. Locations within \eqn{10^{-10}} logits are treated
+as tied: neither object is called stronger, the two-sided residual probability
+remains descriptive and in the Holm family, and \code{surprise} is false.
+A tied row is oriented toward its non-negative residual for display only.
 }
 \examples{
 set.seed(1); objs <- LETTERS[1:6]; beta <- setNames(seq(-1.5, 1.5, len = 6), objs)

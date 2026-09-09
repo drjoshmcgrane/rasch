@@ -48,6 +48,12 @@ data import, model fitting, diagnostics, plots, saved analysis projects and
 reports. The corresponding R code is shown for each result.
 }
 
+\section{Reproducible simulations}{
+
+Simulators and bootstrap procedures accept a random seed. See
+\code{\link{rasch_rng}} for random-number generator support.
+}
+
 \references{
 Rasch, G. (1960). Probabilistic Models for Some Intelligence and
 Attainment Tests. Copenhagen: Danish Institute for Educational Research.

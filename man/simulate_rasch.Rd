@@ -110,7 +110,8 @@ is added when > 1, for DIF).}
 drawn from cells not already missing through speededness. The requested
 count must fit among those cells and leave at least one observed response.}
 
-\item{seed}{Optional non-negative whole-number RNG seed.}
+\item{seed}{Optional non-negative whole-number RNG seed. See
+\code{\link{rasch_rng}} for generator support.}
 }
 \value{
 A data frame of class \code{"rasch_sim"} (item columns

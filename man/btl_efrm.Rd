@@ -63,7 +63,9 @@ through sufficient cross-set pairs raise an error.}
 dependence among a judge's comparisons. \code{"bootstrap"} instead
 draws independent outcomes from fitted probabilities. Both stages are
 refitted. \code{"conditional"} uses
-analytic stage-one standard errors for \code{beta} and \code{phi}, and
+analytic stage-one standard errors for \code{beta} and \code{phi}; the
+panel-unit covariance retains dependence across sets judged by the same
+people. It uses
 inverse observed information for \code{alpha} and \code{kappa}
 conditional on the stage-one estimates. It is faster, but does not
 propagate stage-one uncertainty into the linking parameters; unit
@@ -128,7 +130,11 @@ have geometric mean one.
 
 Estimation has two stages. Within-set comparisons estimate object locations
 and panel-unit ratios. Weighted least squares reconciles the ratios over the
-panel-by-set linking graph. Cross-set comparisons then estimate the set
+panel-by-set linking graph, using each set's covariance for its precision
+weight. The analytic covariance of the reconciled panel units is a joint
+judge-cluster sandwich: influence contributions with the same judge label
+are aligned across sets, while disjoint judge pools have zero cross-set
+covariance. Cross-set comparisons then estimate the set
 units and origins. Unlike the person-by-item EFRM, this linking step uses
 only comparison outcomes and does not require a distribution of persons.
 The paired-comparison form is an extension of Humphry's model implemented in
@@ -147,7 +153,12 @@ as descriptive summaries. Its row-based chi-square probability is withheld
 because judges are the sampling units and contribute repeated comparisons.
 
 With one set, the model contains panel units only. With one set and one
-panel, it reduces to \code{\link{btl}}. Omnibus Wald probabilities are
+panel, its likelihood and finite interior estimates reduce to
+\code{\link{btl}}. Boundary handling differs: \code{btl()} can set aside an
+undefeated or winless object and report an extrapolated location, whereas
+\code{btl_efrm()} treats every declared object as part of the frame design
+and refuses a within-set outcome separation rather than deleting or
+extrapolating an object. Omnibus Wald probabilities are
 Holm-adjusted across the panel-unit, set-unit and set-origin families.
 Individual estimated units form a separate Holm-adjusted follow-up family
 across all three parameter types. Structurally fixed reference coordinates
@@ -165,6 +176,12 @@ probabilities but report a caution.
 Set-unit estimates can also be attenuated when each object pair has little
 comparison information. In simulation, log-unit bias declined from about
 -0.11 with 10 repetitions per pair to less than -0.01 with 100 repetitions.
+A set whose within-set locations have no numerical spread has an
+unidentified unit: its reported unit is \code{NA}, and the conventional
+unit one is used only to place its objects. In contrast, a positive linking
+unit driven to zero by the cross-set outcomes is an unsupported boundary
+link and raises an error. Such boundary links are also rejected in
+bootstrap refits; they are never replaced by unit one.
 }
 \examples{
 \donttest{
