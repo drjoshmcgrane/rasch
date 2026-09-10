@@ -273,7 +273,14 @@ ef$kappa_table
 ```
 
 The default judge bootstrap resamples judges within panels and refits both
-stages. The parametric bootstrap (`se_method = "bootstrap"`) draws independent
+stages. A set's panel-ratio fit must pass an exact likelihood-curvature check
+before entering the reconciliation. Failed sets are omitted from that
+reconciliation; estimation stops if the remaining sets cannot link all panels.
+Cross-set outcomes are checked for complete and quasi-complete separation;
+neither supports a finite link. Reaching the iteration limit is not convergence.
+Saved frame fits without a current likelihood-check record require refitting
+before reopening in the app; their source files remain unchanged.
+The parametric bootstrap (`se_method = "bootstrap"`) draws independent
 outcomes from the fitted model. The conditional option used above reports
 estimates and conditional standard errors but withholds probabilities because
 it does not propagate stage-one uncertainty into the set link. With either

@@ -91,7 +91,7 @@ total)} during estimation.}
 batches. Returning \code{TRUE} stops with a \code{rasch_cancelled}
 condition.}
 
-\item{maxit, tol}{Newton iteration cap and convergence tolerance.}
+\item{maxit, tol}{Scoring iteration cap and convergence tolerance.}
 }
 \value{
 An object of class \code{"rasch_btl_efrm"}. It contains the object
@@ -139,6 +139,15 @@ units and origins. Unlike the person-by-item EFRM, this linking step uses
 only comparison outcomes and does not require a distribution of persons.
 The paired-comparison form is an extension of Humphry's model implemented in
 this package.
+A within-set panel-ratio fit must have a small score and negative curvature
+of the exact likelihood Hessian in all free directions. Failed fits do not
+enter the panel-unit reconciliation; the remaining sets must link all panels.
+The same rule applies to bootstrap refits. It checks an identified local
+maximum, not a global maximum.
+Cross-set outcomes are checked for complete and quasi-complete separation,
+including designs where only some comparisons become deterministic.
+Separated links have no finite estimate. Reaching \code{maxit} without
+satisfying the convergence criterion is reported as non-convergence.
 
 The default judge bootstrap resamples judges within panels and refits both
 stages. The parametric bootstrap draws independent outcomes from the fitted

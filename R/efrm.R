@@ -188,8 +188,9 @@
   # UNRIDGED joint information that loads on a group's unit parameter
   # means the data cannot identify that unit -- the ridged solve would
   # land anywhere on the flat manifold and still show a small gradient.
-  # (H is the negative expected Hessian here, so its eigenvalues are
-  # nonnegative up to the bilinear cross term.)
+  # H is the exact log-likelihood Hessian, including the bilinear cross
+  # term. At an identified interior maximum it must be negative definite.
+  maximum_ok <- .likelihood_curvature_ok(H)
   phi_unident <- setNames(rep(FALSE, G), glevs)
   if (G > 1L) {
     eh <- eigen(H, symmetric = TRUE)
@@ -206,8 +207,9 @@
   support <- attr(Jt, "cluster_support", exact = TRUE)
   support_guard <- .pcml_covariance_support(Jb, ncol(J), support)
   covb <- Hinv %*% Jb %*% Hinv
-  if (!support_guard$inference) covb[,] <- NA_real_
-  conv <- max(abs(drop(crossprod(J, glh$g)))) < 1e-3
+  if (!support_guard$inference || !maximum_ok) covb[,] <- NA_real_
+  stationary <- isTRUE(max(abs(drop(crossprod(J, glh$g)))) < 1e-3)
+  conv <- maximum_ok && stationary
 
   # recentre to sum_g log phi = 0; dtilde absorbs the constant
   cc <- mean(log(phi))
@@ -249,7 +251,8 @@
        cov_log_phi = cov_lp, phi_unident = phi_unident,
        cov_dtilde = cov_dt, cov_joint = cov_joint,
        loglik = glh$ll, iterations = outer,
-       converged = conv, gidx = gidx,
+       converged = conv, stationary = stationary,
+       maximum_ok = maximum_ok, gidx = gidx,
        cluster_inference = support_guard$inference,
        cluster_support = support, cluster_note = support_guard$note)
 }
@@ -1292,6 +1295,10 @@
 #' convergence flag covers the conditional calibration, the set-link
 #' transformation and its nonparametric nuisance masses;
 #' \code{stage1_converged} records the conditional stage separately.
+#' The conditional stage requires a small score and negative curvature of the
+#' exact likelihood Hessian in all free directions. A stationary point with
+#' flat or positive curvature is refused, including in bootstrap refits.
+#' This checks an identified local maximum, not a global maximum.
 #'
 #' The empirical Godambe covariance from the conditional stage requires at
 #' least ten informative persons, at least eight effective persons, more
@@ -1942,6 +1949,12 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
 
   sol <- .efrm_solve(Xv, thr_v, m_v, vmap, pairs, drow, A_D,
                      maxit = maxit, tol = tol)
+  if (isTRUE(sol$stationary) && !isTRUE(sol$maximum_ok))
+    stop("EFRM conditional calibration did not reach an identified local ",
+         "maximum: the likelihood has flat or positive curvature in a free ",
+         "parameter direction. No fit or unit inference is returned; inspect ",
+         "the item hierarchy across groups and the frame design",
+         call. = FALSE)
   if (!isTRUE(sol$converged))
     warning("EFRM estimation did NOT converge in ", sol$iterations,
             " iterations; increase maxit or inspect the frame design",
@@ -1965,7 +1978,8 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
   # carry essentially no unit information. That check follows the choice
   # between analytic and full-bootstrap uncertainty below.
   bad_g <- sol$phi_unident |
-    (isTRUE(sol$cluster_inference) & !is.finite(sol$se_log_phi))
+    (isTRUE(sol$converged) & isTRUE(sol$cluster_inference) &
+       !is.finite(sol$se_log_phi))
   if (length(glevs) > 1L && any(bad_g))
     stop("the unit(s) of group(s) ", paste(glevs[bad_g], collapse = ", "),
          " are unidentified: the thresholds in their frames carry no ",
@@ -2100,10 +2114,9 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
       sb <- utils::getFromNamespace(".efrm_solve", "rasch")(
         Xb, thr_v, m_v, vmap, pb, drow, A_D,
         maxit = maxit, tol = tol)
-      # A small gradient does not establish identification: the ridged
-      # solver can converge in a flat group-unit direction. Apply the same
-      # structural refusal as the observed fit before linking or collecting
-      # this draw. Its analytic SEs are not needed for bootstrap covariance.
+      # Convergence includes the exact likelihood-curvature check. Apply
+      # the group-unit identification guard as well before linking or
+      # collecting this draw; its analytic SEs are not needed here.
       if (!isTRUE(sb$converged) || any(sb$phi_unident)) return(NULL)
       if (S > 1L) {
         pm_b <- person_mats(Xb, sb$dtilde, sb$phi)
@@ -2716,6 +2729,7 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
     fit$efrm_vs_rasch$ll_efrm <- NA_real_
     fit$efrm_vs_rasch$two_delta_ll <- NA_real_
   }
+  fit$calibration_algorithm <- "frame-likelihood-1"
   fit <- .tag_tables(fit)
   class(fit) <- c("rasch_efrm", "rasch")
   fit

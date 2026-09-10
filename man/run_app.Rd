@@ -29,6 +29,8 @@ Older saved analyses are checked against the current person-scoring
 algorithm. If their scores differ, refit the analysis before reopening it;
 the original file is left unchanged. Its source data can be recovered with
 \code{readRDS(file)$data}.
+Saved EFRM and CJ frame fits without a current likelihood-check record
+also require refitting. Their settings remain in \code{readRDS(file)$settings}.
 Superseded DIF results, or CJ DIF without verified judge-role alignment,
 are omitted with a warning. Rerun those analyses before reporting them.
 }

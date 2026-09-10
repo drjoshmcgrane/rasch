@@ -54,6 +54,8 @@ A list of class \code{"rasch_dif_size"}. \code{levels} contains
   supported repeated-person calibration.
   Sampling-uncertainty fields are \code{NA} when the resolved-location
   covariance cannot support Wald inference.
+  The ETS category is also \code{NA} if a probability needed to classify
+  the contrast is unavailable or its standard error is zero.
 }
 \description{
 Resolves an item by one or more person factors and compares the resulting

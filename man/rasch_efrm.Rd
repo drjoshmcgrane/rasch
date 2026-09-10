@@ -181,6 +181,10 @@ item sets are not permitted. The public
 convergence flag covers the conditional calibration, the set-link
 transformation and its nonparametric nuisance masses;
 \code{stage1_converged} records the conditional stage separately.
+The conditional stage requires a small score and negative curvature of the
+exact likelihood Hessian in all free directions. A stationary point with
+flat or positive curvature is refused, including in bootstrap refits.
+This checks an identified local maximum, not a global maximum.
 
 The empirical Godambe covariance from the conditional stage requires at
 least ten informative persons, at least eight effective persons, more

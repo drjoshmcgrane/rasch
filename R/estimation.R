@@ -105,6 +105,23 @@
   scale == 0 || max(abs(C - t(C))) <= tolerance * scale
 }
 
+# Local-maximum check in free likelihood coordinates. Expected information
+# alone misses the residual-weighted curvature of a nonlinear parameter map.
+# Standardise the diagonal before testing definiteness so changing a
+# parameter's units does not change the decision. Flat directions do not
+# establish an identified maximum, even when the score is zero.
+.likelihood_curvature_ok <- function(H, tolerance = 1e-10) {
+  if (!.covariance_is_symmetric(H)) return(FALSE)
+  if (!nrow(H)) return(TRUE)
+  if (any(diag(H) >= 0)) return(FALSE)
+  sc <- sqrt(-diag(H))
+  information <- sweep(sweep(-H, 1L, sc, "/"), 2L, sc, "/")
+  if (any(!is.finite(information))) return(FALSE)
+  ev <- eigen((information + t(information)) / 2,
+              symmetric = TRUE, only.values = TRUE)$values
+  min(ev) > tolerance * max(abs(ev))
+}
+
 # A covariance used for Wald inference must be more than present. This common
 # gate prevents a malformed or materially indefinite matrix from becoming a
 # zero variance through downstream pmax(..., 0) guards. Singular matrices are

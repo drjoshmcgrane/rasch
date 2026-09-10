@@ -1,5 +1,18 @@
 # rasch 1.12.1
 
+* DIF magnitudes leave the ETS category unavailable when a required test
+  probability is unavailable or its standard error is zero, rather than
+  treating the missing test as evidence for category A or B.
+* EFRM conditional calibration and CJ frame panel-ratio fits check the exact
+  likelihood curvature as well as the score. Stationary saddles can no longer
+  supply converged fits, unit inference or bootstrap covariance. Previously
+  saved frame analyses without a current likelihood-check record must be
+  refitted before reopening; their source files remain unchanged.
+  Resolving every common item in a set is also refused when it leaves the
+  groups' relative origins unidentified, even if another set links their units.
+* CJ frame linking checks partly separated outcomes, including comparisons
+  with zero loading along a separating direction. Such links have no finite
+  estimate. An exhausted iteration limit can no longer certify convergence.
 * The installed Shiny app resolves the internal helpers needed for item
   tables, saved CJ analyses and simulation recovery, including standalone
   launches.

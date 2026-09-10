@@ -19,10 +19,38 @@
     length(x) == 1L && !is.na(x) && nzchar(trimws(x))
 }
 
-.validate_app_fit <- function(fit, what = "fitted model") {
+.validate_app_frame_calibration <- function(fit, label) {
+  if (!inherits(fit, c("rasch_efrm", "rasch_btl_efrm")))
+    return(invisible(NULL))
+  if (!identical(fit$calibration_algorithm, "frame-likelihood-1"))
+    stop(label, " ", paste("has an unverified frame calibration; refit this analysis",
+      "with the current likelihood checks before reopening it.",
+      "The saved file is unchanged. Recover its source data and settings",
+      "with readRDS(file)$data and readRDS(file)$settings."), call. = FALSE)
+  invisible(NULL)
+}
+
+# Derived results can contain their own frame fits, outside base/history/kept
+# slots. Walk the authenticated bundle so those fits cannot bypass the guard.
+.validate_app_frame_fits <- function(x, label = "the saved analysis") {
+  if (inherits(x, c("rasch", "rasch_btl"))) {
+    .validate_app_frame_calibration(x, label)
+    return(invisible(NULL))
+  }
+  if (is.list(x) && !is.data.frame(x)) for (i in seq_along(x)) {
+    nm <- names(x)[i]
+    part <- if (length(nm) && !is.na(nm) && nzchar(nm)) paste0("$", nm)
+            else paste0("[[", i, "]]")
+    .validate_app_frame_fits(x[[i]], paste0(label, part))
+  }
+  invisible(NULL)
+}
+
+.validate_app_fit <- function(fit, what = "fitted model", check_algorithm = TRUE) {
   fail <- function(message) stop(what, " ", message, call. = FALSE)
   family <- .app_fit_family(fit)
   if (is.na(family)) fail("is not a fitted rasch model")
+  if (check_algorithm) .validate_app_frame_calibration(fit, what)
 
   if (identical(family, "btl")) {
     if (!is.data.frame(fit$objects) || nrow(fit$objects) < 2L ||
@@ -209,7 +237,7 @@
     fail("the analysis file has invalid source-data column names")
 
   base_problem <- tryCatch({
-    .validate_app_fit(project$base_fit, "the saved base fit")
+    .validate_app_fit(project$base_fit, "the saved base fit", check_algorithm = FALSE)
     NULL
   }, error = function(e) conditionMessage(e))
   if (!is.null(base_problem)) fail(base_problem)
@@ -345,7 +373,8 @@
     for (i in seq_along(kept)) {
       problem <- tryCatch({
         .validate_app_fit(kept[[i]],
-                          sprintf("the kept fit '%s'", kept_names[i]))
+                          sprintf("the kept fit '%s'", kept_names[i]),
+                          check_algorithm = FALSE)
         NULL
       }, error = function(e) conditionMessage(e))
       if (!is.null(problem)) fail(problem)
@@ -365,7 +394,8 @@
                      field, i))
       problem <- tryCatch({
         .validate_app_fit(entry$fit,
-                          sprintf("the %s history fit at entry %d", field, i))
+                          sprintf("the %s history fit at entry %d", field, i),
+                          check_algorithm = FALSE)
         NULL
       }, error = function(e) conditionMessage(e))
       if (!is.null(problem) ||
@@ -564,6 +594,7 @@
                  "changed since they were saved"))
   # Check only after structural validation and authentication. Inspect every
   # retained fit, including inactive history and comparison/equating fits.
+  .validate_app_frame_fits(project)
   .validate_app_person_scoring(project$base_fit, "the saved base fit")
   for (field in c("rasch_steps", "btl_steps"))
     for (i in seq_along(project[[field]]))

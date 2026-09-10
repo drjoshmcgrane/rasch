@@ -376,19 +376,38 @@ test_that("structural refits do not silently transform external anchors", {
                               est$anchors$item), "I01")
 })
 
-test_that("resolve_frames uses global frame connectivity", {
+test_that("frame resolution needs set origins as well as global unit links", {
   d <- simulate_efrm(n_per_group = 350, items_per_set = 6, n_sets = 2,
                      n_groups = 2, seed = 23)
   tr <- attr(d, "truth")
   f <- rasch_efrm(d, item_sets = tr$item_sets, groups = "group", id = "id",
                   boot_reps = 0)
-  resolved <- resolve_frames(f, tr$item_sets[[1]], boot_reps = 0)
+  # The second set can identify phi, but cannot identify separate origins
+  # for two disjoint groups of item versions in the first set. Resolving
+  # every item there leaves a threshold-only flat likelihood direction.
+  H <- NULL
+  original <- .likelihood_curvature_ok
+  testthat::local_mocked_bindings(.likelihood_curvature_ok = function(h, ...) {
+    H <<- h
+    original(h, ...)
+  }, .package = "rasch")
+  expect_error(resolve_frames(f, tr$item_sets[[1]], boot_reps = 0),
+               "did not reach an identified local maximum")
+  ev <- eigen(H, symmetric = TRUE, only.values = TRUE)$values
+  expect_lt(min(abs(ev)) / max(abs(ev)), 1e-10)
+  expect_lte(max(ev), 1e-8 * max(abs(ev)))
+
+  # One common item retains the origin link. The second set still supplies
+  # the unit link, so two common items are not required in every set.
+  resolved <- resolve_frames(f, tr$item_sets[[1]][-1L], boot_reps = 0)
   expect_s3_class(resolved, "rasch_efrm")
+  expect_true(resolved$est$converged)
   expect_true(all(is.finite(resolved$phi_table$phi)))
 })
 
 test_that("ETS classification uses its interval-null rule", {
-  # ETS uses the itemwise probability, not a family-adjusted substitute.
+  # This helper uses the supplied probabilities; public callers adjust them
+  # over their planned comparison family before classification.
   expect_equal(.ets_category(0.8, 0.1, 0.01), "C+")
   expect_equal(.ets_category(0.8, 0.1, 0.20), "A")
   expect_equal(.ets_category(0.6, 0.2, 0.01), "B+")

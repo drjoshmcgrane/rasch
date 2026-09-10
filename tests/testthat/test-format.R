@@ -120,6 +120,32 @@ test_that("the ETS categories follow the published rule on the logit scale", {
   expect_true(is.na(.ets_p_beyond(1, Inf)))
 })
 
+test_that("ETS classifications do not replace unavailable tests with A or B", {
+  expect_true(all(is.na(.ets_category(c(.2, .8, -.8), .1,
+                                      c(NA_real_, NaN, Inf)))))
+  expect_true(all(is.na(.ets_category(.8, c(0, -1), .01))))
+  expect_true(all(is.na(.ets_category(c(.8, -.8), .1, .01,
+                                      p_beyond = NA_real_))))
+  # The interval-null test cannot affect these already determined classes.
+  expect_identical(.ets_category(c(.2, .5, .8), .1, c(.01, .01, .2),
+                                p_beyond = NA_real_), c("A", "B+", "A"))
+
+  d <- simulate_rasch(300, 6, n_groups = 2, seed = 922817)
+  fit <- rasch(d, id = "id", factors = "group")
+  original <- split_items
+  testthat::local_mocked_bindings(split_items = function(...) {
+    out <- original(...)
+    # A degenerate resolved covariance must not imply negligible DIF.
+    out$est$cov_tau[,] <- 0
+    out
+  }, .package = "rasch")
+  size <- dif_size(fit, fit$items$item[1L], "group")$pairs
+  expect_true(all(is.finite(size$difference)))
+  expect_true(all(size$se == 0))
+  expect_true(all(is.na(size$p_adj)))
+  expect_true(all(is.na(size$ets)))
+})
+
 test_that("dif_size reports an ETS category beside the magnitude", {
   set.seed(2)
   N <- 2000; K <- 8

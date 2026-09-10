@@ -12,6 +12,31 @@ with `Rscript`, loading the in-tree package via `pkgload::load_all(".")`.
 
 ## Layout
 
+- `tests/testthat/test-format.R` checks that missing DIF probabilities and
+  zero standard errors cannot produce an ETS A/B classification. It also
+  checks `dif_size()` with a degenerate resolved covariance. Classification
+  is unchanged for supported tests; this is a reporting conformance check,
+  not a new calibration study.
+- `studies/frame-link-safety.R` checks complete and quasi-complete CJ frame
+  separation, finite near-separated links, iteration-limit accounting, and
+  refusal of unverified saved frame calibrations. Project checks cover base,
+  history, kept and nested-result fits, with source-file preservation and an
+  app restore regression. `results/frame-link-safety.csv` records the runner,
+  source-tree and test hashes. These are fixed-data conformance checks, not
+  estimates of coverage or error rates.
+- `studies/frame-likelihood-curvature.R` checks stationary saddles in response
+  EFRM and CJ frame calibration against independently evaluated likelihoods
+  and numerical Hessians. It checks scale invariance of the curvature guard,
+  public refusal, fixed-unit estimation, bootstrap exclusion and covariance
+  reconstructed from accepted draws. Results in
+  `results/frame-likelihood-curvature.csv` identify the source tree, runner
+  and regression-file hashes. These are deterministic numerical checks, not
+  coverage or Type I error studies. Historical frame validation predates this
+  guard and does not measure its refusal rate; saved analyses need refitting
+  to apply it.
+  `test-frame-refits.R` also checks a threshold-only flat direction after
+  resolving every item in a set. Retaining one common item restores the
+  origin link when another set already identifies the group-unit ratio.
 - `studies/efrm-full-identification.R` checks full-bootstrap group-unit
   identification on five fixed datasets: balanced binary and polytomous
   scales, groups of three and twelve persons alongside a group of 120,
@@ -20,6 +45,8 @@ with `Rscript`, loading the in-tree package via `pkgload::load_all(".")`.
   covariance block must match the accepted draws. Results are in
   `results/efrm-full-identification.csv`, with execution-state hashes:
   190 of 200 draws were retained and ten unidentified draws were rejected.
+  The rerun with the likelihood-curvature guard retained the same draws;
+  one rejected draw also failed the convergence check.
   All covariance reconstructions matched exactly. The two small-group
   cases still withhold group-unit probabilities.
   These are numerical and accounting checks, not coverage or Type I error

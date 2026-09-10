@@ -56,10 +56,9 @@
 #
 # Stage 2 (linking sets): with beta-hat and phi-hat fixed, the cross-set
 # comparisons are a low-dimensional maximum likelihood in (log alpha, kappa)
-# for the non-reference sets, solved by Newton with the analytic gradient and
-# Hessian. The key theoretical point, and the reason this design is worth
-# stating, is that the linking uses only comparison OUTCOMES: no distributional
-# assumption about the objects is made, so the set units are identified WITHIN
+# for the non-reference sets, solved by Fisher scoring with an analytic score
+# and observed-information covariance. Linking uses only comparison outcomes:
+# no distributional assumption about the objects is made, so the units are identified within
 # the conditional (person-free) framework. This is unlike the persons-by-items
 # EFRM, whose item-set units are identified only from the person side (their
 # distribution), a genuinely distributional step. The paired-comparison design
@@ -176,6 +175,19 @@
   # judge-clustered Godambe sandwich (unclustered when every judge appears once)
   J <- design(cur); u <- y - cur$p; av <- cur$p * (1 - cur$p)
   Fi <- crossprod(J, J * av)
+  # Exact log-likelihood curvature: eta = exp(log rho) * Bd beta is
+  # nonlinear. Fisher information omits residual-weighted second
+  # derivatives and can be full rank at a stationary saddle.
+  H <- -Fi
+  if (Gf) for (h in seq_len(Gf)) {
+    sel <- which(pf == h)
+    ih <- (K - 1L) + h
+    cb <- drop(crossprod(Bd[sel, , drop = FALSE], u[sel] * cur$rho[sel]))
+    H[seq_len(K - 1L), ih] <- H[seq_len(K - 1L), ih] + cb
+    H[ih, seq_len(K - 1L)] <- H[ih, seq_len(K - 1L)] + cb
+    H[ih, ih] <- H[ih, ih] + sum(u[sel] * cur$rho[sel] * cur$d[sel])
+  }
+  maximum_ok <- .likelihood_curvature_ok(H)
   # rank of the UNRIDGED information: panels that observe disjoint object
   # pairs leave the (location, log rho) system underdetermined -- the
   # ridged solve then lands somewhere on the flat manifold with a small
@@ -202,12 +214,15 @@
   } else {
     matrix(NA_real_, np, np)
   }
+  if (!maximum_ok) {
+    cov_theta[,] <- NA_real_
+    influence_theta[,] <- NA_real_
+  }
   # scale-free convergence: the gradient per comparison, invariant to the
   # number of comparisons -- an absolute threshold flags converged fits as
   # unconverged on large R (and would then misroute them into the screen);
-  # a per-observation criterion also stays permissive at a boundary, where
-  # the gradient vanishes but a Newton-decrement quadratic would not
-  conv <- isTRUE(max(abs(crossprod(J, u))) < 1e-6 * R)
+  # the score condition must also pass the exact local-maximum check.
+  conv <- maximum_ok && isTRUE(max(abs(crossprod(J, u))) < 1e-6 * R)
 
   cov_bb <- B %*% cov_theta[seq_len(K - 1L), seq_len(K - 1L), drop = FALSE] %*% t(B)
   se_beta <- sqrt(pmax(diag(cov_bb), 0))
@@ -229,7 +244,7 @@
   list(beta = cur$beta, se_beta = se_beta, p = cur$p, ll = cur$ll,
        ref = ref, panels = present, rho = rho_p, free = free,
        cov_lrho = cov_lrho, influence_lrho = influence_lrho,
-       converged = conv, rank_ok = rank_ok,
+       converged = conv, rank_ok = rank_ok, maximum_ok = maximum_ok,
        n_clusters = nc, n_parameters = np, cluster_ok = cluster_ok)
 }
 
@@ -345,9 +360,63 @@
        lphi = setNames(lphi_c, panels_u), cov_log_phi = cov_c)
 }
 
+# Find a certified recession direction in the natural (alpha, kappa)
+# coordinates. Signed predictors A v >= 0, with some strictly positive,
+# increase the binary log likelihood at every finite point. Alpha components
+# of v must be nonnegative to keep the set units positive along the whole ray.
+# Zero-loading rows are allowed: they distinguish quasi-complete separation
+# from the special case in which every comparison becomes deterministic.
+.btlef_separation_direction <- function(D, y, nonnegative = integer(0)) {
+  scale <- pmax(apply(abs(D), 2L, max), 1e-12)
+  A <- sweep(D, 2L, scale, "/") * (2 * y - 1)
+  norm <- sqrt(rowSums(A^2))
+  A <- A[norm > 0, , drop = FALSE] / norm[norm > 0]
+  if (!nrow(A)) return(NULL)
+  A <- as.matrix(unique(as.data.frame(A)))
+  U <- if (length(nonnegative))
+    rbind(A, diag(ncol(A))[nonnegative, , drop = FALSE]) else A
+  b <- colMeans(A)
+  if (max(abs(b)) < 1e-12) return(NULL)
+
+  # Project b onto {v: U v >= 0} through its nonnegative least-squares dual:
+  # min_{lambda >= 0} ||b + U'lambda||^2 / 2. The projected vector is zero
+  # when no direction can strictly improve any outcome. The optimizer is
+  # only a candidate finder; verify the actual separation inequalities before
+  # rejecting a calibration, irrespective of its termination code.
+  projected <- function(lambda) b + drop(crossprod(U, lambda))
+  candidate <- tryCatch(stats::optim(numeric(nrow(U)),
+    function(lambda) sum(projected(lambda)^2) / 2,
+    function(lambda) drop(U %*% projected(lambda)),
+    method = "L-BFGS-B", lower = 0,
+    control = list(maxit = 1000L, factr = 1, pgtol = 1e-10)),
+    error = function(e) NULL)
+  if (is.null(candidate)) return(NULL)
+  v <- projected(candidate$par)
+  if (any(!is.finite(v)) || max(abs(v)) < 1e-7) return(NULL)
+  v <- v / max(abs(v))
+  # The dual can stop a few rounding errors off an active face. Project
+  # onto the nearly active constraints, then recheck every inequality;
+  # this is important when several mixed-outcome rows define that face.
+  active <- abs(drop(U %*% v)) < 1e-6
+  if (any(active)) {
+    face <- svd(U[active, , drop = FALSE], nu = 0L, nv = ncol(U))
+    rank <- sum(face$d > max(face$d) * 1e-10)
+    if (rank) {
+      basis <- face$v[, seq_len(rank), drop = FALSE]
+      v <- v - drop(basis %*% crossprod(basis, v))
+    }
+  }
+  if (max(abs(v)) < 1e-7) return(NULL)
+  v <- v / max(abs(v))
+  v[nonnegative] <- pmax(v[nonnegative], 0)
+  gain <- drop(A %*% v)
+  if (min(gain) < -1e-8 || mean(gain) <= 1e-7) return(NULL)
+  unname(v / scale)
+}
+
 # Stage 2: cross-set linking. With the frame locations beta and panel units
 # phi held fixed, estimate (log alpha, kappa) for the non-reference sets by
-# Newton on the cross-set comparison likelihood. Standard errors are the
+# Fisher scoring on the cross-set comparison likelihood. Standard errors are the
 # inverse observed information, conditional on stage 1 (the stage-1
 # uncertainty is not propagated -- see the roxygen note).
 .btlef_stage2 <- function(a, b, y, phg, sa, sb, bhat, sets_u, maxit, tol,
@@ -380,6 +449,7 @@
 
   solve_masked <- function(mask) {
     theta <- numeric(np); cur <- eval_th(theta)
+    termination <- "iteration_limit"
     for (it in seq_len(maxit)) {
       Dm <- design(cur)[, mask, drop = FALSE]
       u <- y - cur$p; av <- cur$p * (1 - cur$p)
@@ -395,10 +465,10 @@
         }
         lam <- lam / 2
       }
-      if (!moved) break
-      if (max(abs(lam * step)) < tol) break
+      if (!moved) { termination <- "line_search"; break }
+      if (max(abs(lam * step)) < tol) { termination <- "step"; break }
     }
-    cur
+    list(fit = cur, termination = termination, iterations = it)
   }
   obs_info <- function(cur) {
     # observed information; the la-diagonal carries the curvature
@@ -428,21 +498,19 @@
       diff(range(z)) <= 1e-12 * max(1, abs(z))
   }, logical(1)), free)
   kept <- which(!c(alpha_unident, rep(FALSE, nf)))
-  cur <- solve_masked(seq_len(np) %in% kept)
+  Dnatural <- design(list(alpha = stats::setNames(rep(1, S), sets_u)))
+  direction <- .btlef_separation_direction(Dnatural[, kept, drop = FALSE], y,
+                                          which(kept <= nf))
+  if (!is.null(direction))
+    stop("the cross-set outcomes are (quasi-)completely separated: ",
+         "a set unit or origin can increase the likelihood without a finite ",
+         "maximum. The sets cannot be placed on one scale; review the ",
+         "cross-set outcomes and add comparisons with overlap", call. = FALSE)
+  solved <- solve_masked(seq_len(np) %in% kept)
+  cur <- solved$fit
   oi <- obs_info(cur)
 
-  rank_ok <- TRUE; separated <- FALSE
-  # Complete / quasi-complete separation of the cross-set comparisons:
-  # every outcome is fitted at the boundary (p -> 0 or 1), so the
-  # likelihood is unbounded and kappa / log-alpha run to the trust region
-  # while the observed information stays finite -- the eigenvalue and rcond
-  # checks below cannot see it (nothing is singular at the stopping point).
-  # Detect it directly from the fitted probabilities: near-deterministic
-  # prediction of essentially every cross-set outcome means the sets are
-  # ordered by an unbounded margin and cannot be placed on a common scale.
-  if (length(y) && mean(pmin(cur$p, 1 - cur$p) < 1e-4) > 0.99) {
-    separated <- TRUE; rank_ok <- FALSE
-  }
+  rank_ok <- TRUE
   Hkept <- oi$H[kept, kept, drop = FALSE]
   ev <- eigen((Hkept + t(Hkept)) / 2, symmetric = TRUE,
                only.values = TRUE)$values
@@ -456,7 +524,6 @@
   # in log(alpha) vanishes automatically at alpha -> 0 even when the
   # likelihood still has a nonzero slope in alpha. Normalise each column so
   # this check does not depend on the stage-one location unit.
-  Dnatural <- design(list(alpha = stats::setNames(rep(1, S), sets_u)))
   natural_scale <- pmax(apply(abs(Dnatural), 2L, max), 1e-12)
   natural_score <- drop(crossprod(Dnatural, oi$u)) / natural_scale
   alpha_boundary <- !alpha_unident &
@@ -475,7 +542,8 @@
       solve(crossprod(Dk, Dk * av) + diag(1e-8, length(kept)))
     })
   # scale-free per-comparison gradient criterion (see .btlef_stage1)
-  conv <- isTRUE(max(abs(natural_score[kept])) < 1e-6 * R)
+  conv <- identical(solved$termination, "step") &&
+    isTRUE(max(abs(natural_score[kept])) < 1e-6 * R)
   se <- sqrt(pmax(diag(cov), 0))
   if (!rank_ok) se[] <- NA_real_
   alpha_rep <- cur$alpha
@@ -487,7 +555,8 @@
        se_log_alpha = se_la,
        se_kappa = setNames(se[nf + seq_len(nf)], free),
        free = free, converged = conv, rank_ok = rank_ok,
-       separated = separated, alpha_unident = alpha_unident,
+       termination = solved$termination, iterations = solved$iterations,
+       alpha_unident = alpha_unident,
        alpha_boundary = alpha_boundary)
 }
 
@@ -677,6 +746,15 @@
 #' only comparison outcomes and does not require a distribution of persons.
 #' The paired-comparison form is an extension of Humphry's model implemented in
 #' this package.
+#' A within-set panel-ratio fit must have a small score and negative curvature
+#' of the exact likelihood Hessian in all free directions. Failed fits do not
+#' enter the panel-unit reconciliation; the remaining sets must link all panels.
+#' The same rule applies to bootstrap refits. It checks an identified local
+#' maximum, not a global maximum.
+#' Cross-set outcomes are checked for complete and quasi-complete separation,
+#' including designs where only some comparisons become deterministic.
+#' Separated links have no finite estimate. Reaching \code{maxit} without
+#' satisfying the convergence criterion is reported as non-convergence.
 #'
 #' The default judge bootstrap resamples judges within panels and refits both
 #' stages. The parametric bootstrap draws independent outcomes from the fitted
@@ -771,7 +849,7 @@
 #' @param cancel Optional zero-argument function checked between bootstrap
 #'   batches. Returning \code{TRUE} stops with a \code{rasch_cancelled}
 #'   condition.
-#' @param maxit,tol Newton iteration cap and convergence tolerance.
+#' @param maxit,tol Scoring iteration cap and convergence tolerance.
 #' @return An object of class \code{"rasch_btl_efrm"}. It contains the object
 #'   estimates, group- and set-unit tables, origin shifts, omnibus unit tests,
 #'   unit-specific judge support, frame definitions, convergence information,
@@ -1230,7 +1308,8 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
              "within-set comparisons carry no stable panel-ratio information ",
              "-- their contests are near-even or one-sided, or their panels ",
              "observe disjoint object pairs, leaving the ratio ",
-             "rank-deficient)", call. = FALSE)
+             "rank-deficient, or the likelihood failed the local-maximum ",
+             "curvature check)", call. = FALSE)
       stop(e)
     })
     phi <- rec$phi
@@ -1263,7 +1342,6 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
     se_log_alpha <- setNames(rep(NA_real_, S), sets_u)
     se_kappa <- setNames(rep(NA_real_, S), sets_u)
     cov2 <- NULL; s2_conv <- TRUE; ll_cross <- 0; s2_rank_ok <- TRUE
-    s2_separated <- FALSE
     s2_alpha_boundary <- stats::setNames(rep(FALSE, length(sets_u[-1L])),
                                          sets_u[-1L])
     p_all <- within_p
@@ -1277,7 +1355,7 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
       se_log_alpha[st2$free] <- st2$se_log_alpha
       se_kappa[st2$free] <- st2$se_kappa
       s2_conv <- st2$converged && st2$rank_ok; ll_cross <- st2$ll
-      s2_rank_ok <- st2$rank_ok; s2_separated <- st2$separated
+      s2_rank_ok <- st2$rank_ok
       s2_alpha_boundary <- st2$alpha_boundary
       p_all[cross] <- st2$p
     }
@@ -1292,7 +1370,6 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
          within_p = within_p, p_all = p_all,
          ll_within = ll_within, ll_cross = ll_cross,
          dropped = dropped, s2_rank_ok = s2_rank_ok,
-         s2_separated = s2_separated,
          s2_alpha_boundary = s2_alpha_boundary,
          converged = isTRUE(s1_conv && s2_conv))
   }
@@ -1307,13 +1384,6 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
          "estimated within-set ordering; the link cannot be replaced by ",
          "unit one. Inspect the cross-set comparisons or revise the frame ",
          "design", call. = FALSE)
-  if (S > 1L && isTRUE(fit0$s2_separated))
-    stop("the cross-set comparisons are (quasi-)completely separated: one ",
-         "set beats the other in essentially every cross-set comparison, so ",
-         "the sets are ordered by an unbounded margin and cannot be placed ",
-         "on one scale (the set units alpha and origins kappa have no finite ",
-         "estimate). Collect cross-set comparisons that some objects of the ",
-         "weaker set sometimes win", call. = FALSE)
   if (S > 1L && !isTRUE(fit0$s2_rank_ok))
     stop("the cross-set information matrix is singular or ill-conditioned: ",
          "the cross-set comparisons cannot place the sets on one scale ",
@@ -1879,8 +1949,9 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
   if (length(fit0$dropped))
     notes <- c(notes, paste0(
       "set(s) ", paste(fit0$dropped, collapse = ", "), " carry no stable ",
-      "panel-ratio information (within-set contests too close to even or ",
-      "too one-sided); they were excluded from the phi reconciliation and ",
+      "panel-ratio information (weak or rank-deficient comparisons, or a ",
+      "failed convergence or local-maximum check); they were excluded from ",
+      "the phi reconciliation and ",
       "refit with the panel units held at the reconciled phi"))
 
   report("finalising", 1L, 1L)
@@ -1939,6 +2010,7 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
                       "do not represent total pipeline uncertainty; use",
                       "se_method = 'judge_bootstrap' for inference"),
               notes = notes)
+  out$calibration_algorithm <- "frame-likelihood-1"
   out <- .tag_tables(out)
   class(out) <- c("rasch_btl_efrm", "rasch_btl")
   out

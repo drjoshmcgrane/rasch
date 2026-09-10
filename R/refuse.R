@@ -100,7 +100,11 @@ ETS_DELTA_PER_LOGIT <- 2.35
   beyond <- is.finite(se) & se > 0 & is.finite(p_beyond) & p_beyond < alpha
   out <- ifelse(!sig | d <= a_cut, "A",
                 ifelse(d >= c_cut & beyond, "C", "B"))
-  out[!is.finite(difference) | !is.finite(se)] <- NA_character_
+  # An unavailable test is not a nonsignificant test. The interval-null
+  # probability is required only when it distinguishes B from C.
+  unavailable <- !is.finite(difference) | !is.finite(se) | se <= 0 |
+    !is.finite(p) | (sig & d >= c_cut & !is.finite(p_beyond))
+  out[unavailable] <- NA_character_
   sign_c <- ifelse(!is.finite(difference) | out == "A", "",
                    ifelse(difference > 0, "+", "-"))
   ifelse(is.na(out), NA_character_, paste0(out, sign_c))

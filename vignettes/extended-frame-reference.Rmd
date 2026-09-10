@@ -176,6 +176,11 @@ fit stops. A numerical failure or non-convergence on any supported link
 invalidates the whole replicate. Pairs without enough informative common
 persons can be omitted only if the remaining links connect all sets.
 Full-bootstrap refits with unidentified group units are also discarded.
+The conditional calibration checks the exact likelihood curvature as well as
+the score. Stationary saddles and flat solutions are refused; the same check
+applies to bootstrap refits.
+Saved frame fits without a current likelihood-check record must be refitted
+before reopening in the app; their source files remain unchanged.
 The alpha--phi cross-covariance has the same usable-draw rule and is
 withheld if it cannot be estimated. A full bootstrap that falls below its
 minimum returns hybrid standard errors instead, retaining its attempted, usable
@@ -290,6 +295,8 @@ items provide the defensible reference.
 continues to contribute to person measurement but no longer links those
 frames. `drop_items()` removes it. Both functions refit the model and update
 the frame, item and person estimates.
+Each set must retain common items linking its groups' origins; a unit link
+through another set is not sufficient.
 
 ```{r repair, eval = FALSE}
 resolved <- resolve_frames(fit, "S1I02")

@@ -1409,6 +1409,8 @@ print.rasch_dif <- function(x, ...) {
 #'   supported repeated-person calibration.
 #'   Sampling-uncertainty fields are \code{NA} when the resolved-location
 #'   covariance cannot support Wald inference.
+#'   The ETS category is also \code{NA} if a probability needed to classify
+#'   the contrast is unavailable or its standard error is zero.
 #'
 #' @section Magnitude conventions:
 #' For dichotomous items, \code{ets} applies the ETS A, B and C rules to the
