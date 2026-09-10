@@ -186,6 +186,7 @@ reference:
   - sim_apply
   - sim_recovery
   - plot_recovery
+  - rasch_rng
 
 - title: Export and interface
   desc: >
