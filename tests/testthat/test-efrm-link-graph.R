@@ -63,7 +63,8 @@ test_that("NPML distinguishes absent support from numerical link failure", {
   local_mocked_bindings(
     efrm_negloglik_cpp = function(z, ...) (z[1] - log(20))^2 + z[2]^2,
     .package = "rasch")
-  withr::local_options(rasch.efrm_cpp = TRUE)
+  old <- options(rasch.efrm_cpp = TRUE)
+  on.exit(options(old), add = TRUE)
   expect_null(pair(Xm))
 })
 

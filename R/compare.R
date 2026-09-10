@@ -227,7 +227,7 @@ compare_fits <- function(..., reference = 1) {
       }
       out
     }
-    sig <- function(f, use_presented, seq_cols) {
+    comparison_sig <- function(f, use_presented, seq_cols) {
       cmp <- f$comparisons
       if (is.null(cmp)) return(NULL)
       ca <- as.character(cmp$object_a); cb <- as.character(cmp$object_b)
@@ -331,7 +331,8 @@ compare_fits <- function(..., reference = 1) {
       # requirements into a comparison between two plain BTL models).
       presented <- has_presented(candidate) || has_presented(ref)
       columns <- intersect(seq_names(candidate), seq_names(ref))
-      identical(sig(candidate, presented, columns), sig(ref, presented, columns))
+      identical(comparison_sig(candidate, presented, columns),
+                comparison_sig(ref, presented, columns))
     }
     rows <- lapply(seq_along(fits), function(i) {
       f <- fits[[i]]
@@ -372,7 +373,7 @@ compare_fits <- function(..., reference = 1) {
     # maximum scores, and person count: two different datasets sharing those
     # margins would otherwise be declared the same data and get a spurious
     # two_delta_ll. The full response matrix is the exact fingerprint.
-    sig <- function(f) {
+    response_sig <- function(f) {
       # Row and column order are presentation details, not different response
       # data.  Canonicalise the items by name, then represent each independent
       # person by the (sorted) multiset of response rows belonging to that
@@ -397,7 +398,7 @@ compare_fits <- function(..., reference = 1) {
       if (!is.null(f$item_effects)) nrow(f$item_effects)
       else if (!is.null(f$item_arbitrary)) nrow(f$item_arbitrary)
       else ncol(f$X)
-    ref_sig <- sig(fits[[reference]])
+    ref_sig <- response_sig(fits[[reference]])
     rows <- lapply(seq_along(fits), function(i) {
       f <- fits[[i]]
       conv <- isTRUE(f$est$converged)
@@ -416,7 +417,7 @@ compare_fits <- function(..., reference = 1) {
         loglik = if (conv) f$est$loglik else NA_real_,
         eff_params = unname(ic["eff"]), cl_aic = unname(ic["aic"]),
         cl_bic = unname(ic["bic"]),
-        same_data = identical(sig(f), ref_sig),
+        same_data = identical(response_sig(f), ref_sig),
         two_delta_ll = NA_real_, delta_parameters = NA_integer_,
         chisq_per_df = if (is.finite(f$total_df) && f$total_df > 0)
           f$total_chisq / f$total_df else NA_real_,
