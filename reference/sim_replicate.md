@@ -27,7 +27,9 @@ sim_replicate(FUN, n, ..., seed = NULL)
 
 - seed:
 
-  Seed of the first replicate (each subsequent one increments it).
+  Seed of the first replicate (each subsequent one increments it). See
+  [`rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md)
+  for generator support.
 
 ## Value
 

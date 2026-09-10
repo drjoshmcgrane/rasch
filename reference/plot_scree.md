@@ -60,7 +60,9 @@ plot_scree(
 - seed:
 
   Optional non-negative whole-number seed. The caller's random- number
-  state is restored when the calculation finishes.
+  state is restored when the calculation finishes; see
+  [`rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md)
+  for generator support.
 
 - result:
 

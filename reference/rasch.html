@@ -111,8 +111,11 @@ vector with one entry per data row.</p></dd>
 
 
 <dt id="arg-items">items<a class="anchor" aria-label="anchor" href="#arg-items"></a></dt>
-<dd><p>Optional character vector naming the item columns; by default
-every column not named in <code>id</code> or <code>factors</code>.</p></dd>
+<dd><p>Optional item column names or numeric column indices. By
+default, columns named in <code>id</code> or <code>factors</code> are excluded.
+A separate factor data frame may share item names when <code>items</code> is
+explicit. Without it, matching names exclude columns whose values agree;
+conflicting values are refused.</p></dd>
 
 
 <dt id="arg-n-groups">n_groups<a class="anchor" aria-label="anchor" href="#arg-n-groups"></a></dt>

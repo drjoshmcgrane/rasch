@@ -10,7 +10,11 @@ Holm across matchups meeting `min_n`. A surprise is an eligible matchup
 with a negative residual whose adjusted probability passes the level
 represented by `flag_z`. The fitted model must have converged. An
 adequately sampled matchup with unavailable residual inference remains
-in the adjustment family.
+in the adjustment family. Locations within \\10^{-10}\\ logits are
+treated as tied: neither object is called stronger, the two-sided
+residual probability remains descriptive and in the Holm family, and
+`surprise` is false. A tied row is oriented toward its non-negative
+residual for display only.
 
 ## Usage
 
@@ -43,10 +47,11 @@ judge_pair_surprise(fit, judge, min_n = 1L, flag_z = 1.96)
 ## Value
 
 A list of class `"rasch_btl_judge_pairs"`: `pairs` (per matchup: the
-stronger and weaker object and their locations, the location `gap`,
-times met `n`, residual `z`, approximate `p`, Holm-adjusted `p_adj`, the
-`net_winner`, and the `surprise` flag); `all_locations`; the `judge` and
-settings.
+stronger and weaker object and their locations when `tied` is false (at
+a tie these columns only orient the row), the location `gap`, tie
+indicator `tied`, times met `n`, residual `z`, approximate `p`,
+Holm-adjusted `p_adj`, the `net_winner`, and the `surprise` flag);
+`all_locations`; the `judge` and settings.
 
 ## Examples
 

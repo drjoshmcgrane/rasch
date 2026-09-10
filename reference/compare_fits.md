@@ -10,7 +10,11 @@ fits of the same response data using the same likelihood contributions,
 twice the difference from the reference fit is reported with the
 difference in parameter counts; this is descriptive (composite
 likelihood), and most meaningful for nested structures such as RSM
-inside PCM.
+inside PCM. Paired-comparison data identity is evaluated separately for
+each fit against the reference, including sequence fields shared by that
+pair. Order values are compared through their within-judge ranks, so
+relabelling that preserves order and ties does not change identity.
+Adding another model does not change an existing pair's compatibility.
 
 ## Usage
 

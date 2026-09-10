@@ -56,8 +56,11 @@ rasch(
 
 - items:
 
-  Optional character vector naming the item columns; by default every
-  column not named in `id` or `factors`.
+  Optional item column names or numeric column indices. By default,
+  columns named in `id` or `factors` are excluded. A separate factor
+  data frame may share item names when `items` is explicit. Without it,
+  matching names exclude columns whose values agree; conflicting values
+  are refused.
 
 - n_groups:
 

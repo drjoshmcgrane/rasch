@@ -160,7 +160,9 @@ unit whose thresholds were estimated directly.</p></dd>
 
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
 <dd><p>Optional integer seed for the bootstrap; the replicates are
-reproducible for a given seed whatever the worker count.</p></dd>
+reproducible for a given seed whatever the worker count. The bootstrap
+does not support Box–Muller, including when <code>seed = NULL</code>;
+see <code><a href="rasch_rng.html">rasch_rng</a></code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

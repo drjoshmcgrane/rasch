@@ -199,10 +199,12 @@ dim_data <- simulate_btl(
 )
 dim_fit <- btl(dim_data, object_a = "object_a", object_b = "object_b",
                winner = "winner", judge = "judge")
-dimensions <- btl_dimensionality(dim_fit, reps = 20, seed = 2026)
+dimensions <- btl_dimensionality(dim_fit, reps = 20, seed = 2026,
+                                independent_comparisons = TRUE)
 dimensions
 #> Paired-comparison residual dimensionality: 4 bimension(s)
-#> Leading bimension strength 1.060 (68% of residual; reference 5% upper limit: 1.385; adjusted p = 0.476) -> within the conditional reference
+#> Leading bimension strength 1.078 (68% of residual; reference 5% upper limit: 1.421; adjusted p = 0.476) -> within the conditional reference
+#> Note: the simulated reference assumes conditionally independent comparison outcomes given the fitted probabilities and any modeled history; it is not cluster-robust
 ```
 
 ``` r
@@ -221,10 +223,19 @@ plot_btl_scree(dimensions)
 ![Residual bimension strengths against the simulated noise
 reference.](paired-comparisons_files/figure-html/plot-scree-1.png)
 
-The shaded area runs from the simulated mean to the finite-simulation 5%
-upper limit. The example uses twenty replicates to keep the vignette
-quick; a final analysis should use enough replicates to stabilise the
-reference distribution. An ordered analysis needs one row per
+The decomposition compares observed and fitted expected points within
+each object pair. For ordered responses this includes the category
+thresholds; fitted position and history effects also enter the
+expectation.
+
+The simulated comparisons in this example are independent, so the call
+explicitly requests that reference. For judge-clustered data, the
+default shows only the residual decomposition: clustered repetition can
+look like dimensional structure against an independent-comparison
+reference. The shaded area runs from the simulated mean to the
+finite-simulation 5% upper limit. Twenty replicates keep this example
+quick; a final sensitivity analysis needs enough replicates to stabilise
+the reference distribution. An ordered analysis needs one row per
 comparison: a replication count does not retain the sequence needed to
 construct exposure and carry-over histories, so
 [`btl()`](https://drjoshmcgrane.github.io/rasch/reference/btl.md)
@@ -351,8 +362,8 @@ ef <- btl_efrm(
 )
 ef$phi_table
 #>   panel   phi se_log_phi t df p p_adj significant
-#>  panel1 0.801      0.111                         
-#>  panel2 1.249      0.111
+#>  panel1 0.801      0.091                         
+#>  panel2 1.249      0.091
 ef$alpha_table
 #>   set alpha se_log_alpha t df p p_adj significant
 #>  set1 1.000                                      
@@ -364,9 +375,17 @@ ef$kappa_table
 ```
 
 The default judge bootstrap resamples judges within panels and refits
-both stages. The parametric bootstrap (`se_method = "bootstrap"`) draws
-independent outcomes from the fitted model. The conditional option used
-above reports estimates and conditional standard errors but withholds
+both stages. A set’s panel-ratio fit must pass an exact
+likelihood-curvature check before entering the reconciliation. Failed
+sets are omitted from that reconciliation; estimation stops if the
+remaining sets cannot link all panels. Cross-set outcomes are checked
+for complete and quasi-complete separation; neither supports a finite
+link. Reaching the iteration limit is not convergence. Saved frame fits
+without a current likelihood-check record require refitting before
+reopening in the app; their source files remain unchanged. The
+parametric bootstrap (`se_method = "bootstrap"`) draws independent
+outcomes from the fitted model. The conditional option used above
+reports estimates and conditional standard errors but withholds
 probabilities because it does not propagate stage-one uncertainty into
 the set link. With either bootstrap, omnibus probabilities are
 Holm-adjusted across the three unit families. Individual panel-unit,

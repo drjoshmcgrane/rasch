@@ -37,7 +37,10 @@ A resolved item continues to contribute to person measurement within
 each frame but no longer constrains the link between those frames. Its
 versions are named `"item (frame)"`. The remaining common items and the
 linked set design must still identify the frame units; otherwise the
-refit is refused by the model's connectivity and rank checks.
+refit is refused by the model's connectivity and rank checks. Each set
+must also retain links between its groups of item versions to identify
+their relative origins. A unit link supplied by another set cannot
+replace these origin links.
 
 Resolve an item when its within-frame measurement remains defensible but
 its cross-frame location does not. This refit does not estimate a

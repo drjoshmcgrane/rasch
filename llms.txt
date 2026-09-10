@@ -473,6 +473,8 @@ Simulate data from the fitted model families.
   : Compare fitted and generating parameters
 - [`plot_recovery()`](https://drjoshmcgrane.github.io/rasch/reference/plot_recovery.md)
   : Plot fitted against generating parameters
+- [`rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md)
+  : Random-number generation
 
 ## Export and interface
 

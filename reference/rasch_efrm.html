@@ -185,7 +185,8 @@ holds its own copy of the bootstrap state.</p></dd>
 
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
 <dd><p>Optional bootstrap seed. The caller's random-number state is
-restored when estimation finishes.</p></dd>
+restored when estimation finishes; see <code><a href="rasch_rng.html">rasch_rng</a></code> for
+generator support.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -237,7 +238,12 @@ thresholds across groups. Item sets partition the items, so set ratios
 \(\alpha_s\) are identified instead from persons observed in more than
 one set. The
 set-linking graph and the group-by-set frame graph must each connect to a
-common scale.</p>
+common scale. Direct overlap between every pair of item sets is not
+required: sets can be linked through intermediate sets. Pairs without
+enough informative common persons contribute no edge; the remaining
+graph must still connect all sets. A bootstrap replicate is unusable if
+any supported link fails numerically or does not converge, even when
+other links still connect the sets.</p>
 <p>Set units use a semiparametric likelihood for persons observed in each
 linked pair of sets. For sets \(a\) and \(b\), it maximises
 $$\prod_n\int P(X_{na}\mid u)P(X_{nb}\mid ru+c)\,dF_{g(n)}(u),$$
@@ -263,7 +269,11 @@ patterns must span a score range of at least four within a set. Overlapping
 item sets are not permitted. The public
 convergence flag covers the conditional calibration, the set-link
 transformation and its nonparametric nuisance masses;
-<code>stage1_converged</code> records the conditional stage separately.</p>
+<code>stage1_converged</code> records the conditional stage separately.
+The conditional stage requires a small score and negative curvature of the
+exact likelihood Hessian in all free directions. A stationary point with
+flat or positive curvature is refused, including in bootstrap refits.
+This checks an identified local maximum, not a global maximum.</p>
 <p>The empirical Godambe covariance from the conditional stage requires at
 least ten informative persons, at least eight effective persons, more
 effective persons than fitted stage-one directions, and full rank in the
@@ -276,7 +286,8 @@ person bootstrap for set linking. Each replicate jointly redraws the
 within-frame thresholds and group units, then rebuilds the link. The joint
 draws retain covariance among common-scale thresholds, set units and group
 units. With <code>se_method = "bootstrap"</code>, the complete model is refitted
-to each person resample.</p>
+to each person resample. Refits that do not converge or have unidentified
+group units are discarded and counted as failed replicates.</p>
 <p>The <code>efrm_vs_rasch</code> component records the within-frame composite
 log-likelihood comparison between group-dependent and equal group units.
 This difference is descriptive and contains no information about set units,

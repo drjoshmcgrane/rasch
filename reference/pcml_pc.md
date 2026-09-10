@@ -1,11 +1,11 @@
 # Estimate Rasch thresholds using a principal-component parameterisation
 
 Re-expresses each item's thresholds as orthogonal polynomial components:
-location, spread, skewness, and kurtosis (Andrich 1978, 1985; Pedler
-1987). Estimation uses the same pairwise conditional likelihood as
+location, spread, skewness, and kurtosis (Andrich and Luo 2003).
+Estimation uses the same pairwise conditional likelihood as
 [`pcml`](https://drjoshmcgrane.github.io/rasch/reference/pcml.md). With
-at most three thresholds per item the full parameterisation is exact.
-Items with four or more thresholds are fitted by a reduced-rank
+at most four thresholds per item the full parameterisation is exact.
+Items with five or more thresholds are fitted by a reduced-rank
 polynomial trend, which can stabilise sparse categories at the cost of
 restricting the threshold pattern.
 
@@ -26,11 +26,9 @@ pcml_pc(X, n_components = 4, maxit = 60, tol = 1e-08)
 - n_components:
 
   Maximum number of components per item: 1 (location only) up to 4
-  (location, spread, skewness, kurtosis; the highest derived by Pedler
-  1987). Capped per item at its own number of thresholds, and further
-  wherever a component would be collinear with lower-order ones for that
-  item's threshold count (kurtosis is unidentified, and dropped, at
-  exactly 4 thresholds).
+  (location, spread, skewness, kurtosis). Capped per item at its own
+  number of thresholds. Kurtosis requires at least four thresholds (five
+  response categories).
 
 - maxit, tol:
 
@@ -49,6 +47,14 @@ warns and all standard errors and covariance entries are `NA`. The
 independent-person and effective-support conditions described for
 [`pcml`](https://drjoshmcgrane.github.io/rasch/reference/pcml.md) also
 apply.
+
+## Details
+
+For scores \\x=0,\ldots,m\\, the cumulative threshold function is
+\$\$C(x)=x\omega_1-x(m-x)\omega_2-x(m-x)(2x-m)\omega_3
+-x(m-x)(5x^2-5mx+m^2+1)\omega_4.\$\$ Threshold \\k\\ is \\C(k)-C(k-1)\\.
+The four coefficients are location, spread, skewness and kurtosis,
+respectively.
 
 ## References
 

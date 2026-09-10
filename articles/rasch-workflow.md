@@ -626,6 +626,12 @@ and
 [`lr_test()`](https://drjoshmcgrane.github.io/rasch/reference/lr_test.md)
 produce.
 
+Older projects are checked against the current person-scoring algorithm.
+If their scores differ, the app asks for a refit and leaves the original
+file unchanged. The source data remain accessible with
+`readRDS(file)$data`. Superseded DIF results are omitted with a warning;
+rerun those analyses before reporting them.
+
 ![The Export panel, offering the tables, figures and report formats an
 analysis can be written out as.](figures/app-export.png)
 

@@ -2,6 +2,148 @@
 
 ## rasch 1.12.1
 
+- DIF magnitudes leave the ETS category unavailable when a required test
+  probability is unavailable or its standard error is zero, rather than
+  treating the missing test as evidence for category A or B.
+
+- EFRM conditional calibration and CJ frame panel-ratio fits check the
+  exact likelihood curvature as well as the score. Stationary saddles
+  can no longer supply converged fits, unit inference or bootstrap
+  covariance. Previously saved frame analyses without a current
+  likelihood-check record must be refitted before reopening; their
+  source files remain unchanged. Resolving every common item in a set is
+  also refused when it leaves the groups’ relative origins unidentified,
+  even if another set links their units.
+
+- CJ frame linking checks partly separated outcomes, including
+  comparisons with zero loading along a separating direction. Such links
+  have no finite estimate. An exhausted iteration limit can no longer
+  certify convergence.
+
+- The installed Shiny app resolves the internal helpers needed for item
+  tables, saved CJ analyses and simulation recovery, including
+  standalone launches.
+
+- CJ dimensionality compares observed and fitted expected points within
+  each object pair, retaining category thresholds and fitted position or
+  history effects. Simulated histories use their own fitted
+  expectations. Older saved dimensionality results require
+  recalculation; fitted models are unchanged.
+
+- EFRM bootstrap replicates are discarded when any supported set link
+  fails numerically or does not converge, including redundant links.
+  Failed draws cannot enter the covariance or count as usable
+  replicates. Full-bootstrap refits with unidentified group units are
+  also discarded.
+
+- CSV, HTML, Word and PDF exports include supplied DIF results based on
+  external person factors. Bulk exports require a new or empty folder,
+  preventing files from separate analyses being mixed.
+
+- CJ pair-surprise diagnostics do not assign a stronger or weaker
+  direction to tied object locations. Relabelling objects no longer
+  changes these flags.
+
+- Explicit item selectors can distinguish item columns from separately
+  supplied person factors with the same names in Rasch and EFRM fits.
+
+- CJ model comparisons recognise unchanged within-judge sequences after
+  relabelling their order values.
+
+- EFRM item sets can link through intermediate sets without direct
+  overlap between every pair. Insufficient overlap is distinguished from
+  a numerical link failure; the retained linking graph must still
+  connect all sets.
+
+- Structural Rasch and EFRM refits preserve external factors whose names
+  match item names, including frame-invariance bootstrap refits.
+
+- Downloaded simulation scripts load `rasch` before recreating the data.
+
+- EFRM DIF bootstraps preserve frame and person-factor names, including
+  an ordinary factor named `group`.
+
+- Calculations that restore random-number streams refuse the Box-Muller
+  normal generator before changing the stream. R does not expose its
+  cached normal value for restoration. The default Inversion generator
+  is unaffected;
+  [`?rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md)
+  describes the supported behaviour.
+
+- BTL-EFRM documents its different treatment of response-boundary
+  objects and distinguishes separated outcomes from disconnected
+  comparison designs.
+
+- Saved CJ DIF results without verified judge-role alignment are omitted
+  on reopening. Reports refuse older automatic DIF magnitudes that may
+  have used stale factor values; the analysis must be rerun.
+
+- Bootstrap workers retain the coordinator’s random-number generator
+  settings, including non-default generators, so a fixed seed gives the
+  same draws in serial and parallel execution. Installations with source
+  references retained also select the coordinator’s package library
+  before loading the worker namespace.
+
+- BTL simulation recovery checks the original comparisons before extreme
+  objects were set aside, then assesses the calibrated objects only.
+
+- Principal-component calibration uses the corrected kurtosis
+  polynomial. The full four-component model matches unrestricted PCM
+  through four thresholds; longer scales retain a restricted polynomial
+  structure. Saved fits that used the earlier kurtosis polynomial
+  require a refit.
+
+- Automatic DIF magnitudes retain the factor values supplied to that
+  analysis, including replacements for factors stored in the fit.
+
+- BTL-EFRM panel-unit reconciliation retains covariance between object
+  sets assessed by the same judges. Point-estimation weights are
+  unchanged.
+
+- Saved fits record their person-scoring algorithm. Older fits are
+  checked before reopening; materially changed scores require a refit
+  rather than silently restoring superseded estimates and diagnostics.
+
+- CJ DIF in the app uses the judge role from the fitted analysis, not a
+  subsequently changed column selector. Unavailable overall fit
+  probabilities are labelled explicitly in summary tables.
+
+- Incomplete repeated-measures DIF fits occasion and person factors
+  jointly, with equal total weight per person and person-cluster CR3
+  covariance. Marginal occasion centering no longer introduces group
+  effects when occasion coverage and person-factor composition differ.
+  Complete-panel analyses retain their existing covariance references.
+
+- WLE scoring compares competing maxima for separated item banks instead
+  of accepting the first score-equation root. This applies to ordinary
+  and extended-frame scoring, including externally weighted measures.
+  Saved weighted tables from earlier solvers are authenticated and
+  recomputed.
+
+- BTL-EFRM refuses a linking unit at the zero boundary rather than
+  replacing it with one. The same check applies inside bootstrap refits;
+  genuinely indistinguishable within-set locations retain their
+  placement convention.
+
+- CJ model comparisons check each fit against its reference separately.
+  Adding another fit cannot erase a known difference in comparison
+  order.
+
+- Judge-clustered CJ dimensionality is descriptive by default.
+  `independent_comparisons = TRUE` requests the conditional sensitivity
+  reference; it does not account for general within-judge dependence.
+  Unsupported saved references and superseded mixed-panel DIF results
+  are omitted on reopening, without removing the source data or fitted
+  models.
+
+- Explanatory diagnostics use stable added directions and retain failed
+  candidates in the Holm family, allowing other departures to be
+  reported.
+
+- Loading another dataset in the app clears the active analysis and its
+  derived results. Explicitly kept model snapshots remain available.
+  HTML reports label an unavailable total-fit probability explicitly.
+
 - CJ dimensionality withholds probabilities and reference bands wherever
   its design checks withhold inference, including incomplete pair
   coverage in BTL-EFRM. The observed residual decomposition remains

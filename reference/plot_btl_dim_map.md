@@ -1,10 +1,11 @@
 # Residual map of the leading paired-comparison bimension
 
-Objects placed in the leading bimension plane. Reading round the swirl,
-an object sits “upstream” of those it over-beats relative to the fitted
-locations; a clear rotational arrangement is the second attribute, a
-formless blob near the origin is noise. Point size grows with the
-object's location on the primary scale.
+Objects placed in the leading bimension plane to show the pattern of
+residual comparisons. The coordinates describe the pattern, not its
+magnitude or significance; use
+[`plot_btl_scree`](https://drjoshmcgrane.github.io/rasch/reference/plot_btl_scree.md)
+to compare its strength with the conditional reference. Point size grows
+with the object's location on the primary scale.
 
 ## Usage
 

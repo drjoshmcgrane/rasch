@@ -299,11 +299,19 @@ The requested number must exceed the free directions in the largest
 covariance block used by the fit. The stored bootstrap row contains
 several constrained blocks and is not treated as one covariance. Once
 estimation begins, the linking covariance needs at least 30 usable
-replicates and a majority of those requested; otherwise the fit stops.
-The alpha–phi cross-covariance has the same usable-draw rule and is
-withheld if it cannot be estimated. A full bootstrap that falls below
-its minimum returns hybrid standard errors instead, retaining its
-attempted, usable and failed counts in
+replicates and a majority of those requested; otherwise the fit stops. A
+numerical failure or non-convergence on any supported link invalidates
+the whole replicate. Pairs without enough informative common persons can
+be omitted only if the remaining links connect all sets. Full-bootstrap
+refits with unidentified group units are also discarded. The conditional
+calibration checks the exact likelihood curvature as well as the score.
+Stationary saddles and flat solutions are refused; the same check
+applies to bootstrap refits. Saved frame fits without a current
+likelihood-check record must be refitted before reopening in the app;
+their source files remain unchanged. The alpha–phi cross-covariance has
+the same usable-draw rule and is withheld if it cannot be estimated. A
+full bootstrap that falls below its minimum returns hybrid standard
+errors instead, retaining its attempted, usable and failed counts in
 <code>full_boot_reps_*</code>.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span><span class="op">$</span><span class="va">efrm_vs_rasch</span><span class="op">$</span><span class="va">unit_omnibus</span></span>
@@ -326,13 +334,13 @@ generic likelihood differences involving EFRM: its calibration
 likelihood uses within-set pairs, whereas ordinary PCM also uses
 cross-set pairs. The matched group-unit comparison is retained in
 <code>fit$efrm_vs_rasch</code>. Probabilities require at least 50
-persons or effective persons in every group and at least 50 informative
-common persons on every set-link edge. A person at the same extreme tail
-in both sets remains in the likelihood but does not count as link
-support. Sparse designs retain the unit estimates without an inferential
-probability.</p>
-<p>Simulation under normal, bimodal and deliberately different group
-distributions gave set-unit bias within 0.004 log-units,
+persons or effective persons in every group and a path between each pair
+of sets whose links each have at least 50 informative common persons. A
+person at the same extreme tail in both sets remains in the likelihood
+but does not count as link support. Sparse designs retain the unit
+estimates without an inferential probability.</p>
+<p>Two-set simulations under normal, bimodal and deliberately different
+group distributions gave set-unit bias within 0.004 log-units,
 empirical-to-reported SE ratios from 0.97 to 1.05, and null rejection
 from 4.0 to 5.0 per cent for the hybrid method. The complete person
 bootstrap was mildly conservative in the corresponding null design. Sets
@@ -414,7 +422,8 @@ to decide which items provide the defensible reference.</p>
 each frame. The item continues to contribute to person measurement but
 no longer links those frames. <code><a href="../reference/drop_items.html">drop_items()</a></code> removes it. Both
 functions refit the model and update the frame, item and person
-estimates.</p>
+estimates. Each set must retain common items linking its groups’
+origins; a unit link through another set is not sufficient.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">resolved</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/resolve_frames.html">resolve_frames</a></span><span class="op">(</span><span class="va">fit</span>, <span class="st">"S1I02"</span><span class="op">)</span></span>
 <span><span class="va">removed</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/drop_items.html">drop_items</a></span><span class="op">(</span><span class="va">fit</span>, <span class="st">"S1I02"</span><span class="op">)</span></span></code></pre></div>

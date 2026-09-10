@@ -85,7 +85,9 @@ dimensionality_test(
 - seed:
 
   Optional integer seed for the bootstrap; the replicates are
-  reproducible for a given seed whatever the worker count.
+  reproducible for a given seed whatever the worker count. The bootstrap
+  does not support Box–Muller, including when `seed = NULL`; see
+  [`rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md).
 
 ## Value
 

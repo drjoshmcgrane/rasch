@@ -125,6 +125,11 @@ A list with:
   When `sizes = TRUE`, the number of planned questions in that family,
   including unavailable comparisons.
 
+- `followup_algorithm`:
+
+  When `sizes = TRUE`, records that stored contrasts used the same
+  normalized factor values as the omnibus analysis.
+
 - `between_covariance`:
 
   The covariance reference used for uniform between-person terms.
@@ -155,16 +160,22 @@ means. A Greenhouse–Geisser correction is applied to within-person
 factors with more than two levels. Persons missing a required cell are
 excluded from the corresponding within-person test. Required cells
 include every combination of the within-person factor levels, even when
-a combination or level has no observations for an item. In incomplete
-mixed designs, within-cell effects are removed before the between-person
-analysis. Uniform between-person factor terms use HC3 covariance so
-unequal group sizes, leverage, and differing precision of person means
-do not impose a common residual variance. Class-interval interactions
-retain the residual-ANOVA reference used to test non-uniform DIF. For
-between-person design matrix \\X\\, residuals \\e_i\\, and leverages
-\\h_i\\, \$\$\widehat{V}\_{\mathrm{HC3}}=(X^{\mathsf T}X)^{-1}X^{\mathsf
-T} \operatorname{diag}\left\\\frac{e_i^2}{(1-h_i)^2}\right\\X
-(X^{\mathsf T}X)^{-1}.\$\$
+a combination or level has no observations for an item. Uniform
+between-person factor terms use HC3 covariance so unequal group sizes,
+leverage, and differing precision of person means do not impose a common
+residual variance. Class-interval interactions retain the residual-ANOVA
+reference used to test non-uniform DIF. In incomplete mixed designs, the
+between-person tests instead fit the declared occasion and person-factor
+model jointly to person-by-cell means. Each person has total weight one.
+All between-person terms then use person-cluster CR3 covariance,
+including uncertainty in the occasion adjustment, with an approximate F
+reference whose denominator degrees of freedom are the number of persons
+minus the full model rank. This branch does not use marginal occasion
+means to adjust the residuals. For between-person design matrix \\X\\,
+residuals \\e_i\\, and leverages \\h_i\\,
+\$\$\widehat{V}\_{\mathrm{HC3}}=(X^{\mathsf T}X)^{-1}X^{\mathsf T}
+\operatorname{diag}\left\\\frac{e_i^2}{(1-h_i)^2}\right\\X (X^{\mathsf
+T}X)^{-1}.\$\$
 
 A significant higher-order factor term supersedes its component terms in
 the summary. For EFRM fits, frame-defining factors are excluded because

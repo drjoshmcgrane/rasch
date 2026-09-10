@@ -86,11 +86,12 @@ btl_efrm(
   resamples judges within panels and retains dependence among a judge's
   comparisons. `"bootstrap"` instead draws independent outcomes from
   fitted probabilities. Both stages are refitted. `"conditional"` uses
-  analytic stage-one standard errors for `beta` and `phi`, and inverse
-  observed information for `alpha` and `kappa` conditional on the
-  stage-one estimates. It is faster, but does not propagate stage-one
-  uncertainty into the linking parameters; unit probabilities and
-  omnibus tests are therefore withheld.
+  analytic stage-one standard errors for `beta` and `phi`; the
+  panel-unit covariance retains dependence across sets judged by the
+  same people. It uses inverse observed information for `alpha` and
+  `kappa` conditional on the stage-one estimates. It is faster, but does
+  not propagate stage-one uncertainty into the linking parameters; unit
+  probabilities and omnibus tests are therefore withheld.
 
 - boot_reps:
 
@@ -124,7 +125,7 @@ btl_efrm(
 
 - maxit, tol:
 
-  Newton iteration cap and convergence tolerance.
+  Scoring iteration cap and convergence tolerance.
 
 ## Value
 
@@ -154,11 +155,24 @@ Cross-set comparisons identify the common scale. The first set fixes
 
 Estimation has two stages. Within-set comparisons estimate object
 locations and panel-unit ratios. Weighted least squares reconciles the
-ratios over the panel-by-set linking graph. Cross-set comparisons then
+ratios over the panel-by-set linking graph, using each set's covariance
+for its precision weight. The analytic covariance of the reconciled
+panel units is a joint judge-cluster sandwich: influence contributions
+with the same judge label are aligned across sets, while disjoint judge
+pools have zero cross-set covariance. Cross-set comparisons then
 estimate the set units and origins. Unlike the person-by-item EFRM, this
 linking step uses only comparison outcomes and does not require a
 distribution of persons. The paired-comparison form is an extension of
-Humphry's model implemented in this package.
+Humphry's model implemented in this package. A within-set panel-ratio
+fit must have a small score and negative curvature of the exact
+likelihood Hessian in all free directions. Failed fits do not enter the
+panel-unit reconciliation; the remaining sets must link all panels. The
+same rule applies to bootstrap refits. It checks an identified local
+maximum, not a global maximum. Cross-set outcomes are checked for
+complete and quasi-complete separation, including designs where only
+some comparisons become deterministic. Separated links have no finite
+estimate. Reaching `maxit` without satisfying the convergence criterion
+is reported as non-convergence.
 
 The default judge bootstrap resamples judges within panels and refits
 both stages. The parametric bootstrap draws independent outcomes from
@@ -174,26 +188,37 @@ because judges are the sampling units and contribute repeated
 comparisons.
 
 With one set, the model contains panel units only. With one set and one
-panel, it reduces to
-[`btl`](https://drjoshmcgrane.github.io/rasch/reference/btl.md). Omnibus
-Wald probabilities are Holm-adjusted across the panel-unit, set-unit and
-set-origin families. Individual estimated units form a separate
-Holm-adjusted follow-up family across all three parameter types.
-Structurally fixed reference coordinates are not hypotheses. An
-unavailable estimated unit remains in its predeclared family; an omnibus
-is withheld rather than reduced when one of its requested coordinates is
-unavailable. Judge-bootstrap probabilities require at least six judges
-and 5.5 effective judges in every contributing panel. Each non-reference
-set also requires eight judges and eight effective judges along a
-supported path to the reference set. With redundant links, the path with
-the strongest bottleneck is used. The support is returned in
-`unit_support`; estimates remain descriptive when a probability is
-withheld. Fits with fewer than eight effective judges per panel or 9.5
-along a set's reference path retain probabilities but report a caution.
-Set-unit estimates can also be attenuated when each object pair has
-little comparison information. In simulation, log-unit bias declined
-from about -0.11 with 10 repetitions per pair to less than -0.01 with
-100 repetitions.
+panel, its likelihood and finite interior estimates reduce to
+[`btl`](https://drjoshmcgrane.github.io/rasch/reference/btl.md).
+Boundary handling differs:
+[`btl()`](https://drjoshmcgrane.github.io/rasch/reference/btl.md) can
+set aside an undefeated or winless object and report an extrapolated
+location, whereas `btl_efrm()` treats every declared object as part of
+the frame design and refuses a within-set outcome separation rather than
+deleting or extrapolating an object. Omnibus Wald probabilities are
+Holm-adjusted across the panel-unit, set-unit and set-origin families.
+Individual estimated units form a separate Holm-adjusted follow-up
+family across all three parameter types. Structurally fixed reference
+coordinates are not hypotheses. An unavailable estimated unit remains in
+its predeclared family; an omnibus is withheld rather than reduced when
+one of its requested coordinates is unavailable. Judge-bootstrap
+probabilities require at least six judges and 5.5 effective judges in
+every contributing panel. Each non-reference set also requires eight
+judges and eight effective judges along a supported path to the
+reference set. With redundant links, the path with the strongest
+bottleneck is used. The support is returned in `unit_support`; estimates
+remain descriptive when a probability is withheld. Fits with fewer than
+eight effective judges per panel or 9.5 along a set's reference path
+retain probabilities but report a caution. Set-unit estimates can also
+be attenuated when each object pair has little comparison information.
+In simulation, log-unit bias declined from about -0.11 with 10
+repetitions per pair to less than -0.01 with 100 repetitions. A set
+whose within-set locations have no numerical spread has an unidentified
+unit: its reported unit is `NA`, and the conventional unit one is used
+only to place its objects. In contrast, a positive linking unit driven
+to zero by the cross-set outcomes is an unsupported boundary link and
+raises an error. Such boundary links are also rejected in bootstrap
+refits; they are never replaced by unit one.
 
 ## References
 

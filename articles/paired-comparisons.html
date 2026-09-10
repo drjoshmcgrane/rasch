@@ -266,20 +266,30 @@ is retained as the raw probability.</p>
 <span><span class="op">)</span></span>
 <span><span class="va">dim_fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/btl.html">btl</a></span><span class="op">(</span><span class="va">dim_data</span>, object_a <span class="op">=</span> <span class="st">"object_a"</span>, object_b <span class="op">=</span> <span class="st">"object_b"</span>,</span>
 <span>               winner <span class="op">=</span> <span class="st">"winner"</span>, judge <span class="op">=</span> <span class="st">"judge"</span><span class="op">)</span></span>
-<span><span class="va">dimensions</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/btl_dimensionality.html">btl_dimensionality</a></span><span class="op">(</span><span class="va">dim_fit</span>, reps <span class="op">=</span> <span class="fl">20</span>, seed <span class="op">=</span> <span class="fl">2026</span><span class="op">)</span></span>
+<span><span class="va">dimensions</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/btl_dimensionality.html">btl_dimensionality</a></span><span class="op">(</span><span class="va">dim_fit</span>, reps <span class="op">=</span> <span class="fl">20</span>, seed <span class="op">=</span> <span class="fl">2026</span>,</span>
+<span>                                independent_comparisons <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">dimensions</span></span>
 <span><span class="co">#&gt; Paired-comparison residual dimensionality: 4 bimension(s)</span></span>
-<span><span class="co">#&gt; Leading bimension strength 1.060 (68% of residual; reference 5% upper limit: 1.385; adjusted p = 0.476) -&gt; within the conditional reference</span></span></code></pre></div>
+<span><span class="co">#&gt; Leading bimension strength 1.078 (68% of residual; reference 5% upper limit: 1.421; adjusted p = 0.476) -&gt; within the conditional reference</span></span>
+<span><span class="co">#&gt; Note: the simulated reference assumes conditionally independent comparison outcomes given the fitted probabilities and any modeled history; it is not cluster-robust</span></span></code></pre></div>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_btl_transitivity.html">plot_btl_transitivity</a></span><span class="op">(</span><span class="va">tr</span><span class="op">)</span></span></code></pre></div>
 <p><img src="paired-comparisons_files/figure-html/plot-transitivity-1.png" class="r-plt" alt="Per-judge consistency of the paired comparisons." width="672"></p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_btl_scree.html">plot_btl_scree</a></span><span class="op">(</span><span class="va">dimensions</span><span class="op">)</span></span></code></pre></div>
 <p><img src="paired-comparisons_files/figure-html/plot-scree-1.png" class="r-plt" alt="Residual bimension strengths against the simulated noise reference." width="672"></p>
-<p>The shaded area runs from the simulated mean to the finite-simulation
-5% upper limit. The example uses twenty replicates to keep the vignette
-quick; a final analysis should use enough replicates to stabilise the
-reference distribution. An ordered analysis needs one row per
+<p>The decomposition compares observed and fitted expected points within
+each object pair. For ordered responses this includes the category
+thresholds; fitted position and history effects also enter the
+expectation.</p>
+<p>The simulated comparisons in this example are independent, so the
+call explicitly requests that reference. For judge-clustered data, the
+default shows only the residual decomposition: clustered repetition can
+look like dimensional structure against an independent-comparison
+reference. The shaded area runs from the simulated mean to the
+finite-simulation 5% upper limit. Twenty replicates keep this example
+quick; a final sensitivity analysis needs enough replicates to stabilise
+the reference distribution. An ordered analysis needs one row per
 comparison: a replication count does not retain the sequence needed to
 construct exposure and carry-over histories, so <code><a href="../reference/btl.html">btl()</a></code>
 refuses that combination.</p>
@@ -395,8 +405,8 @@ outcomes and does not use the finite-grid person-distribution link in
 <span><span class="op">)</span></span>
 <span><span class="va">ef</span><span class="op">$</span><span class="va">phi_table</span></span>
 <span><span class="co">#&gt;   panel   phi se_log_phi t df p p_adj significant</span></span>
-<span><span class="co">#&gt;  panel1 0.801      0.111                         </span></span>
-<span><span class="co">#&gt;  panel2 1.249      0.111</span></span>
+<span><span class="co">#&gt;  panel1 0.801      0.091                         </span></span>
+<span><span class="co">#&gt;  panel2 1.249      0.091</span></span>
 <span><span class="va">ef</span><span class="op">$</span><span class="va">alpha_table</span></span>
 <span><span class="co">#&gt;   set alpha se_log_alpha t df p p_adj significant</span></span>
 <span><span class="co">#&gt;  set1 1.000                                      </span></span>
@@ -406,23 +416,30 @@ outcomes and does not use the finite-grid person-distribution link in
 <span><span class="co">#&gt;  set1 0.000                                  </span></span>
 <span><span class="co">#&gt;  set2 0.494    0.124</span></span></code></pre></div>
 <p>The default judge bootstrap resamples judges within panels and refits
-both stages. The parametric bootstrap
-(<code>se_method = "bootstrap"</code>) draws independent outcomes from
-the fitted model. The conditional option used above reports estimates
-and conditional standard errors but withholds probabilities because it
-does not propagate stage-one uncertainty into the set link. With either
-bootstrap, omnibus probabilities are Holm-adjusted across the three unit
-families. Individual panel-unit, set-unit and set-origin contrasts form
-one separate Holm-adjusted follow-up family. Judge-bootstrap tests
-require at least six judges and 5.5 effective judges in every panel, and
-eight of each on a set link. The pooled pairwise chi-square is retained
-as a descriptive fit summary, but its row-based probability is not
-reported because judges contribute repeated comparisons. Judge resamples
-are distributed over four workers by default, or fewer where the system
-imposes a lower limit. Set <code>seed</code> to reproduce the resamples.
-The parametric bootstrap remains serial because its refits are
-inexpensive. In the application, frame estimation runs in the background
-and may be cancelled.</p>
+both stages. A set’s panel-ratio fit must pass an exact
+likelihood-curvature check before entering the reconciliation. Failed
+sets are omitted from that reconciliation; estimation stops if the
+remaining sets cannot link all panels. Cross-set outcomes are checked
+for complete and quasi-complete separation; neither supports a finite
+link. Reaching the iteration limit is not convergence. Saved frame fits
+without a current likelihood-check record require refitting before
+reopening in the app; their source files remain unchanged. The
+parametric bootstrap (<code>se_method = "bootstrap"</code>) draws
+independent outcomes from the fitted model. The conditional option used
+above reports estimates and conditional standard errors but withholds
+probabilities because it does not propagate stage-one uncertainty into
+the set link. With either bootstrap, omnibus probabilities are
+Holm-adjusted across the three unit families. Individual panel-unit,
+set-unit and set-origin contrasts form one separate Holm-adjusted
+follow-up family. Judge-bootstrap tests require at least six judges and
+5.5 effective judges in every panel, and eight of each on a set link.
+The pooled pairwise chi-square is retained as a descriptive fit summary,
+but its row-based probability is not reported because judges contribute
+repeated comparisons. Judge resamples are distributed over four workers
+by default, or fewer where the system imposes a lower limit. Set
+<code>seed</code> to reproduce the resamples. The parametric bootstrap
+remains serial because its refits are inexpensive. In the application,
+frame estimation runs in the background and may be cancelled.</p>
 <p>With six judges per panel and 20 repetitions per pair, a 1,000-fit
 null study gave raw marginal rejection of 3.3 per cent for panel units,
 6.7 per cent for set units and 6.0 per cent for set origins. Holm

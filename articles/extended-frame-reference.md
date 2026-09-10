@@ -240,11 +240,20 @@ requested number must exceed the free directions in the largest
 covariance block used by the fit. The stored bootstrap row contains
 several constrained blocks and is not treated as one covariance. Once
 estimation begins, the linking covariance needs at least 30 usable
-replicates and a majority of those requested; otherwise the fit stops.
-The alpha–phi cross-covariance has the same usable-draw rule and is
-withheld if it cannot be estimated. A full bootstrap that falls below
-its minimum returns hybrid standard errors instead, retaining its
-attempted, usable and failed counts in `full_boot_reps_*`.
+replicates and a majority of those requested; otherwise the fit stops. A
+numerical failure or non-convergence on any supported link invalidates
+the whole replicate. Pairs without enough informative common persons can
+be omitted only if the remaining links connect all sets. Full-bootstrap
+refits with unidentified group units are also discarded. The conditional
+calibration checks the exact likelihood curvature as well as the score.
+Stationary saddles and flat solutions are refused; the same check
+applies to bootstrap refits. Saved frame fits without a current
+likelihood-check record must be refitted before reopening in the app;
+their source files remain unchanged. The alpha–phi cross-covariance has
+the same usable-draw rule and is withheld if it cannot be estimated. A
+full bootstrap that falls below its minimum returns hybrid standard
+errors instead, retaining its attempted, usable and failed counts in
+`full_boot_reps_*`.
 
 ``` r
 
@@ -271,14 +280,14 @@ withholds generic likelihood differences involving EFRM: its calibration
 likelihood uses within-set pairs, whereas ordinary PCM also uses
 cross-set pairs. The matched group-unit comparison is retained in
 `fit$efrm_vs_rasch`. Probabilities require at least 50 persons or
-effective persons in every group and at least 50 informative common
-persons on every set-link edge. A person at the same extreme tail in
-both sets remains in the likelihood but does not count as link support.
-Sparse designs retain the unit estimates without an inferential
-probability.
+effective persons in every group and a path between each pair of sets
+whose links each have at least 50 informative common persons. A person
+at the same extreme tail in both sets remains in the likelihood but does
+not count as link support. Sparse designs retain the unit estimates
+without an inferential probability.
 
-Simulation under normal, bimodal and deliberately different group
-distributions gave set-unit bias within 0.004 log-units,
+Two-set simulations under normal, bimodal and deliberately different
+group distributions gave set-unit bias within 0.004 log-units,
 empirical-to-reported SE ratios from 0.97 to 1.05, and null rejection
 from 4.0 to 5.0 per cent for the hybrid method. The complete person
 bootstrap was mildly conservative in the corresponding null design. Sets
@@ -369,7 +378,8 @@ gives an item a separate location in each frame. The item continues to
 contribute to person measurement but no longer links those frames.
 [`drop_items()`](https://drjoshmcgrane.github.io/rasch/reference/drop_items.md)
 removes it. Both functions refit the model and update the frame, item
-and person estimates.
+and person estimates. Each set must retain common items linking its
+groups’ origins; a unit link through another set is not sufficient.
 
 ``` r
 

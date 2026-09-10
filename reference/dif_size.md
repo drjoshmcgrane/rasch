@@ -71,7 +71,9 @@ contains the descriptive `signed_area`. `df` gives the reference degrees
 of freedom: infinite for independent response rows and the independent
 person-cluster count minus one for a supported repeated-person
 calibration. Sampling-uncertainty fields are `NA` when the
-resolved-location covariance cannot support Wald inference.
+resolved-location covariance cannot support Wald inference. The ETS
+category is also `NA` if a probability needed to classify the contrast
+is unavailable or its standard error is zero.
 
 ## Details
 

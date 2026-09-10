@@ -300,6 +300,32 @@ at 250 persons and 68.4% at 4,000, because the statistics are computed
 at estimated parameters. The bootstrap rows alongside show the same
 statistics calibrated once each replicate repeats the estimation.
 
+The corrected principal-component kurtosis was also checked against the
+published polynomial coefficients. Full-PC and unrestricted PCM agreed
+through four thresholds. Recovery studies at four, five and six
+thresholds gave mean item-wise 95% coverage of 95.5%, 94.0% and 95.2%,
+respectively (100 datasets per condition; Monte Carlo SE 0.74–0.99
+percentage points). These are limited recovery checks, not null-size
+estimates; the scripts and complete accounting are in `tools/simval/`.
+
+For CJ extended frames, 50 shared-, partially shared- and disjoint-judge
+designs checked conditional panel-unit covariance against independently
+stacked judge scores. Agreement was within 1.4e-17. This verifies
+covariance propagation, not confidence-interval coverage; the default
+judge bootstrap is unchanged.
+
+For item-set EFRM, eight fixed-data checks covered two sets, complete
+three-set overlap, pairwise booklets and an indirect chain. All fits
+converged; 465 of 480 requested hybrid draws were usable. Separate
+fault-injection tests verify that a failed supported link invalidates
+the whole replicate. These check numerical behaviour and accounting, not
+coverage.
+
+Installed-package tests also check seeded bootstrap agreement between
+serial and socket-worker execution under default and non-default
+random-number generators. These are reproducibility checks, not
+additional calibration studies.
+
 The principal calibration results, each carried with its script and
 provenance in the result tables:
 
@@ -328,7 +354,8 @@ provenance in the result tables:
 | Ordinary DIF covariance | balanced, 1:4 ability imbalance, unequal observations/person, and a three-level 1:2:3 factor | hybrid HC3-uniform/residual-ANOVA-non-uniform familywise error 4.0%, 6.4%, 4.6%, and 6.2%; full HC3 reached 22.0% and 20.2% in the two imbalanced designs and was rejected (500 replicates each) |
 | Balanced homoskedastic DIF | two- and three-level factors, 10–150 observations per group-by-interval cell | hybrid familywise error 4.3–5.2%; under local alternatives the classical power advantage declined from 3.10 points at ten per cell to 0.84, 0.42, and 0.16 at 30, 75, and 150 for two levels, and from 1.72 at ten to 0.54 at 50 for three levels (5,000 paired replicates each) |
 | DIF bootstrap sensitivity | dichotomous data, four-category PCM and RSM data, three-level groups, correlated person factors, and public-function conformance passes over ordinary, explanatory, Multiple Ratings, Extended Frames and Comparative Judgement fits | preserving sufficient scores and refitting under the ordinary Rasch null gave acceptable global-null calibration but was usually more conservative and less powerful than the hybrid analysis. Under 0.5- and 0.9-logit partial alternatives, affected-member primary/bootstrap power was 5/8% and 51/49% for explanatory Rasch, 23/23% and 78/74% for Multiple Ratings, 6/8% and 31/25% for Extended Frames, and 7/8% and 15/17% for Comparative Judgement (100 attempted datasets per cell; Extended Frames results conditional on 83 and 80 analysed datasets). Invariant-member familywise error reached 23% primary and 20% bootstrap in the stronger Multiple Ratings condition. The bootstrap can attenuate contamination, but is a sensitivity analysis under the fitted global invariant null rather than a replacement for the primary analysis or a score-purification procedure |
-| Repeated-measures DIF bootstrap | group crossed with four observations of occasion; balanced Rasch null, local-dependence stress and group-dependent panel loss | primary/bootstrap familywise error was 6.9/4.9%, 2.9/2.3% and 4.6/4.0% over 350 datasets per condition. Uniform occasion-DIF power at 0.7 and 1.2 logits was 48.8/41.6% and 98.4/96.0%; adjusted non-uniform power was only 2.4/2.4% and 5.6/4.8% for slope increments of 0.8 and 1.5. Invariant-item familywise error was no greater than 4.8% (125 datasets per alternative) |
+| Repeated-measures DIF bootstrap | group crossed with four observations of occasion; balanced Rasch null and local-dependence stress | primary/bootstrap familywise error was 6.9/4.9% and 2.9/2.3% over 350 datasets per condition. Uniform occasion-DIF power at 0.7 and 1.2 logits was 48.8/41.6% and 98.4/96.0%; adjusted non-uniform power was only 2.4/2.4% and 5.6/4.8% for slope increments of 0.8 and 1.5. Invariant-item familywise error was no greater than 4.8% (125 datasets per alternative). The earlier panel-loss cell used the superseded marginal adjustment and does not validate the current incomplete-panel procedure |
+| Incomplete-panel DIF joint adjustment | correlated person factors, unequal occasion coverage and heteroskedastic known residuals; 600 persons | marginal uniform/non-uniform rejection was 5.7/5.3% over 3,000 null datasets (MCSE 0.42/0.41 percentage points). A separate end-to-end Rasch check gave 3.0% rejection for a null factor on an item carrying another factor’s DIF (200 datasets; MCSE 1.21 points). All datasets were usable. These check primary marginal tests, not bootstrap or familywise calibration |
 | DIF score purification | four-category PCM and RSM data, plus two correlated person factors | preselecting a five-item anchor scale was liberal and leave-one-out matching was rejected; the public split-and-refit procedure retained uniform-DIF power and left 4.0–5.6% familywise error among invariant items, while a strongest-item recalibration was promising for non-uniform DIF but is not yet an automatic remedy (500 replicates per refined condition) |
 | BTL-DIF pairwise inference | 6 objects, 8 or 10 judges per factor level | 5.5% and 4.83% size when balanced; 5.0% with 10 raw/9.31 effective judges per level (2,000-replicate top-up); omnibus and pairwise inference are withheld below eight judges or eight effective judges per level |
 | BTL-DIF multi-cell contrasts | balanced 2 by 2 judge cells, 12 judges per cell | the conservative weakest-cell reference gave 3.6% Type I error and 0.964 coverage; the superseded pooled-count extension gave 6.2% and 0.938 (500 replicates) |
@@ -351,12 +378,13 @@ provenance in the result tables:
 | Equating familywise error | 3, 5, and 10 anchors | 4.8-5.0% under the Holm adjustment (2,000 replicates per anchor count) |
 | Anchored estimation | mixed-score PCM with threshold and location anchors; two disconnected PCM blocks with one anchor each; BTL with two anchored objects | maximum absolute parameter bias 0.022, 0.013 and 0.018 logits; mean parameterwise empirical SD/mean SE 1.003, 1.040 and 1.014; coverage 0.946, 0.935 and 0.943 (250 PCM and 500 BTL replicates, conditional on exact anchor values; no failed fits) |
 | Person-measure coverage | 10-item test, central range | 0.945-0.983; conservative in the tails |
+| Competing WLE maxima | 100 dichotomous and partial-credit banks, with easy/hard gaps up to 16 logits; every possible score | no point on a 4,001-point comparison grid exceeded the selected WLE objective; no scores were unavailable. This checks numerical maximisation, not interval coverage |
 | Externally weighted person measures | equal, moderate, strong and zero weights; dichotomous and partial credit items; equal and differing units | absolute bias at most 0.016 logits, empirical SD/mean SE 0.940-1.004 and 95% coverage 0.941-0.978 (5,000 persons in each of 18 conditions) |
 | Tailored bootstrap | 300 persons, 8 items, 399 resamples | in the current-tree null check, 0/54 analysed datasets had a Holm-adjusted item flag (exact 95% interval 0–6.6%); 1/55 was refused, and 21,802/21,945 inner refits were usable. In the 80-dataset power study, clean-item familywise error was 0–2.5%, and at least one of two hard items was detected in 17.5% and 26.3% of datasets with guessing 0.15 and 0.30 |
 | CL-AIC model selection | PCM vs RSM; free vs PC thresholds (items and CJ) | null false selection 4.5-5.2% multi-parameter, ~17% one-parameter (the theoretical AIC rates); at the strongest tested departures, selection was 50% for PCM vs RSM and 99.5-100% for the threshold-structure comparisons |
 | Paired-comparison effect tests | 8 objects, 14 judges | position/exposure nulls 5.8%/5.9%; carry-over 8.3% at 14 judges, 5.3% at 30; power 62/39/77% at 0.6 logits |
 | Paired-comparison effect multiplicity | 8 objects, 30 judges, position, exposure and carry-over fitted together | Holm familywise error 5.9% (1,000 null replicates); adjusted power at 0.3/0.6 logits was 42/97% for position, 10/44% for exposure and 23/85% for carry-over |
-| BTL second-attribute simulation | 3-15 objects, correlations -0.8 to 1; strong 15-object dimensionality design | maximum realised-correlation error 3.9e-16 over 1,200 draws; leading-structure power 87% over 100 datasets |
+| BTL second-attribute simulation | 3-15 objects, correlations -0.8 to 1; strong 15-object dimensionality design with independent comparisons | maximum realised-correlation error 3.9e-16 over 1,200 draws; leading-structure power 87% over 100 datasets under the independent-comparison reference. This does not calibrate inference under within-judge dependence |
 | Cross-package agreement | sirt, eRm, TAM, BradleyTerry2, VGAM, lme4 | identical-likelihood comparators at solver precision; current EFRM set-unit bias +0.0036 vs TAM +0.0008 dichotomous and +0.0035 vs +0.0020 polytomous |
 | Cross-package diagnostics | eRm, TAM, psych, difR, PerFit, sirt | alpha exact; item fit r 0.97-0.99 aligned; person fit rho 0.97-0.98; DIF detection 80-88% across methods; no dimensionality flags in the sampled null datasets and 67% power, compared with 100% for DETECT |
 | EFRM boundary conditions | 3-8 items/set; 80-1,000 persons; ratios to 3.5; targeting, missingness and non-normality | absolute bias at most 0.022 under the model; all three-item links refused; at 80 persons 11% refused and 2% did not converge; 41- and 101-point grids agreed |

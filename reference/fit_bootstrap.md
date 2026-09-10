@@ -53,13 +53,15 @@ fit_bootstrap(
 
   Number of parallel bootstrap workers. The default is four, reduced
   when fewer physical cores are available or the R process has a lower
-  system limit. Per-replicate seeds are fixed before distribution, so
-  results do not depend on the worker count.
+  system limit. Per-replicate seeds and random-number generator settings
+  are shared, so results do not depend on the worker count.
 
 - seed:
 
   Optional non-negative whole-number seed within the integer range. The
-  caller's random stream is restored on exit.
+  caller's random stream is restored on exit. This calculation does not
+  support Box–Muller, including when `seed = NULL`; see
+  [`rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md).
 
 ## Value
 
@@ -145,8 +147,9 @@ Testing*. Wiley.
 
 ## See also
 
-[`chisq_detail`](https://drjoshmcgrane.github.io/rasch/reference/chisq_detail.md)
-and [`btl`](https://drjoshmcgrane.github.io/rasch/reference/btl.md).
+[`chisq_detail`](https://drjoshmcgrane.github.io/rasch/reference/chisq_detail.md),
+[`btl`](https://drjoshmcgrane.github.io/rasch/reference/btl.md),
+[`rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md).
 
 ## Examples
 

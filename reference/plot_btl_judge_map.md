@@ -2,13 +2,12 @@
 
 The judge counterpart of the kidmap, drawn matchup by matchup. Each pair
 the judge met is a segment on the consensus location axis, spanning its
-two objects, positioned horizontally by how surprising the verdict was:
-at zero (the dashed line, inside the unadjusted z-reference band) the
-stronger object won as its lead predicts; to the left the judge backed
-the underdog. A filled dot marks the object the judge's verdict
-favoured, hollow the other – so an upset is a red segment on the left
-with its filled dot at the lower end. The rug marks every object's
-location.
+two objects, positioned horizontally by its standardised residual. For a
+non-tied pair, a negative residual means the stronger object
+under-performed. A tied pair has no directional interpretation and is
+oriented to a non-negative residual for display only. A filled dot marks
+the object the judge's verdict favoured and a hollow dot the other. The
+rug marks every object's location.
 
 ## Usage
 

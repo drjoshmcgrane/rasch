@@ -78,6 +78,13 @@ This mixed-design analysis extends the single-factor residual analysis
 of variance described by Andrich and Marais (2019). Its F references are
 large-sample approximations.
 
+With incomplete panels, between-person tests fit the occasion and person
+factors jointly, giving each person total weight one. They use
+person-cluster CR3 covariance for both uniform and non-uniform terms,
+including uncertainty in the occasion adjustment. This avoids confusing
+unequal occasion coverage with differences in the composition of the
+person groups. Within-person contrasts still require complete panels.
+
 ``` r
 
 fit <- rasch(dat, id = "pid", factors = c("group", "occasion"),
@@ -191,12 +198,20 @@ db$summary[, c("item", "term", "p_uniform_boot_adj",
 
 In a four-occasion validation study, familywise error under the balanced
 Rasch null was 6.9% for the primary analysis and 4.9% for the bootstrap
-over 350 datasets. The corresponding rates were 4.6% and 4.0% with
-unequal groups and group-dependent panel loss. For uniform occasion DIF
-the bootstrap was slightly less powerful than the primary analysis.
-Adjusted non-uniform power was weak for both procedures in this
-seven-item, 180-person design. The bootstrap therefore remains a
-sensitivity analysis rather than the default test.
+over 350 datasets. For uniform occasion DIF the bootstrap was slightly
+less powerful than the primary analysis. Adjusted non-uniform power was
+weak for both procedures in this seven-item, 180-person design. The
+bootstrap therefore remains a sensitivity analysis rather than the
+default test.
+
+The earlier panel-loss results used the superseded marginal adjustment.
+For the current joint adjustment, a known-residual study with correlated
+person factors and unequal panels gave uniform and non-uniform null
+rejection rates of 5.7% and 5.3% over 3,000 replicates (Monte Carlo SEs
+0.42 and 0.41 percentage points). A separate end-to-end Rasch check gave
+3.0% over 200 datasets for a null group effect on an item carrying DIF
+for another factor. These checks assess the primary tests, not the full
+bootstrap family’s error rate under every incomplete-panel design.
 
 ## Quantify the departure
 

@@ -348,6 +348,29 @@ beyond 1.96 flags 11.5% of correctly fitting items at 250 persons and
 68.4% at 4,000, because the statistics are computed at estimated
 parameters. The bootstrap rows alongside show the same statistics
 calibrated once each replicate repeats the estimation.</p>
+<p>The corrected principal-component kurtosis was also checked against
+the published polynomial coefficients. Full-PC and unrestricted PCM
+agreed through four thresholds. Recovery studies at four, five and six
+thresholds gave mean item-wise 95% coverage of 95.5%, 94.0% and 95.2%,
+respectively (100 datasets per condition; Monte Carlo SE 0.74–0.99
+percentage points). These are limited recovery checks, not null-size
+estimates; the scripts and complete accounting are in
+<code>tools/simval/</code>.</p>
+<p>For CJ extended frames, 50 shared-, partially shared- and
+disjoint-judge designs checked conditional panel-unit covariance against
+independently stacked judge scores. Agreement was within 1.4e-17. This
+verifies covariance propagation, not confidence-interval coverage; the
+default judge bootstrap is unchanged.</p>
+<p>For item-set EFRM, eight fixed-data checks covered two sets, complete
+three-set overlap, pairwise booklets and an indirect chain. All fits
+converged; 465 of 480 requested hybrid draws were usable. Separate
+fault-injection tests verify that a failed supported link invalidates
+the whole replicate. These check numerical behaviour and accounting, not
+coverage.</p>
+<p>Installed-package tests also check seeded bootstrap agreement between
+serial and socket-worker execution under default and non-default
+random-number generators. These are reproducibility checks, not
+additional calibration studies.</p>
 <p>The principal calibration results, each carried with its script and
 provenance in the result tables:</p>
 <table class="table">
@@ -571,15 +594,28 @@ score-purification procedure</td>
 <tr class="even">
 <td>Repeated-measures DIF bootstrap</td>
 <td>group crossed with four observations of occasion; balanced Rasch
-null, local-dependence stress and group-dependent panel loss</td>
-<td>primary/bootstrap familywise error was 6.9/4.9%, 2.9/2.3% and
-4.6/4.0% over 350 datasets per condition. Uniform occasion-DIF power at
-0.7 and 1.2 logits was 48.8/41.6% and 98.4/96.0%; adjusted non-uniform
-power was only 2.4/2.4% and 5.6/4.8% for slope increments of 0.8 and
-1.5. Invariant-item familywise error was no greater than 4.8% (125
-datasets per alternative)</td>
+null and local-dependence stress</td>
+<td>primary/bootstrap familywise error was 6.9/4.9% and 2.9/2.3% over
+350 datasets per condition. Uniform occasion-DIF power at 0.7 and 1.2
+logits was 48.8/41.6% and 98.4/96.0%; adjusted non-uniform power was
+only 2.4/2.4% and 5.6/4.8% for slope increments of 0.8 and 1.5.
+Invariant-item familywise error was no greater than 4.8% (125 datasets
+per alternative). The earlier panel-loss cell used the superseded
+marginal adjustment and does not validate the current incomplete-panel
+procedure</td>
 </tr>
 <tr class="odd">
+<td>Incomplete-panel DIF joint adjustment</td>
+<td>correlated person factors, unequal occasion coverage and
+heteroskedastic known residuals; 600 persons</td>
+<td>marginal uniform/non-uniform rejection was 5.7/5.3% over 3,000 null
+datasets (MCSE 0.42/0.41 percentage points). A separate end-to-end Rasch
+check gave 3.0% rejection for a null factor on an item carrying another
+factor’s DIF (200 datasets; MCSE 1.21 points). All datasets were usable.
+These check primary marginal tests, not bootstrap or familywise
+calibration</td>
+</tr>
+<tr class="even">
 <td>DIF score purification</td>
 <td>four-category PCM and RSM data, plus two correlated person
 factors</td>
@@ -590,7 +626,7 @@ items, while a strongest-item recalibration was promising for
 non-uniform DIF but is not yet an automatic remedy (500 replicates per
 refined condition)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>BTL-DIF pairwise inference</td>
 <td>6 objects, 8 or 10 judges per factor level</td>
 <td>5.5% and 4.83% size when balanced; 5.0% with 10 raw/9.31 effective
@@ -598,33 +634,33 @@ judges per level (2,000-replicate top-up); omnibus and pairwise
 inference are withheld below eight judges or eight effective judges per
 level</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>BTL-DIF multi-cell contrasts</td>
 <td>balanced 2 by 2 judge cells, 12 judges per cell</td>
 <td>the conservative weakest-cell reference gave 3.6% Type I error and
 0.964 coverage; the superseded pooled-count extension gave 6.2% and
 0.938 (500 replicates)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>BTL-DIF omnibus under unequal precision</td>
 <td>8 versus 16 judges, fourfold variance ratio</td>
 <td>classical Type I 11.7% or 1.8% depending on the allocation; HC3 Type
 I 5.6% and 4.0% (10,000 replicates each)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>BTL core cluster covariance</td>
 <td>10 balanced judges; 20 judges with one carrying 20%</td>
 <td>CR1 Type I 5.4% and 4.2%, coverage 94.6% and 95.8%; delete-one-judge
 Type I 5.6% and 4.0%, coverage 94.4% and 96.0% (500 replicates each); no
 default change</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Superitem spread test</td>
 <td>900 persons, 8 items</td>
 <td>5.2% size at the binomial boundary (1,000 replicates); 100% power
 under the planted dependence condition (400 replicates)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>EFRM set-unit linking</td>
 <td>200 persons/group, 6 items/set (500 null datasets); boundary cell
 with 100 persons/group and 4 items/set (1,000 attempts)</td>
@@ -634,7 +670,7 @@ rates 5.2% and 2.5% among 483 analysed fits, with 493 refusals and 24
 non-convergences; raw marginal hybrid Type I remained 4.0-5.0% in the
 larger distributional studies</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Crossed EFRM factorial tests</td>
 <td>400 persons, 100 in each cell of a balanced 2 by 2 design, 12
 dichotomous items</td>
@@ -642,14 +678,14 @@ dichotomous items</td>
 pooled over 3,000); marginal rates 5.25-5.75%; adjusted power 73% and
 100% for region unit ratios 1.25 and 1.50</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>EFRM compiled-kernel parity</td>
 <td>demonstration data, 30 seed-paired hybrid bootstrap replicates</td>
 <td>largest absolute difference from the retained R implementation
 1.30e-11 across set units, standard errors, origins, thresholds and edge
 likelihoods; all convergence flags agreed</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>EFRM parallel-bootstrap parity</td>
 <td>demonstration data, 300 hybrid replicates; simulated data, 30
 full-bootstrap replicates</td>
@@ -657,7 +693,7 @@ full-bootstrap replicates</td>
 samples and agreed exactly on every checked estimate and convergence
 flag</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>BTL-EFRM parallel-bootstrap parity</td>
 <td>3 sets, 2 panels, 20 judges, 200 judge-bootstrap replicates</td>
 <td>serial and default four-worker fits used the same pre-generated
@@ -665,7 +701,7 @@ judge resamples and agreed exactly on the complete reported result,
 apart from the recorded worker count; elapsed time fell from 17.34 to
 5.47 seconds on the executing machine</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>BTL-EFRM bootstrap inference</td>
 <td>6 or 12 judges/panel, 6 objects/set, 20 repetitions/pair</td>
 <td>with six judges per panel, raw marginal Type I was 3.3% for panel
@@ -675,7 +711,7 @@ set-unit coverage was 0.900 (1,000 null fits). With 12 judges per panel
 and the default 200 resamples, raw set-unit Type I was 4.6%, SE ratio
 0.992 and coverage 0.934 (500 null fits)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>BTL-EFRM fit coherence</td>
 <td>3 sets, 3 panels, 8/4 to 72/36 within/cross repetitions</td>
 <td>reported likelihoods agreed with likelihoods reconstructed from all
@@ -683,48 +719,48 @@ fitted probabilities to numerical precision; mean common-scale object
 RMSE fell from 0.401 to 0.123 as information increased (180 attempted
 fits, 2 refused)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>MFRM interaction omnibus</td>
 <td>50 or 200 persons, 6 raters, 25 df</td>
 <td>4.3% and 5.2% Type I error (600 fixed-truth replicates each);
 probabilities use the least-supported item-by-level cell and require
 <code>max(30, q + 2)</code> effective persons</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>MFRM multifactor DIF</td>
 <td>500 persons, 8 items, 6 raters</td>
 <td>4.7% familywise error with balanced raters and 3.8% when one group
 has two raters (1,000 replicates)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Frame-invariance bootstrap size</td>
 <td>500 persons/frame, 8 common items</td>
 <td>3.0% combined Holm familywise error; SE ratios 1.00 locations and
 1.03 discrimination (300 replicates)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Frame-invariance bootstrap power</td>
 <td>two affected items, 500 persons/frame</td>
 <td>96.3% for a one-logit location shift; 9.6% for a 1.5-fold
 discrimination change (120 replicates)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Comparative judgement contrasts</td>
 <td>10-50 judges, balanced</td>
 <td>5.0% size, 94.5% coverage (1,200 replicates)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Effective-judge thresholds</td>
 <td>one judge with 15-50% of comparisons</td>
 <td>~9% at 4 effective, ~7% at 6-7, nominal when balanced</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Equating familywise error</td>
 <td>3, 5, and 10 anchors</td>
 <td>4.8-5.0% under the Holm adjustment (2,000 replicates per anchor
 count)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Anchored estimation</td>
 <td>mixed-score PCM with threshold and location anchors; two
 disconnected PCM blocks with one anchor each; BTL with two anchored
@@ -734,10 +770,18 @@ parameterwise empirical SD/mean SE 1.003, 1.040 and 1.014; coverage
 0.946, 0.935 and 0.943 (250 PCM and 500 BTL replicates, conditional on
 exact anchor values; no failed fits)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Person-measure coverage</td>
 <td>10-item test, central range</td>
 <td>0.945-0.983; conservative in the tails</td>
+</tr>
+<tr class="even">
+<td>Competing WLE maxima</td>
+<td>100 dichotomous and partial-credit banks, with easy/hard gaps up to
+16 logits; every possible score</td>
+<td>no point on a 4,001-point comparison grid exceeded the selected WLE
+objective; no scores were unavailable. This checks numerical
+maximisation, not interval coverage</td>
 </tr>
 <tr class="odd">
 <td>Externally weighted person measures</td>
@@ -782,9 +826,11 @@ at 0.3/0.6 logits was 42/97% for position, 10/44% for exposure and
 <tr class="even">
 <td>BTL second-attribute simulation</td>
 <td>3-15 objects, correlations -0.8 to 1; strong 15-object
-dimensionality design</td>
+dimensionality design with independent comparisons</td>
 <td>maximum realised-correlation error 3.9e-16 over 1,200 draws;
-leading-structure power 87% over 100 datasets</td>
+leading-structure power 87% over 100 datasets under the
+independent-comparison reference. This does not calibrate inference
+under within-judge dependence</td>
 </tr>
 <tr class="odd">
 <td>Cross-package agreement</td>

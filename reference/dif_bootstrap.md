@@ -106,7 +106,8 @@ Testing: Examples and Methods for p-Value Adjustment*. Wiley.
 
 [`dif_anova`](https://drjoshmcgrane.github.io/rasch/reference/dif_anova.md),
 [`btl_dif`](https://drjoshmcgrane.github.io/rasch/reference/btl_dif.md),
-[`fit_bootstrap`](https://drjoshmcgrane.github.io/rasch/reference/fit_bootstrap.md)
+[`fit_bootstrap`](https://drjoshmcgrane.github.io/rasch/reference/fit_bootstrap.md),
+[`rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md)
 
 ## Examples
 

@@ -49,7 +49,9 @@ frame_invariance(
 
 - seed:
 
-  Optional bootstrap seed.
+  Optional bootstrap seed. See
+  [`rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md)
+  for generator support.
 
 ## Value
 

@@ -75,7 +75,9 @@ tailored_analysis(
 - seed:
 
   Optional non-negative whole-number seed for the person bootstrap. The
-  caller's random-number state is restored on exit.
+  caller's random-number state is restored on exit; see
+  [`rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md)
+  for generator support.
 
 ## Value
 

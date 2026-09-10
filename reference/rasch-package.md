@@ -48,6 +48,12 @@ launches the package's Shiny application. It supports data import, model
 fitting, diagnostics, plots, saved analysis projects and reports. The
 corresponding R code is shown for each result.
 
+## Reproducible simulations
+
+Simulators and bootstrap procedures accept a random seed. See
+[`rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md)
+for random-number generator support.
+
 ## References
 
 Rasch, G. (1960). Probabilistic Models for Some Intelligence and

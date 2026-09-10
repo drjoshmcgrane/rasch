@@ -155,6 +155,13 @@ Greenhouse–Geisser correction when a factor has more than two levels.
 This mixed-design analysis extends the single-factor residual analysis
 of variance described by Andrich and Marais (2019). Its F references are
 large-sample approximations.</p>
+<p>With incomplete panels, between-person tests fit the occasion and
+person factors jointly, giving each person total weight one. They use
+person-cluster CR3 covariance for both uniform and non-uniform terms,
+including uncertainty in the occasion adjustment. This avoids confusing
+unequal occasion coverage with differences in the composition of the
+person groups. Within-person contrasts still require complete
+panels.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/rasch.html">rasch</a></span><span class="op">(</span><span class="va">dat</span>, id <span class="op">=</span> <span class="st">"pid"</span>, factors <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"group"</span>, <span class="st">"occasion"</span><span class="op">)</span>,</span>
 <span>             items <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"I%02d"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">8</span><span class="op">)</span><span class="op">)</span></span>
@@ -261,12 +268,20 @@ invariant items when another item has DIF.</p>
 <span>               <span class="st">"p_nonuniform_boot_adj"</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
 <p>In a four-occasion validation study, familywise error under the
 balanced Rasch null was 6.9% for the primary analysis and 4.9% for the
-bootstrap over 350 datasets. The corresponding rates were 4.6% and 4.0%
-with unequal groups and group-dependent panel loss. For uniform occasion
-DIF the bootstrap was slightly less powerful than the primary analysis.
-Adjusted non-uniform power was weak for both procedures in this
-seven-item, 180-person design. The bootstrap therefore remains a
-sensitivity analysis rather than the default test.</p>
+bootstrap over 350 datasets. For uniform occasion DIF the bootstrap was
+slightly less powerful than the primary analysis. Adjusted non-uniform
+power was weak for both procedures in this seven-item, 180-person
+design. The bootstrap therefore remains a sensitivity analysis rather
+than the default test.</p>
+<p>The earlier panel-loss results used the superseded marginal
+adjustment. For the current joint adjustment, a known-residual study
+with correlated person factors and unequal panels gave uniform and
+non-uniform null rejection rates of 5.7% and 5.3% over 3,000 replicates
+(Monte Carlo SEs 0.42 and 0.41 percentage points). A separate end-to-end
+Rasch check gave 3.0% over 200 datasets for a null group effect on an
+item carrying DIF for another factor. These checks assess the primary
+tests, not the full bootstrap family’s error rate under every
+incomplete-panel design.</p>
 </div>
 <div class="section level2">
 <h2 id="quantify-the-departure">Quantify the departure<a class="anchor" aria-label="anchor" href="#quantify-the-departure"></a>

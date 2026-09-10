@@ -73,7 +73,9 @@ simulate_btl(
 
 - seed:
 
-  Optional non-negative whole-number RNG seed.
+  Optional non-negative whole-number RNG seed. See
+  [`rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md)
+  for generator support.
 
 - object_locations:
 

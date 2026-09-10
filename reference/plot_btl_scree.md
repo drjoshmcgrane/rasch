@@ -2,7 +2,8 @@
 
 Bimension strengths against the model-simulated noise reference (its
 mean and finite-simulation 5 available. A leading bar clearing the band
-is structured residual dependence – a likely second attribute.
+suggests residual structure beyond the fitted model under that
+reference.
 
 ## Usage
 

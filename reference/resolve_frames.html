@@ -86,7 +86,10 @@ the fitted specification; a number overrides it.</p></dd>
 frame but no longer constrains the link between those frames. Its versions
 are named <code>"item (frame)"</code>. The remaining common items and the linked
 set design must still identify the frame units; otherwise the refit is
-refused by the model's connectivity and rank checks.</p>
+refused by the model's connectivity and rank checks.
+Each set must also retain links between its groups of item versions to
+identify their relative origins. A unit link supplied by another set
+cannot replace these origin links.</p>
 <p>Resolve an item when its within-frame measurement remains defensible but
 its cross-frame location does not. This refit does not estimate a separate
 discrimination and therefore does not resolve a discrimination-only flag

@@ -31,7 +31,10 @@ A list with `theta` and `se`, each named by raw score.
 For raw score \\R\\, let \\E(\theta)\\, \\V(\theta)\\, and
 \\\mu_3(\theta)\\ be the sums of the item expected scores, variances,
 and third central moments. The estimate solves Warm's weighted score
-equation \$\$R-E(\theta)+\frac{\mu_3(\theta)}{2V(\theta)}=0.\$\$ With
+equation \$\$R-E(\theta)+\frac{\mu_3(\theta)}{2V(\theta)}=0.\$\$ When
+the equation has several solutions, competing maxima are compared using
+log likelihood plus one half log information. Equal maxima use the lower
+location; their average need not maximize the weighted likelihood. With
 common discrimination \\d\\, its explicit multiplier cancels from this
 equation, although the moments are evaluated under \\d\\. The reported
 standard error is \$\$\operatorname{SE}(\hat{\theta})=
@@ -41,6 +44,9 @@ standard error is \$\$\operatorname{SE}(\hat{\theta})=
 
 Warm, T. A. (1989). Weighted likelihood estimation of ability in item
 response theory. Psychometrika, 54(3), 427–450.
+
+Zhang, J. (2005). Bias correction for the maximum likelihood estimate of
+ability. ETS Research Report RR-05-15.
 
 ## See also
 

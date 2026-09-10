@@ -123,7 +123,9 @@ rasch_efrm(
 - seed:
 
   Optional bootstrap seed. The caller's random-number state is restored
-  when estimation finishes.
+  when estimation finishes; see
+  [`rasch_rng`](https://drjoshmcgrane.github.io/rasch/reference/rasch_rng.md)
+  for generator support.
 
 ## Value
 
@@ -169,7 +171,12 @@ ratios \\\phi_g\\ are identified from common item thresholds across
 groups. Item sets partition the items, so set ratios \\\alpha_s\\ are
 identified instead from persons observed in more than one set. The
 set-linking graph and the group-by-set frame graph must each connect to
-a common scale.
+a common scale. Direct overlap between every pair of item sets is not
+required: sets can be linked through intermediate sets. Pairs without
+enough informative common persons contribute no edge; the remaining
+graph must still connect all sets. A bootstrap replicate is unusable if
+any supported link fails numerically or does not converge, even when
+other links still connect the sets.
 
 Set units use a semiparametric likelihood for persons observed in each
 linked pair of sets. For sets \\a\\ and \\b\\, it maximises
@@ -195,7 +202,11 @@ screen weak links. Response patterns must span a score range of at least
 four within a set. Overlapping item sets are not permitted. The public
 convergence flag covers the conditional calibration, the set-link
 transformation and its nonparametric nuisance masses; `stage1_converged`
-records the conditional stage separately.
+records the conditional stage separately. The conditional stage requires
+a small score and negative curvature of the exact likelihood Hessian in
+all free directions. A stationary point with flat or positive curvature
+is refused, including in bootstrap refits. This checks an identified
+local maximum, not a global maximum.
 
 The empirical Godambe covariance from the conditional stage requires at
 least ten informative persons, at least eight effective persons, more
@@ -210,7 +221,8 @@ person bootstrap for set linking. Each replicate jointly redraws the
 within-frame thresholds and group units, then rebuilds the link. The
 joint draws retain covariance among common-scale thresholds, set units
 and group units. With `se_method = "bootstrap"`, the complete model is
-refitted to each person resample.
+refitted to each person resample. Refits that do not converge or have
+unidentified group units are discarded and counted as failed replicates.
 
 The `efrm_vs_rasch` component records the within-frame composite
 log-likelihood comparison between group-dependent and equal group units.

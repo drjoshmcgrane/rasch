@@ -41,7 +41,8 @@ save_outputs(
 
 - dir:
 
-  Output directory; created if absent.
+  Output directory; created if absent. An existing directory must be
+  empty; exports refuse to overwrite files from an earlier analysis.
 
 - formats:
 
@@ -129,6 +130,6 @@ set.seed(1)
 d <- seq(-2, 2, length.out = 6)
 X <- matrix(rbinom(150 * 6, 1, plogis(outer(rnorm(150), d, "-"))), 150, 6)
 colnames(X) <- paste0("I", 1:6)
-out <- file.path(tempdir(), "rasch-out")
+out <- tempfile("rasch-out-")
 save_outputs(rasch(X), out, formats = "png", item_plots = FALSE, dpi = 96)
 ```

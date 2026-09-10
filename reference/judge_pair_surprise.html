@@ -14,7 +14,10 @@ across matchups meeting min_n. A surprise is an eligible matchup
 with a negative residual whose adjusted probability passes the level
 represented by flag_z. The fitted model must have converged.
 An adequately sampled matchup with unavailable residual inference remains
-in the adjustment family."><meta property="og:description" content="The comparison-level companion of judge_surprise. Each pair
+in the adjustment family. Locations within \(10^{-10}\) logits are treated
+as tied: neither object is called stronger, the two-sided residual probability
+remains descriptive and in the Holm family, and surprise is false.
+A tied row is oriented toward its non-negative residual for display only."><meta property="og:description" content="The comparison-level companion of judge_surprise. Each pair
 the judge met is oriented to its stronger object (higher consensus
 location) and given a standardised residual: z &amp;lt; 0 means the
 stronger object won less than its lead predicts – the judge backed the
@@ -23,7 +26,10 @@ across matchups meeting min_n. A surprise is an eligible matchup
 with a negative residual whose adjusted probability passes the level
 represented by flag_z. The fitted model must have converged.
 An adequately sampled matchup with unavailable residual inference remains
-in the adjustment family."><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch/logo.svg"></head><body>
+in the adjustment family. Locations within \(10^{-10}\) logits are treated
+as tied: neither object is called stronger, the two-sided residual probability
+remains descriptive and in the Holm family, and surprise is false.
+A tied row is oriented toward its non-negative residual for display only."><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch/logo.svg"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -73,7 +79,10 @@ across matchups meeting <code>min_n</code>. A surprise is an eligible matchup
 with a negative residual whose adjusted probability passes the level
 represented by <code>flag_z</code>. The fitted model must have converged.
 An adequately sampled matchup with unavailable residual inference remains
-in the adjustment family.</p>
+in the adjustment family. Locations within \(10^{-10}\) logits are treated
+as tied: neither object is called stronger, the two-sided residual probability
+remains descriptive and in the Holm family, and <code>surprise</code> is false.
+A tied row is oriented toward its non-negative residual for display only.</p>
     </div>
 
     <div class="section level2">
@@ -106,8 +115,10 @@ of approximately 0.05.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list of class <code>"rasch_btl_judge_pairs"</code>: <code>pairs</code> (per
-  matchup: the stronger and weaker object and their locations, the location
-  <code>gap</code>, times met <code>n</code>, residual <code>z</code>, approximate <code>p</code>,
+  matchup: the stronger and weaker object and their locations when
+  <code>tied</code> is false (at a tie these columns only orient the row), the
+  location <code>gap</code>, tie indicator <code>tied</code>, times met <code>n</code>,
+  residual <code>z</code>, approximate <code>p</code>,
   Holm-adjusted <code>p_adj</code>, the <code>net_winner</code>, and the
   <code>surprise</code> flag); <code>all_locations</code>; the <code>judge</code> and settings.</p>
     </div>
