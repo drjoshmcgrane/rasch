@@ -149,8 +149,14 @@ used at every round and in the final DIF assessment.</p></dd>
   <code>fit</code>, the <code>splits</code> performed (order, item, factor, partial
   eta-squared, source item, DIF magnitude in logits), the <code>stopped</code>
   reason, the residual <code>dif</code> table, and the number of distinct source
-  items that still show DIF in the final fit. <code>effects</code> records the
-  factor model used.</p>
+  items that still show DIF in the final fit. <code>n_untested</code> counts the
+  item-term tests the final assessment could not estimate although the
+  design could answer them; those terms are reported as neither DIF nor no
+  DIF, so the remaining-DIF count is a lower bound whenever
+  <code>n_untested</code> is positive. A split copy answered in one level of its
+  splitting factor only is not counted: its term is structurally absent,
+  not lost. Both counts are <code>NA</code> when no item-term test was estimable
+  at all. <code>effects</code> records the factor model used.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>

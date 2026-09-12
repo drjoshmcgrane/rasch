@@ -52,7 +52,9 @@ rasch_efrm(
   Name of the person-group column in `data`, or a vector with one entry
   per person. Several columns define crossed group cells. Their units
   are returned in `phi_table`; `phi_factorial` and `phi_factorial_tests`
-  contain the GLS factorial decomposition and omnibus Wald tests. Raw
+  contain the GLS factorial decomposition and omnibus Wald tests, each
+  referred to \\F(q, B-q)\\ when the cell-unit covariance came from the
+  full bootstrap and to \\\chi^2(q)\\ when it is analytic. Raw
   probabilities are retained in `p`; decisions use `p_adj`,
   Holm-adjusted across the factorial terms. Structurally unidentified
   units are refused. Very imprecise but identified units are retained
@@ -133,28 +135,31 @@ An object of classes `"rasch_efrm"` and `"rasch"`. Model-specific
 components include `frames`, `phi_table`, `alpha_table`, `set_table`,
 common-unit item and threshold tables, group-specific `score_curves`
 (expected weighted sufficient score and conditional standard error by
-person location and exact observed-item pattern), `efrm_vs_rasch`, and
-`linking`, the person support used for unit inference in `unit_support`,
-and the active covariance blocks in `unit_cov`. For a full-bootstrap
-fit, all blocks in `unit_cov` are calculated from the same usable person
-resamples; otherwise they are the analytic within-frame and, when
-requested, hybrid linking covariances used by the reported tests. With
-several item sets and `boot_reps = 0`, `cov_delta` and the corresponding
-common-unit standard errors are unavailable because set-link uncertainty
-has not been estimated. The requested, usable and failed uncertainty
-replicates used by the returned uncertainty method are reported as
-`boot_reps_requested`, `boot_reps_used` and `boot_reps_failed`; the
-hybrid set-link counts are repeated inside `linking`. When a full
-bootstrap was requested, its requested, attempted, usable and failed
-counts are retained separately in the corresponding `full_boot_reps_*`
-components, including when the fit falls back to hybrid standard errors.
-See the extended frame of reference vignette for their interpretation.
-If the within-frame calibration does not converge, its covariance
-blocks, standard errors and all later inferential probabilities are
-withheld. Failure of only a set link does not invalidate the already
-converged within-frame calibration or group-unit estimates, but
-common-unit item, frame and person uncertainty is withheld because it
-depends on that link, including the standard errors in `score_curves`.
+person location and exact observed-item pattern, one row block per
+design and labelled as in
+[`test_information`](https://drjoshmcgrane.github.io/rasch/reference/test_information.md)),
+`efrm_vs_rasch`, and `linking`, the person support used for unit
+inference in `unit_support`, and the active covariance blocks in
+`unit_cov`. For a full-bootstrap fit, all blocks in `unit_cov` are
+calculated from the same usable person resamples; otherwise they are the
+analytic within-frame and, when requested, hybrid linking covariances
+used by the reported tests. With several item sets and `boot_reps = 0`,
+`cov_delta` and the corresponding common-unit standard errors are
+unavailable because set-link uncertainty has not been estimated. The
+requested, usable and failed uncertainty replicates used by the returned
+uncertainty method are reported as `boot_reps_requested`,
+`boot_reps_used` and `boot_reps_failed`; the hybrid set-link counts are
+repeated inside `linking`. When a full bootstrap was requested, its
+requested, attempted, usable and failed counts are retained separately
+in the corresponding `full_boot_reps_*` components, including when the
+fit falls back to hybrid standard errors. See the extended frame of
+reference vignette for their interpretation. If the within-frame
+calibration does not converge, its covariance blocks, standard errors
+and all later inferential probabilities are withheld. Failure of only a
+set link does not invalidate the already converged within-frame
+calibration or group-unit estimates, but common-unit item, frame and
+person uncertainty is withheld because it depends on that link,
+including the standard errors in `score_curves`.
 
 ## Details
 
@@ -231,18 +236,36 @@ units, which are identified at the linking stage. The accompanying Wald
 omnibus tests provide inference for the group- and set-unit families.
 Their probabilities are Holm-adjusted as one omnibus family; the
 individual unit contrasts form a second Holm-adjusted follow-up family.
-An unavailable probability remains in its declared family. Unit
-estimates are retained for sparse designs, but probabilities require at
-least 50 persons or effective persons in every group. Set-unit inference
-requires at least 50 informative common persons on the strongest
-bottleneck path from every set to the first set, which is used only as
-the support graph's bookkeeping root. Thus a weak upstream link limits a
-terminal set, while a weak redundant edge does not suppress a stronger
-route. Group-unit and dependent set-unit probabilities are withheld when
-any group unit has a reported standard error above 5 log units. The
-estimates and covariance remain descriptive. This check uses the
-returned uncertainty method, including the full bootstrap when
-available.
+Each family counts the distinct hypotheses it declares, available or
+not: the units are centred, so with two groups (or two sets) the two
+reported rows are one hypothesis stated twice and count once, as the
+omnibus rank already does. The second row of such a pair keeps its
+estimate and unadjusted probability, but its adjusted probability and
+flag are withheld, so one difference is not reported as two deviating
+units. Beyond two groups (or two sets) no two reported rows are the same
+hypothesis, so each stays a member: that family is then one larger than
+its free dimension, which leaves the adjustment conservative rather than
+liberal. A bootstrap standard error is a standard deviation over the
+retained replicates, so its contrast is referred to \\t(B-1)\\; an
+analytic standard error keeps the normal reference. The reference is
+reported as `df`. An omnibus Wald test on an estimated (bootstrap)
+covariance is referred to \\F(q, B-q)\\ on the same grounds, reported as
+`df`, `df2` and `f`, so that a one-dimensional omnibus and its unit
+contrast report the same probability; an analytic covariance keeps the
+chi-square reference. This holds for every omnibus Wald test the fit
+reports, including the crossed group-unit decomposition in
+`phi_factorial_tests`, so one printed fit never refers two tests on the
+same draws to two different references. Unit estimates are retained for
+sparse designs, but probabilities require at least 50 persons or
+effective persons in every group. Set-unit inference requires at least
+50 informative common persons on the strongest bottleneck path from
+every set to the first set, which is used only as the support graph's
+bookkeeping root. Thus a weak upstream link limits a terminal set, while
+a weak redundant edge does not suppress a stronger route. Group-unit and
+dependent set-unit probabilities are withheld when any group unit has a
+reported standard error above 5 log units. The estimates and covariance
+remain descriptive. This check uses the returned uncertainty method,
+including the full bootstrap when available.
 
 The model assumes that an item retains its location and discrimination
 across the frames in which it appears, apart from the frame unit.

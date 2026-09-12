@@ -162,17 +162,18 @@ set-unit ratio of 1.30 and a group-unit ratio of 1.10.</p>
 <span><span class="co">#&gt; Equal-unit comparison: 2(ll_EFRM - ll_equal) = 20.620 with 1 extra unit parameter(s)</span></span>
 <span><span class="co">#&gt; (composite likelihood: descriptive; informative for group units (phi))</span></span>
 <span><span class="co">#&gt; Omnibus Wald tests of equal units (Holm-adjusted family):</span></span>
-<span><span class="co">#&gt;               term df   wald       p   p_adj significant</span></span>
-<span><span class="co">#&gt;  group units (phi)  1  7.442   0.006   0.006           *</span></span>
-<span><span class="co">#&gt;  set units (alpha)  1 16.034 &lt; 0.001 &lt; 0.001           *</span></span>
+<span><span class="co">#&gt;               term df df2   wald      f       p   p_adj significant</span></span>
+<span><span class="co">#&gt;  group units (phi)  1 Inf  7.442  7.442   0.006   0.006           *</span></span>
+<span><span class="co">#&gt;  set units (alpha)  1  49 16.034 16.034 &lt; 0.001 &lt; 0.001           *</span></span>
 <span><span class="co">#&gt; Holm-adjusted exploratory unit contrasts (H0: unit = 1):</span></span>
-<span><span class="co">#&gt;        parameter estimate    se      z       p   p_adj significant</span></span>
-<span><span class="co">#&gt;      log phi[g1]   -0.109 0.040 -2.728   0.006   0.013           *</span></span>
-<span><span class="co">#&gt;      log phi[g2]    0.109 0.040  2.728   0.006   0.013           *</span></span>
-<span><span class="co">#&gt;  log alpha[set1]   -0.174 0.043 -4.004 &lt; 0.001 &lt; 0.001           *</span></span>
-<span><span class="co">#&gt;  log alpha[set2]    0.174 0.043  4.004 &lt; 0.001 &lt; 0.001           *</span></span>
+<span><span class="co">#&gt;        parameter estimate    se      z  df       p   p_adj significant</span></span>
+<span><span class="co">#&gt;      log phi[g1]   -0.109 0.040 -2.728 Inf   0.006   0.006           *</span></span>
+<span><span class="co">#&gt;      log phi[g2]    0.109 0.040  2.728 Inf   0.006                    </span></span>
+<span><span class="co">#&gt;  log alpha[set1]   -0.174 0.043 -4.004  49 &lt; 0.001 &lt; 0.001           *</span></span>
+<span><span class="co">#&gt;  log alpha[set2]    0.174 0.043  4.004  49 &lt; 0.001                    </span></span>
+<span><span class="co">#&gt; (the units are centred: the second row of a two-row family restates the first, so its adjustment is withheld)</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; Notes: person measures use the weighted score; per-group score curves replace the raw-score table (see score_curves); a universal raw-score conversion is not defined across the expanded frame response cells; use score_curves and design-specific information</span></span></code></pre></div>
+<span><span class="co">#&gt; Notes: person measures use the weighted score; per-group score curves replace the raw-score table (see score_curves); a universal raw-score conversion is not defined across the expanded frame response cells; use score_curves and design-specific information; two centred unit rows are one hypothesis: the adjusted probability and flag are reported on the first row of the pair and withheld on the second, which restates it</span></span></code></pre></div>
 <p>The principal model-specific tables are:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span><span class="op">$</span><span class="va">phi_table</span>       <span class="co"># person-group units</span></span>
@@ -307,23 +308,26 @@ refits with unidentified group units are also discarded. The conditional
 calibration checks the exact likelihood curvature as well as the score.
 Stationary saddles and flat solutions are refused; the same check
 applies to bootstrap refits. Saved frame fits without a current
-likelihood-check record must be refitted before reopening in the app;
-their source files remain unchanged. The alpha–phi cross-covariance has
-the same usable-draw rule and is withheld if it cannot be estimated. A
-full bootstrap that falls below its minimum returns hybrid standard
+likelihood-check record must be refitted before reopening in the app. So
+must an extended frame fit whose stored score curves predate the shared
+design enumeration, since their designs and labels are no longer the
+ones <code><a href="../reference/test_information.html">test_information()</a></code> and the curve plots would give.
+Neither refusal alters the source file. The alpha–phi cross-covariance
+has the same usable-draw rule and is withheld if it cannot be estimated.
+A full bootstrap that falls below its minimum returns hybrid standard
 errors instead, retaining its attempted, usable and failed counts in
 <code>full_boot_reps_*</code>.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span><span class="op">$</span><span class="va">efrm_vs_rasch</span><span class="op">$</span><span class="va">unit_omnibus</span></span>
-<span><span class="co">#&gt;               term df   wald       p   p_adj significant</span></span>
-<span><span class="co">#&gt;  group units (phi)  1  7.442   0.006   0.006           *</span></span>
-<span><span class="co">#&gt;  set units (alpha)  1 16.034 &lt; 0.001 &lt; 0.001           *</span></span>
+<span><span class="co">#&gt;               term df df2   wald      f       p   p_adj significant</span></span>
+<span><span class="co">#&gt;  group units (phi)  1 Inf  7.442  7.442   0.006   0.006           *</span></span>
+<span><span class="co">#&gt;  set units (alpha)  1  49 16.034 16.034 &lt; 0.001 &lt; 0.001           *</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">efrm_vs_rasch</span><span class="op">$</span><span class="va">unit_tests</span></span>
-<span><span class="co">#&gt;        parameter estimate    se      z       p   p_adj significant</span></span>
-<span><span class="co">#&gt;      log phi[g1]   -0.109 0.040 -2.728   0.006   0.013           *</span></span>
-<span><span class="co">#&gt;      log phi[g2]    0.109 0.040  2.728   0.006   0.013           *</span></span>
-<span><span class="co">#&gt;  log alpha[set1]   -0.174 0.043 -4.004 &lt; 0.001 &lt; 0.001           *</span></span>
-<span><span class="co">#&gt;  log alpha[set2]    0.174 0.043  4.004 &lt; 0.001 &lt; 0.001           *</span></span></code></pre></div>
+<span><span class="co">#&gt;        parameter estimate    se      z  df       p   p_adj significant</span></span>
+<span><span class="co">#&gt;      log phi[g1]   -0.109 0.040 -2.728 Inf   0.006   0.006           *</span></span>
+<span><span class="co">#&gt;      log phi[g2]    0.109 0.040  2.728 Inf   0.006                    </span></span>
+<span><span class="co">#&gt;  log alpha[set1]   -0.174 0.043 -4.004  49 &lt; 0.001 &lt; 0.001           *</span></span>
+<span><span class="co">#&gt;  log alpha[set2]    0.174 0.043  4.004  49 &lt; 0.001</span></span></code></pre></div>
 <p>The omnibus Wald tests assess the set- and group-unit families. Their
 probabilities are adjusted together by Holm’s method. Individual unit
 contrasts form a separate Holm-adjusted follow-up family. The raw

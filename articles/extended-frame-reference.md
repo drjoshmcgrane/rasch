@@ -86,17 +86,18 @@ fit
 #> Equal-unit comparison: 2(ll_EFRM - ll_equal) = 20.620 with 1 extra unit parameter(s)
 #> (composite likelihood: descriptive; informative for group units (phi))
 #> Omnibus Wald tests of equal units (Holm-adjusted family):
-#>               term df   wald       p   p_adj significant
-#>  group units (phi)  1  7.442   0.006   0.006           *
-#>  set units (alpha)  1 16.034 < 0.001 < 0.001           *
+#>               term df df2   wald      f       p   p_adj significant
+#>  group units (phi)  1 Inf  7.442  7.442   0.006   0.006           *
+#>  set units (alpha)  1  49 16.034 16.034 < 0.001 < 0.001           *
 #> Holm-adjusted exploratory unit contrasts (H0: unit = 1):
-#>        parameter estimate    se      z       p   p_adj significant
-#>      log phi[g1]   -0.109 0.040 -2.728   0.006   0.013           *
-#>      log phi[g2]    0.109 0.040  2.728   0.006   0.013           *
-#>  log alpha[set1]   -0.174 0.043 -4.004 < 0.001 < 0.001           *
-#>  log alpha[set2]    0.174 0.043  4.004 < 0.001 < 0.001           *
+#>        parameter estimate    se      z  df       p   p_adj significant
+#>      log phi[g1]   -0.109 0.040 -2.728 Inf   0.006   0.006           *
+#>      log phi[g2]    0.109 0.040  2.728 Inf   0.006                    
+#>  log alpha[set1]   -0.174 0.043 -4.004  49 < 0.001 < 0.001           *
+#>  log alpha[set2]    0.174 0.043  4.004  49 < 0.001                    
+#> (the units are centred: the second row of a two-row family restates the first, so its adjustment is withheld)
 #> 
-#> Notes: person measures use the weighted score; per-group score curves replace the raw-score table (see score_curves); a universal raw-score conversion is not defined across the expanded frame response cells; use score_curves and design-specific information
+#> Notes: person measures use the weighted score; per-group score curves replace the raw-score table (see score_curves); a universal raw-score conversion is not defined across the expanded frame response cells; use score_curves and design-specific information; two centred unit rows are one hypothesis: the adjusted probability and flag are reported on the first row of the pair and withheld on the second, which restates it
 ```
 
 The principal model-specific tables are:
@@ -248,25 +249,29 @@ refits with unidentified group units are also discarded. The conditional
 calibration checks the exact likelihood curvature as well as the score.
 Stationary saddles and flat solutions are refused; the same check
 applies to bootstrap refits. Saved frame fits without a current
-likelihood-check record must be refitted before reopening in the app;
-their source files remain unchanged. The alpha–phi cross-covariance has
-the same usable-draw rule and is withheld if it cannot be estimated. A
-full bootstrap that falls below its minimum returns hybrid standard
-errors instead, retaining its attempted, usable and failed counts in
-`full_boot_reps_*`.
+likelihood-check record must be refitted before reopening in the app. So
+must an extended frame fit whose stored score curves predate the shared
+design enumeration, since their designs and labels are no longer the
+ones
+[`test_information()`](https://drjoshmcgrane.github.io/rasch/reference/test_information.md)
+and the curve plots would give. Neither refusal alters the source file.
+The alpha–phi cross-covariance has the same usable-draw rule and is
+withheld if it cannot be estimated. A full bootstrap that falls below
+its minimum returns hybrid standard errors instead, retaining its
+attempted, usable and failed counts in `full_boot_reps_*`.
 
 ``` r
 
 fit$efrm_vs_rasch$unit_omnibus
-#>               term df   wald       p   p_adj significant
-#>  group units (phi)  1  7.442   0.006   0.006           *
-#>  set units (alpha)  1 16.034 < 0.001 < 0.001           *
+#>               term df df2   wald      f       p   p_adj significant
+#>  group units (phi)  1 Inf  7.442  7.442   0.006   0.006           *
+#>  set units (alpha)  1  49 16.034 16.034 < 0.001 < 0.001           *
 fit$efrm_vs_rasch$unit_tests
-#>        parameter estimate    se      z       p   p_adj significant
-#>      log phi[g1]   -0.109 0.040 -2.728   0.006   0.013           *
-#>      log phi[g2]    0.109 0.040  2.728   0.006   0.013           *
-#>  log alpha[set1]   -0.174 0.043 -4.004 < 0.001 < 0.001           *
-#>  log alpha[set2]    0.174 0.043  4.004 < 0.001 < 0.001           *
+#>        parameter estimate    se      z  df       p   p_adj significant
+#>      log phi[g1]   -0.109 0.040 -2.728 Inf   0.006   0.006           *
+#>      log phi[g2]    0.109 0.040  2.728 Inf   0.006                    
+#>  log alpha[set1]   -0.174 0.043 -4.004  49 < 0.001 < 0.001           *
+#>  log alpha[set2]    0.174 0.043  4.004  49 < 0.001
 ```
 
 The omnibus Wald tests assess the set- and group-unit families. Their

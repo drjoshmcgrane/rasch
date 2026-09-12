@@ -10,7 +10,11 @@ one curve per observed item-by-facet pattern for a person, so ratings
 that jointly inform the same person measure are added and mutually
 exclusive designs remain separate. Partly answered sets or facet
 conditions contribute only their observed items; a missing response is
-not treated as an administered item when defining these patterns.
+not treated as an administered item when defining these patterns. Where
+item nonresponse leaves nearly every person a pattern of their own, that
+is what these fits return: an unanswered item carries no information
+about the person who left it, so no pattern is merged into a fuller one
+and no curve of theirs is drawn over a design nobody was administered.
 
 ## Usage
 
@@ -33,7 +37,9 @@ test_information(fit, grid = NULL, items = NULL)
 
   Optional item selection: item names or indices. Every design block is
   restricted to the named items, so a restricted person-item map can
-  carry the information of its own selection.
+  carry the information of its own selection. The `design` labels are
+  those of the restricted blocks, and blocks that differ only outside
+  the selection are returned once.
 
 ## Value
 

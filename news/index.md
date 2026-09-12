@@ -2,6 +2,134 @@
 
 ## rasch 1.12.1
 
+- Automatic DIF resolution withholds its verdict when the final
+  assessment could not estimate a single item-term test, instead of
+  reporting that no DIF remains. Where only some tests were estimable
+  the stop reason says how many were not, and the counts of remaining
+  and non-uniform DIF are reported as unavailable rather than as zero.
+  Saved resolutions from earlier versions are dropped when a project is
+  reopened.
+
+- Planned DIF contrasts withhold only the affected item when a split
+  refit is refused, and say why, instead of abandoning the whole call.
+  The refusal reason is reported in place of an unrelated
+  response-category note.
+
+- A linear trend across an ordered factor is no longer withheld because
+  the middle level carries the rounding residue that
+  [`contr.poly()`](https://rdrr.io/r/stats/contrast.html) leaves in
+  place of an exact zero. Contrast weights below a relative tolerance
+  are zeroed, so a level with no weight is no longer treated as a
+  required cell. Saved planned contrasts from earlier versions are
+  dropped on reopening.
+
+- The notes recording which requested DIF tests were not estimable reach
+  every surface that reports the analysis: the console, the HTML report,
+  the Word and PDF report, and the saved summary, not only the app.
+
+- Item and person tables in the app colour and embolden cells by their
+  own value again. A conditional style was passed to the table as a
+  function where an expression was expected, so every flag was decided
+  from the row index: whole columns read as misfitting or significant,
+  and residual and DIF magnitude flags never appeared.
+
+- Switching an analysis to Comparative Judgement clears the Rasch
+  results that do not carry over, so a CJ analysis can be saved after
+  planned contrasts, automatic DIF resolution or a tailored analysis was
+  run on the same data.
+
+- Uploaded equating references, Comparative Judgement banks and item
+  panel maps are checked when they are supplied rather than when the
+  analysis is saved. An unusable upload is refused at the point of
+  upload and leaves the rest of the analysis saveable.
+
+- The app’s dependence and spread panels print the note explaining why a
+  statistic was withheld, as the console does, rather than an
+  unexplained NA.
+
+- [`sim_recovery()`](https://drjoshmcgrane.github.io/rasch/reference/sim_recovery.md)
+  accepts a fit made without an identifier column, matching persons on
+  their responses rather than on labels the fit never held, and accepts
+  a fit whose estimator dropped an item with no variation. Both cases
+  previously failed with a claim that the fit did not belong to the
+  simulation. A person-to-group allocation that differs from the planted
+  one is still refused.
+
+- Test characteristic, test information and targeting displays enumerate
+  the administration designs actually observed. Item-level missingness
+  no longer produces one curve per person, and a design that no person
+  was administered is never formed. Where more designs exist than the
+  palette can name, the legend counts them instead of cycling colours.
+
+- `test_information(items = )` labels each curve with the items that
+  produced it, and no longer returns a curve twice.
+
+- Extended frame score curves use the same design enumeration and labels
+  as
+  [`test_information()`](https://drjoshmcgrane.github.io/rasch/reference/test_information.md)
+  and the curve plots, so a fit describes its designs one way. A design
+  label always names its item set, and a set or item name containing the
+  separator is quoted. Saved extended frame analyses holding the earlier
+  curves must be refitted before reopening; their source files remain
+  unchanged.
+
+- The EFRM unit-test family counts the hypotheses that are free. With
+  two groups or two sets the second reported coordinate restates the
+  first, and now leaves its adjusted probability and flag to the row it
+  restates instead of being counted twice.
+
+- `frame_invariance(se_method = "bootstrap")` refers its Wald statistics
+  to a t distribution on the bootstrap degrees of freedom rather than to
+  the normal. A 30-draw bootstrap rejected an invariant item about 6.6
+  per cent of the time at the nominal 5 per cent.
+
+- The two-panel Comparative Judgement frame family counts the single
+  panel-unit hypothesis once, so a panel-unit difference is reported
+  with the evidence it has and the step-down multiplier for the scale
+  rows is the number of distinct questions.
+
+- [`btl_equate()`](https://drjoshmcgrane.github.io/rasch/reference/btl_equate.md)
+  records that its precision-weighted shift standard error treats the
+  estimated weights as fixed, which understates the shift’s uncertainty
+  in small panels.
+
+- [`btl_dif()`](https://drjoshmcgrane.github.io/rasch/reference/btl_dif.md)
+  no longer reports the judge-clustered chi-square boilerplate as a
+  finding about a particular object.
+
+- Explanatory coefficient tests refer to a t distribution on the
+  residual degrees of freedom for a fit without repeated persons. The
+  normal reference rejected a true null about 8.6 per cent of the time
+  at the nominal 5 per cent with the smallest supported person count.
+
+- The item-fit bootstrap keeps the observed class-interval count in
+  every replicate under the `"resample"`, `"normal"` and `"fixed"`
+  generators, so the null and the observed statistic use the same number
+  of intervals. Probabilities no longer depend on which side of a
+  50-person boundary the sample happens to sit.
+
+- [`dimensionality_test()`](https://drjoshmcgrane.github.io/rasch/reference/dimensionality_test.md)
+  reports the difference between the two subsets’ mean estimates as a
+  description and no longer as a paired t-test. The test rejected on
+  every unidimensional replicate whenever the subsets differed in
+  difficulty, which is targeting rather than dimensionality. Saved
+  person-subset tests are dropped when a project is reopened.
+
+- Printing a dependence result saved by an earlier version reports its
+  statistic again instead of failing, and a withheld item-trait
+  probability prints as unavailable rather than as an empty value, in
+  the console and in the saved summary alike.
+
+- Notes containing parentheses or brackets appear as prose in the Word,
+  PDF and HTML reports. They were escaped in a way the report renderer
+  read as mathematics.
+
+- The simulation-validation studies run from the tree as committed: the
+  conditional DIF bootstrap confirmation pins the committed helper, the
+  item-fit interval checker verifies against the current sources, and
+  the README describes the recorded dimensionality guard results and how
+  to reproduce them.
+
 - DIF magnitudes leave the ETS category unavailable when a required test
   probability is unavailable or its standard error is zero, rather than
   treating the missing test as evidence for category A or B.

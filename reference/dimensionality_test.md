@@ -96,17 +96,23 @@ confidence interval, the sample sizes (`n` used, `n_excluded_extreme`),
 the item split and its source, a `multidimensional` verdict, the
 corresponding uncalibrated `binomial_multidimensional` reading, a
 `caution` note when the subtests fall short of `min_score_points`, and
-`paired_t`, the paired t-test of the two subset means (the group-level
-comparison, which requires pairing because both estimates come from the
-same persons). With `B > 0` the list also carries `p_boot`, the
-bootstrap probability of a proportion at least as large as the observed
-one under the fitted unidimensional model; `prop_null`, the mean
-replicate proportion (the rate the split produces when nothing is
-there); `bootstrap_resolution`, the smallest attainable bootstrap
-probability; and `bootstrap`, the replicate proportions with the counts
-requested, used, non-converged and failed. When the comparison itself is
+`subset_mean_difference`, the mean and standard deviation of the
+person-level differences between the two subset estimates, reported
+descriptively with the `note` that no test accompanies them (see
+Details). With `B > 0` the list also carries `p_boot`, the bootstrap
+probability of a proportion at least as large as the observed one under
+the fitted unidimensional model; `prop_null`, the mean replicate
+proportion (the rate the split produces when nothing is there);
+`bootstrap_resolution`, the smallest attainable bootstrap probability;
+and `bootstrap`, the replicate proportions with the counts requested,
+used, non-converged and failed. When the comparison itself is
 unavailable (undefined split, degenerate subsets, too few persons) the
-list carries a `note` explaining why and `multidimensional = NA`.
+list carries a `note` explaining why and `multidimensional = NA`. Every
+result carries `algorithm`, the stamp of the calculation that produced
+it; a saved result without the current stamp reported the superseded
+paired t-test of the subset means, so an analysis file carrying one
+opens with that result dropped and a warning, and the rest of the
+analysis intact.
 
 ## Details
 
@@ -133,6 +139,19 @@ one-sided bootstrap probability cannot be smaller than `1/(B_used + 1)`.
 If that floor exceeds `alpha`, a data-driven split has no rejection
 region and its verdict is withheld. A split fixed in advance retains its
 binomial verdict in that case.
+
+The mean difference between the two subset estimates is reported but not
+tested. Each subset estimate is a weighted-likelihood estimate on a
+short test, and the two subsets differ in difficulty, so their
+estimation bias differs systematically: under a perfectly unidimensional
+Rasch model the expected difference is non-zero whenever the subsets are
+not matched in targeting, and it grows relative to its standard error
+with the number of persons. A t-test of that difference therefore tests
+the targeting of the split rather than its dimensionality – it rejects
+for every sample large enough on unidimensional data – so the difference
+is reported as a description of the split and the inference is withheld.
+The person-level comparisons, whose standard errors carry each person's
+subset uncertainty, are the test.
 
 ## References
 

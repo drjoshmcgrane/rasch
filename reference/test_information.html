@@ -15,7 +15,11 @@ observed item-by-facet pattern for a person, so ratings that jointly
 inform the same person measure are added and mutually exclusive designs
 remain separate. Partly answered sets or facet conditions contribute only
 their observed items; a missing response is not treated as an administered
-item when defining these patterns."><meta property="og:description" content="Fisher information over a grid of person locations, with the corresponding
+item when defining these patterns. Where item nonresponse leaves nearly
+every person a pattern of their own, that is what these fits return:
+an unanswered item carries no information about the person who left it,
+so no pattern is merged into a fuller one and no curve of theirs is
+drawn over a design nobody was administered."><meta property="og:description" content="Fisher information over a grid of person locations, with the corresponding
 standard error of measurement. Ordinary Rasch fits return one whole-test
 curve. EFRM fits return one curve per person group and per item
 administration pattern actually observed within that group (in a linking
@@ -25,7 +29,11 @@ observed item-by-facet pattern for a person, so ratings that jointly
 inform the same person measure are added and mutually exclusive designs
 remain separate. Partly answered sets or facet conditions contribute only
 their observed items; a missing response is not treated as an administered
-item when defining these patterns."><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch/logo.svg"></head><body>
+item when defining these patterns. Where item nonresponse leaves nearly
+every person a pattern of their own, that is what these fits return:
+an unanswered item carries no information about the person who left it,
+so no pattern is merged into a fuller one and no curve of theirs is
+drawn over a design nobody was administered."><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch/logo.svg"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -76,7 +84,11 @@ observed item-by-facet pattern for a person, so ratings that jointly
 inform the same person measure are added and mutually exclusive designs
 remain separate. Partly answered sets or facet conditions contribute only
 their observed items; a missing response is not treated as an administered
-item when defining these patterns.</p>
+item when defining these patterns. Where item nonresponse leaves nearly
+every person a pattern of their own, that is what these fits return:
+an unanswered item carries no information about the person who left it,
+so no pattern is merged into a fuller one and no curve of theirs is
+drawn over a design nobody was administered.</p>
     </div>
 
     <div class="section level2">
@@ -99,7 +111,9 @@ item when defining these patterns.</p>
 <dt id="arg-items">items<a class="anchor" aria-label="anchor" href="#arg-items"></a></dt>
 <dd><p>Optional item selection: item names or indices. Every design
 block is restricted to the named items, so a restricted person-item map
-can carry the information of its own selection.</p></dd>
+can carry the information of its own selection. The <code>design</code> labels
+are those of the restricted blocks, and blocks that differ only outside
+the selection are returned once.</p></dd>
 
 </dl></div>
     <div class="section level2">

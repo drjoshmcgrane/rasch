@@ -172,10 +172,11 @@ see <code><a href="rasch_rng.html">rasch_rng</a></code>.</p></dd>
   <code>n_excluded_extreme</code>), the item split and its source, a
   <code>multidimensional</code> verdict, the corresponding uncalibrated
   <code>binomial_multidimensional</code> reading, a <code>caution</code> note when the
-  subtests fall short of <code>min_score_points</code>, and <code>paired_t</code>,
-  the paired t-test of the two subset means (the group-level comparison,
-  which requires pairing because both estimates come from the same
-  persons). With <code>B &gt; 0</code> the list also carries <code>p_boot</code>, the
+  subtests fall short of <code>min_score_points</code>, and
+  <code>subset_mean_difference</code>, the mean and standard deviation of the
+  person-level differences between the two subset estimates, reported
+  descriptively with the <code>note</code> that no test accompanies them (see
+  Details). With <code>B &gt; 0</code> the list also carries <code>p_boot</code>, the
   bootstrap probability of a proportion at least as large as the observed
   one under the fitted unidimensional model; <code>prop_null</code>, the mean
   replicate proportion (the rate the split produces when nothing is
@@ -184,7 +185,11 @@ see <code><a href="rasch_rng.html">rasch_rng</a></code>.</p></dd>
   counts requested, used, non-converged and failed. When the comparison
   itself is unavailable (undefined split, degenerate subsets, too few
   persons) the list carries a <code>note</code> explaining why and
-  <code>multidimensional = NA</code>.</p>
+  <code>multidimensional = NA</code>. Every result carries <code>algorithm</code>,
+  the stamp of the calculation that produced it; a saved result without
+  the current stamp reported the superseded paired t-test of the subset
+  means, so an analysis file carrying one opens with that result dropped
+  and a warning, and the rest of the analysis intact.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -211,6 +216,18 @@ A one-sided bootstrap probability cannot be smaller than
 <code>1/(B_used + 1)</code>. If that floor exceeds <code>alpha</code>, a data-driven
 split has no rejection region and its verdict is withheld. A split fixed
 in advance retains its binomial verdict in that case.</p>
+<p>The mean difference between the two subset estimates is reported but not
+tested. Each subset estimate is a weighted-likelihood estimate on a short
+test, and the two subsets differ in difficulty, so their estimation bias
+differs systematically: under a perfectly unidimensional Rasch model the
+expected difference is non-zero whenever the subsets are not matched in
+targeting, and it grows relative to its standard error with the number of
+persons. A t-test of that difference therefore tests the targeting of the
+split rather than its dimensionality – it rejects for every sample large
+enough on unidimensional data – so the difference is reported as a
+description of the split and the inference is withheld. The person-level
+comparisons, whose standard errors carry each person's subset
+uncertainty, are the test.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>

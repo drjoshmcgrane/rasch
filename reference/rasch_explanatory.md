@@ -86,15 +86,14 @@ applies the first-order Kent calibration required for the pairwise
 composite likelihood. When an identifier occurs on more than one
 response row, coefficient covariance is clustered by person. A
 linearised delete-one-person correction accounts for finite-cluster
-leverage without refitting the model once per person. Supported
-repeated-person fits use a \\t\\ reference with degrees of freedom equal
-to the number of person clusters contributing conditional information
-minus one; inference is withheld when the calibration lacks enough
-independent information. Supported fits without repeated identifiers use
-the limiting normal reference. Holm adjustment covers the coefficient
-family. With few persons and unequal numbers of response rows, these
-approximate tests can still be mildly liberal; the correction does not
-guarantee nominal coverage in small samples.
+leverage without refitting the model once per person. Supported fits use
+a \\t\\ reference with degrees of freedom equal to the number of
+independent person units contributing conditional information minus one,
+whether or not identifiers repeat; inference is withheld when the
+calibration lacks enough independent information. Holm adjustment covers
+the coefficient family. With few persons and unequal numbers of response
+rows, these approximate tests can still be mildly liberal; the
+correction does not guarantee nominal coverage in small samples.
 
 ## References
 
@@ -127,8 +126,8 @@ fit <- rasch_explanatory(X, predictors = q,
                          formula = ~ operation + format)
 fit$est$coefficients
 #>       term estimate    se     t  df       p   p_adj
-#>  operation    0.697 0.070 9.996 Inf < 0.001 < 0.001
-#>    formatB    0.423 0.071 5.925 Inf < 0.001 < 0.001
+#>  operation    0.697 0.070 9.996 449 < 0.001 < 0.001
+#>    formatB    0.423 0.071 5.925 449 < 0.001 < 0.001
 explanatory_test(fit)
 #>  model parameters free_parameters r_squared r_squared_adj              r2_basis
 #>   LLTM          2               7     0.945         0.923 threshold calibration

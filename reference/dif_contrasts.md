@@ -101,12 +101,15 @@ strata containing all of its non-zero target cells; an unsupported
 planned contrast is not estimated but remains in the multiplicity count.
 Once these weights are defined, every weighted cell must meet `min_n`
 for the item; sparse cells are not dropped and the remaining weights are
-not renormalised. Independent between-person cells are then combined
-with a Welch–Satterthwaite reference. If a required between- person cell
-has fewer than two complete person scores, residual inference is
-withheld rather than changing the marginal contrast by dropping that
-cell. The resolved logit estimate is retained, but its calibration-based
-standard error is withheld because it does not include repeated-person
+not renormalised. A level a contrast places no weight on is not
+required: the middle level of an odd-length linear trend carries weight
+zero, and so restricts neither the nuisance strata nor the persons the
+test uses. Independent between-person cells are then combined with a
+Welch–Satterthwaite reference. If a required between- person cell has
+fewer than two complete person scores, residual inference is withheld
+rather than changing the marginal contrast by dropping that cell. The
+resolved logit estimate is retained, but its calibration-based standard
+error is withheld because it does not include repeated-person
 dependence.
 
 For independent rows, a contrast with weights \\\mathbf{c}\\ is
@@ -122,10 +125,12 @@ contrast. Contrasts require a converged calibration. For independent
 rows, an unavailable or non-positive- semidefinite resolved-location
 covariance leaves the logit estimate descriptive and causes Wald
 inference to be withheld. A contrast with withheld inference remains in
-the adjustment family formed by every requested item and contrast. For
-an MFRM fit, underlying items are pooled over their facet cells by
-default. EFRM fits are excluded because the required split refit would
-discard the frame units.
+the adjustment family formed by every requested item and contrast. When
+the split refit that resolves one item's locations cannot be calibrated,
+that item's contrasts are withheld with the reason and the other items
+are unaffected. For an MFRM fit, underlying items are pooled over their
+facet cells by default. EFRM fits are excluded because the required
+split refit would discard the frame units.
 
 ## References
 

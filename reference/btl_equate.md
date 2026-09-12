@@ -90,32 +90,39 @@ Let \\d_j\\ be the location difference for common object \\j\\ and
 is the precision-weighted mean \$\$\hat s=\frac{\sum_j d_j/v_j}{\sum_j
 1/v_j}.\$\$ If fewer than two common objects have usable variances but
 at least two have finite locations, their unweighted mean difference is
-returned as a descriptive fallback and recorded in `shift_method`. An
-exact common anchor determines the shift even when it is the only common
-object with usable uncertainty. Each object is tested using its shifted
-difference \\d_j-\hat s\\. The covariance calculation retains the
-dependence induced by the sum-zero constraints. Drift tests then require
-independent calibrations and at least three common objects with usable,
-positive-semidefinite joint covariance information. Two common objects
-identify a descriptive origin shift, but do not support an object-drift
-test. With `shift = "none"`, the origin is fixed before the comparison
-and each object's variance is the sum of its two marginal variances;
-joint covariance information and a three-object link are unnecessary.
-One common object is sufficient for that fixed-origin comparison;
-estimating a shift still requires at least two. A judge-clustered
-ordinary BTL covariance, or a BTL–EFRM covariance from the judge
-bootstrap, uses finite judge-cluster degrees of freedom. A contrast
-involving only fixed external anchors has exact zero covariance from
-that calibration and therefore uses infinite degrees of freedom even
-when inference for its estimated objects is unavailable. A BTL–EFRM
-location outside the reference set is also limited by the weakest edge
-on its strongest supported path to that reference. A comparison-level
-parametric-bootstrap BTL–EFRM covariance uses the asymptotic normal
-reference instead. Conditional frame errors are preliminary and do not
-support drift inference, including comparisons on a fixed origin. Binary
-fits have no threshold parameters, so their recorded threshold structure
-does not affect compatibility. Polytomous fits must use the same
-category scale and threshold structure.
+returned as a descriptive fallback and recorded in `shift_method`. Every
+error built from those precision weights conditions on them as if the
+two calibrations' standard errors were known: `shift_se`, each drift
+contrast's `se_diff` (and so its probability and `drifting` flag), and
+the equated location errors that carry the shift. Weight uncertainty
+adds a positive term all of them omit, so they understate uncertainty –
+intervals under-cover, drift probabilities run small – when the
+calibrations rest on few judges; a judge resample of both calibrations
+is the weight-aware alternative. An exact common anchor determines the
+shift even when it is the only common object with usable uncertainty.
+Each object is tested using its shifted difference \\d_j-\hat s\\. The
+covariance calculation retains the dependence induced by the sum-zero
+constraints. Drift tests then require independent calibrations and at
+least three common objects with usable, positive-semidefinite joint
+covariance information. Two common objects identify a descriptive origin
+shift, but do not support an object-drift test. With `shift = "none"`,
+the origin is fixed before the comparison and each object's variance is
+the sum of its two marginal variances; joint covariance information and
+a three-object link are unnecessary. One common object is sufficient for
+that fixed-origin comparison; estimating a shift still requires at least
+two. A judge-clustered ordinary BTL covariance, or a BTL–EFRM covariance
+from the judge bootstrap, uses finite judge-cluster degrees of freedom.
+A contrast involving only fixed external anchors has exact zero
+covariance from that calibration and therefore uses infinite degrees of
+freedom even when inference for its estimated objects is unavailable. A
+BTL–EFRM location outside the reference set is also limited by the
+weakest edge on its strongest supported path to that reference. A
+comparison-level parametric-bootstrap BTL–EFRM covariance uses the
+asymptotic normal reference instead. Conditional frame errors are
+preliminary and do not support drift inference, including comparisons on
+a fixed origin. Binary fits have no threshold parameters, so their
+recorded threshold structure does not affect compatibility. Polytomous
+fits must use the same category scale and threshold structure.
 
 The `equated` table includes uncertainty in the estimated shift. For
 independent calibrations, with \\y_j=b_j+\hat s\\,

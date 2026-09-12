@@ -199,26 +199,28 @@ deleting or extrapolating an object. Omnibus Wald probabilities are
 Holm-adjusted across the panel-unit, set-unit and set-origin families.
 Individual estimated units form a separate Holm-adjusted follow-up
 family across all three parameter types. Structurally fixed reference
-coordinates are not hypotheses. An unavailable estimated unit remains in
-its predeclared family; an omnibus is withheld rather than reduced when
-one of its requested coordinates is unavailable. Judge-bootstrap
-probabilities require at least six judges and 5.5 effective judges in
-every contributing panel. Each non-reference set also requires eight
-judges and eight effective judges along a supported path to the
-reference set. With redundant links, the path with the strongest
-bottleneck is used. The support is returned in `unit_support`; estimates
-remain descriptive when a probability is withheld. Fits with fewer than
-eight effective judges per panel or 9.5 along a set's reference path
-retain probabilities but report a caution. Set-unit estimates can also
-be attenuated when each object pair has little comparison information.
-In simulation, log-unit bias declined from about -0.11 with 10
-repetitions per pair to less than -0.01 with 100 repetitions. A set
-whose within-set locations have no numerical spread has an unidentified
-unit: its reported unit is `NA`, and the conventional unit one is used
-only to place its objects. In contrast, a positive linking unit driven
-to zero by the cross-set outcomes is an unsupported boundary link and
-raises an error. Such boundary links are also rejected in bootstrap
-refits; they are never replaced by unit one.
+coordinates are not hypotheses. With two panels the centring constraint
+makes the two reported panel units a single hypothesis: it enters that
+family once, and both rows report its adjusted probability. An
+unavailable estimated unit remains in its predeclared family; an omnibus
+is withheld rather than reduced when one of its requested coordinates is
+unavailable. Judge-bootstrap probabilities require at least six judges
+and 5.5 effective judges in every contributing panel. Each non-reference
+set also requires eight judges and eight effective judges along a
+supported path to the reference set. With redundant links, the path with
+the strongest bottleneck is used. The support is returned in
+`unit_support`; estimates remain descriptive when a probability is
+withheld. Fits with fewer than eight effective judges per panel or 9.5
+along a set's reference path retain probabilities but report a caution.
+Set-unit estimates can also be attenuated when each object pair has
+little comparison information. In simulation, log-unit bias declined
+from about -0.11 with 10 repetitions per pair to less than -0.01 with
+100 repetitions. A set whose within-set locations have no numerical
+spread has an unidentified unit: its reported unit is `NA`, and the
+conventional unit one is used only to place its objects. In contrast, a
+positive linking unit driven to zero by the cross-set outcomes is an
+unsupported boundary link and raises an error. Such boundary links are
+also rejected in bootstrap refits; they are never replaced by unit one.
 
 ## References
 

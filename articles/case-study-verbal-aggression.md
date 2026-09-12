@@ -145,18 +145,18 @@ effects <- fit_explanatory$est$coefficients
 effects[effects$p_adj < .05,
         c("term", "estimate", "se", "t", "df", "p", "p_adj")]
 #>                        term estimate    se      t  df       p   p_adj
-#>                 situationS3    0.952 0.121  7.878 Inf < 0.001 < 0.001
-#>              behaviourScold    0.619 0.109  5.651 Inf < 0.001 < 0.001
-#>              behaviourShout    1.631 0.130 12.549 Inf < 0.001 < 0.001
-#>                  threshold2    0.815 0.184  4.423 Inf < 0.001 < 0.001
-#>        situationS2:modewant   -0.416 0.081 -5.119 Inf < 0.001 < 0.001
-#>        situationS3:modewant   -0.507 0.104 -4.892 Inf < 0.001 < 0.001
-#>  situationS3:behaviourScold    0.425 0.106  4.015 Inf < 0.001 < 0.001
-#>  situationS4:behaviourScold    0.329 0.098  3.375 Inf < 0.001   0.010
-#>  situationS3:behaviourShout    0.618 0.134  4.628 Inf < 0.001 < 0.001
-#>  situationS4:behaviourShout    0.425 0.122  3.487 Inf < 0.001   0.007
-#>     modewant:behaviourShout   -0.574 0.114 -5.038 Inf < 0.001 < 0.001
-#>   behaviourShout:threshold2   -0.531 0.175 -3.026 Inf   0.002   0.032
+#>                 situationS3    0.952 0.121  7.878 309 < 0.001 < 0.001
+#>              behaviourScold    0.619 0.109  5.651 309 < 0.001 < 0.001
+#>              behaviourShout    1.631 0.130 12.549 309 < 0.001 < 0.001
+#>                  threshold2    0.815 0.184  4.423 309 < 0.001 < 0.001
+#>        situationS2:modewant   -0.416 0.081 -5.119 309 < 0.001 < 0.001
+#>        situationS3:modewant   -0.507 0.104 -4.892 309 < 0.001 < 0.001
+#>  situationS3:behaviourScold    0.425 0.106  4.015 309 < 0.001   0.001
+#>  situationS4:behaviourScold    0.329 0.098  3.375 309 < 0.001   0.012
+#>  situationS3:behaviourShout    0.618 0.134  4.628 309 < 0.001 < 0.001
+#>  situationS4:behaviourShout    0.425 0.122  3.487 309 < 0.001   0.008
+#>     modewant:behaviourShout   -0.574 0.114 -5.038 309 < 0.001 < 0.001
+#>   behaviourShout:threshold2   -0.531 0.175 -3.026 309   0.003   0.035
 ```
 
 For example, the positive coefficients for `behaviourScold` and

@@ -131,19 +131,22 @@ response format.</p>
 <span><span class="op">)</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">est</span><span class="op">$</span><span class="va">coefficients</span></span>
 <span><span class="co">#&gt;             term estimate    se       t  df       p   p_adj</span></span>
-<span><span class="co">#&gt;  operationrecall   -0.851 0.069 -12.294 Inf &lt; 0.001 &lt; 0.001</span></span>
-<span><span class="co">#&gt;   formatselected   -0.327 0.071  -4.606 Inf &lt; 0.001 &lt; 0.001</span></span></code></pre></div>
+<span><span class="co">#&gt;  operationrecall   -0.851 0.069 -12.294 461 &lt; 0.001 &lt; 0.001</span></span>
+<span><span class="co">#&gt;   formatselected   -0.327 0.071  -4.606 461 &lt; 0.001 &lt; 0.001</span></span></code></pre></div>
 <p>If the same person contributes more than one response row, the
 coefficient covariance is clustered by person. Supported repeated-person
-fits use a linearised delete-one-person covariance correction and a
-<span class="math inline">\(t\)</span> reference with degrees of freedom
-equal to the number of person clusters contributing conditional
-information minus one. Coefficient inference is withheld when the
-calibration lacks enough independent information; supported fits without
-repeated identifiers use the limiting normal reference. Holm adjustment
-covers the coefficient family. With few persons and unequal numbers of
-response rows, these approximate tests can still be mildly liberal. The
-correction does not guarantee nominal small-sample coverage.</p>
+fits use a linearised delete-one-person covariance correction. Every
+supported fit takes a <span class="math inline">\(t\)</span> reference
+with degrees of freedom equal to the number of independent person units
+contributing conditional information minus one, whether or not
+identifiers repeat: one response row per person still leaves a finite
+count of sampling units, and reading that count as a limiting normal
+rejects a true null more often than the printed probability states.
+Coefficient inference is withheld when the calibration lacks enough
+independent information. Holm adjustment covers the coefficient family.
+With few persons and unequal numbers of response rows, these approximate
+tests can still be mildly liberal. The correction does not guarantee
+nominal small-sample coverage.</p>
 <p>Predictors may be continuous, categorical or ordinal. Numeric vectors
 are continuous and unordered factors are categorical. An ordered factor
 is scored with successive contrasts: each coefficient is the change

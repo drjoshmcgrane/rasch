@@ -141,12 +141,11 @@ calibration required for the pairwise composite likelihood. When an
 identifier occurs on more than one response row, coefficient covariance is
 clustered by person. A linearised delete-one-person correction accounts for
 finite-cluster leverage without refitting the model once per person.
-Supported repeated-person fits use a \(t\) reference
-with degrees of freedom equal to the number of person clusters contributing
-conditional information minus one; inference
-is withheld when the calibration lacks enough independent information.
-Supported fits without repeated identifiers use the limiting normal
-reference. Holm adjustment covers the coefficient family.
+Supported fits use a \(t\) reference with degrees of freedom equal to
+the number of independent person units contributing conditional
+information minus one, whether or not identifiers repeat; inference is
+withheld when the calibration lacks enough independent information.
+Holm adjustment covers the coefficient family.
 With few persons and unequal numbers of response rows, these approximate
 tests can still be mildly liberal; the correction does not guarantee nominal
 coverage in small samples.</p>
@@ -180,8 +179,8 @@ model with an application to the measurement of change. Psychometrika, 59,
 <span class="r-in"><span>                         formula <span class="op">=</span> <span class="op">~</span> <span class="va">operation</span> <span class="op">+</span> <span class="va">format</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">fit</span><span class="op">$</span><span class="va">est</span><span class="op">$</span><span class="va">coefficients</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>       term estimate    se     t  df       p   p_adj</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  operation    0.697 0.070 9.996 Inf &lt; 0.001 &lt; 0.001</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    formatB    0.423 0.071 5.925 Inf &lt; 0.001 &lt; 0.001</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  operation    0.697 0.070 9.996 449 &lt; 0.001 &lt; 0.001</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    formatB    0.423 0.071 5.925 449 &lt; 0.001 &lt; 0.001</span>
 <span class="r-in"><span><span class="fu"><a href="explanatory_test.html">explanatory_test</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  model parameters free_parameters r_squared r_squared_adj              r2_basis</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   LLTM          2               7     0.945         0.923 threshold calibration</span>

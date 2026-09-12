@@ -78,7 +78,14 @@ A list of class `"rasch_resolve_dif"`: the final resolved `fit`, the
 `splits` performed (order, item, factor, partial eta-squared, source
 item, DIF magnitude in logits), the `stopped` reason, the residual `dif`
 table, and the number of distinct source items that still show DIF in
-the final fit. `effects` records the factor model used.
+the final fit. `n_untested` counts the item-term tests the final
+assessment could not estimate although the design could answer them;
+those terms are reported as neither DIF nor no DIF, so the remaining-DIF
+count is a lower bound whenever `n_untested` is positive. A split copy
+answered in one level of its splitting factor only is not counted: its
+term is structurally absent, not lost. Both counts are `NA` when no
+item-term test was estimable at all. `effects` records the factor model
+used.
 
 ## References
 

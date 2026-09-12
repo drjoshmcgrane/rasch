@@ -115,7 +115,9 @@ with one entry per person.
 Several columns define crossed group cells. Their units are returned in
 <code>phi_table</code>; <code>phi_factorial</code> and
 <code>phi_factorial_tests</code> contain the GLS factorial decomposition and
-omnibus Wald tests. Raw probabilities are retained in <code>p</code>; decisions
+omnibus Wald tests, each referred to \(F(q, B-q)\) when the cell-unit
+covariance came from the full bootstrap and to \(\chi^2(q)\) when it
+is analytic. Raw probabilities are retained in <code>p</code>; decisions
 use <code>p_adj</code>, Holm-adjusted across the factorial terms. Structurally
 unidentified units are refused. Very
 imprecise but identified units are retained with a warning.</p></dd>
@@ -196,7 +198,8 @@ generator support.</p></dd>
   <code>alpha_table</code>, <code>set_table</code>, common-unit item and threshold
   tables, group-specific <code>score_curves</code> (expected weighted sufficient
   score and conditional standard error by person location and exact
-  observed-item pattern), <code>efrm_vs_rasch</code>, and
+  observed-item pattern, one row block per design and labelled as in
+  <code><a href="test_information.html">test_information</a></code>), <code>efrm_vs_rasch</code>, and
   <code>linking</code>, the person support used for unit inference in
   <code>unit_support</code>, and the active covariance blocks in
   <code>unit_cov</code>. For a full-bootstrap fit, all blocks in
@@ -294,8 +297,27 @@ This difference is descriptive and contains no information about set units,
 which are identified at the linking stage. The accompanying Wald omnibus
 tests provide inference for the group- and set-unit families. Their
 probabilities are Holm-adjusted as one omnibus family; the individual
-unit contrasts form a second Holm-adjusted follow-up family. An unavailable
-probability remains in its declared family. Unit estimates
+unit contrasts form a second Holm-adjusted follow-up family. Each family
+counts the distinct hypotheses it declares, available or not: the units
+are centred, so with two groups (or two sets) the two reported rows are
+one hypothesis stated twice and count once, as the omnibus rank already
+does. The second row of such a pair keeps its estimate and unadjusted
+probability, but its adjusted probability and flag are withheld, so one
+difference is not reported as two deviating units. Beyond two groups (or
+two sets) no two reported rows are the same hypothesis, so each stays a
+member: that family is then one larger than its free dimension, which
+leaves the adjustment conservative rather than liberal. A bootstrap standard
+error is a standard deviation over the retained replicates, so its
+contrast is referred to \(t(B-1)\); an analytic standard error keeps
+the normal reference. The reference is reported as <code>df</code>. An omnibus
+Wald test on an estimated (bootstrap) covariance is referred to
+\(F(q, B-q)\) on the same grounds, reported as <code>df</code>, <code>df2</code>
+and <code>f</code>, so that a one-dimensional omnibus and its unit contrast
+report the same probability; an analytic covariance keeps the chi-square
+reference. This holds for every omnibus Wald test the fit reports,
+including the crossed group-unit decomposition in
+<code>phi_factorial_tests</code>, so one printed fit never refers two tests on
+the same draws to two different references. Unit estimates
 are retained for sparse designs, but probabilities require at least 50
 persons or effective persons in every group. Set-unit inference requires
 at least 50 informative common persons on the strongest bottleneck path
