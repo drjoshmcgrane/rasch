@@ -718,7 +718,12 @@ plot_btl <- function(fit, band = 2.5) {
 .btl_graded <- function(a, b, x, jd, w, cats, maxit, tol, notes,
                         thr = "free", Z = NULL, ord = NULL, anchors = NULL,
                         object_design = NULL, row_cluster = NULL,
-                        row_replicates = NULL) {
+                        row_replicates = NULL, withheld_notes = TRUE) {
+  # withheld_notes: emit the notes that explain a statistic this engine
+  # withholds from a table the caller may never report. A refit whose
+  # pairwise fit and dependence table are discarded must not carry them,
+  # or engine boilerplate is prefixed as a finding about that caller's
+  # own analysis.
   m <- length(cats) - 1L
   if (m < 1L) stop("polytomous responses need at least two categories")
   if (is.null(row_cluster)) row_cluster <- seq_along(a)
@@ -1372,7 +1377,9 @@ plot_btl <- function(fit, band = 2.5) {
     if (any(carry_small)) {
       dependence$df[carry_small] <- NA_real_
       dependence$p[carry_small] <- NA_real_
-      notes <- c(notes, paste0(
+      # Same rule as the pairwise note: it explains a withheld entry of this
+      # dependence table, so only a caller that reports the table carries it.
+      if (withheld_notes) notes <- c(notes, paste0(
         "carry-over probability withheld with fewer than 30 judges: null ",
         "simulation found mild anti-conservatism at 14 judges; the estimate ",
         "and clustered standard error remain descriptive"))
@@ -1559,7 +1566,9 @@ plot_btl <- function(fit, band = 2.5) {
   total_chisq <- sum(pairs$chisq[used])
   total_df <- sum(used) - np
   if (total_df < 1L) { total_chisq <- NA_real_; total_df <- NA_integer_ }
-  if (!is.null(jd))
+  # The note explains a withheld total_p, so only a caller that reports that
+  # probability should carry it.
+  if (!is.null(jd) && withheld_notes)
     notes <- c(notes, paste(
       "the pairwise chi-square probability is withheld because its row-based",
       "reference does not model within-judge dependence; the statistic remains",
@@ -2106,6 +2115,10 @@ plot_btl_dependence <- function(fit, effect = c("exposure", "carry_over"),
 #' objects are retained in the joint refit. If a resolved-location covariance
 #' is unavailable or not positive semidefinite, the locations and differences
 #' remain descriptive but their uncertainty and tests are withheld.
+#' A note raised by a resolution refit is reported against that object.
+#' Engine notes explaining a statistic this analysis never reports -- the
+#' refit's pairwise chi-square probability and its dependence table's
+#' carry-over probability -- are not carried; the base fit retains them.
 #'
 #' @param fit An ordinary paired-comparison fit from \code{\link{btl}}.
 #' @param factors One judge factor, or a named list containing several. Each
@@ -2682,7 +2695,7 @@ btl_dif <- function(fit, factors, objects = NULL,
       a2, b2, cm$response[rsel], if (is.null(jd_all)) NULL else jd_all[rsel],
       cm$weight[rsel], cats, maxit, tol, character(0), thr = thr,
       Z = if (is.null(Zc)) NULL else Zc[rsel, , drop = FALSE],
-      anchors = fit$anchors),
+      anchors = fit$anchors, withheld_notes = FALSE),
       error = function(e) NULL)
     if (is.null(rf) || !isTRUE(rf$converged)) {
       notes <- c(notes, sprintf(

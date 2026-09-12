@@ -242,7 +242,10 @@ with `Rscript`, loading the in-tree package via `pkgload::load_all(".")`.
   that metric's denominator and counted separately, not treated as no rejection.
   After completion, `Rscript tools/simval/check-item-fit-intervals.R` independently
   reconstructs the rates and Monte Carlo SEs, checks bootstrap resolution,
-  and verifies the accounting and source hashes.
+  and verifies the accounting, the study and harness hashes, and that the
+  three result files agree on one R-source hash. It names both that hash and
+  the working tree's, which later commits move apart, and reconstructs from
+  the recorded outputs either way.
 - `tests/testthat/test-tailored-fixed-calibration.R` checks the final tailored
   scoring fit's anchor contract and refusal of unsupported structural, item-fit,
   DIF and dimensionality refits. Older fits without refit metadata receive the
@@ -336,15 +339,42 @@ with `Rscript`, loading the in-tree package via `pkgload::load_all(".")`.
   any syntax error; run it (and a smoke subset) before trusting the
   reproducibility claim.
 - `results/scree-conditional-reference.csv` records the score-conditional
-  scree study. Across five supported null designs, familywise rejection over
-  ten displayed components was 2.0--5.5%, and 40/1,000 (4.0%) overall. Power
-  for a planted second dimension was 98.5--100% in the complete designs and
-  71.5% in the booklet design. Every supported dataset and all 100,000 inner
-  draws were analysed. A sparse-PCM stress cell analysed 178/200 datasets
-  (2 fits refused and 20 reference analyses unavailable); its conditional
-  familywise rate was 2.8%, with 8,751/8,900 inner draws used. The study is
-  `studies/scree-conditional-reference.R`; its rows carry script hash
-  `7c42ef04e0a145c398cfa46a977c0819` and R-tree hash `17a08ef1fa4c`.
+  scree study as it ran before the conditional reference gained its
+  category-support guard. Across five supported null designs, familywise
+  rejection over ten displayed components was 2.0--5.5%, and 40/1,000 (4.0%)
+  overall. Power for a planted second dimension was 98.5--100% in the complete
+  designs and 71.5% in the booklet design. Every supported dataset and all
+  100,000 inner draws were analysed. A sparse-PCM stress cell analysed
+  178/200 datasets (2 fits refused and 20 reference analyses unavailable);
+  its conditional familywise rate was 2.8%, with 8,751/8,900 inner draws used.
+  The study is `studies/scree-conditional-reference.R`; those rows carry
+  script hash `7c42ef04e0a145c398cfa46a977c0819` and R-tree hash
+  `17a08ef1fa4c`.
+- The reference now refuses a replicate whose conditional draws lose a
+  response category, which retires the sparse-PCM rate above and thins the
+  polytomous cells. `results/scree-conditional-reference-category-guard.csv`
+  reruns the affected cells under the guard, in two invocations of the
+  committed script at `SV_REPS=200 SV_INNER=50`, one with
+  `SV_DESIGNS="PCM,RSM"` and one with `SV_DESIGNS="sparse PCM"` (script hash
+  `d8c136bf74b882d7da8e9c507dc57858`, R-tree hash `31c67c5c3755`). Give each
+  invocation its own `SV_OUTPUT` stem -- say `...-category-guard-poly` and
+  `...-category-guard-sparse` -- and concatenate the two files in full-grid
+  scenario order. The stem defaults to `scree-conditional-reference` and
+  `sv_write()` truncates rather than appends, so omitting `SV_OUTPUT`
+  overwrites the pre-guard record described above, then overwrites itself.
+  The per-cell seed is `710000 + tag * 1000 + r`, where `tag` is the
+  scenario's position in the grid *after* the `SV_DESIGNS` filter, so these
+  rows reproduce only under exactly those two subsets; the full grid, or any
+  other subset, silently draws different replicates for the same cell.
+  The guard refused 8 of 200 PCM null datasets and 14 of 200 PCM datasets
+  with a planted second dimension, and no RSM dataset. On the datasets it
+  keeps, familywise null rejection was 4.2% (192 PCM) and 4.0% (200 RSM),
+  and power was 100% in both; these are fresh seeds, not the pre-guard
+  replicates rescored. The stress cell is now refused outright -- 199 of 200
+  datasets on the guard and one on an earlier failure -- so it reports a
+  support-guard quantity rather than a rejection rate, with only 1,431 of its
+  9,950 conditional draws retaining the fitted category structure. The
+  dichotomous, booklet and explanatory cells were not rerun.
 - `results/dimensionality-bootstrap.csv` separates a content split fixed in
   advance from the residual-derived split and its parametric-bootstrap
   calibration. Across 100 null datasets, the uncalibrated automatic rule
@@ -588,7 +618,11 @@ All 99,900 bootstrap refits were usable, with no outer refusals,
 non-convergence, other errors or unavailable metrics. Same-data refits
 reproduced the observed item chi-squares exactly in all 200 datasets.
 The independent checker verified the complete accounting, per-item-to-summary
-calculations, Holm resolution, and study, harness and R-source hashes.
+calculations, Holm resolution, and the study and harness hashes. The results
+record R-source hash `c0c325bc7d42`; later commits in the same round moved the
+working tree on, so the checker now names both hashes instead of requiring
+them to match. Rerunning the study, not the checker, is what re-establishes
+the rates against current code.
 
 The score-conditional person-fit and fitted-design comparative-judgement
 bootstraps are checked in `studies/person-cj-fit-bootstrap.R`. The supported

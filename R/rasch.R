@@ -1058,8 +1058,11 @@ print.rasch <- function(x, ...) {
               separation_quality))
   total_p <- if (.has_repeated_residual_units(x)) NA_real_
     else x$total_chisq_p
-  cat(sprintf("Approximate asymptotic total item-trait chi-square %.3f on %d df, p = %s\n",
-              x$total_chisq, x$total_df, .fmt_p(total_p)))
+  fit_probability <- if (is.finite(total_p))
+    paste0("p = ", .fmt_p(total_p)) else "probability unavailable"
+  cat(sprintf(paste0("Approximate asymptotic total item-trait chi-square ",
+                     "%.3f on %d df, %s\n"),
+              x$total_chisq, x$total_df, fit_probability))
   if (length(x$notes)) cat(sprintf("Notes: %s\n", paste(x$notes, collapse = "; ")))
   invisible(x)
 }

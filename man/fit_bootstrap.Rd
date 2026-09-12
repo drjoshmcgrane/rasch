@@ -56,7 +56,13 @@ conditions on each person's observed raw score and missingness pattern.
 The person parameter then cancels by sufficiency. Item parameters and
 person locations are re-estimated in every replicate.
 The original class-interval rule is repeated, including automatic per-item
-allocation with missing responses. Tied locations remain in one interval.
+allocation with missing responses. An automatic count is resolved against
+the observed fit and held across replicates, so every replicate chi-square
+is scored on the intervals the observed one used. Tied locations remain in
+one interval. A result stored by an earlier version under
+\code{theta = "resample"}, \code{"fixed"} or \code{"normal"} was built
+from a null that mixed interval counts, so it is refused and must be
+recomputed; results from the default generator are unchanged.
 The generator assumes independent response rows. A fit with repeated person
 IDs is therefore refused because this bootstrap does not reproduce
 within-person dependence.

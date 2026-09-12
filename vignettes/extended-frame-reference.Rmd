@@ -180,7 +180,10 @@ The conditional calibration checks the exact likelihood curvature as well as
 the score. Stationary saddles and flat solutions are refused; the same check
 applies to bootstrap refits.
 Saved frame fits without a current likelihood-check record must be refitted
-before reopening in the app; their source files remain unchanged.
+before reopening in the app. So must an extended frame fit whose stored score
+curves predate the shared design enumeration, since their designs and labels
+are no longer the ones `test_information()` and the curve plots would give.
+Neither refusal alters the source file.
 The alpha--phi cross-covariance has the same usable-draw rule and is
 withheld if it cannot be estimated. A full bootstrap that falls below its
 minimum returns hybrid standard errors instead, retaining its attempted, usable

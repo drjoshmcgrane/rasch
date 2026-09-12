@@ -139,6 +139,37 @@ test_that("explanatory coefficients use supported person-cluster inference", {
     "se", "t", "df", "p", "p_adj")])))
 })
 
+test_that("one row per person keeps the finite coefficient reference", {
+  # The sandwich rests on the same finite count of independent units whether
+  # or not identifiers repeat. Reading single-row units as a limiting normal
+  # rejects a true null far more often than the printed probability states.
+  set.seed(4471)
+  n_person <- 30L
+  predictors <- data.frame(
+    item = paste0("I", 1:10),
+    operation = rep(0:1, each = 5),
+    format = rep(c("A", "B"), 5),
+    stringsAsFactors = FALSE)
+  theta <- rnorm(n_person)
+  delta <- -0.5 + 0.7 * predictors$operation +
+    0.35 * (predictors$format == "B")
+  X <- sapply(delta, function(d)
+    rbinom(n_person, 1, plogis(theta - d)))
+  colnames(X) <- predictors$item
+
+  fit <- rasch_explanatory(X, predictors, ~ operation + format,
+                           id = sprintf("P%02d", seq_len(n_person)))
+  cf <- fit$est$coefficients
+  n_units <- fit$est$cluster_support$n
+  expect_false(fit$est$cluster_support$repeated)
+  expect_true(fit$est$cluster_inference)
+  expect_equal(cf$df, rep(n_units - 1L, nrow(cf)))
+  expect_equal(cf$p, 2 * pt(-abs(cf$t), df = n_units - 1L),
+               tolerance = 1e-12)
+  # strictly larger than the limiting-normal probabilities it replaces
+  expect_true(all(cf$p > 2 * pnorm(-abs(cf$t))))
+})
+
 test_that("explanatory CJ accepts predictors for set-aside boundary objects", {
   pr <- t(utils::combn(LETTERS[1:4], 2L))
   core <- do.call(rbind, lapply(seq_len(nrow(pr)), function(i)
@@ -183,9 +214,12 @@ test_that("LLTM recovers item-feature effects and retains Rasch scoring", {
   expect_equal(f$est$n_parameters, 2L)
   expect_lt(abs(f$est$coefficients["operation", "estimate"] - 0.75), .25)
   expect_lt(abs(f$est$coefficients["formatB", "estimate"] - 0.35), .25)
-  expect_true(all(is.infinite(f$est$coefficients$df)))
+  # independent rows are still a finite number of sampling units
+  n_units <- f$est$cluster_support$n
+  expect_equal(f$est$coefficients$df, rep(n_units - 1L, 2L))
   expect_equal(f$est$coefficients$p,
-               2 * pnorm(-abs(f$est$coefficients$t)), tolerance = 1e-12)
+               2 * pt(-abs(f$est$coefficients$t), df = n_units - 1L),
+               tolerance = 1e-12)
   expect_equal(f$person$theta, f$score_table$theta[f$person$raw + 1L],
                tolerance = 1e-10)
 

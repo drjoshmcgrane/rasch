@@ -81,8 +81,11 @@ A replicate is usable only when it retains the observed set of item
 comparisons, so every centred difference has the same frame origin.
 Location tests then use the empirical covariance of the centred
 differences. The discrimination test uses the bootstrap standard error of
-the log slope ratio. This includes uncertainty in the fitted frame units
-but is more computationally demanding.
+the log slope ratio. Both are standard deviations over the usable
+replicates, so their statistics are referred to \eqn{t(B-1)} rather than
+the normal, where \eqn{B} is the number of usable replicates. This
+includes uncertainty in the fitted frame units but is more
+computationally demanding.
 
 Raw and Holm-adjusted probabilities are reported. With conditional
 uncertainty, Holm adjustment covers the location comparisons. With

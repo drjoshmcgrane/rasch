@@ -392,7 +392,12 @@ save_person_plots <- function(fit, file, persons = NULL, level = 0.95,
       "frame_model_comparison")
   }
   spath <- file.path(dir, "summary.txt")
-  writeLines(c(utils::capture.output(print(fit)), "", fit$notes), spath)
+  # a blank row in the exported DIF table is a test the design could not
+  # estimate, not an absence of DIF: the summary carries the reason
+  writeLines(c(utils::capture.output(print(fit)), "", fit$notes,
+               if (length(dif$notes))
+                 paste("DIF notes:", paste(dif$notes, collapse = "; "))),
+             spath)
   files <- c(files, spath)
   sp <- function(f, stem) files <<- c(files,
     .rr_save_plot(f, stem, pdir, formats, width, height, dpi))
@@ -700,6 +705,7 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
     wtab(fit$thresholds_arbitrary, "thresholds_common_unit")
     wtab(fit$score_curves, "score_curves")
   }
+  dif_notes <- character(0)
   if (!is.null(dif) || !is.null(fit$factors)) {
     # an analysis exported from the application carries the DIF model the
     # analyst actually chose; recomputing at defaults would export a
@@ -709,6 +715,9 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
     if (!is.null(da)) {
       wtab(da$summary, "dif_anova")
       wtab(da$terms, "dif_anova_terms")
+      # a blank row in the exported table is a test the design could not
+      # estimate, not an absence of DIF: the summary carries the reason
+      dif_notes <- as.character(da$notes)
     }
   }
   if (!is.null(bootstrap)) {
@@ -794,6 +803,8 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
                 ctt$n, ctt$mean, ctt$sd, ctt$alpha, ctt$sem))
   if (!is.null(distractors$note))
     cat("Distractor analysis unavailable:", distractors$note, "\n")
+  if (length(dif_notes))
+    cat("DIF notes:", paste(dif_notes, collapse = "; "), "\n")
   if (!is.null(tailored)) {
     cat(sprintf(paste0("Tailored analysis: %d responses below chance %.2f ",
                        "set to missing; origin anchored by %s"),
@@ -1286,6 +1297,10 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
       da <- if (!is.null(dif)) dif
             else tryCatch(dif_anova(fit), error = function(e) NULL)
       if (!is.null(da)) s("<h2>Differential item functioning</h2>",
+        # a test the design could not estimate leaves a blank row in the
+        # table and still counts in the adjusted family: say so beside it
+        if (length(da$notes)) s("<p class='note'>Notes: ",
+          esc(paste(da$notes, collapse = "; ")), "</p>") else "",
         .html_table(da$summary[, intersect(c("item", "term", "F_uniform",
                                      "p_uniform_adj", "eta2_uniform",
                                      "F_nonuniform", "p_nonuniform_adj",

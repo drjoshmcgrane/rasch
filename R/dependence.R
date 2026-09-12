@@ -205,11 +205,13 @@ dependence_magnitude <- function(fit, dependent, independent) {
 print.rasch_dependence <- function(x, ...) {
   cat(sprintf("Response dependence of %s on %s (Andrich & Kreiner resolution)\n",
               x$dependent, x$independent))
-  statistic <- x$t %||% x$z
+  # Exact access matters for pre-`t` saved fits: they have `thresholds` but
+  # no `t`, and `$t` would partially match that data frame.
+  statistic <- x[["t"]] %||% x[["z"]]
   if (is.na(x$se) || is.na(statistic) || is.na(x$p))
     cat(sprintf("  d = %.3f logits (descriptive; inference withheld)\n", x$d))
   else {
-    df <- x$df %||% Inf
+    df <- x[["df"]] %||% Inf
     reference <- if (is.finite(df)) sprintf("t(%g)", df) else "z"
     cat(sprintf("  d = %.3f logits (se %.3f), %s = %.2f, p = %s\n",
                 x$d, x$se, reference, statistic, .fmt_p(x$p)))

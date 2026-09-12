@@ -228,6 +228,35 @@ NONE_CH <- c(None = "(none)")
   .rasch_internal(".fit_boot_signature_matches")
 .fit_boot_md5 <- .rasch_internal(".fit_boot_md5")
 .sim_planted_count <- .rasch_internal(".sim_planted_count")
+.app_project_resource_problem <-
+  .rasch_internal(".app_project_resource_problem")
+# How the uploads a project can decline to carry are named to the user, at
+# the save that leaves one out and at the reopening that finds it gone.
+.app_resource_label <- c(
+  eq_reference = "uploaded item-equating reference",
+  bt_eq_bank = "uploaded object-equating bank",
+  wright_item_map = "uploaded item panel map")
+# The statement that goes with an omission, wherever it is made. `omitted`
+# is the named character vector of problems that project_resources() leaves
+# on the resources it wrote; NULL when nothing was left out.
+.app_omitted_resource_ui <- function(omitted) {
+  # A reopened file supplies this, so read it as stored: anything but a
+  # named character vector of problems says nothing reportable.
+  if (!is.character(omitted) || !length(omitted) || anyNA(omitted))
+    return(NULL)
+  nms <- names(omitted)
+  labels <- if (is.null(nms)) rep(NA_character_, length(omitted))
+            else unname(.app_resource_label[nms])
+  unnamed <- is.na(labels)
+  if (!is.null(nms) && any(unnamed)) labels[unnamed] <- nms[unnamed]
+  labels[is.na(labels) | !nzchar(labels)] <- "an upload"
+  tagList(
+    "The analysis was saved without an upload it could not use.",
+    tags$ul(class = "mb-0 ps-3",
+            lapply(sprintf("%s: %s", labels, omitted), tags$li)),
+    paste("Everything else was written. Correct the upload and save again",
+          "to include it."))
+}
 
 # Controls that determine the fitted analysis. Project files retain these
 # separately from display-only choices so reopening an analysis also restores
@@ -2455,6 +2484,7 @@ panel_ld <- nav_panel("Local", value = "p_ld", icon = bs_icon("link-45deg"),
                   downloadButton("spread_tbl_csv", "CSV",
                                  class = "btn-outline-secondary btn-xs")),
               DTOutput("spread_tbl"),
+              uiOutput("spread_note"),
               rcode_details("spread_tbl")),
             padding = 12, fillable = FALSE)))))
   )
@@ -3985,6 +4015,26 @@ server <- function(input, output, session) {
     btlef_res(NULL)
     invisible(NULL)
   }
+  # Every result computed on request belongs to the calibration it came from.
+  # Clearing them is one operation because they are cleared together: by the
+  # ordinary-fit observer when a Rasch calibration is replaced, and by
+  # complete_fit() when Comparative Judgement takes over (there fit() becomes
+  # unavailable before that observer can run, so the leftovers would survive
+  # into the saved paired-comparison project and make it unreadable).
+  clear_calibration_results <- function(keep_resolve = FALSE) {
+    lr_res(NULL); dep_res(NULL); spread_res(NULL); dm_res(NULL)
+    guess_res(NULL); contr_res(NULL); rescore_res(NULL)
+    person_weight_state(NULL)
+    restored_dimensionality(NULL); restored_subtest(NULL)
+    dim_computed(NULL)
+    restored_invariance(NULL)
+    # An automatic resolution sets the override fit itself, so its trace
+    # must survive its own refit; a fresh run or another override clears it.
+    if (!keep_resolve) resolve_res(NULL)
+    # Manual dimensionality subsets name items of the previous fit.
+    dim_subsets(NULL)
+    invisible(NULL)
+  }
   # shared estimation-control resolution (used by every model branch and
   # the reproducible-code footers)
   est_opts <- reactive(list(maxit = max(5, input$maxit %||% 60),
@@ -4079,13 +4129,12 @@ server <- function(input, output, session) {
     clear_analysis_steps()
     clear_btl_analysis_steps()
     clear_btl_fit_results()
-    # A weighted person table belongs to one completed calibration.  Clear it
-    # here rather than relying only on the ordinary-fit observer: when a Rasch
-    # analysis is replaced by Comparative Judgement, fit() becomes unavailable
-    # before that observer can run and the old table would otherwise survive.
-    person_weight_state(NULL)
     fitted_sim_gen(simulation_stamp)
     if (inherits(fit, "rasch_btl")) {
+      # A Rasch analysis replaced by Comparative Judgement takes its results
+      # with it: fit() is about to become unavailable, so the ordinary-fit
+      # observer cannot do this.
+      clear_calibration_results()
       btl_fit(fit); fit_val(NULL)
       try(nav_select("nav", "p_summary", session = session), silent = TRUE)
       return(invisible(NULL))
@@ -4898,17 +4947,8 @@ server <- function(input, output, session) {
       # Allow a 10% refit-failure margin above the Holm resolution threshold.
       updateNumericInput(session, "guess_boot_reps",
                          value = max(999L, ceiling(40 * length(its) / 0.9)))
-      lr_res(NULL); dep_res(NULL); spread_res(NULL); dm_res(NULL)
-      guess_res(NULL); contr_res(NULL); rescore_res(NULL)
-      person_weight_state(NULL)
-      restored_dimensionality(NULL); restored_subtest(NULL)
-      dim_computed(NULL)
-      restored_invariance(NULL)
-      # An automatic resolution sets the override fit itself, so its trace
-      # must survive its own refit; a fresh run or another override clears it.
-      if (!identical(active_step_type(), "dif_auto")) resolve_res(NULL)
-      # Manual dimensionality subsets name items of the previous fit.
-      dim_subsets(NULL)
+      clear_calibration_results(
+        keep_resolve = identical(active_step_type(), "dif_auto"))
     }
   })
 
@@ -5018,9 +5058,12 @@ server <- function(input, output, session) {
   outputOptions(output, "has_resolve", suspendWhenHidden = FALSE)
   output$resolve_summary <- renderUI({
     rr <- resolve_res(); req(!is.null(rr))
+    n_left <- rr$n_remaining_dif
+    left <- if (length(n_left) != 1L || is.na(n_left))
+      "the number of items still flagging DIF is unknown" else
+      sprintf("%d item(s) still flag DIF", n_left)
     p(class = "text-muted small mb-2",
-      sprintf("%d split(s); %s; %d item(s) still flag DIF.",
-              rr$n_splits, rr$stopped, rr$n_remaining_dif))
+      sprintf("%d split(s); %s; %s.", rr$n_splits, rr$stopped, left))
   })
   output$resolve_tbl <- DT::renderDT({
     rr <- resolve_res(); req(!is.null(rr))
@@ -5377,14 +5420,18 @@ server <- function(input, output, session) {
   # styleInterval() includes the cut point in its lower interval. That is the
   # wrong boundary for p < alpha and makes symmetric fit bands asymmetric at
   # their negative cut. Use the same strict decisions as the result objects.
+  # formatStyle() interpolates the style verbatim as a jQuery .css() property,
+  # so it must be a JS *expression* over the `value` variable it declares: a
+  # function literal would be called by jQuery with (index, current value) and
+  # every cell would be decided from its row position. Hence the IIFE.
   colour_if <- function(condition) DT::JS(paste0(
-    "function(value){if(value===null||value==='')return 'inherit';",
-    "var x=Number(value);if(!Number.isFinite(x))return 'inherit';return ",
-    condition, "?'var(--bs-danger)':'inherit';}"))
+    "(function(v){if(v===null||v==='')return 'inherit';",
+    "var x=Number(v);if(!Number.isFinite(x))return 'inherit';return ",
+    condition, "?'var(--bs-danger)':'inherit';})(value)"))
   weight_if <- function(condition) DT::JS(paste0(
-    "function(value){if(value===null||value==='')return 'normal';",
-    "var x=Number(value);if(!Number.isFinite(x))return 'normal';return ",
-    condition, "?'bold':'normal';}"))
+    "(function(v){if(v===null||v==='')return 'normal';",
+    "var x=Number(v);if(!Number.isFinite(x))return 'normal';return ",
+    condition, "?'bold':'normal';})(value)"))
   # fit flags, consistent across every model table: a fit residual beyond
   # |2.5|, an outfit mean square outside 0.7-1.3, and an infit mean square
   # outside the tighter 0.8-1.2 (infit is information-weighted, so it varies
@@ -6866,6 +6913,8 @@ server <- function(input, output, session) {
                   "The item panel map needs columns named item and panel."))
     validate(need(!anyDuplicated(names(d)),
                   "The item panel map cannot have duplicate column names."))
+    validate(need(nrow(d) > 0L,
+                  "The item panel map has no rows."))
     validate(need(!anyNA(d$item) && !anyNA(d$panel) &&
                     all(nzchar(trimws(as.character(d$item)))) &&
                     all(nzchar(trimws(as.character(d$panel)))),
@@ -9273,10 +9322,12 @@ server <- function(input, output, session) {
         "Note: the smallest attainable bootstrap p is %.3f; increase B for ",
         "an inferential verdict at alpha %.3f.\n"),
         dt$bootstrap_resolution, dt$alpha))
-    if (!is.null(dt$paired_t))
-      cat(sprintf("Paired t-test of subset means: mean difference %.3f, t = %.2f (df %.0f), p = %s\n",
-                  dt$paired_t$mean_difference, dt$paired_t$t,
-                  dt$paired_t$df, fmt_p(dt$paired_t$p)))
+    if (!is.null(dt$subset_mean_difference))
+      cat(sprintf(paste0("Mean difference between subset estimates: %.3f ",
+                         "(SD %.3f) -- descriptive, not a test of ",
+                         "unidimensionality\n"),
+                  dt$subset_mean_difference$mean_difference,
+                  dt$subset_mean_difference$sd_difference))
     cat("\nSubset A items:\n ", paste(dt$items_positive, collapse = ", "), "\n")
     cat("Subset B items:\n ", paste(dt$items_negative, collapse = ", "), "\n")
   })
@@ -9461,9 +9512,21 @@ server <- function(input, output, session) {
     validate(need(!is.null(r),
                   "Choose the dependent and independent items and press the button."))
     ref <- .app_wald_reference(r)
-    cat(sprintf("Dependence of %s on %s: d = %.3f logits (se %.3f), %s = %.2f, p = %s\n",
-                r$dependent, r$independent, r$d, r$se,
-                ref$label, ref$value, fmt_p(r$p)))
+    # Inference is withheld rather than defaulted when the resolved refit
+    # cannot support it. Say so, and give the reason, exactly as the console
+    # print does: bare NA columns read as a numerical failure. A missing
+    # field counts as withheld, so a result carrying no standard error at
+    # all prints its magnitude rather than failing the panel.
+    withheld <- function(x)
+      !is.numeric(x) || length(x) != 1L || is.na(x)
+    if (withheld(r$se) || withheld(ref$value) || withheld(r$p))
+      cat(sprintf("Dependence of %s on %s: d = %.3f logits (descriptive; inference withheld)\n",
+                  r$dependent, r$independent, r$d))
+    else
+      cat(sprintf("Dependence of %s on %s: d = %.3f logits (se %.3f), %s = %.2f, p = %s\n",
+                  r$dependent, r$independent, r$d, r$se,
+                  ref$label, ref$value, fmt_p(r$p)))
+    if (!is.null(r$note)) cat("Note:", r$note, "\n")
   })
   output$dep_tbl <- renderDT({
     r <- dep_res()
@@ -9507,6 +9570,14 @@ server <- function(input, output, session) {
     d$dependent <- ifelse(is.na(d$dependent), "",
                           ifelse(d$dependent, "*", ""))
     style_lo_red(num_dt(d), d, "p_adj", attr(r, "alpha") %||% 0.05)
+  })
+  # A withheld reference leaves the se, statistic and probability columns NA.
+  # The reason travels with the result, so show it beside the table.
+  output$spread_note <- renderUI({
+    r <- spread_res()
+    note <- if (is.null(r)) NULL else attr(r, "note")
+    if (is.null(note)) return(NULL)
+    p(class = "text-muted small mb-0 mt-2", paste("Note:", note))
   })
   register_code("spread_tbl", function() {
     r <- spread_res()
@@ -9787,6 +9858,27 @@ server <- function(input, output, session) {
     current_model <- if (!is.null(btl_fit())) "btl" else
       if (inherits(fit_or_null(), "rasch_efrm")) "efrm" else
       if (inherits(fit_or_null(), "rasch_mfrm")) "mfrm" else "rasch"
+    # An uploaded reference or panel map the equating and Wright-map cards
+    # cannot use is left out of the project rather than embedded: the loader
+    # applies the same tests, so keeping it would make the whole analysis
+    # unsaveable over an upload that was never usable. The card's own refusal
+    # arrives as an error from the reactive; an upload the card tolerates is
+    # tested here with the loader's rule. The omission travels with the
+    # resources it is missing from, so the save that makes it and the
+    # reopening that inherits it can both state which upload is not there.
+    omitted <- character(0)
+    usable <- function(name, uploaded, value, m = NULL) {
+      value <- tryCatch(value, error = function(e) e)
+      problem <- if (inherits(value, "condition")) conditionMessage(value)
+                 else .app_project_resource_problem(name, value, m)
+      if (is.null(problem)) return(value)
+      # Only an upload made in this session can be reported as left out: a
+      # page never used has nothing to report.
+      if (isTRUE(uploaded))
+        omitted[[name]] <<- if (nzchar(trimws(problem))) problem else
+          "the upload could not be read"
+      NULL
+    }
     out <- list(
       anchors = tryCatch(anchors_in(), error = function(e) NULL),
       bt_anchors = tryCatch(bt_anchors_in(), error = function(e) NULL),
@@ -9794,13 +9886,15 @@ server <- function(input, output, session) {
       predictors = tryCatch(exp_predictors_raw(), error = function(e) NULL),
       eq_reference = if (!identical(current_model, "btl") &&
                            identical(input$eq_source %||% "csv", "csv"))
-        tryCatch(eq_ref(), error = function(e) NULL) else NULL,
+        usable("eq_reference", !is.null(input$eq_file), eq_ref()) else NULL,
       bt_eq_bank = if (identical(current_model, "btl"))
-        tryCatch(bt_eq_bank(), error = function(e) NULL) else NULL,
+        usable("bt_eq_bank", !is.null(input$bt_eq_file), bt_eq_bank(),
+               if (isTRUE(btl_fit()$m > 1L)) btl_fit()$m else NULL) else NULL,
       wright_item_map = if (!identical(current_model, "btl") &&
                               identical(input$wright_item_panels,
                                         "uploaded"))
-        tryCatch(wright_item_map_data(), error = function(e) NULL) else NULL,
+        usable("wright_item_map", !is.null(input$wright_item_map),
+               wright_item_map_data()) else NULL,
       ef_setmap = if (identical(current_model, "efrm"))
         tryCatch(ef_setmap(), error = function(e) NULL) else NULL,
       btlef_sets = if (identical(current_model, "btl"))
@@ -9820,6 +9914,13 @@ server <- function(input, output, session) {
         all(c("object", "set") %in% names(frm$objects)))
       out["btlef_sets"] <- list(split(as.character(frm$objects$object),
                                       as.character(frm$objects$set)))
+    # A resource frozen with the base calibration is written under its own
+    # name whatever the live upload now holds, so only a name that ends up
+    # with nothing stored is reported as left out.
+    if (length(omitted))
+      omitted <- omitted[vapply(names(omitted),
+                                function(nm) is.null(out[[nm]]), logical(1))]
+    if (length(omitted)) attr(out, "omitted") <- omitted
     out
   }
 
@@ -9958,8 +10059,17 @@ server <- function(input, output, session) {
   output$dl_project <- downloadHandler(
     filename = function()
       format(Sys.time(), "rasch_analysis_%Y%m%d_%H%M.rasch"),
-    content = function(file)
-      .save_app_project(project_state(), file))
+    content = function(file) {
+      state <- project_state()
+      # An upload the project declined to carry is named here, at the save
+      # that leaves it out: the download itself shows nothing.
+      note <- .app_omitted_resource_ui(attr(state$resources, "omitted",
+                                            exact = TRUE))
+      if (!is.null(note))
+        showNotification(note, type = "warning", duration = 12,
+                         session = session)
+      .save_app_project(state, file)
+    })
 
   observeEvent(input$project_file, {
     p <- tryCatch(.read_app_project(input$project_file$datapath),
@@ -9988,6 +10098,12 @@ server <- function(input, output, session) {
         ". Recompute them before reporting those results."),
         type = "warning", duration = 10)
     }
+    # An upload the saving session could not use was recorded rather than
+    # embedded. Say which one, so its absence here is not read as loss.
+    omitted_note <- .app_omitted_resource_ui(
+      attr(p$resources, "omitted", exact = TRUE))
+    if (!is.null(omitted_note))
+      showNotification(omitted_note, type = "warning", duration = 12)
     cancelled_job <- cancel_efrm_job() | cancel_btlef_job() |
       cancel_boot_job()
     advance_analysis_context()

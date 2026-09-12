@@ -70,3 +70,33 @@ test_that("fully supported DIF contrasts retain their declared weighting", {
   expect_equal(out$table$se, sqrt(drop(t(w) %*% resolved$vloc %*% w)))
   expect_true(is.finite(out$table$p))
 })
+
+test_that("an unweighted middle level is not required by a linear trend", {
+  # contr.poly leaves the middle level of an odd-K linear contrast at about
+  # -1e-17. That residue must not be read as a cell the trend needs.
+  three <- factor(c("1", "2", "3"), ordered = TRUE)
+  fam <- .dif_factor_contrasts(three, "band")
+  expect_identical(unname(fam[["band: linear"]][["2"]]), 0)
+  expect_identical(unname(.dif_leading(three)$weights[["2"]]), 0)
+
+  set.seed(814)
+  n <- c(90L, 10L, 100L)
+  theta <- rnorm(sum(n))
+  X <- matrix(rbinom(length(theta) * 5L, 1,
+                     plogis(outer(theta, seq(-1, 1, length.out = 5), "-"))),
+              length(theta), 5L, dimnames = list(NULL, paste0("I", 1:5)))
+  band <- factor(rep(c("1", "2", "3"), n), ordered = TRUE)
+  fit <- rasch(X, factors = data.frame(band = band))
+  out <- dif_contrasts(fit, factors = "band", items = c("I1", "I2"),
+                       min_n = 20)
+  tab <- out$table
+  lin <- tab$contrast == "band: linear"
+  expect_equal(sum(lin), 2L)
+  expect_true(all(is.finite(tab$estimate[lin])))
+  expect_true(all(is.finite(tab$p[lin])))
+  # the quadratic contrast does weight the thin middle level, so it stays
+  # withheld and explained
+  expect_true(all(is.na(tab$estimate[!lin])))
+  expect_match(paste(out$notes, collapse = " "),
+               "quadratic\\]: estimate and inference withheld")
+})

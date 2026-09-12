@@ -564,3 +564,114 @@ test_that("the scree null retains enough draws for its finite reference", {
   expect_identical(refused$B_used, 19L)
   expect_identical(refused$B_errors, 1L)
 })
+
+test_that("the subset mean difference is reported without a test", {
+  # An easy/hard split of unidimensional data: the two subset estimates
+  # carry different estimation bias, so a t-test of their mean difference
+  # rejects however unidimensional the data are. The difference is
+  # descriptive; the inference belongs to the person-level comparisons.
+  set.seed(1); N <- 800; L <- 20
+  d <- seq(-2.5, 2.5, length.out = L)
+  X <- matrix(rbinom(N * L, 1, plogis(outer(rnorm(N), d, "-"))), N, L,
+              dimnames = list(NULL, sprintf("I%02d", 1:L)))
+  fit <- rasch(X)
+  dt <- dimensionality_test(fit, items_positive = sprintf("I%02d", 1:10),
+                            items_negative = sprintf("I%02d", 11:20),
+                            min_score_points = 2)
+  expect_false(dt$multidimensional)
+  expect_null(dt$paired_t)
+  smd <- dt$subset_mean_difference
+  expect_true(is.list(smd))
+  expect_true(is.finite(smd$mean_difference) && smd$mean_difference < 0)
+  expect_match(smd$note, "no test of this mean")
+  expect_false(any(c("t", "df", "p") %in% names(smd)))
+  # the description is printed, so it is readable without the object
+  out <- capture.output(print(dt))
+  expect_match(paste(out, collapse = "\n"),
+               "Mean difference between subset estimates: .*descriptive, not a test")
+  expect_false(any(grepl("Paired t", out, fixed = TRUE)))
+})
+
+test_that("a saved subtest with the superseded paired t-test is refused", {
+  # The displays print a paired t of the subset means whenever the field is
+  # present, so a result saved before the field was withdrawn must not be
+  # restored beside the current verdict.
+  set.seed(2); N <- 200; L <- 10
+  X <- matrix(rbinom(N * L, 1, plogis(outer(
+    rnorm(N), seq(-1.5, 1.5, length.out = L), "-"))), N, L,
+    dimnames = list(NULL, sprintf("I%02d", 1:L)))
+  fit <- rasch(X)
+  dt <- dimensionality_test(fit, items_positive = sprintf("I%02d", 1:5),
+                            items_negative = sprintf("I%02d", 6:10),
+                            min_score_points = 2)
+  expect_identical(dt$algorithm, "person-subset-comparison-1")
+  expect_no_error(.validate_dimensionality_test(dt, fit))
+  old <- dt
+  old$algorithm <- NULL
+  old$subset_mean_difference <- NULL
+  old$paired_t <- list(mean_difference = -0.5, t = -17.4, df = 290,
+                       p = 1.4e-34)
+  attr(old, "result_signature") <- NULL
+  attr(old, "result_signature") <- .fit_boot_md5(old)
+  expect_error(.validate_dimensionality_test(old, fit), "superseded")
+})
+
+test_that("a saved project keeps its data when its subtest is superseded", {
+  # The stamp must not cost the user the rest of the analysis: the superseded
+  # result is dropped with a warning, as for every other superseded tag, and
+  # the data, fits and history reopen.
+  d <- simulate_rasch(200, 8, seed = 91)
+  fit <- rasch(d)
+  current <- dimensionality_test(fit, items_positive = sprintf("I%02d", 1:4),
+                                 items_negative = sprintf("I%02d", 5:8),
+                                 min_score_points = 2)
+  expect_identical(current$algorithm, "person-subset-comparison-1")
+  old <- current
+  old$algorithm <- NULL
+  old$subset_mean_difference <- NULL
+  old$paired_t <- list(mean_difference = -0.4, t = -6.1, df = 180, p = 5e-09)
+  attr(old, "result_signature") <- NULL
+  attr(old, "result_signature") <- .fit_boot_md5(old)
+  project <- .seal_app_project(list(
+    format = "rasch-shiny-project", schema = 2L,
+    model_type = "rasch", data = as.data.frame(d), base_fit = fit,
+    rasch_steps = list(), btl_steps = list(), kept_fits = list(base = fit),
+    settings = list(), results = list(subtest = old,
+                                      display = list(item = "I01"))))
+  path <- tempfile(fileext = ".rasch")
+  on.exit(unlink(path), add = TRUE)
+  saveRDS(project, path)
+  expect_error(.save_app_project(project, path), "superseded person-subset")
+  expect_warning(restored <- .read_app_project(path),
+                 "paired t-test of the subset means.*omitted")
+  expect_null(restored$results$subtest)
+  for (field in c("data", "base_fit", "rasch_steps", "btl_steps", "kept_fits",
+                  "settings"))
+    expect_identical(restored[[field]], project[[field]])
+  expect_identical(restored$results$display, project$results$display)
+  expect_match(attr(restored, "rasch_project_legacy_dropped"),
+               "person-subset dimensionality test")
+  expect_no_error(.validate_app_project(restored))
+  expect_no_error(.save_app_project(restored, path))
+  expect_no_warning(.read_app_project(path))
+
+  changed <- project
+  changed$results$subtest$prop_significant <- 0.9
+  saveRDS(changed, path)
+  expect_error(.read_app_project(path), "changed since they were saved")
+
+  project$results$subtest <- current
+  project <- .seal_app_project(project)
+  expect_no_error(.save_app_project(project, path))
+  expect_no_warning(restored <- .read_app_project(path))
+  expect_identical(restored$results$subtest, current)
+
+  project$schema <- 1L
+  project$binding <- NULL
+  project$results$subtest <- old
+  saveRDS(project, path)
+  expect_warning(restored <- .read_app_project(path), "schema-1")
+  expect_null(restored$results$subtest)
+  expect_identical(restored$base_fit, fit)
+  expect_no_error(.validate_app_project(restored))
+})

@@ -69,11 +69,13 @@ fit$est$coefficients
 
 If the same person contributes more than one response row, the coefficient
 covariance is clustered by person. Supported repeated-person fits use a
-linearised delete-one-person covariance correction and a
-\(t\) reference with degrees of freedom equal to the number of person clusters
-contributing conditional information minus one. Coefficient inference is
-withheld when the calibration lacks enough independent information; supported
-fits without repeated identifiers use the limiting normal reference. Holm
+linearised delete-one-person covariance correction. Every supported fit takes
+a \(t\) reference with degrees of freedom equal to the number of independent
+person units contributing conditional information minus one, whether or not
+identifiers repeat: one response row per person still leaves a finite count of
+sampling units, and reading that count as a limiting normal rejects a true
+null more often than the printed probability states. Coefficient inference is
+withheld when the calibration lacks enough independent information. Holm
 adjustment covers the coefficient family.
 With few persons and unequal numbers of response rows, these approximate tests
 can still be mildly liberal. The correction does not guarantee nominal

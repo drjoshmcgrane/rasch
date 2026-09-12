@@ -1075,8 +1075,8 @@ test_that("app captions escape item names and table decisions use strict cuts", 
     expect_match(html, "&lt;em&gt;Injected&lt;/em&gt;", fixed = TRUE)
     expect_match(as.character(colour_if("x<0.05")), "x<0.05", fixed = TRUE)
     expect_match(as.character(weight_if("x<0.05")), "x<0.05", fixed = TRUE)
-    expect_match(as.character(colour_if("x<0.05")), "value===null",
-                 fixed = TRUE)
+    expect_match(as.character(colour_if("x<0.05")), "v===null", fixed = TRUE)
+    expect_match(as.character(colour_if("x<0.05")), "})(value)", fixed = TRUE)
     expect_match(as.character(colour_if("Math.abs(x)>=0.5")),
                  "Math.abs(x)>=0.5", fixed = TRUE)
   })
@@ -1255,4 +1255,154 @@ test_that("saved CJ analyses retain a polytomous equating bank", {
   wrong_scale <- .seal_app_project(wrong_scale)
   expect_error(.validate_app_project(wrong_scale),
                "response-scale metadata do not match")
+})
+
+test_that("an unusable uploaded resource is left out of the saved project", {
+  skip_on_cran()
+  skip_if_not_installed("shiny")
+  skip_if_not_installed("bslib")
+  skip_if_not_installed("DT")
+  skip_if_not_installed("bsicons")
+
+  e <- new.env(parent = globalenv())
+  suppressWarnings(sys.source(.app_test_path(), envir = e))
+
+  # a polytomous comparison bank with no response-scale column: the equating
+  # card refuses it, so the project must not carry it into the loader
+  d <- as.data.frame(simulate_btl(5, 12, 4, model = "polytomous",
+                                  n_categories = 3, seed = 907))
+  bt <- btl(d, "object_a", "object_b", response = "response",
+            judge = "judge")
+  no_scale <- tempfile(fileext = ".csv")
+  scaled <- tempfile(fileext = ".csv")
+  saved <- tempfile(fileext = ".rasch")
+  on.exit(unlink(c(no_scale, scaled, saved)), add = TRUE)
+  bank <- data.frame(object = bt$objects$object,
+                     location = bt$objects$location + 0.3,
+                     se = bt$objects$se, stringsAsFactors = FALSE)
+  write.csv(bank, no_scale, row.names = FALSE)
+  write.csv(cbind(bank, m = bt$m), scaled, row.names = FALSE)
+
+  shiny::testServer(e$server, {
+    btl_fit(bt); sim_data(d)
+    session$setInputs(model_type = "btl", bt_a = "object_a",
+                      bt_b = "object_b", bt_win = "(none)",
+                      bt_judge = "judge")
+    session$setInputs(bt_eq_file = list(
+      datapath = no_scale, name = "bank.csv",
+      size = file.info(no_scale)$size, type = "text/csv"))
+    session$flushReact()
+    expect_false(is.null(bt_eq_bank()))
+    resources <- project_state()$resources
+    expect_null(resources$bt_eq_bank)
+    # the omission is recorded with its reason, and stated at the save
+    omitted <- attr(resources, "omitted", exact = TRUE)
+    expect_identical(names(omitted), "bt_eq_bank")
+    expect_match(omitted[["bt_eq_bank"]], "response-scale")
+    note <- as.character(e$.app_omitted_resource_ui(omitted))
+    expect_match(note, "uploaded object-equating bank", fixed = TRUE)
+    expect_match(note, "response-scale")
+    expect_no_error(.save_app_project(project_state(), saved))
+    expect_identical(attr(.read_app_project(saved)$resources, "omitted",
+                          exact = TRUE), omitted)
+
+    session$setInputs(bt_eq_file = list(
+      datapath = scaled, name = "bank.csv",
+      size = file.info(scaled)$size, type = "text/csv"))
+    session$flushReact()
+    expect_false(is.null(project_state()$resources$bt_eq_bank))
+    expect_null(attr(project_state()$resources, "omitted", exact = TRUE))
+    expect_null(e$.app_omitted_resource_ui(NULL))
+  })
+
+  # an item reference naming an item twice, and a header-only panel map
+  set.seed(908)
+  X <- as.data.frame(matrix(rbinom(600, 1, .5), 120, 5,
+                            dimnames = list(NULL, paste0("I", 1:5))))
+  f <- rasch(X)
+  repeated <- tempfile(fileext = ".csv")
+  empty_map <- tempfile(fileext = ".csv")
+  good_map <- tempfile(fileext = ".csv")
+  saved2 <- tempfile(fileext = ".rasch")
+  on.exit(unlink(c(repeated, empty_map, good_map, saved2)), add = TRUE)
+  write.csv(data.frame(item = c("I1", "I1", "I2"),
+                       location = c(0, 0.2, 0.5)), repeated,
+            row.names = FALSE)
+  writeLines("item,panel", empty_map)
+  write.csv(data.frame(item = c("I1", "I2"), panel = c("A", "B")),
+            good_map, row.names = FALSE)
+
+  shiny::testServer(e$server, {
+    fit_val(f); sim_data(X)
+    session$setInputs(model_type = "rasch", eq_source = "csv",
+                      wright_item_panels = "uploaded")
+    session$setInputs(
+      eq_file = list(datapath = repeated, name = "reference.csv",
+                     size = file.info(repeated)$size, type = "text/csv"),
+      wright_item_map = list(datapath = empty_map, name = "panels.csv",
+                             size = file.info(empty_map)$size,
+                             type = "text/csv"))
+    session$flushReact()
+    expect_error(wright_item_map_data(), "no rows")
+    expect_null(project_state()$resources$eq_reference)
+    expect_null(project_state()$resources$wright_item_map)
+    expect_setequal(names(attr(project_state()$resources, "omitted",
+                               exact = TRUE)),
+                    c("eq_reference", "wright_item_map"))
+    expect_no_error(.save_app_project(project_state(), saved2))
+
+    session$setInputs(wright_item_map = list(
+      datapath = good_map, name = "panels.csv",
+      size = file.info(good_map)$size, type = "text/csv"))
+    session$flushReact()
+    expect_identical(project_state()$resources$wright_item_map$panel,
+                     c("A", "B"))
+
+    # a reference frozen with the base calibration is written under its own
+    # name whatever the live upload holds, so nothing is reported missing
+    frozen <- project_resources(list(resources = list(
+      eq_reference = data.frame(item = c("I1", "I2"), location = c(0, 0.5),
+                                stringsAsFactors = FALSE))))
+    expect_false(is.null(frozen$eq_reference))
+    expect_false("eq_reference" %in%
+                   names(attr(frozen, "omitted", exact = TRUE)))
+  })
+})
+
+test_that("a switch to Comparative Judgement clears the Rasch results", {
+  skip_on_cran()
+  skip_if_not_installed("shiny")
+  skip_if_not_installed("bslib")
+  skip_if_not_installed("DT")
+  skip_if_not_installed("bsicons")
+
+  e <- new.env(parent = globalenv())
+  suppressWarnings(sys.source(.app_test_path(), envir = e))
+
+  X <- as.data.frame(simulate_rasch(150, 6, seed = 909))
+  X$grp <- rep(c("A", "B"), length.out = nrow(X))
+  rf <- rasch(X, items = setdiff(names(X), "grp"), factors = "grp")
+  contrasts <- dif_contrasts(rf, factors = "grp", p_adjust = "holm")
+  d <- as.data.frame(simulate_btl(5, 8, 3, seed = 910))
+  bf <- btl(d, "object_a", "object_b", winner = "winner", judge = "judge")
+  saved <- tempfile(fileext = ".rasch")
+  on.exit(unlink(saved), add = TRUE)
+
+  shiny::testServer(e$server, {
+    fit_val(rf); sim_data(X)
+    session$setInputs(model_type = "rasch")
+    session$flushReact()
+    contr_res(contrasts); lr_res("stale"); dim_subsets(list(a = "I01"))
+    # the switch: fit() becomes unavailable, so the ordinary-fit observer
+    # never runs and these results must be cleared here instead
+    sim_data(d)
+    session$setInputs(model_type = "btl", bt_a = "object_a",
+                      bt_b = "object_b", bt_win = "winner",
+                      bt_judge = "judge")
+    complete_fit(bf, NULL, character(0), "")
+    session$flushReact()
+    expect_null(contr_res()); expect_null(lr_res()); expect_null(dim_subsets())
+    expect_null(project_state()$results$contrasts)
+    expect_no_error(.save_app_project(project_state(), saved))
+  })
 })

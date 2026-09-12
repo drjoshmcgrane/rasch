@@ -778,9 +778,11 @@
 #' Holm-adjusted across the panel-unit, set-unit and set-origin families.
 #' Individual estimated units form a separate Holm-adjusted follow-up family
 #' across all three parameter types. Structurally fixed reference coordinates
-#' are not hypotheses. An unavailable estimated unit remains in its predeclared
-#' family; an omnibus is withheld rather than reduced when one of its
-#' requested coordinates is unavailable.
+#' are not hypotheses. With two panels the centring constraint makes the two
+#' reported panel units a single hypothesis: it enters that family once, and
+#' both rows report its adjusted probability. An unavailable estimated unit
+#' remains in its predeclared family; an omnibus is withheld rather than
+#' reduced when one of its requested coordinates is unavailable.
 #' Judge-bootstrap probabilities require at least six judges and 5.5 effective
 #' judges in every contributing panel. Each non-reference set also requires
 #' eight judges and eight effective judges along a supported path to the
@@ -1789,14 +1791,22 @@ btl_efrm <- function(data, object_a, object_b, winner, judge, panels,
   all_p <- unlist(lapply(unit_tables, `[[`, "p"), use.names = FALSE)
   all_adj <- rep(NA_real_, length(all_p))
   # With a single panel phi is fixed at one by identification, so there is no
-  # panel-unit hypothesis to include in the follow-up family. With multiple
-  # panels each reported phi tests a genuine (albeit constrained) coordinate.
-  family_member <- c(rep(G > 1L, nrow(phi_table)),
+  # panel-unit hypothesis to include in the follow-up family. Two panels are
+  # one hypothesis reported twice: centring makes log phi_1 = -log phi_2, so
+  # both rows carry the same |t| and probability and the family must count
+  # them once. With three or more panels each reported phi tests a genuine
+  # (albeit constrained) coordinate.
+  phi_member <- rep(G > 1L, nrow(phi_table))
+  if (G == 2L) phi_member[2L] <- FALSE
+  family_member <- c(phi_member,
                      alpha_table$set %in% free,
                      kappa_table$set %in% free)
   usable <- is.finite(all_p) & family_member
   all_adj[usable] <- stats::p.adjust(
     all_p[usable], method = "holm", n = sum(family_member))
+  # The excluded second panel row is that same hypothesis, so it reports the
+  # adjusted probability of the row that carried it, not a blank.
+  if (G == 2L) all_adj[2L] <- all_adj[1L]
   cursor_p <- 0L
   for (j in seq_along(unit_tables)) {
     nr <- nrow(unit_tables[[j]])

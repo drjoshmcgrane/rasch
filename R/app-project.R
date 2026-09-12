@@ -27,6 +27,16 @@
       "with the current likelihood checks before reopening it.",
       "The saved file is unchanged. Recover its source data and settings",
       "with readRDS(file)$data and readRDS(file)$settings."), call. = FALSE)
+  # An EFRM also stores score curves, whose designs and labels now come from
+  # the shared design enumeration. The guard is on the EFRM class alone:
+  # btl_efrm() shares the calibration tag but has no score curves, and must
+  # keep reading.
+  if (inherits(fit, "rasch_efrm") &&
+      !identical(fit$efrm_results_algorithm, "efrm-results-2"))
+    stop(label, " ", paste("holds score curves from a superseded design",
+      "enumeration; refit this analysis before reopening it.",
+      "The saved file is unchanged. Recover its source data and settings",
+      "with readRDS(file)$data and readRDS(file)$settings."), call. = FALSE)
   invisible(NULL)
 }
 
@@ -216,6 +226,49 @@
   invisible(NULL)
 }
 
+# One statement of what an embedded display resource must satisfy, shared by
+# the loader and by the app that writes the file. The app already refuses an
+# unusable equating reference or panel map on its own page; without the same
+# test at the writing end an upload the app tolerates would make the whole
+# analysis unsaveable, and the failure would surface only as a broken
+# download. `m` is the fitted response-scale size a polytomous comparison
+# bank must carry, and NULL wherever that check does not apply.
+.app_project_resource_problem <- function(name, value, m = NULL) {
+  if (is.null(value)) return(NULL)
+  switch(name,
+    eq_reference = tryCatch({
+      ref <- .equate_ref(value)
+      .equate_bank_cov(value, ref$item)
+      NULL
+    }, error = function(e) conditionMessage(e)),
+    bt_eq_bank = tryCatch({
+      ref <- .btl_equate_ref(value)
+      .btl_equate_bank_cov(value, ref$object)
+      .btl_equate_cov_df(value)
+      if (!is.null(m)) {
+        bm <- attr(value, "m", exact = TRUE)
+        if (!is.numeric(bm) || is.complex(bm) || length(bm) != 1L ||
+            !is.null(dim(bm)) || !is.null(oldClass(bm)) || !is.finite(bm) ||
+            bm < 1L || bm > .Machine$integer.max || bm != floor(bm) ||
+            !identical(as.integer(bm), as.integer(m)))
+          stop("its response-scale metadata do not match the saved fit",
+               call. = FALSE)
+      }
+      NULL
+    }, error = function(e) conditionMessage(e)),
+    wright_item_map = {
+      z <- value
+      ok <- is.data.frame(z) && !anyDuplicated(names(z)) &&
+        all(c("item", "panel") %in% names(z)) && nrow(z) > 0L &&
+        !anyNA(z$item) && !anyNA(z$panel) &&
+        all(nzchar(trimws(as.character(z$item)))) &&
+        all(nzchar(trimws(as.character(z$panel)))) &&
+        !anyDuplicated(trimws(as.character(z$item)))
+      if (ok) NULL else "it is not a usable item panel map"
+    },
+    NULL)
+}
+
 .validate_app_project <- function(project) {
   fail <- function(message) stop(message, call. = FALSE)
   if (!is.list(project) || !identical(project$format, "rasch-shiny-project"))
@@ -268,51 +321,21 @@
         any(!nzchar(trimws(resource_names))) || anyDuplicated(resource_names))
       fail("the analysis file has invalid resource names")
   }
-  eq_reference <- resources[["eq_reference"]]
-  if (!is.null(eq_reference)) {
-    problem <- tryCatch({
-      ref <- .equate_ref(eq_reference)
-      .equate_bank_cov(eq_reference, ref$item)
-      NULL
-    }, error = function(e) conditionMessage(e))
-    if (!is.null(problem))
-      fail(paste("the analysis file has an invalid item-equating reference:",
-                 problem))
-  }
-  bt_eq_bank <- resources[["bt_eq_bank"]]
-  if (!is.null(bt_eq_bank)) {
-    problem <- tryCatch({
-      ref <- .btl_equate_ref(bt_eq_bank)
-      .btl_equate_bank_cov(bt_eq_bank, ref$object)
-      .btl_equate_cov_df(bt_eq_bank)
-      if (identical(base_family, "btl") && project$base_fit$m > 1L) {
-        m <- attr(bt_eq_bank, "m", exact = TRUE)
-        if (!is.numeric(m) || is.complex(m) || length(m) != 1L ||
-            !is.null(dim(m)) || !is.null(oldClass(m)) || !is.finite(m) ||
-            m < 1L || m > .Machine$integer.max || m != floor(m) ||
-            !identical(as.integer(m),
-                       as.integer(project$base_fit$m)))
-          stop("its response-scale metadata do not match the saved fit",
-               call. = FALSE)
-      }
-      NULL
-    }, error = function(e) conditionMessage(e))
-    if (!is.null(problem))
-      fail(paste("the analysis file has an invalid object-equating bank:",
-                 problem))
-  }
-  wright_item_map <- resources[["wright_item_map"]]
-  if (!is.null(wright_item_map)) {
-    z <- wright_item_map
-    ok <- is.data.frame(z) && !anyDuplicated(names(z)) &&
-      all(c("item", "panel") %in% names(z)) && nrow(z) > 0L &&
-      !anyNA(z$item) && !anyNA(z$panel) &&
-      all(nzchar(trimws(as.character(z$item)))) &&
-      all(nzchar(trimws(as.character(z$panel)))) &&
-      !anyDuplicated(trimws(as.character(z$item)))
-    if (!ok)
-      fail("the analysis file has an invalid Wright-map item panel map")
-  }
+  problem <- .app_project_resource_problem("eq_reference",
+                                           resources[["eq_reference"]])
+  if (!is.null(problem))
+    fail(paste("the analysis file has an invalid item-equating reference:",
+               problem))
+  problem <- .app_project_resource_problem(
+    "bt_eq_bank", resources[["bt_eq_bank"]],
+    m = if (identical(base_family, "btl") && isTRUE(project$base_fit$m > 1L))
+      project$base_fit$m else NULL)
+  if (!is.null(problem))
+    fail(paste("the analysis file has an invalid object-equating bank:",
+               problem))
+  if (!is.null(.app_project_resource_problem("wright_item_map",
+                                             resources[["wright_item_map"]])))
+    fail("the analysis file has an invalid Wright-map item panel map")
 
   # Current app fits retain the exact data, controls and uploaded metadata
   # used for their base calibration. The enclosing project must reproduce
@@ -538,16 +561,17 @@
   contrasts <- project$results[["contrasts"]]
   if (!is.null(contrasts) &&
       (is_btl || !inherits(contrasts, "rasch_dif_contrasts") ||
-       !identical(contrasts$algorithm, "complete-contrast-cells-1")))
+       !identical(contrasts$algorithm, "complete-contrast-cells-2")))
     fail("the saved planned DIF contrasts use a superseded calculation; recompute them")
 
   resolution <- project$results[["resolve"]]
   if (!is.null(resolution) &&
       (is_btl || !inherits(resolution, "rasch_resolve_dif") ||
-       !identical(resolution$algorithm, "factor-design-resolution-1") ||
+       !identical(resolution$algorithm, "factor-design-resolution-2") ||
        !.app_scalar_text(resolution$effects) ||
        !resolution$effects %in% c("main", "factorial")))
-    fail("the saved automatic DIF resolution uses a superseded factor model; recompute it")
+    fail(paste("the saved automatic DIF resolution uses a superseded",
+               "calculation; recompute it"))
 
   dimensionality <- project$results$dimensionality
   if (!is.null(dimensionality)) {
@@ -564,6 +588,10 @@
   if (!is.null(subtest)) {
     if (is_btl)
       fail("the saved person-subset dimensionality test accompanies a paired-comparison fit")
+    if (!is.list(subtest) ||
+        !identical(subtest$algorithm, "person-subset-comparison-1"))
+      fail(paste("the saved person-subset dimensionality test uses a superseded",
+                 "person-subset comparison; recompute it"))
     problem <- tryCatch({
       .validate_dimensionality_test(subtest, active_fit)
       NULL
@@ -624,17 +652,26 @@
     !is.null(project$results[["contrasts"]]) &&
     (!is.list(project$results[["contrasts"]]) ||
      !identical(project$results[["contrasts"]]$algorithm,
-                "complete-contrast-cells-1"))
+                "complete-contrast-cells-2"))
   old_resolution <- is.list(project) && is.list(project$results) &&
     !is.null(project$results[["resolve"]]) &&
     (!is.list(project$results[["resolve"]]) ||
      !identical(project$results[["resolve"]]$algorithm,
-                "factor-design-resolution-1") ||
+                "factor-design-resolution-2") ||
      !is.character(project$results[["resolve"]]$effects) ||
      length(project$results[["resolve"]]$effects) != 1L ||
      anyNA(project$results[["resolve"]]$effects) ||
      !nzchar(trimws(project$results[["resolve"]]$effects)) ||
      !project$results[["resolve"]]$effects %in% c("main", "factorial"))
+  # The person-subset comparison withdrew its paired t-test of the two subset
+  # means: that test reads the targeting of the split rather than its
+  # dimensionality. A saved result without the current stamp carries that
+  # reading, so it is dropped rather than restored beside the current verdict.
+  old_subtest <- is.list(project) && is.list(project$results) &&
+    !is.null(project$results[["subtest"]]) &&
+    (!is.list(project$results[["subtest"]]) ||
+     !identical(project$results[["subtest"]]$algorithm,
+                "person-subset-comparison-1"))
   old_btl_dimensionality <- FALSE
   # The residual decomposition changed from row/count residuals to the
   # pooled expected-score definition. A saved result without the current
@@ -919,7 +956,8 @@
     }
     if (isTRUE(old_resolution)) {
       project$results$resolve <- NULL
-      dropped <- c(dropped, "automatic DIF resolution (superseded factor model)")
+      dropped <- c(dropped,
+                   "automatic DIF resolution (superseded factor model or reporting)")
     }
     project <- .seal_app_project(project)
   }
@@ -1008,6 +1046,24 @@
     project$results$dimension_magnitude <- NULL
     project <- .seal_app_project(project)
     dropped <- c(dropped, "dimensionality magnitude (unmatched reliability samples)")
+  }
+  # Keep the source data, fits and history of a project whose person-subset
+  # test predates the current comparison; omit only that result. Verify the
+  # original bundle before resealing.
+  if (!legacy && isTRUE(old_subtest) && is.numeric(project$schema) &&
+      length(project$schema) == 1L && isTRUE(project$schema == 2L)) {
+    unsigned_project <- project
+    attr(unsigned_project, "rasch_project_legacy") <- NULL
+    attr(unsigned_project, "rasch_project_legacy_dropped") <- NULL
+    unsigned_project$binding <- NULL
+    if (!.app_scalar_text(project$binding) ||
+        !.fit_boot_hash_matches(project$binding, unsigned_project))
+      stop(paste("the analysis file's source data, fitted models or results have",
+                 "changed since they were saved"), call. = FALSE)
+    project$results$subtest <- NULL
+    project <- .seal_app_project(project)
+    dropped <- c(dropped,
+                 "person-subset dimensionality test (superseded subset-mean comparison)")
   }
   # Earlier weighted solvers have no algorithm stamp, use pattern-wle-1, or
   # use the intermediate pattern-unit-wle-2 implementation.
@@ -1163,6 +1219,10 @@
         results$dimension_magnitude <- NULL
         dropped <- c(dropped, "dimensionality magnitude")
       }
+      if (isTRUE(old_subtest)) {
+        results$subtest <- NULL
+        dropped <- c(dropped, "person-subset dimensionality test")
+      }
       if (!is.null(results$bootstrap) &&
           (old_interval_bootstrap || !is.list(results$bootstrap) ||
            !has_signature(results$bootstrap$bs))) {
@@ -1255,6 +1315,13 @@
                   "samples and was omitted; recompute it on matched response rows"),
             call. = FALSE)
   }
+  if (!legacy && isTRUE(old_subtest)) {
+    attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
+    warning(paste("the saved person-subset dimensionality test reported the",
+                  "superseded paired t-test of the subset means and was",
+                  "omitted; recompute it with dimensionality_test() before",
+                  "reporting its verdict"), call. = FALSE)
+  }
   if (!legacy && isTRUE(old_btl_residual_method)) {
     attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
     warning(paste("the saved Comparative Judgement dimensionality used an",
@@ -1291,14 +1358,15 @@
   }
   if (!legacy && isTRUE(old_contrasts)) {
     attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
-    warning(paste("the saved planned DIF contrasts predate the complete-cell",
-                  "support rule and were omitted; recompute them before",
-                  "reporting estimates or probabilities"), call. = FALSE)
+    warning(paste("the saved planned DIF contrasts predate the current",
+                  "complete-cell support rules and were omitted; recompute",
+                  "them before reporting estimates or probabilities"),
+            call. = FALSE)
   }
   if (!legacy && isTRUE(old_resolution)) {
     attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
-    warning(paste("the saved automatic DIF resolution predates preservation",
-                  "of the requested factor model and was omitted; fitted",
+    warning(paste("the saved automatic DIF resolution predates the current",
+                  "factor model and reporting rules and was omitted; fitted",
                   "models and analysis history are unchanged; rerun resolution",
                   "from the pre-resolution fit with the intended factors and effects"),
             call. = FALSE)

@@ -281,3 +281,60 @@ test_that("DIF post-hocs give marginal pairs and pure interaction magnitudes", {
   expect_equal(row$estimate, manual, tolerance = 1e-8)
   expect_gt(abs(row$estimate), 0.6)
 })
+
+test_that("an item whose split refit is refused withholds only its own rows", {
+  # In group b, item I3 scores 0 only inside all-zero patterns, so its
+  # split copy loses that category during calibration and split_items
+  # refuses. The refusal must not abort the other items' contrasts.
+  set.seed(11); n <- 200; L <- 6
+  d <- seq(-1.5, 1.5, length.out = L); th <- rnorm(n)
+  X <- matrix(rbinom(n * L, 1, plogis(outer(th, d, "-"))), n, L)
+  colnames(X) <- paste0("I", seq_len(L))
+  g <- rep(c("a", "b"), each = n / 2); b <- g == "b"
+  X[b, "I3"] <- 1L
+  X[which(b)[1:6], ] <- 0L
+  fit <- rasch(data.frame(X, grp = g, check.names = FALSE), factors = "grp")
+  expect_error(split_items(fit, "I3", by = "grp"),
+               "cannot preserve the fitted score structure")
+
+  dc <- dif_contrasts(fit)
+  tab <- dc$table
+  expect_equal(nrow(tab), L)
+  refused <- tab$item == "I3"
+  expect_true(all(is.na(unlist(tab[refused,
+    c("estimate", "se", "statistic", "p", "p_adj")]))))
+  expect_true(all(is.finite(tab$estimate[!refused])))
+  expect_true(all(is.finite(tab$p[!refused])))
+  expect_match(paste(dc$notes, collapse = " "),
+               "I3: resolved contrasts withheld because the split refit is")
+  # the withheld item keeps its place in the multiplicity family
+  expect_equal(dc$family_n, L)
+  expect_equal(tab$p_adj[!refused],
+               p.adjust(tab$p[!refused], "holm", n = L))
+})
+
+test_that("a refused split refit is not reported as a category mismatch", {
+  # An anchored item cannot be split, but both groups answer it on the same
+  # 0:1 structure. The withholding note must give the refusal's own reason
+  # and must not also blame the response categories.
+  set.seed(7); n <- 300L; L <- 6L
+  d <- seq(-1.5, 1.5, length.out = L); th <- rnorm(n)
+  X <- matrix(rbinom(n * L, 1, plogis(outer(th, d, "-"))), n, L)
+  colnames(X) <- c("A1", "A2", paste0("I", 3:L))
+  df <- data.frame(X, grp = rep(c("a", "b"), each = n / 2),
+                   check.names = FALSE)
+  f0 <- rasch(df, factors = "grp")
+  th0 <- f0$thresholds
+  th0$item <- f0$items$item[th0$item]
+  fit <- rasch(df, factors = "grp",
+               anchors = th0[th0$item %in% c("A1", "A2"), c("item", "k", "tau")])
+
+  dc <- dif_contrasts(fit)
+  notes <- paste(dc$notes, collapse = " ")
+  expect_match(notes, "A1: resolved contrasts withheld because the split refit")
+  expect_match(notes, "an anchored item cannot be split")
+  expect_false(grepl("response-category", notes))
+  anchored <- dc$table$item %in% c("A1", "A2")
+  expect_true(all(is.na(dc$table$estimate[anchored])))
+  expect_true(all(is.finite(dc$table$estimate[!anchored])))
+})

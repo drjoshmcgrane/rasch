@@ -478,8 +478,12 @@ test_that("bootstrap SEs propagate linking uncertainty (estimates unchanged)", {
   expect_true(all(is.finite(fb$unit_omnibus$df2)))
   expect_equal(fb$unit_omnibus$p_adj,
                p.adjust(fb$unit_omnibus$p, "holm"))
-  follow_p <- c(fb$phi_table$p, fb$alpha_table$p, fb$kappa_table$p)
-  follow_adj <- c(fb$phi_table$p_adj, fb$alpha_table$p_adj,
+  # Centring makes the two panel units one hypothesis reported twice, so the
+  # follow-up family holds it once and both rows report its adjusted value.
+  expect_equal(fb$phi_table$p[1], fb$phi_table$p[2])
+  expect_equal(fb$phi_table$p_adj[1], fb$phi_table$p_adj[2])
+  follow_p <- c(fb$phi_table$p[1], fb$alpha_table$p, fb$kappa_table$p)
+  follow_adj <- c(fb$phi_table$p_adj[1], fb$alpha_table$p_adj,
                   fb$kappa_table$p_adj)
   ok <- is.finite(follow_p)
   expect_equal(follow_adj[ok], p.adjust(follow_p[ok], "holm"))
@@ -585,6 +589,33 @@ test_that("set-unit df follow the support path to the reference set", {
   expect_true(is.na(fit$phi_table$p_adj))
   set3_objects <- fit$objects$object[fit$objects$set == "set3"]
   expect_equal(.btl_equate_cov_df(fit, set3_objects), floor(weak) - 1)
+})
+
+test_that("two panel units are one hypothesis in the follow-up family", {
+  skip_on_cran()
+  pu <- c(0.6, 1 / 0.6)
+  pu <- pu / exp(mean(log(pu)))
+  d <- simulate_btl_efrm(n_objects_per_set = 6, n_sets = 2, n_panels = 2,
+                         n_judges_per_panel = 12, reps_within = 25,
+                         reps_cross = 25, panel_units = pu, seed = 12)
+  os <- attr(d, "truth")$object_sets
+  fit <- btl_efrm(d, "object_a", "object_b", "winner", "judge", "panel", os,
+                  se_method = "judge_bootstrap", boot_reps = 30, workers = 1,
+                  seed = 3)
+  # centring makes log phi_1 = -log phi_2, so the two rows are one test
+  expect_equal(abs(fit$phi_table$t[1]), abs(fit$phi_table$t[2]))
+  expect_equal(fit$phi_table$p[1], fit$phi_table$p[2])
+  expect_equal(fit$phi_table$p_adj[1], fit$phi_table$p_adj[2])
+  free_set <- fit$alpha_table$set != fit$reference_set
+  fam_p <- c(fit$phi_table$p[1], fit$alpha_table$p[free_set],
+             fit$kappa_table$p[free_set])
+  expect_true(all(is.finite(fam_p)))
+  expect_equal(fit$phi_table$p_adj[1], p.adjust(fam_p, "holm")[1])
+  # the planted panel unit gives the family's smallest probability, so its
+  # step-down multiplier is the number of distinct questions (three), not the
+  # four that counting the duplicated row would give
+  expect_lt(fam_p[1], min(fam_p[-1]))
+  expect_equal(fit$phi_table$p_adj[1], 3 * fit$phi_table$p[1])
 })
 
 test_that("set pairs below min_link do not enter the linking fit", {

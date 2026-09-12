@@ -4,10 +4,15 @@
 # from anchor-based residual recalibration, selects one strongest item per
 # round, and checks the public split-and-refit resolution for uniform DIF.
 
+# The pinned hash is the screen as committed. Its own hash moved when its
+# stale helper pin was repaired, which postdates the recorded results, whose
+# rows name the earlier screen they ran against
+# (afd7a676ac870245ace7844f5e452ed7), so a rerun is distinguishable from them.
+
 base_study <- "tools/simval/studies/dif-score-purification.R"
-base_md5 <- "afd7a676ac870245ace7844f5e452ed7"
+base_md5 <- "532cbc3095c6067cb3f09883e7ff3e99"
 if (!identical(unname(tools::md5sum(base_study)), base_md5))
-  stop("purification helper hash does not match the screened version")
+  stop("purification helper hash does not match the committed version")
 ex2 <- parse(file = base_study)
 for (i in seq_len(15L)) eval(ex2[[i]], envir = environment())
 

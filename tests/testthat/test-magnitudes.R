@@ -115,6 +115,26 @@ test_that("dependence resolution retains controls and refuses constrained polyto
                "unconstrained PCM")
 })
 
+test_that("the dependence print method reads a saved fit that carries `z`", {
+  set.seed(21); N <- 400
+  d0 <- seq(-1.2, 1.2, length.out = 6)
+  X <- matrix(rbinom(N * 6, 1, plogis(outer(rnorm(N), d0, "-"))), N, 6,
+              dimnames = list(NULL, paste0("I", 1:6)))
+  X[, 3] <- ifelse(runif(N) < 0.7, X[, 2], X[, 3])
+  dm <- dependence_magnitude(rasch(X), "I3", "I2")
+  # a pre-`t` saved object: `z`, no `t`, no `df`
+  old <- dm
+  old$z <- old[["t"]]
+  old <- old[c("d", "se", "z", "p", "thresholds", "dependent", "independent",
+               "note", "refit")]
+  class(old) <- "rasch_dependence"
+  # `$t` still partial-matches `thresholds`, so the print must use `[["t"]]`
+  expect_identical(old$t, old$thresholds)
+  out <- paste(capture.output(print(old)), collapse = "\n")
+  expect_match(out, sprintf("z = %.2f", dm[["t"]]), fixed = TRUE)
+  expect_match(out, "p = ", fixed = TRUE)
+})
+
 test_that("spread_test flags a dependent subtest by the LUB", {
   set.seed(5); N <- 800
   d0 <- rep(c(-0.5, 0, 0.5), 3)[1:9]
@@ -467,10 +487,11 @@ test_that("the new displays draw without error", {
   expect_no_error(plot_pcc(fit, person = 1))
   expect_no_error(plot_resid_dist(fit, "items"))
   expect_no_error(plot_resid_dist(fit, "persons", "natural"))
-  # paired t-test is part of the dimensionality report
+  # the subset mean difference is part of the dimensionality report, as a
+  # description of the split rather than a test of it
   dt <- dimensionality_test(fit, min_score_points = 2)
-  expect_true(is.list(dt$paired_t))
-  expect_true(is.finite(dt$paired_t$p))
+  expect_true(is.list(dt$subset_mean_difference))
+  expect_true(is.finite(dt$subset_mean_difference$mean_difference))
 })
 
 test_that("rasch(pc_components) routes estimation through pcml_pc", {

@@ -171,9 +171,11 @@ extrapolating an object. Omnibus Wald probabilities are
 Holm-adjusted across the panel-unit, set-unit and set-origin families.
 Individual estimated units form a separate Holm-adjusted follow-up family
 across all three parameter types. Structurally fixed reference coordinates
-are not hypotheses. An unavailable estimated unit remains in its predeclared
-family; an omnibus is withheld rather than reduced when one of its
-requested coordinates is unavailable.
+are not hypotheses. With two panels the centring constraint makes the two
+reported panel units a single hypothesis: it enters that family once, and
+both rows report its adjusted probability. An unavailable estimated unit
+remains in its predeclared family; an omnibus is withheld rather than
+reduced when one of its requested coordinates is unavailable.
 Judge-bootstrap probabilities require at least six judges and 5.5 effective
 judges in every contributing panel. Each non-reference set also requires
 eight judges and eight effective judges along a supported path to the

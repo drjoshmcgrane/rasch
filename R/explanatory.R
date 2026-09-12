@@ -250,8 +250,15 @@
   thr$se[thr$weak] <- NA_real_
   se <- sqrt(pmax(diag(sol$cov_beta), 0))
   stat <- .wald_ratio(sol$beta, se)
-  ref_df <- if (!isTRUE(sol$cluster_inference)) NA_real_ else if (repeated)
-    sol$cluster_support$n - 1L else Inf
+  # The sandwich rests on the same finite count of independent person units
+  # whether or not identifiers repeat, so both cases take the finite t
+  # reference. Reading those units as a limiting normal merely because each
+  # contributes one response row rejects a true null far more often than the
+  # printed probability states: at the smallest supported counts the normal
+  # reference rejects at roughly 1.7 times the nominal rate.
+  n_units <- sol$cluster_support$n
+  ref_df <- if (isTRUE(sol$cluster_inference) && length(n_units) == 1L &&
+                is.finite(n_units) && n_units >= 2) n_units - 1L else NA_real_
   coef <- data.frame(term = parameter_names, estimate = sol$beta, se = se,
                      t = stat, df = ref_df,
                      p = 2 * stats::pt(-abs(stat), df = ref_df),
@@ -639,12 +646,11 @@ print.rasch_btl_explanatory <- function(x, ...) {
 #' identifier occurs on more than one response row, coefficient covariance is
 #' clustered by person. A linearised delete-one-person correction accounts for
 #' finite-cluster leverage without refitting the model once per person.
-#' Supported repeated-person fits use a \eqn{t} reference
-#' with degrees of freedom equal to the number of person clusters contributing
-#' conditional information minus one; inference
-#' is withheld when the calibration lacks enough independent information.
-#' Supported fits without repeated identifiers use the limiting normal
-#' reference. Holm adjustment covers the coefficient family.
+#' Supported fits use a \eqn{t} reference with degrees of freedom equal to
+#' the number of independent person units contributing conditional
+#' information minus one, whether or not identifiers repeat; inference is
+#' withheld when the calibration lacks enough independent information.
+#' Holm adjustment covers the coefficient family.
 #' With few persons and unequal numbers of response rows, these approximate
 #' tests can still be mildly liberal; the correction does not guarantee nominal
 #' coverage in small samples.

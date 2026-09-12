@@ -3,11 +3,16 @@
 # verifying their exact content hash. In addition to each
 # rate, this study records the paired current-minus-bootstrap difference and
 # its Monte Carlo standard error.
+#
+# The pinned hash is the helper as committed. Its reference-probability fix
+# postdates the recorded results, whose rows name the earlier helper they ran
+# against (813c7f6af9cbb06cac9a2b8c24ab07e5), so a rerun is distinguishable
+# from them.
 
 helper <- "tools/simval/studies/dif-conditional-bootstrap-extended.R"
-helper_md5 <- "9cd830f747e4d180bba7a6fca1c56929"
+helper_md5 <- "4624788f06cc401781b2cc774a246b8e"
 if (!identical(unname(tools::md5sum(helper)), helper_md5))
-  stop("extended-study helper hash does not match the screened version")
+  stop("extended-study helper hash does not match the committed version")
 ex <- parse(file = helper)
 for (i in seq_len(19L)) eval(ex[[i]], envir = environment())
 

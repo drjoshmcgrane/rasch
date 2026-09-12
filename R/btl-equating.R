@@ -170,6 +170,14 @@
 #' If fewer than two common objects have usable variances but at least two have
 #' finite locations, their unweighted mean difference is returned as a
 #' descriptive fallback and recorded in \code{shift_method}.
+#' Every error built from those precision weights conditions on them as if
+#' the two calibrations' standard errors were known: \code{shift_se}, each
+#' drift contrast's \code{se_diff} (and so its probability and
+#' \code{drifting} flag), and the equated location errors that carry the
+#' shift. Weight uncertainty adds a positive term all of them omit, so they
+#' understate uncertainty -- intervals under-cover, drift probabilities run
+#' small -- when the calibrations rest on few judges; a judge resample of
+#' both calibrations is the weight-aware alternative.
 #' An exact common anchor determines the shift even when it is the only
 #' common object with usable uncertainty.
 #' Each object is tested using its shifted difference \eqn{d_j-\hat s}. The
@@ -559,6 +567,29 @@ btl_equate <- function(fit1, fit2, alpha = 0.05, p_adjust = "holm",
             "no common-object shift was estimated.")
   if (exact_link)
     notes <- c(notes, "Exact common anchors determine the origin shift.")
+  # u is built from the calibrations' own estimated standard errors, so every
+  # quadratic form in u conditions on weights that are themselves estimated:
+  # the shift error, each drift contrast error, and the equated errors that
+  # carry the shift. The omitted term is positive, and it grows as the
+  # standard errors become noisier, so name every affected quantity that this
+  # call actually reports and state the direction, rather than manufacture a
+  # correction.
+  if (shift_method == "precision-weighted" && !exact_link &&
+      is.finite(shift_se)) {
+    weighted <- c("the shift standard error",
+                  if (any(testable)) "each drift contrast standard error",
+                  if (any(is.finite(equated_se)))
+                    "the equated location standard errors")
+    notes <- c(notes, paste0(
+      "Every error built from the estimated precision weights (",
+      paste(weighted, collapse = "; "),
+      ") treats the two calibrations' standard errors as known. The omitted ",
+      "weight-uncertainty term is positive, and it grows as those standard ",
+      "errors become noisier: with few judges per panel these errors ",
+      "understate the uncertainty and their intervals under-cover",
+      if (any(testable)) ", and the drift probabilities run small" else "",
+      ". Resample the judges of both calibrations for weight-aware errors."))
+  }
   if (conditional1 || conditional2)
     notes <- c(notes, paste(
       "Drift tests are withheld because conditional frame errors do not",

@@ -182,8 +182,20 @@
     .fit_boot_hash_matches(stored_fingerprint, fit)
 }
 
+# The algorithm tag a stored result must carry to be read as current. The
+# ability-sampling generators once re-derived an automatic class-interval
+# count inside every replicate, so their nulls mixed interval counts, and
+# degrees of freedom, the observed chi-square never used; those results are
+# superseded. The conditional generator retains every raw score, so its
+# non-extreme set, and hence its interval count, was already constant across
+# replicates: those nulls are unchanged and stay current.
+.fit_boot_algorithm <- function(kind, theta) {
+  if (identical(kind, "btl")) "loo-maxt-1"
+  else if (identical(theta, "conditional")) "loo-maxt-2" else "loo-maxt-3"
+}
+
 .new_fit_bootstrap <- function(x, fit, kind) {
-  x$algorithm <- if (kind == "btl") "loo-maxt-1" else "loo-maxt-2"
+  x$algorithm <- .fit_boot_algorithm(kind, x$theta)
   x$model_kind <- kind
   x$fit_signature <- .fit_boot_signature(fit)
   x <- .tag_tables(x)
@@ -223,7 +235,7 @@
     c("items", "persons", "person_adjustment"))
   if (!all(required %in% names(bootstrap)) ||
       !identical(bootstrap$algorithm,
-                 if (expected == "btl") "loo-maxt-1" else "loo-maxt-2") ||
+                 .fit_boot_algorithm(expected, bootstrap$theta)) ||
       !is.list(bootstrap$total) || !is.list(bootstrap$replicates)) fail()
 
   whole <- function(x, lower = 0L)
@@ -488,7 +500,11 @@
 # are not used here and would multiply the cost by the number of replicates.
 # Repeat the requested allocation rule: NULL selects intervals automatically
 # (per item with missing responses), while a supplied count stays fixed.
-.fit_refit <- function(X, model, n_groups, anchors, expected_m, maxit, tol) {
+# fixed_groups, when supplied, holds the interval counts the observed fit
+# realised under the automatic rule, so a replicate is scored on the same
+# intervals as the statistic it forms a null for.
+.fit_refit <- function(X, model, n_groups, anchors, expected_m, maxit, tol,
+                       fixed_groups = NULL) {
   r <- .fit_refit_residuals(X, model, anchors, expected_m, maxit, tol)
   if (inherits(r, "rasch_fit_boot_failure")) return(r)
   est <- r$est; tau_list <- r$tau_list; person <- r$person
@@ -500,9 +516,14 @@
     tot <- sum(col, na.rm = TRUE); nn <- sum(!is.na(col))
     nn == 0L || tot == 0 || tot == nn * m_i[j]
   }, logical(1))
-  ci <- .class_intervals(person$theta, person$extreme, n_groups)
-  ci_list <- if (anyNA(X))
-    .class_intervals_by_item(X, person$theta, person$extreme, n_groups) else NULL
+  ci <- .class_intervals(person$theta, person$extreme,
+                         fixed_groups$common %||% n_groups)
+  ng_item <- fixed_groups$item
+  ci_list <- if (!anyNA(X)) NULL else if (is.null(ng_item))
+    .class_intervals_by_item(X, person$theta, person$extreme, n_groups) else
+      lapply(seq_len(L), function(i)
+        .class_intervals_by_item(X[, i, drop = FALSE], person$theta,
+                                 person$extreme, ng_item[i])[[1L]])
   it <- .item_trait(X, mo, ci, ci_list = ci_list)
   ifit <- .item_fit(X, Z, mo, extreme = person$extreme)
   pfit <- .person_fit(X, Z, mo, item_extreme = item_extreme)
@@ -516,6 +537,24 @@
                       outfit_ms = pfit$outfit_ms,
                       infit_z = pfit$infit_z,
                       outfit_z = pfit$outfit_z))
+}
+
+# The interval counts the observed item-trait chi-squares were computed on.
+# The automatic rule reads the non-extreme sample size, which the
+# ability-sampling generators move from replicate to replicate: re-deriving
+# the rule inside each replicate builds the null from chi-squares carrying a
+# different number of intervals, and different degrees of freedom, from the
+# observed statistic. Resolve the rule once, against the fit itself.
+.fit_boot_realised_groups <- function(fit) {
+  common <- fit$n_groups
+  if (!(length(common) == 1L && is.finite(common) && common >= 2L))
+    return(NULL)
+  item <- if (length(fit$ci_item) != ncol(fit$X)) NULL else
+    vapply(fit$ci_item, function(g) {
+      g <- g[!is.na(g)]
+      if (length(g)) as.integer(max(g)) else 1L
+    }, 1L)
+  list(common = as.integer(common), item = item)
 }
 
 # The statistics this bootstrap calibrates, and how each is read. The
@@ -1100,7 +1139,13 @@
 #' The person parameter then cancels by sufficiency. Item parameters and
 #' person locations are re-estimated in every replicate.
 #' The original class-interval rule is repeated, including automatic per-item
-#' allocation with missing responses. Tied locations remain in one interval.
+#' allocation with missing responses. An automatic count is resolved against
+#' the observed fit and held across replicates, so every replicate chi-square
+#' is scored on the intervals the observed one used. Tied locations remain in
+#' one interval. A result stored by an earlier version under
+#' \code{theta = "resample"}, \code{"fixed"} or \code{"normal"} was built
+#' from a null that mixed interval counts, so it is refused and must be
+#' recomputed; results from the default generator are unchanged.
 #' The generator assumes independent response rows. A fit with repeated person
 #' IDs is therefore refused because this bootstrap does not reproduce
 #' within-person dependence.
@@ -1288,13 +1333,17 @@ fit_bootstrap <- function(fit, B = 200,
   tau_list <- fit$tau_list; item_names <- colnames(X)
   model <- fit$model; ng <- .refit_n_groups(fit); anchors <- spec$anchors
   maxit <- spec$maxit %||% 60L; tol <- spec$tol %||% 1e-8
+  # An automatic count is resolved against the observed fit rather than
+  # re-derived per replicate; an explicit request is already fixed.
+  fixed_groups <- if (is.null(ng)) .fit_boot_realised_groups(fit) else NULL
   one <- function(b) {
     old_stream <- .sim_seed_capture()
     on.exit(.sim_seed_restore(old_stream), add = TRUE)
     set.seed(seeds[b])
     Xb <- if (is.null(th_b)) .fit_gen_conditional(X, tau_list, na_mask)
           else .fit_gen(th_b[[b]], tau_list, na_mask, item_names)
-    .fit_refit(Xb, model, ng, anchors, fit$m, maxit, tol)
+    .fit_refit(Xb, model, ng, anchors, fit$m, maxit, tol,
+               fixed_groups = fixed_groups)
   }
   reps <- .rasch_boot_apply(B, one, workers = workers,
                             label = "item fit bootstrap")

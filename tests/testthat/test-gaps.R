@@ -1930,10 +1930,17 @@ test_that("curves, styles and selectors follow the design they describe", {
                    boot_reps = 0)
   sc <- fe$score_curves
   expect_true("design" %in% names(sc))
-  expect_setequal(unique(paste0(sc$group, ":", sc$design)),
-                  c("g1:set1", "g1:set1 + set2", "g2:set1 + set2"))
-  mx <- tapply(sc$expected_score, paste0(sc$group, ":", sc$design), max)
-  expect_lt(mx[["g1:set1"]], mx[["g1:set1 + set2"]])
+  # the shared labeller names the administration in full, so the design
+  # stands alone and the group column agrees with it
+  expect_setequal(unique(sc$design),
+                  c("group=g1, sets=set1", "group=g1, sets=set1+set2",
+                    "group=g2, sets=set1+set2"))
+  expect_setequal(unique(sc$group), c("g1", "g2"))
+  # the label names the group, so every row's group column must agree with it
+  expect_true(all(mapply(grepl, paste0("group=", sc$group, ","), sc$design,
+                         MoreArgs = list(fixed = TRUE))))
+  mx <- tapply(sc$expected_score, sc$design, max)
+  expect_lt(mx[["group=g1, sets=set1"]], mx[["group=g1, sets=set1+set2"]])
 
   # A partial form within one set is its exact scored-item pattern, not the
   # whole set.  These two forms each contribute three items to their curve.
@@ -1946,8 +1953,11 @@ test_that("curves, styles and selectors follow the design they describe", {
   fp <- rasch_efrm(dp, item_sets = list(core = ip), groups = "group",
                    id = "id", boot_reps = 0)
   sp <- fp$score_curves
-  expect_equal(length(unique(paste(sp$group, sp$design))), 4L)
-  expect_true(all(grepl("^core \\[", unique(sp$design))))
+  expect_equal(length(unique(sp$design)), 4L)
+  # a one-set frame still names its set: the administration is which items
+  # of which set, and the set identity is not dropped for want of a second
+  expect_true(all(grepl("sets=core, items=", unique(sp$design),
+                        fixed = TRUE)))
   expect_equal(unique(sp$n_persons), 60)
   hi <- stats::aggregate(expected_score ~ group + design, sp, max)
   ph <- stats::setNames(fp$phi_table$phi, fp$phi_table$group)

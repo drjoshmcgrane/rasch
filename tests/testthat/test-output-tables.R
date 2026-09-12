@@ -11,6 +11,25 @@ simd2 <- function(N, d, seed = 1) {
   X
 }
 
+# The first occasion carries both groups and the later ones only group B, so
+# the occasion-by-group tests are not estimable from the retained design and
+# dif_anova() records why.
+sim_unestimable_dif <- function(seed = 14) {
+  set.seed(seed)
+  np <- 80L; L <- 5L; b <- seq(-1, 1, length.out = L)
+  g <- rep(c("A", "B"), each = np / 2); th0 <- rnorm(np); rows <- list()
+  for (k in 1:3) {
+    th <- th0 + rnorm(np, 0, 0.3)
+    X <- matrix(0L, np, L, dimnames = list(NULL, paste0("I", 1:L)))
+    for (j in seq_len(L)) X[, j] <- rbinom(np, 1, plogis(th - b[j]))
+    keep <- if (k == 1L) rep(TRUE, np) else g == "B"
+    rows[[k]] <- data.frame(X, occ = paste0("t", k), grp = g,
+                            pid = sprintf("P%03d", 1:np))[keep, ]
+  }
+  rasch(do.call(rbind, rows), factors = c("occ", "grp"), id = "pid",
+        items = paste0("I", 1:L))
+}
+
 test_that("chisq_detail reproduces the item-trait chi-square from its components", {
   fit <- rasch(simd2(400, seq(-1.5, 1.5, length.out = 8), seed = 2))
   cd <- chisq_detail(fit, "I4")
@@ -425,6 +444,90 @@ test_that("exports accept DIF only from the fitted model being reported", {
                "different fitted model")
 })
 
+test_that("every DIF surface says which requested tests were not estimable", {
+  fit <- sim_unestimable_dif()
+  da <- dif_anova(fit, effects = "factorial")
+  expect_true(any(grepl("not estimable", da$notes, fixed = TRUE)))
+
+  # a blank summary row otherwise reads as "nothing to report" while the
+  # withheld test still counts in the adjusted family
+  printed <- paste(utils::capture.output(print(da)), collapse = "\n")
+  expect_match(printed, "not estimable", fixed = TRUE)
+
+  html <- tempfile(fileext = ".html")
+  on.exit(unlink(html), add = TRUE)
+  # parallel residual inference is separately unavailable for repeated IDs;
+  # its export warning is not the DIF note under test
+  suppressWarnings(report_html(fit, html, dif = da))
+  document <- paste(readLines(html, warn = FALSE), collapse = "\n")
+  expect_match(document,
+               "<h2>Differential item functioning</h2><p class='note'>",
+               fixed = TRUE)
+  expect_match(document, "not estimable", fixed = TRUE)
+
+  out <- tempfile("dif-note-output-")
+  on.exit(unlink(out, recursive = TRUE), add = TRUE)
+  suppressWarnings(save_outputs(fit, out, formats = "png",
+                                item_plots = FALSE, dpi = 40, dif = da))
+  summary <- paste(readLines(file.path(out, "summary.txt")), collapse = "\n")
+  expect_match(summary, "DIF notes:", fixed = TRUE)
+  expect_match(summary, "not estimable", fixed = TRUE)
+})
+
+test_that("a paired-comparison export records the DIF notes", {
+  d <- as.data.frame(simulate_btl(4, 24, 30, seed = 816))
+  d$group <- ifelse(as.integer(sub("^J", "", d$judge)) <= 12, "A", "B")
+  fit <- btl(d, "object_a", "object_b", winner = "winner", judge = "judge")
+  ids <- unique(d$judge)
+  groups <- setNames(vapply(ids, function(id)
+    unique(d$group[d$judge == id]), character(1)), ids)
+  dif <- btl_dif(fit, factors = list(group = groups))
+  # this fixture leaves nothing unavailable, so the note an unavailable test
+  # would record is supplied here to exercise the export on its own terms.
+  # Re-seal it as the internal constructor would; an unsigned edited result
+  # is deliberately rejected by the public export path.
+  dif$notes <- "2 requested object-term test(s) were not estimable"
+  unsigned <- unclass(dif)
+  unsigned$result_signature <- NULL
+  dif$result_signature <- .fit_boot_md5(unsigned)
+  out <- tempfile("btl-dif-note-")
+  on.exit(unlink(out, recursive = TRUE), add = TRUE)
+  local_mocked_bindings(.rr_save_plot = function(...) character(0),
+                         .package = "rasch")
+  save_outputs(fit, out, formats = "png", item_plots = FALSE, dif = dif)
+  summary <- paste(readLines(file.path(out, "summary.txt")), collapse = "\n")
+  expect_match(summary,
+               "DIF notes: 2 requested object-term test(s) were not estimable",
+               fixed = TRUE)
+
+  skip_if_not_installed("rmarkdown")
+  skip_if_not(rmarkdown::pandoc_available())
+  html <- tempfile(fileext = ".html")
+  on.exit(unlink(html), add = TRUE)
+  report_document(fit, html, format = "html", dif = dif)
+  document <- paste(readLines(html, warn = FALSE), collapse = "\n")
+  expect_match(document, "<li>2 requested object-term test(s) were not",
+               fixed = TRUE)
+})
+
+test_that("report_document delivers a parenthesised note as prose", {
+  skip_if_not_installed("rmarkdown")
+  skip_if_not(rmarkdown::pandoc_available())
+  fit <- sim_unestimable_dif()
+  da <- dif_anova(fit, effects = "factorial")
+  html <- tempfile(fileext = ".html")
+  on.exit(unlink(html), add = TRUE)
+  report_document(fit, html, format = "html", dif = da)
+  document <- paste(readLines(html, warn = FALSE), collapse = "\n")
+  expect_match(document, "not estimable", fixed = TRUE)
+  # pandoc reads "\(" and "\[" as mathematics under tex_math_single_backslash:
+  # a backslash-escaped parenthesis sets the clause as an equation and
+  # deletes the parentheses from the reported note
+  expect_false(grepl("class=\"math", document, fixed = TRUE))
+  expect_match(document, "(rank deficiency", fixed = TRUE)
+  expect_match(document, "term(s)", fixed = TRUE)
+})
+
 test_that("report_document writes a self-contained HTML report", {
   skip_if_not_installed("rmarkdown")
   skip_if_not(rmarkdown::pandoc_available())
@@ -558,6 +661,23 @@ test_that("the fit and targeting summaries are complete tidy tables", {
   expect_identical(fu$value[grepl("Holm p", fu$statistic)], "unavailable")
   expect_match(paste(capture.output(summary(unavailable)), collapse = "\n"),
                "Holm p < 0.05: unavailable", fixed = TRUE)
+})
+
+test_that("a withheld item-trait probability prints as unavailable", {
+  d <- simulate_rasch(n_persons = 200, n_items = 8, seed = 5)
+  X <- d[, grep("^I", names(d))]
+  # one person id for every row: the row-based item-trait reference does not
+  # hold, so the probability is withheld rather than printed blank
+  f <- rasch(data.frame(id = rep("P1", nrow(X)), X), id = "id",
+             items = names(X))
+  out <- capture.output(print(f))
+  expect_match(paste(out, collapse = "\n"), "df, probability unavailable",
+               fixed = TRUE)
+  expect_false(any(grepl("p = $", out)))
+  ft <- fit_summary_table(f)
+  expect_identical(ft$value[ft$statistic ==
+                              "Approximate asymptotic item-trait probability"],
+                   "unavailable")
 })
 
 test_that("structural summaries name response cells and withhold alpha", {

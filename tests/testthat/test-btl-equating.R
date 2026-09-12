@@ -118,6 +118,38 @@ test_that("clustered equating uses contrast-specific finite degrees of freedom",
                                 2 * pnorm(-abs(eq$table$t)))))
 })
 
+test_that("precision-weighted errors state their estimated weights", {
+  objs <- paste0("O", 1:5)
+  C <- 0.04 * (diag(5) - matrix(1 / 5, 5, 5))
+  make_fit <- function(loc, prefix) structure(list(
+    objects = data.frame(object = objs, location = loc,
+                         se = sqrt(diag(C))),
+    cov_beta = C, converged = TRUE, m = 1L, categories = 0:1,
+    thr_structure = "none", clustered = TRUE,
+    comparisons = data.frame(judge = rep(paste0(prefix, 1:12), each = 2))),
+    class = "rasch_btl")
+  f1 <- make_fit(c(-0.9, -0.3, 0.1, 0.4, 0.7), "A")
+  f2 <- make_fit(c(-1.1, -0.5, 0.3, 0.5, 0.8), "B")
+  eq <- btl_equate(f1, f2, independent = TRUE)
+  expect_identical(eq$shift_method, "precision-weighted")
+  expect_true(is.finite(eq$shift_se))
+  # the weights are built from the calibrations' own estimated errors, so
+  # every quadratic form in them conditions on estimated weights: the note
+  # must name the drift and equated errors too, not the shift alone
+  expect_true(any(is.finite(eq$table$p_adj)))
+  expect_true(any(is.finite(eq$equated$se)))
+  msg <- paste(eq$notes, collapse = " ")
+  expect_match(msg, "Every error built from the estimated precision weights",
+               fixed = TRUE)
+  expect_match(msg, "the shift standard error", fixed = TRUE)
+  expect_match(msg, "each drift contrast standard error", fixed = TRUE)
+  expect_match(msg, "the equated location standard errors", fixed = TRUE)
+  fixed_origin <- btl_equate(f1, f2, independent = TRUE, shift = "none")
+  expect_identical(fixed_origin$shift_method, "none")
+  expect_false(any(grepl("estimated precision weights", fixed_origin$notes,
+                         fixed = TRUE)))
+})
+
 test_that("BTL-EFRM equating df follows its uncertainty method", {
   z <- structure(list(
     se_method = "bootstrap",

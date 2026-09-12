@@ -43,7 +43,11 @@ test_that("drop_items keeps the standard errors the source fit had", {
                    with_se$boot_reps_requested - with_se$boot_reps_used)
   kept <- drop_items(with_se, drop1)
   expect_true(all(is.finite(kept$alpha_table$se_log_alpha)))
-  expect_true(all(is.finite(kept$efrm_vs_rasch$unit_tests$p_adj)))
+  # The two centred set units are one hypothesis: the first row carries the
+  # adjusted probability and the second, which restates it, is withheld.
+  kept_adj <- kept$efrm_vs_rasch$unit_tests$p_adj
+  expect_true(is.finite(kept_adj[1]))
+  expect_true(is.na(kept_adj[2]))
 
   # a fit asked for no standard errors keeps none, and stays cheap
   without <- rasch_efrm(d, item_sets = tr$item_sets, groups = "group",

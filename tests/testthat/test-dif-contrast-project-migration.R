@@ -2,7 +2,7 @@ test_that("saved contrasts with superseded support rules are not restored", {
   d <- simulate_rasch(200, 6, n_groups = 2, seed = 814)
   fit <- rasch(d, factors = "group")
   current <- dif_contrasts(fit, items = "I01")
-  expect_identical(current$algorithm, "complete-contrast-cells-1")
+  expect_identical(current$algorithm, "complete-contrast-cells-2")
   old <- current
   old$algorithm <- NULL
   old$table$estimate <- old$table$estimate + 1
@@ -43,6 +43,30 @@ test_that("saved contrasts with superseded support rules are not restored", {
   project$results$contrasts <- old
   saveRDS(project, path)
   expect_warning(restored <- .read_app_project(path), "schema-1")
+  expect_null(restored$results$contrasts)
+  expect_identical(restored$base_fit, fit)
+  expect_no_error(.validate_app_project(restored))
+})
+
+test_that("contrasts saved under the previous support tag are not restored", {
+  # The polynomial-weight rule changed which nuisance strata and persons a
+  # contrast uses, so numbers stored under the previous tag are stale even
+  # though that tag was itself current one release ago.
+  d <- simulate_rasch(200, 6, n_groups = 2, seed = 814)
+  fit <- rasch(d, factors = "group")
+  old <- dif_contrasts(fit, items = "I01")
+  old$algorithm <- "complete-contrast-cells-1"
+  project <- .seal_app_project(list(
+    format = "rasch-shiny-project", schema = 2L,
+    model_type = "rasch", data = as.data.frame(d), base_fit = fit,
+    rasch_steps = list(), btl_steps = list(), kept_fits = list(base = fit),
+    settings = list(pc_items = "I01"), results = list(contrasts = old)))
+  path <- tempfile(fileext = ".rasch")
+  on.exit(unlink(path), add = TRUE)
+  saveRDS(project, path)
+  expect_error(.save_app_project(project, path), "superseded calculation")
+  expect_warning(restored <- .read_app_project(path),
+                 "complete-cell support rules")
   expect_null(restored$results$contrasts)
   expect_identical(restored$base_fit, fit)
   expect_no_error(.validate_app_project(restored))

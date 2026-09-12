@@ -568,6 +568,19 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 50,
 #' split has no rejection region and its verdict is withheld. A split fixed
 #' in advance retains its binomial verdict in that case.
 #'
+#' The mean difference between the two subset estimates is reported but not
+#' tested. Each subset estimate is a weighted-likelihood estimate on a short
+#' test, and the two subsets differ in difficulty, so their estimation bias
+#' differs systematically: under a perfectly unidimensional Rasch model the
+#' expected difference is non-zero whenever the subsets are not matched in
+#' targeting, and it grows relative to its standard error with the number of
+#' persons. A t-test of that difference therefore tests the targeting of the
+#' split rather than its dimensionality -- it rejects for every sample large
+#' enough on unidimensional data -- so the difference is reported as a
+#' description of the split and the inference is withheld. The person-level
+#' comparisons, whose standard errors carry each person's subset
+#' uncertainty, are the test.
+#'
 #' @param fit A fitted object from \code{\link{rasch}} with one response row
 #'   per person. Repeated identifiers are refused because the person-level
 #'   comparisons and their binomial count would not be independent.
@@ -604,10 +617,11 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 50,
 #'   \code{n_excluded_extreme}), the item split and its source, a
 #'   \code{multidimensional} verdict, the corresponding uncalibrated
 #'   \code{binomial_multidimensional} reading, a \code{caution} note when the
-#'   subtests fall short of \code{min_score_points}, and \code{paired_t},
-#'   the paired t-test of the two subset means (the group-level comparison,
-#'   which requires pairing because both estimates come from the same
-#'   persons). With \code{B > 0} the list also carries \code{p_boot}, the
+#'   subtests fall short of \code{min_score_points}, and
+#'   \code{subset_mean_difference}, the mean and standard deviation of the
+#'   person-level differences between the two subset estimates, reported
+#'   descriptively with the \code{note} that no test accompanies them (see
+#'   Details). With \code{B > 0} the list also carries \code{p_boot}, the
 #'   bootstrap probability of a proportion at least as large as the observed
 #'   one under the fitted unidimensional model; \code{prop_null}, the mean
 #'   replicate proportion (the rate the split produces when nothing is
@@ -616,7 +630,11 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 50,
 #'   counts requested, used, non-converged and failed. When the comparison
 #'   itself is unavailable (undefined split, degenerate subsets, too few
 #'   persons) the list carries a \code{note} explaining why and
-#'   \code{multidimensional = NA}.
+#'   \code{multidimensional = NA}. Every result carries \code{algorithm},
+#'   the stamp of the calculation that produced it; a saved result without
+#'   the current stamp reported the superseded paired t-test of the subset
+#'   means, so an analysis file carrying one opens with that result dropped
+#'   and a warning, and the rest of the analysis intact.
 #' @references
 #' Smith, E. V. Jr. (2002). Detecting and evaluating the impact of
 #' multidimensionality using item fit statistics and principal component
@@ -730,11 +748,9 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
          items_negative = colnames(X)[neg], score_points = score_points,
          n = n, n_excluded_extreme = tt$n_excluded_extreme), fit))
   bt <- stats::binom.test(tt$n_sig, n, p = alpha)
-  # paired t-test of the two subset means (the group-level comparison: the
-  # two estimates come from the same persons, so the means need pairing;
-  # Andrich & Marais 2019, ch. 24). Degenerate subsets (e.g. two-item
-  # manual subtests where every usable person has the same difference)
-  # would crash t.test with a raw error: report the degeneracy instead
+  # the person-level differences behind the comparison. Degenerate subsets
+  # (e.g. two-item manual subtests where every usable person has the same
+  # difference) carry no comparison at all: report the degeneracy instead
   dd <- tt$difference
   if (!is.finite(stats::sd(dd)) || stats::sd(dd) < 1e-12)
     return(.dimensionality_test_result(list(note = paste0(
@@ -744,7 +760,6 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
         multidimensional = NA, split = split_source,
         items_positive = colnames(X)[pos], items_negative = colnames(X)[neg],
         score_points = score_points), fit))
-  pt <- stats::t.test(dd)
   binomial_verdict <- bt$conf.int[1] > alpha
   out <- list(prop_significant = tt$n_sig / n, ci = as.numeric(bt$conf.int),
               n = n, n_excluded_extreme = tt$n_excluded_extreme,
@@ -760,9 +775,17 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
               alpha = alpha, component = if (manual) NA_integer_ else component,
               min_score_points = min_score_points, B = B,
               workers = workers, seed = seed,
-              paired_t = list(mean_difference = mean(dd),
-                              t = unname(pt$statistic), df = unname(pt$parameter),
-                              p = pt$p.value))
+              # descriptive only: the two subset estimates carry different
+              # estimation bias whenever the subsets differ in difficulty, so
+              # a test of this mean against zero rejects on unidimensional
+              # data as soon as the sample is large enough (see Details)
+              subset_mean_difference = list(
+                mean_difference = mean(dd), sd_difference = stats::sd(dd),
+                n = n, note = paste0(
+                  "descriptive: the subsets differ in targeting as well as ",
+                  "in content, so no test of this mean against zero is a ",
+                  "test of unidimensionality; read the person-level ",
+                  "comparisons for that")))
   if (B > 0L) {
     boot <- .dim_bootstrap(fit, pos = pos, neg = neg, manual = manual,
                            component = component, alpha = alpha, B = B,
@@ -792,11 +815,18 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
   .dimensionality_test_result(out, fit)
 }
 
+.dimensionality_test_algorithm <- "person-subset-comparison-1"
+
 # Computed diagnostic results can be saved in an app project or supplied to a
 # report. Bind them to the fitted model, as for scree and fit-bootstrap
 # results, so an analysis from an earlier structural fit cannot be presented
 # beside a later calibration.
 .dimensionality_test_result <- function(x, fit) {
+  # Stamp the calculation. Results saved before this stamp reported a paired
+  # t-test of the two subset means, which tests the targeting of the split
+  # and not its dimensionality (see Details), so they are not restored beside
+  # the current verdict: an analysis file drops them on restore and warns.
+  x$algorithm <- .dimensionality_test_algorithm
   class(x) <- c("rasch_dimensionality_test", "list")
   attr(x, "fit_signature") <- .fit_boot_signature(fit)
   attr(x, "result_signature") <- .fit_boot_md5(x)
@@ -813,6 +843,14 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
       !.fit_boot_hash_matches(signature, unsigned) ||
       !.fit_boot_signature_matches(attr(result, "fit_signature"), fit))
     stop("`subtest` must be a dimensionality_test() result from this fitted model")
+  # A result without the current stamp carries the superseded paired t-test
+  # of the subset means, which its displays would present as an inferential
+  # reading of the split. Refuse it here; .read_app_project() drops such a
+  # result from a saved analysis with a warning before it reaches this point.
+  if (!identical(result$algorithm, .dimensionality_test_algorithm))
+    stop(paste("`subtest` uses a superseded person-subset comparison;",
+               "recompute it with dimensionality_test()"),
+         call. = FALSE)
   if (!is.null(result$bootstrap)) .require_refittable_calibration(fit)
   invisible(result)
 }
@@ -839,6 +877,13 @@ print.rasch_dimensionality_test <- function(x, ...) {
   if (!is.null(x$p_boot))
     cat(sprintf("Bootstrap p: %s (%d of %d replicates used)\n",
                 .fmt_p(x$p_boot), x$bootstrap$B_used, x$bootstrap$B))
+  # the description of the split: reported, with no test attached to it
+  smd <- x$subset_mean_difference
+  if (is.list(smd))
+    cat(sprintf(paste0("Mean difference between subset estimates: %.3f ",
+                       "(SD %.3f) -- descriptive, not a test of ",
+                       "unidimensionality\n"),
+                smd$mean_difference, smd$sd_difference))
   if (!is.null(x$caution)) cat("Caution:", x$caution, "\n")
   invisible(x)
 }

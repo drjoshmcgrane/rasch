@@ -404,6 +404,21 @@ test_that("btl_dif finds a planted judge-group effect on the right object only",
   expect_true(s6$significant && s6$practical)
   expect_lt(abs(abs(s6$difference) - 1), 3 * s6$se)
   expect_equal(sum(dif$sizes$significant), 1L)
+  # the chi-square note explains the fit's withheld total_p; the resolved
+  # refits never report that statistic, so it must not surface as a finding
+  # about a resolved object
+  expect_true(any(grepl("pairwise chi-square probability is withheld",
+                        f$notes, fixed = TRUE)))
+  expect_false(any(grepl("pairwise chi-square", dif$notes, fixed = TRUE)))
+  # the same rule for the dependence table's withheld carry-over probability:
+  # the fit that reports the table keeps the note, the DIF refit does not
+  d$ord <- ave(seq_len(nrow(d)), d$judge, FUN = seq_along)
+  fo <- btl(d, "a", "b", winner = "win", judge = "judge", order = "ord")
+  expect_true(any(grepl("carry-over probability withheld", fo$notes,
+                        fixed = TRUE)))
+  difo <- btl_dif(fo, grp, objects = "S06")
+  expect_false(any(grepl("carry-over", difo$notes, fixed = TRUE)))
+  expect_true(any(is.finite(difo$sizes$difference)))
   expect_output(print(dif), "Resolved locations")
   # grouped characteristic curve renders
   pdf(NULL); on.exit(dev.off())

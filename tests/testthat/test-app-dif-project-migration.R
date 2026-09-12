@@ -31,7 +31,7 @@ test_that("saved DIF follow-ups without the normalized-data stamp are omitted", 
     results = list(dif = legacy,
                    dif_bootstrap = list(db = list(stale = TRUE)),
                    resolve = structure(list(
-                     algorithm = "factor-design-resolution-1", effects = "main"),
+                     algorithm = "factor-design-resolution-2", effects = "main"),
                      class = "rasch_resolve_dif"))))
   path <- tempfile(fileext = ".rasch")
   on.exit(unlink(path), add = TRUE)

@@ -611,6 +611,64 @@ test_that("sim_recovery verifies the fitted responses in every model family", {
   expect_error(sim_recovery(fc, dc), "comparison, outcome or judge")
 })
 
+test_that("sim_recovery reads row-number person labels as no identifier", {
+  d <- simulate_rasch(120, 6, seed = 811)
+  items <- names(attr(d, "truth")$difficulty)
+  f <- rasch(d[, items])
+  expect_identical(as.character(f$person$id), as.character(seq_len(120)))
+  r <- sim_recovery(f, d)
+  expect_identical(r$summary$parameter, "item difficulty")
+  expect_match(r$note, "person recovery is unavailable")
+  # identifiers that are not row numbers are still held to the simulation
+  relabelled <- f
+  relabelled$person$id <- paste0("Q", seq_len(120))
+  expect_error(sim_recovery(relabelled, d), "person allocation")
+  # row order and row names are presentation, not data
+  expect_identical(sim_recovery(rasch(d[rev(seq_len(120)), items]), d)$
+                     summary$parameter, "item difficulty")
+  named <- d[, items]
+  rownames(named) <- d$id
+  expect_identical(sim_recovery(rasch(named), d)$summary$parameter,
+                   "item difficulty")
+
+  de <- simulate_efrm(100, 5, n_sets = 2, n_groups = 2, seed = 812)
+  te <- attr(de, "truth")
+  fe <- rasch_efrm(de, item_sets = te$item_sets, groups = "group",
+                   boot_reps = 0)
+  re <- sim_recovery(fe, de)
+  # the responses are verified, but nothing ties a row-numbered person to the
+  # group they were generated in, so the group units are withheld
+  expect_identical(re$summary$parameter, "set unit (log)")
+  expect_match(re$note, "the group units are withheld")
+  dp <- de
+  set.seed(4)
+  dp$group <- sample(de$group)
+  fp <- rasch_efrm(dp, item_sets = te$item_sets, groups = "group",
+                   boot_reps = 0)
+  expect_false("group unit (log)" %in% sim_recovery(fp, de)$summary$parameter)
+  # the identifiers recover the group units, and hold the allocation to the
+  # membership that was generated
+  fi <- rasch_efrm(de, item_sets = te$item_sets, groups = "group",
+                   id = "id", boot_reps = 0)
+  expect_setequal(sim_recovery(fi, de)$summary$parameter,
+                  c("set unit (log)", "group unit (log)"))
+  identified <- fp                      # the same rows, fitted with `id`
+  identified$person$id <- de$id
+  expect_error(sim_recovery(identified, de), "person-group")
+})
+
+test_that("sim_recovery reports the items left after a constant item is dropped", {
+  d <- simulate_rasch(30, 20, seed = 6)
+  f <- rasch(d, id = "id")
+  expect_match(f$notes, "dropped constant item\\(s\\): I18", all = FALSE)
+  r <- sim_recovery(f, d)
+  expect_match(r$note, "does not estimate generated item\\(s\\) I18")
+  expect_identical(r$summary$n[r$summary$parameter == "item difficulty"], 19L)
+  # a deliberately smaller item set remains a different fitted item set
+  smaller <- rasch(d[, c("id", sprintf("I%02d", 1:10))], id = "id")
+  expect_error(sim_recovery(smaller, d), "fitted items do not match")
+})
+
 test_that("sim_replicate preserves a seed at the integer boundary", {
   seen <- integer(0)
   generator <- function(seed) {

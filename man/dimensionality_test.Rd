@@ -62,10 +62,11 @@ A list with the proportion of significant tests, its
   \code{n_excluded_extreme}), the item split and its source, a
   \code{multidimensional} verdict, the corresponding uncalibrated
   \code{binomial_multidimensional} reading, a \code{caution} note when the
-  subtests fall short of \code{min_score_points}, and \code{paired_t},
-  the paired t-test of the two subset means (the group-level comparison,
-  which requires pairing because both estimates come from the same
-  persons). With \code{B > 0} the list also carries \code{p_boot}, the
+  subtests fall short of \code{min_score_points}, and
+  \code{subset_mean_difference}, the mean and standard deviation of the
+  person-level differences between the two subset estimates, reported
+  descriptively with the \code{note} that no test accompanies them (see
+  Details). With \code{B > 0} the list also carries \code{p_boot}, the
   bootstrap probability of a proportion at least as large as the observed
   one under the fitted unidimensional model; \code{prop_null}, the mean
   replicate proportion (the rate the split produces when nothing is
@@ -74,7 +75,11 @@ A list with the proportion of significant tests, its
   counts requested, used, non-converged and failed. When the comparison
   itself is unavailable (undefined split, degenerate subsets, too few
   persons) the list carries a \code{note} explaining why and
-  \code{multidimensional = NA}.
+  \code{multidimensional = NA}. Every result carries \code{algorithm},
+  the stamp of the calculation that produced it; a saved result without
+  the current stamp reported the superseded paired t-test of the subset
+  means, so an analysis file carrying one opens with that result dropped
+  and a warning, and the rest of the analysis intact.
 }
 \description{
 Estimates each person separately on two item subsets and compares the two
@@ -117,6 +122,19 @@ A one-sided bootstrap probability cannot be smaller than
 \code{1/(B_used + 1)}. If that floor exceeds \code{alpha}, a data-driven
 split has no rejection region and its verdict is withheld. A split fixed
 in advance retains its binomial verdict in that case.
+
+The mean difference between the two subset estimates is reported but not
+tested. Each subset estimate is a weighted-likelihood estimate on a short
+test, and the two subsets differ in difficulty, so their estimation bias
+differs systematically: under a perfectly unidimensional Rasch model the
+expected difference is non-zero whenever the subsets are not matched in
+targeting, and it grows relative to its standard error with the number of
+persons. A t-test of that difference therefore tests the targeting of the
+split rather than its dimensionality -- it rejects for every sample large
+enough on unidimensional data -- so the difference is reported as a
+description of the split and the inference is withheld. The person-level
+comparisons, whose standard errors carry each person's subset
+uncertainty, are the test.
 }
 \examples{
 set.seed(1)

@@ -107,6 +107,10 @@ the same anchor would define their difference as zero. Anchors on the other
 objects are retained in the joint refit. If a resolved-location covariance
 is unavailable or not positive semidefinite, the locations and differences
 remain descriptive but their uncertainty and tests are withheld.
+A note raised by a resolution refit is reported against that object.
+Engine notes explaining a statistic this analysis never reports -- the
+refit's pairwise chi-square probability and its dependence table's
+carry-over probability -- are not carried; the base fit retains them.
 }
 \examples{
 set.seed(1)

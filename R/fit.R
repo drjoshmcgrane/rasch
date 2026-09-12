@@ -490,12 +490,68 @@ chisq_detail <- function(fit, item) {
        prop_above = if (length(th) && length(tau)) mean(th > tr[2L]) else NA_real_)
 }
 
+# One list of display names, joined so the joined string names exactly that
+# list. A name may itself contain the separator, so a name that would
+# otherwise read as several is quoted and a quote within a name is escaped:
+# "a+b"+c is two sets, a+b+c is three. Labels are never parsed back into
+# membership; the quoting is what stops two different designs reading alike.
+.label_names <- function(x, sep = "+") {
+  x <- as.character(x)
+  q <- grepl(sep, x, fixed = TRUE) | grepl("\"", x, fixed = TRUE)
+  x[q] <- encodeString(x[q], quote = "\"")
+  paste(x, collapse = sep)
+}
+
+# Display label of one design block, built from the block's own columns, so a
+# block restricted to an item selection never names items outside it.
+.design_label <- function(fit, cols) {
+  vm <- fit$virtual_map
+  if (inherits(fit, "rasch_efrm")) {
+    g <- vm$group[cols[1L]]
+    gcols <- which(vm$group == g)
+    sets_of_col <- vm$set[gcols]
+    psets <- sort(unique(sets_of_col[gcols %in% cols]))
+    # a set is named as a whole only when the block holds every column the
+    # group has in it; otherwise the items themselves are named. The set
+    # clause is unconditional: an administration is which items of which set
+    # a group took, so a one-set frame still names its set, and the group
+    # stays because the label alone identifies the design in
+    # test_information() and in every curve legend.
+    partial <- !all(gcols[sets_of_col %in% psets] %in% cols)
+    paste0("group=", g, ", sets=", .label_names(psets),
+      if (partial) paste0(", items=", .label_names(vm$item[cols])) else "")
+  } else if (inherits(fit, "rasch_mfrm")) {
+    fs <- fit$facet_spec
+    cell <- .factor_keys(vm[, fs, drop = FALSE])
+    cells <- unique(cell)
+    active <- cells[cells %in% cell[cols]]
+    parts <- vapply(active, function(k) {
+      ii <- which(cell == k)
+      jj <- ii[ii %in% cols]
+      paste0(paste(paste0(fs, "=", unlist(vm[ii[1L], fs, drop = FALSE])),
+                   collapse = ", "),
+             if (length(jj) < length(ii))
+               paste0(" [items=", .label_names(vm$item[jj]), "]")
+             else "")
+    }, "")
+    paste(parts, collapse = " + ")
+  } else "test"
+}
+
 # Administrable virtual-item blocks of a fit: one per design a person
 # could actually take. Ordinary fits: the whole test. EFRM: one block per
 # person group AND exact observed item pattern in that group. MFRM: one
-# block per observed item-by-facet pattern for a person. Shared by
-# test_information() and the test-level curve plots so they cannot
-# disagree.
+# block per observed item-by-facet pattern for a person. Every pattern is
+# taken at face value, including where item nonresponse leaves nearly
+# every person a pattern of their own: an item a person left unanswered
+# carries no information about where that person is, so the curve that
+# describes them is the one over the items they answered. Merging their
+# pattern into a fuller one -- let alone into a union of patterns nobody
+# took -- would claim information no response supports and understate
+# their SEM. More designs than a legend can carry is therefore a matter
+# for the curve plots, not a reason to report information as though the
+# unanswered items had been answered. Shared by test_information() and the
+# test-level curve plots so they cannot disagree.
 .design_blocks <- function(fit) {
   L <- length(fit$tau_list)
   blocks <- list(test = seq_len(L))
@@ -512,63 +568,31 @@ chisq_detail <- function(fit, item) {
       gcols <- which(vm$group == g)
       grows <- rowSums(!is.na(fit$X[, gcols, drop = FALSE])) > 0
       if (!any(grows)) next
-      sets_of_col <- vm$set[gcols]
       # Keep the exact observed items, including partial sets. Set membership
       # is used only for labels, not to enlarge a person's administration.
-      gsets <- sort(unique(sets_of_col))
       answered <- !is.na(fit$X[grows, gcols, drop = FALSE])
       pat <- .factor_keys(as.data.frame(answered, check.names = FALSE))
       for (p in unique(pat)) {
-        first <- match(p, pat)
-        cols <- which(answered[first, ])
-        psets <- gsets[gsets %in% sets_of_col[cols]]
-        partial <- any(!answered[first, sets_of_col %in% psets])
-        key <- .factor_keys(data.frame(group = g, pattern = p,
-                                       stringsAsFactors = FALSE))
-        blocks[[key]] <- gcols[cols]
-        labels[key] <- paste0("group=", g, if (length(unique(vm$set)) > 1L)
-          paste0(", sets=", paste(psets, collapse = "+")) else "",
-          if (partial) paste0(", items=", paste(vm$item[gcols[cols]],
-                                                collapse = "+")) else "")
+        cols <- gcols[answered[match(p, pat), ]]
+        blocks[[length(blocks) + 1L]] <- cols
+        labels <- c(labels, .design_label(fit, cols))
       }
     }
     # Readable labels are for display only. If literal group or set names make
     # two labels look the same, retain both designs and mark them distinctly.
-    lab <- unname(labels[names(blocks)])
+    lab <- labels
     if (anyDuplicated(lab)) {
       dup <- duplicated(lab) | duplicated(lab, fromLast = TRUE)
       lab[dup] <- paste0(lab[dup], " [design ", seq_along(lab)[dup], "]")
     }
     names(blocks) <- make.unique(lab)
   } else if (inherits(fit, "rasch_mfrm")) {
-    vm <- fit$virtual_map
-    fs <- fit$facet_spec
-    cell <- .factor_keys(vm[, fs, drop = FALSE])
-    cells <- unique(cell)
-    cell_lab <- stats::setNames(vapply(cells, function(k) {
-      i <- match(k, cell)
-      paste(paste0(fs, "=", unlist(vm[i, fs, drop = FALSE])),
-            collapse = ", ")
-    }, ""), cells)
     observed <- !is.na(fit$X)
-    pattern <- .factor_keys(as.data.frame(observed, check.names = FALSE))
-    patterns <- unique(pattern[rowSums(observed) > 0L])
-    blocks <- list()
-    for (p in patterns) {
-      first <- match(p, pattern)
-      blocks[[p]] <- which(observed[first, ])
-    }
-    labs <- vapply(patterns, function(p) {
-      first <- match(p, pattern)
-      active <- cells[cells %in% cell[observed[first, ]]]
-      parts <- vapply(active, function(k) {
-        ii <- which(cell == k)
-        jj <- ii[observed[first, ii]]
-        paste0(cell_lab[[k]], if (length(jj) < length(ii))
-          paste0(" [items=", paste(vm$item[jj], collapse = "+"), "]") else "")
-      }, "")
-      paste(parts, collapse = " + ")
-    }, "")
+    observed <- observed[rowSums(observed) > 0L, , drop = FALSE]
+    pat <- .factor_keys(as.data.frame(observed, check.names = FALSE))
+    blocks <- lapply(unique(pat), function(p)
+      which(observed[match(p, pat), ]))
+    labs <- vapply(blocks, function(cols) .design_label(fit, cols), "")
     if (anyDuplicated(labs)) {
       dup <- duplicated(labs) | duplicated(labs, fromLast = TRUE)
       labs[dup] <- paste0(labs[dup], " [design ", seq_along(labs)[dup], "]")
@@ -590,7 +614,11 @@ chisq_detail <- function(fit, item) {
 #' inform the same person measure are added and mutually exclusive designs
 #' remain separate. Partly answered sets or facet conditions contribute only
 #' their observed items; a missing response is not treated as an administered
-#' item when defining these patterns.
+#' item when defining these patterns. Where item nonresponse leaves nearly
+#' every person a pattern of their own, that is what these fits return:
+#' an unanswered item carries no information about the person who left it,
+#' so no pattern is merged into a fuller one and no curve of theirs is
+#' drawn over a design nobody was administered.
 #'
 #' @details
 #' For an administrable block \eqn{\mathcal A}, the information and standard
@@ -607,7 +635,9 @@ chisq_detail <- function(fit, item) {
 #' @param grid Logit grid over which to evaluate the information.
 #' @param items Optional item selection: item names or indices. Every design
 #'   block is restricted to the named items, so a restricted person-item map
-#'   can carry the information of its own selection.
+#'   can carry the information of its own selection. The \code{design} labels
+#'   are those of the restricted blocks, and blocks that differ only outside
+#'   the selection are returned once.
 #' @return A data frame with \code{theta}, \code{info}, and \code{sem}. For
 #'   EFRM and MFRM fits it also contains a \code{design} column identifying
 #'   the administrable frame or facet design.
@@ -699,6 +729,14 @@ test_information <- function(fit, grid = NULL, items = NULL) {
   blocks <- blocks[vapply(blocks, length, 0L) > 0L]
   if (!length(blocks))
     stop("the item selection leaves no items in any design block")
+  if (!is.null(items)) {
+    # the curve is the selection's, so its label must be too: blocks that
+    # differ only outside the selection are now one design, and a retained
+    # label must name only the items that produced the numbers
+    blocks <- blocks[!duplicated(vapply(blocks, paste, "", collapse = "+"))]
+    names(blocks) <- make.unique(vapply(blocks, function(ii)
+      .design_label(fit, ii), ""))
+  }
   ans <- lapply(seq_along(blocks), function(j) {
     ii <- blocks[[j]]
     info <- vapply(grid, function(th)

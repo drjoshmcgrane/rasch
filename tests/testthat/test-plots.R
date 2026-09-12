@@ -486,3 +486,75 @@ test_that("person-item map item selections cannot overstate their size", {
   expect_error(.pimap_items(fit, c("I01", "I01")), "same item")
   expect_error(.pimap_items(fit, " "), "must name")
 })
+
+test_that("test-level displays say so when designs outrun the palette", {
+  # A linking design can carry far more administrations than the palette can
+  # name. Cycling colours there would imply distinctions no reader can follow
+  # back to a curve, so the legend counts them instead. The statistics are
+  # untouched: every design still has its own curve.
+  set.seed(21); Np <- 160L; L <- 5L
+  d <- seq(-1.2, 1.2, length.out = L)
+  raters <- c("A", "B", "C", "D")
+  th <- rnorm(Np)
+  blocks <- lapply(seq_along(raters), function(k) {
+    X <- matrix(rbinom(Np * L, 1, plogis(outer(th, d, "-"))), Np, L)
+    colnames(X) <- sprintf("I%02d", seq_len(L))
+    X
+  })
+  dd <- data.frame(person = rep(seq_len(Np), length(raters)),
+                   do.call(rbind, blocks),
+                   rater = rep(raters, each = Np), check.names = FALSE)
+  # each person is rated by a random subset of at least two of the raters
+  keep <- runif(nrow(dd)) >= 0.4
+  for (p in seq_len(Np)) {
+    idx <- which(dd$person == p)
+    if (sum(keep[idx]) < 2L) keep[idx[1:2]] <- TRUE
+  }
+  mf <- rasch_mfrm(dd[keep, ], person = "person", facets = "rater",
+                   items = sprintf("I%02d", seq_len(L)))
+  n_des <- length(unique(test_information(mf, grid = c(-1, 0, 1))$design))
+  expect_gt(n_des, length(.rr$pal))
+
+  legends <- list()
+  spy <- function(...) {
+    legends[[length(legends) + 1L]] <<- list(...)
+    invisible(NULL)
+  }
+  grDevices::png(tf <- tempfile(fileext = ".png"))
+  on.exit({grDevices::dev.off(); unlink(tf)}, add = TRUE)
+  testthat::with_mocked_bindings(
+    {
+      plot_tif(mf, grid = seq(-2, 2, by = 0.5))
+      plot_tcc(mf, grid = seq(-2, 2, by = 0.5))
+      plot_pimap(mf, information = TRUE)
+    },
+    .rr_legend = spy, .package = "rasch")
+  counted <- vapply(legends, function(a)
+    length(a[[2L]]) == 1L && grepl("more than the palette can name", a[[2L]]),
+    NA)
+  expect_equal(sum(counted), 3L)
+  for (a in legends[counted]) {
+    expect_match(a[[2L]], sprintf("^%d administrations;", n_des))
+    expect_true(all(a$col == .rr$soft))
+  }
+
+  # below the limit each design is still named in its own colour
+  de <- simulate_efrm(n_per_group = 80, items_per_set = 5, n_sets = 1,
+                      n_groups = 2, seed = 36)
+  tr <- attr(de, "truth")
+  de$grp <- tr$groups
+  ef <- rasch_efrm(de, item_sets = tr$item_sets, groups = "grp",
+                   boot_reps = 0)
+  legends <- list()
+  testthat::with_mocked_bindings(
+    {
+      plot_tif(ef, grid = c(-1, 0, 1))
+      plot_tcc(ef, grid = c(-1, 0, 1))
+      plot_pimap(ef, information = TRUE)
+    },
+    .rr_legend = spy, .package = "rasch")
+  named <- vapply(legends, function(a)
+    length(a[[2L]]) == 2L && all(grepl("^group=", a[[2L]])), NA)
+  expect_equal(sum(named), 3L)
+  for (a in legends[named]) expect_equal(length(unique(a$col)), 2L)
+})

@@ -76,12 +76,11 @@ calibration required for the pairwise composite likelihood. When an
 identifier occurs on more than one response row, coefficient covariance is
 clustered by person. A linearised delete-one-person correction accounts for
 finite-cluster leverage without refitting the model once per person.
-Supported repeated-person fits use a \eqn{t} reference
-with degrees of freedom equal to the number of person clusters contributing
-conditional information minus one; inference
-is withheld when the calibration lacks enough independent information.
-Supported fits without repeated identifiers use the limiting normal
-reference. Holm adjustment covers the coefficient family.
+Supported fits use a \eqn{t} reference with degrees of freedom equal to
+the number of independent person units contributing conditional
+information minus one, whether or not identifiers repeat; inference is
+withheld when the calibration lacks enough independent information.
+Holm adjustment covers the coefficient family.
 With few persons and unequal numbers of response rows, these approximate
 tests can still be mildly liberal; the correction does not guarantee nominal
 coverage in small samples.

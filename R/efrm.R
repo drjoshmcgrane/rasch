@@ -1211,10 +1211,35 @@
   cap
 }
 
-.efrm_wald_zero <- function(est, Sigma, term) {
+# Refer a Wald statistic on `q` estimable directions to its reference.
+# `n_units` is the number of independent units the covariance was estimated
+# from, and is Inf when it is analytic. A bootstrap covariance is estimated,
+# not known, so the statistic is referred to F rather than to its asymptotic
+# chi-square, exactly as .btlef_wald_unit() does for the same test in
+# btl_efrm(). With one estimable direction that reference is t(n_units - 1)
+# squared, which is the reference the matching unit contrast reports. Every
+# omnibus Wald rasch_efrm() reports -- the unit families and the crossed
+# group-unit decomposition -- is referred here, so one fit cannot refer two
+# tests on the same bootstrap draws to two different references.
+.efrm_wald_reference <- function(W, q, n_units) {
+  if (is.infinite(n_units) && n_units > 0)
+    list(df2 = Inf, f = W / q, p = stats::pchisq(W, q, lower.tail = FALSE))
+  else if (!is.finite(n_units) || n_units <= q)
+    # Fewer independent draws than estimable directions leaves no residual
+    # degrees of freedom to refer the statistic to.
+    list(df2 = NA_real_, f = NA_real_, p = NA_real_)
+  else {
+    Fs <- W * (n_units - q) / (q * (n_units - 1))
+    list(df2 = n_units - q, f = Fs,
+         p = stats::pf(Fs, q, n_units - q, lower.tail = FALSE))
+  }
+}
+
+.efrm_wald_zero <- function(est, Sigma, term, n_units = Inf) {
   if (length(est) < 2L) return(NULL)
   unavailable <- function() data.frame(
-    term = term, df = NA_integer_, wald = NA_real_, p = NA_real_)
+    term = term, df = NA_integer_, df2 = NA_real_, wald = NA_real_,
+    f = NA_real_, p = NA_real_)
   if (is.null(Sigma) || !is.matrix(Sigma) ||
       nrow(Sigma) != length(est) || ncol(Sigma) != length(est) ||
       any(!is.finite(est)) || any(!is.finite(Sigma)) ||
@@ -1232,8 +1257,10 @@
       1e-7 * max(1, sqrt(sum(est^2)))) return(unavailable())
   Sinv <- estimable %*% (t(estimable) / ee$values[use])
   W <- drop(t(est) %*% Sinv %*% est)
-  data.frame(term = term, df = sum(use), wald = W,
-             p = stats::pchisq(W, sum(use), lower.tail = FALSE))
+  q <- sum(use)
+  ref <- .efrm_wald_reference(W, q, n_units)
+  data.frame(term = term, df = q, df2 = ref$df2, wald = W, f = ref$f,
+             p = ref$p)
 }
 
 #' Fit the extended frame of reference model
@@ -1322,8 +1349,27 @@
 #' which are identified at the linking stage. The accompanying Wald omnibus
 #' tests provide inference for the group- and set-unit families. Their
 #' probabilities are Holm-adjusted as one omnibus family; the individual
-#' unit contrasts form a second Holm-adjusted follow-up family. An unavailable
-#' probability remains in its declared family. Unit estimates
+#' unit contrasts form a second Holm-adjusted follow-up family. Each family
+#' counts the distinct hypotheses it declares, available or not: the units
+#' are centred, so with two groups (or two sets) the two reported rows are
+#' one hypothesis stated twice and count once, as the omnibus rank already
+#' does. The second row of such a pair keeps its estimate and unadjusted
+#' probability, but its adjusted probability and flag are withheld, so one
+#' difference is not reported as two deviating units. Beyond two groups (or
+#' two sets) no two reported rows are the same hypothesis, so each stays a
+#' member: that family is then one larger than its free dimension, which
+#' leaves the adjustment conservative rather than liberal. A bootstrap standard
+#' error is a standard deviation over the retained replicates, so its
+#' contrast is referred to \eqn{t(B-1)}; an analytic standard error keeps
+#' the normal reference. The reference is reported as \code{df}. An omnibus
+#' Wald test on an estimated (bootstrap) covariance is referred to
+#' \eqn{F(q, B-q)} on the same grounds, reported as \code{df}, \code{df2}
+#' and \code{f}, so that a one-dimensional omnibus and its unit contrast
+#' report the same probability; an analytic covariance keeps the chi-square
+#' reference. This holds for every omnibus Wald test the fit reports,
+#' including the crossed group-unit decomposition in
+#' \code{phi_factorial_tests}, so one printed fit never refers two tests on
+#' the same draws to two different references. Unit estimates
 #' are retained for sparse designs, but probabilities require at least 50
 #' persons or effective persons in every group. Set-unit inference requires
 #' at least 50 informative common persons on the strongest bottleneck path
@@ -1359,7 +1405,9 @@
 #'   Several columns define crossed group cells. Their units are returned in
 #'   \code{phi_table}; \code{phi_factorial} and
 #'   \code{phi_factorial_tests} contain the GLS factorial decomposition and
-#'   omnibus Wald tests. Raw probabilities are retained in \code{p}; decisions
+#'   omnibus Wald tests, each referred to \eqn{F(q, B-q)} when the cell-unit
+#'   covariance came from the full bootstrap and to \eqn{\chi^2(q)} when it
+#'   is analytic. Raw probabilities are retained in \code{p}; decisions
 #'   use \code{p_adj}, Holm-adjusted across the factorial terms. Structurally
 #'   unidentified units are refused. Very
 #'   imprecise but identified units are retained with a warning.
@@ -1406,7 +1454,8 @@
 #'   \code{alpha_table}, \code{set_table}, common-unit item and threshold
 #'   tables, group-specific \code{score_curves} (expected weighted sufficient
 #'   score and conditional standard error by person location and exact
-#'   observed-item pattern), \code{efrm_vs_rasch}, and
+#'   observed-item pattern, one row block per design and labelled as in
+#'   \code{\link{test_information}}), \code{efrm_vs_rasch}, and
 #'   \code{linking}, the person support used for unit inference in
 #'   \code{unit_support}, and the active covariance blocks in
 #'   \code{unit_cov}. For a full-bootstrap fit, all blocks in
@@ -2352,6 +2401,12 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
     else paste0("set-unit probabilities are withheld because at least one ",
                 "set has fewer than 50 informative common persons on the ",
                 "strongest path to the reference set")))
+  # How many independent draws the group-unit covariance was estimated from.
+  # A full bootstrap prices it from the retained person resamples; Inf marks
+  # an analytic covariance, whose reference is the asymptotic one. Declared
+  # here because both the crossed decomposition below and the unit omnibus
+  # further down refer their Wald statistics to it.
+  boot_units_phi <- if (!is.null(boot)) nrow(boot) else Inf
   # factorial decomposition of the cell units: generalised least squares
   # of log phi_cell on sum-coded main effects (and the interaction when
   # every cell is observed), using the JOINT covariance of the cell
@@ -2434,9 +2489,13 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
               tryCatch(drop(t(cf[ii]) %*% solve(Vt) %*% cf[ii]),
                        error = function(e) NA_real_) else NA_real_
             if (is.finite(W) && W < 0) W <- NA_real_
+            # Sig above is the bootstrap covariance of the cell log-units
+            # whenever a full bootstrap succeeded, and V inherits that, so
+            # this Wald is referred exactly as the unit omnibus is.
+            ref <- .efrm_wald_reference(W, length(ii), boot_units_phi)
             tests[[length(tests) + 1L]] <- data.frame(
-              term = relabel_factorial(tls[tno]), df = length(ii), wald = W,
-              p = stats::pchisq(W, length(ii), lower.tail = FALSE),
+              term = relabel_factorial(tls[tno]), df = length(ii),
+              df2 = ref$df2, wald = W, f = ref$f, p = ref$p,
               stringsAsFactors = FALSE)
           }
           fit$phi_factorial_tests <- do.call(rbind, tests)
@@ -2539,9 +2598,16 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
       link$cov_link[seq_len(S), seq_len(S), drop = FALSE]
     else NULL
   } else NULL
+  # The set link has its own count: it is itself a person bootstrap under
+  # se_method = "hybrid" even when the group units keep the analytic
+  # sandwich, so the two unit families can carry different references.
+  boot_units_alpha <- if (!is.null(boot)) nrow(boot)
+    else if (link$boot_reps_used > 0L) link$boot_reps_used else Inf
   unit_omnibus <- do.call(rbind, Filter(Negate(is.null), list(
-    if (G > 1L) .efrm_wald_zero(log(phi), Sig_phi, "group units (phi)"),
-    if (S > 1L) .efrm_wald_zero(log(alpha), Sig_alpha, "set units (alpha)"))))
+    if (G > 1L) .efrm_wald_zero(log(phi), Sig_phi, "group units (phi)",
+                                n_units = boot_units_phi),
+    if (S > 1L) .efrm_wald_zero(log(alpha), Sig_alpha, "set units (alpha)",
+                                n_units = boot_units_alpha))))
   if (!is.null(unit_omnibus)) {
     unit_omnibus$p[unit_omnibus$term == "group units (phi)" & !phi_ok] <- NA_real_
     unit_omnibus$p[unit_omnibus$term == "set units (alpha)" & !alpha_ok] <- NA_real_
@@ -2564,14 +2630,55 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
                            family = "alpha"))
   if (!is.null(ut)) {
     ut$z <- .wald_ratio(ut$estimate, ut$se)
-    ut$p <- 2 * pnorm(-abs(ut$z))
+    # A bootstrap standard error is the standard deviation of the retained
+    # replicates, so its ratio is referred to t(B - 1) and not to the
+    # normal: at B = 30 the normal reference rejected 6.9 per cent at a
+    # nominal 5 per cent in the matching frame-invariance simulation,
+    # against 5.2 per cent for t(B - 1). An analytic standard error keeps
+    # the normal reference. The hybrid set link is itself a person
+    # bootstrap even when the group units are analytic, so the two
+    # families can carry different references.
+    ut$df <- ifelse(ut$family == "phi", boot_units_phi, boot_units_alpha) - 1
+    ut$p <- 2 * stats::pt(-abs(ut$z), ut$df)
     ut$p[ut$family == "phi" & !phi_ok] <- NA_real_
     ut$p[ut$family == "alpha" & !alpha_ok] <- NA_real_
+    # A reference without a probability to refer is not a reference.
+    ut$df[!is.finite(ut$p)] <- NA_real_
+    # The unit parameters are centred (prod(phi) == prod(alpha) == 1), so a
+    # family of exactly two rows states one hypothesis twice: with two
+    # groups log phi[1] == -log phi[2], with the same standard error and the
+    # same probability. The second row restates the first rather than adding
+    # a contrast, so it is not a second family member and its adjusted
+    # probability and flag are withheld: repeating them would report one
+    # group-unit difference as two deviating units, and the omnibus rank in
+    # the table above already counts the pair once. btl_efrm() withholds its
+    # constrained unit coordinates the same way. The declared family is the
+    # distinct hypotheses, available or not, so its size does not depend on
+    # the data.
+    #
+    # Only a family of exactly two collapses. Beyond two, centring leaves
+    # G - 1 free directions but no two of the G reported rows are the same
+    # hypothesis: H0: phi_g = 1 restricts differently for each g, they carry
+    # different estimates and different probabilities, and which one to drop
+    # would be an arbitrary choice of reference that would make the reported
+    # flags depend on group order. So all G stay members. The family is then
+    # one larger than the free dimension and the adjustment is conservative
+    # by that much, which is the direction to err in; btl_efrm() counts its
+    # own phi rows the same way (R/btl-efrm.R). Null simulation over 400
+    # replicates per design confirms no size violation either way: family
+    # error rates 0.060 (G=2, S=1), 0.028 (G=2, S=2), 0.052 (G=3, S=1) and
+    # 0.040 (G=3, S=2) against a nominal 0.05, MCSE about 0.011.
+    declared <- !duplicated(ifelse(
+      (ut$family == "phi" & G == 2L) | (ut$family == "alpha" & S == 2L),
+      ut$family, ut$parameter))
     ut$p_adj <- NA_real_
-    usable <- is.finite(ut$p)
-    ut$p_adj[usable] <- stats::p.adjust(
-      ut$p[usable], method = "holm", n = nrow(ut))
+    ut$p_adj[declared] <- .p_adjust_family(
+      ut$p[declared], method = "holm", n = sum(declared))
     ut$significant <- ifelse(is.finite(ut$p_adj), ut$p_adj < 0.05, NA)
+    if (any(!declared)) fit$notes <- unique(c(fit$notes, paste(
+      "two centred unit rows are one hypothesis: the adjusted probability",
+      "and flag are reported on the first row of the pair and withheld on",
+      "the second, which restates it")))
     ut$family <- NULL
     rownames(ut) <- NULL
   }
@@ -2618,37 +2725,41 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
   # is the only observable administration pattern.  Do not enlarge that
   # pattern to the whole set: doing so adds unobserved items to the weighted
   # sufficient score and its information.
+  # The designs and their labels are the shared ones, so a score curve,
+  # test_information() and the curve plots can never disagree about which
+  # items form a design or about what it is called. .design_blocks() reads
+  # the class and the virtual map, which are therefore set here.
+  fit$virtual_map <- vmap
+  class(fit) <- c("rasch_efrm", "rasch")
+  blocks <- .design_blocks(fit)
   obs <- !is.na(X)
-  gch <- as.character(grp)
-  # The fixed-width bit key is collision-free for the ordered item columns.
+  # The fixed-width bit key is collision-free for the ordered item columns,
+  # so a design is counted over persons whose pattern it matches exactly.
   # Human-readable labels are never parsed back into item membership, so item
   # and set names may themselves contain the display separators.
-  key <- paste0(gch, "\r", apply(obs, 1L, function(v)
+  key <- paste0(as.character(grp), "\r", apply(obs, 1L, function(v)
     paste0(as.integer(v), collapse = "")))
-  reps <- which(!duplicated(key) & rowSums(obs) > 0L)
-  design_label <- function(v) {
-    parts <- vapply(sets_u, function(s) {
-      ii <- which(set_of == s)
-      jj <- ii[v[ii]]
-      if (!length(jj)) return(NA_character_)
-      if (length(jj) == length(ii)) return(s)
-      paste0(s, " [", paste(colnames(X)[jj], collapse = ", "), "]")
-    }, "")
-    paste(parts[!is.na(parts)], collapse = " + ")
+  # The designs overlap heavily, so each virtual cell is evaluated once per
+  # grid point and summed per design, rather than recomputed inside every
+  # design that administers it.
+  cell_ew <- cell_info <- matrix(0, length(rho_v), length(grid))
+  for (k in seq_along(grid)) {
+    mo <- lapply(seq_along(rho_v), function(i)
+      item_moments(grid[k], fit$tau_list[[i]], disc = rho_v[i]))
+    cell_ew[, k] <- rho_v * vapply(mo, function(z) z$E, 0)
+    cell_info[, k] <- rho_v^2 * vapply(mo, function(z) z$V, 0)
   }
-  fit$score_curves <- do.call(rbind, lapply(reps, function(p) {
-    g <- gch[p]
-    cols <- which(obs[p, ])
-    r_i <- alpha[set_of] * phi[g]
-    ew <- vapply(grid, function(th) sum(vapply(cols, function(i)
-      r_i[i] * item_moments(th, delta[thr_items$item == match(colnames(X)[i], items_o)],
-                            disc = r_i[i])$E, 0)), 0)
-    info <- vapply(grid, function(th) sum(vapply(cols, function(i)
-      r_i[i]^2 * item_moments(th, delta[thr_items$item == match(colnames(X)[i], items_o)],
-                              disc = r_i[i])$V, 0)), 0)
-    data.frame(group = g, design = design_label(obs[p, ]),
-               n_persons = sum(key == key[p]),
-               theta = grid, expected_score = ew, sem = 1 / sqrt(info))
+  fit$score_curves <- do.call(rbind, lapply(seq_along(blocks), function(j) {
+    cols <- blocks[[j]]
+    g <- vmap$group[cols[1L]]
+    bits <- integer(ncol(X))
+    bits[match(vmap$item[cols], colnames(X))] <- 1L
+    data.frame(group = g, design = names(blocks)[j],
+               n_persons = sum(key == paste0(g, "\r",
+                                             paste0(bits, collapse = ""))),
+               theta = grid,
+               expected_score = colSums(cell_ew[cols, , drop = FALSE]),
+               sem = 1 / sqrt(colSums(cell_info[cols, , drop = FALSE])))
   }))
   fit$linking <- list(
     phi_edges = edges_g,
@@ -2673,7 +2784,6 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
   fit$full_boot_reps_failed <- full_boot_reps_failed
   fit$workers <- workers
   fit$seed <- seed
-  fit$virtual_map <- vmap
   fit$set_of <- set_of
   fit$refit_spec <- list(
     groups = if (!is.null(grp_components)) names(grp_components) else grp_name,
@@ -2713,7 +2823,7 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
     fit$frames$se_log_rho[] <- NA_real_
     if (!is.null(fit$phi_factorial)) fit$phi_factorial$se[] <- NA_real_
     if (!is.null(fit$phi_factorial_tests)) {
-      for (nm in intersect(c("wald", "p", "p_adj"),
+      for (nm in intersect(c("df2", "wald", "f", "p", "p_adj"),
                            names(fit$phi_factorial_tests)))
         fit$phi_factorial_tests[[nm]][] <- NA_real_
       fit$phi_factorial_tests$significant[] <- NA
@@ -2721,7 +2831,8 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
     for (part in c("unit_omnibus", "unit_tests")) {
       tab <- fit$efrm_vs_rasch[[part]]
       if (is.null(tab)) next
-      for (nm in intersect(c("se", "z", "wald", "p", "p_adj"), names(tab)))
+      for (nm in intersect(c("se", "z", "df", "df2", "wald", "f", "p",
+                             "p_adj"), names(tab)))
         tab[[nm]][] <- NA_real_
       if ("significant" %in% names(tab)) tab$significant[] <- NA
       fit$efrm_vs_rasch[[part]] <- tab
@@ -2730,8 +2841,14 @@ rasch_efrm <- function(data, item_sets, groups, id = NULL, factors = NULL,
     fit$efrm_vs_rasch$two_delta_ll <- NA_real_
   }
   fit$calibration_algorithm <- "frame-likelihood-1"
+  # The calibration likelihood did not change, and its tag is shared with
+  # btl_efrm(), whose results did not change either: bumping it would refuse
+  # every saved comparative-judgement analysis for nothing. The score-curve
+  # design labels are this model's own stored result and now come from the
+  # shared design enumeration, so superseded ones are refused under a tag of
+  # their own. Fits from before this tag existed are its first generation.
+  fit$efrm_results_algorithm <- "efrm-results-2"
   fit <- .tag_tables(fit)
-  class(fit) <- c("rasch_efrm", "rasch")
   fit
 }
 
@@ -2763,6 +2880,12 @@ print.rasch_efrm <- function(x, ...) {
   if (!is.null(x$efrm_vs_rasch$unit_tests)) {
     cat("Holm-adjusted exploratory unit contrasts (H0: unit = 1):\n")
     print(.fmt_df(x$efrm_vs_rasch$unit_tests), row.names = FALSE)
+    # Two centred rows are one hypothesis; say so, so that a blank second
+    # row is not read as a failed test.
+    if (identical(nrow(x$phi_table), 2L) ||
+        identical(nrow(x$alpha_table), 2L))
+      cat("(the units are centred: the second row of a two-row family",
+          "restates the first, so its adjustment is withheld)\n")
   }
   if (length(x$notes)) cat(sprintf("\nNotes: %s\n", paste(x$notes, collapse = "; ")))
   invisible(x)

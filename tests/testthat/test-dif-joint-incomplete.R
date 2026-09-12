@@ -79,7 +79,7 @@ test_that("project migration drops authenticated obsolete mixed DIF dependencies
     kept_fit_code = list(), settings = list(), resources = list(),
     simulation = list(), results = list(dif = old,
       dif_bootstrap = list(db = "obsolete"),
-      resolve = list(algorithm = "factor-design-resolution-1", effects = "main"))))
+      resolve = list(algorithm = "factor-design-resolution-2", effects = "main"))))
   path <- tempfile(fileext = ".rasch")
   on.exit(unlink(path), add = TRUE)
   saveRDS(project, path)

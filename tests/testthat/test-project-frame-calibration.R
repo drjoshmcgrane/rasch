@@ -18,6 +18,8 @@ test_that("frame algorithm records protect every saved-fit location", {
   for (j in 1:2) {
     fit <- list(ef, bf)[[j]]; data <- list(d, b)[[j]]
     expect_identical(fit$calibration_algorithm, "frame-likelihood-1")
+    expect_identical(fit$efrm_results_algorithm,
+                     if (inherits(fit, "rasch_btl")) NULL else "efrm-results-2")
     p <- .frame_project(fit, data)
     .save_app_project(p, path)
     expect_identical(.read_app_project(path), p)
@@ -42,6 +44,33 @@ test_that("frame algorithm records protect every saved-fit location", {
       expect_identical(readRDS(path)$data, data)
       expect_identical(readRDS(path)$settings, p$settings)
     }
+    # The score-curve designs and labels come from the shared enumeration, so
+    # a fit calibrated before it carries superseded curves. That record is
+    # checked on the EFRM class alone: btl_efrm() shares the calibration tag,
+    # has no score curves and must keep reading.
+    stale <- fit; stale$efrm_results_algorithm <- NULL
+    for (where in c("base", "history", "kept", "derived")) {
+      legacy <- p
+      if (where == "base") legacy$base_fit <- stale
+      if (where == "history") {
+        history <- if (inherits(fit, "rasch_btl")) "btl_steps" else "rasch_steps"
+        stale_entry <- entry; stale_entry$fit <- stale
+        legacy[[history]] <- list(stale_entry)
+      }
+      if (where == "kept") legacy$kept_fits <- list(previous = stale)
+      if (where == "derived") legacy$results$btl_frames <- list(fit = stale)
+      legacy <- .seal_app_project(legacy)
+      saveRDS(legacy, path)
+      before <- tools::md5sum(path)
+      if (inherits(fit, "rasch_btl")) expect_identical(.read_app_project(path),
+                                                       legacy)
+      else {
+        expect_error(.read_app_project(path), "superseded design")
+        expect_identical(readRDS(path)$data, data)
+      }
+      expect_identical(tools::md5sum(path), before)
+    }
+    expect_no_error(.validate_app_frame_calibration(bf, "the saved analysis"))
     legacy <- .frame_project(old, data)
     legacy$schema <- 1L; legacy$binding <- NULL
     saveRDS(legacy, path)

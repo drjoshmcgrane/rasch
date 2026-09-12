@@ -88,11 +88,21 @@ report_text <- function(x) {
   x <- gsub("&", "&amp;", x, fixed = TRUE)
   x <- gsub("<", "&lt;", x, fixed = TRUE)
   x <- gsub(">", "&gt;", x, fixed = TRUE)
-  marks <- c("\\", "`", "*", "_", "{", "}", "[", "]", "(", ")",
-             "#", "+", "!", "|")
-  vapply(strsplit(x, "", fixed = TRUE), function(chars)
+  marks <- c("\\", "`", "*", "_", "{", "}", "#", "+", "!", "|")
+  x <- vapply(strsplit(x, "", fixed = TRUE), function(chars)
     paste0(ifelse(chars %in% marks, paste0("\\", chars), chars),
            collapse = ""), character(1))
+  # The report renders under pandoc's tex_math_single_backslash dialect, in
+  # which "\(" and "\[" open inline and display mathematics rather than
+  # escaping the bracket: a backslash would set "(boot_reps = 0)" as an
+  # equation and delete its parentheses. Character references carry the
+  # literal bracket into HTML, Word and PDF alike, and cannot open a link,
+  # an image or a citation.
+  x <- gsub("(", "&#40;", x, fixed = TRUE)
+  x <- gsub(")", "&#41;", x, fixed = TRUE)
+  x <- gsub("[", "&#91;", x, fixed = TRUE)
+  x <- gsub("]", "&#93;", x, fixed = TRUE)
+  x
 }
 # `what` names the missing display: knitr drops a figure identical to the
 # one before it, so two refusals with the same message need distinct text
@@ -364,6 +374,10 @@ if (!is_btl) {
       da <- tryCatch(dif_anova(fit), error = function(e) NULL)
     if (!is.null(da)) {
       cat("\n# Differential item functioning\n\n")
+      # a test the design could not estimate leaves a blank row in the table
+      # and still counts in the adjusted family: say so beside it
+      if (length(da$notes))
+        cat(paste("*", report_text(da$notes), collapse = "\n"), "\n\n")
       print(show_table(report_columns(da$summary,
         c("item", "term", "p_uniform_adj", "eta2_uniform",
           "p_nonuniform_adj", "eta2_nonuniform", "uniform_DIF",
@@ -466,6 +480,10 @@ if (is_btl) {
   da <- attr(fit, "report_dif")
   if (!is.null(da)) {
     cat("\n# Differential object functioning\n\n")
+    # a test the design could not estimate leaves a blank row in the table
+    # and still counts in the adjusted family: say so beside it
+    if (length(da$notes))
+      cat(paste("*", report_text(da$notes), collapse = "\n"), "\n\n")
     print(show_table(report_columns(da$summary,
       c("object", "term", "p_uniform_adj", "eta2_uniform",
         "p_nonuniform_adj", "eta2_nonuniform", "uniform_DIF",

@@ -25,8 +25,8 @@ save_outputs(
 \arguments{
 \item{fit}{A fitted object from \code{\link{rasch}}.}
 
-\item{dir}{Output directory; created if absent. An existing directory must be
-empty; exports refuse to overwrite files from an earlier analysis.}
+\item{dir}{Output directory; created if absent. An existing directory must
+be empty; exports refuse to overwrite files from an earlier analysis.}
 
 \item{formats}{Plot formats, any of \code{"png"} and \code{"pdf"}.}
 

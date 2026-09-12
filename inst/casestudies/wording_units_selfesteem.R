@@ -44,6 +44,9 @@ print(f1$alpha_table, digits = 3)
 print(f1$efrm_vs_rasch$unit_tests, digits = 3)
 # Note: with a single person group the pairwise 2*delta-ll is invariant to
 # the set units by construction; the Wald tests above carry the evidence.
+# The two set units are centred, so the second row states the same
+# hypothesis as the first: it keeps its own probability and leaves the
+# adjusted one to the row it restates.
 
 # why it matters -------------------------------------------------------------
 ok <- !f0$person$extreme & !f1$person$extreme
@@ -76,9 +79,13 @@ unit_ratio <- function(drop = character(), seed = 31L) {
                   item_sets = list(positive = setdiff(positive, drop),
                                    negative = setdiff(negative, drop)),
                   se_method = "hybrid", boot_reps = 300)
+  # The two centred set units are one hypothesis stated twice, so the row
+  # that restates it withholds its adjusted probability. Take the minimum
+  # over the rows that carry one, and report nothing if none does.
+  pa <- f$efrm_vs_rasch$unit_tests$p_adj
   c(ratio = unname(f$alpha_table$alpha[f$alpha_table$set == "positive"] /
                    f$alpha_table$alpha[f$alpha_table$set == "negative"]),
-    p_adj = min(f$efrm_vs_rasch$unit_tests$p_adj))
+    p_adj = if (any(is.finite(pa))) min(pa, na.rm = TRUE) else NA_real_)
 }
 apriori <- c("Q8", "Q4")   # the usual suspects, named in advance
 print(signif(rbind(all_items = unit_ratio(seed = 31),
@@ -109,10 +116,11 @@ cat(sprintf("ranked first and second: %s; named in advance: %s\n",
 
 # Read that table as a sensitivity sequence rather than an automatic deletion
 # rule. Removing Q8 reduces the ratio from about 1.32 to 1.08, although the
-# large sample still gives an adjusted p-value near .03. Removing Q4 as well
-# moves the ratio away from one again. The conclusion is therefore that Q8
-# carries most, but not all, of the original difference and that the result is
-# sensitive to the composition of these short wording sets.
+# large sample still gives an adjusted p-value near .015: the two centred
+# set units are one hypothesis, so Holm has nothing to adjust it against.
+# Removing Q4 as well moves the ratio away from one again. The conclusion is
+# therefore that Q8 carries most, but not all, of the original difference and
+# that the result is sensitive to the composition of these short wording sets.
 
 # cross-check against free slopes --------------------------------------------
 # A generalized partial credit model frees one slope per item, on the same

@@ -575,6 +575,112 @@ test_that("a B below the adjusted-inference floor warns, naming the remedy", {
     invisible(fit_bootstrap(fit, B = 200, seed = 1)))))
 })
 
+test_that("an automatic interval count is held across replicates", {
+  # The automatic rule reads the non-extreme count, which the ability-
+  # sampling generators move across a 50-person boundary from replicate to
+  # replicate. A null mixing interval counts, and so degrees of freedom, the
+  # observed chi-square never used is not that statistic's null.
+  d <- simulate_rasch(160, 6, seed = 8)
+  f_auto <- rasch(d, id = "id")
+  f_fix <- rasch(d, id = "id", n_groups = f_auto$n_groups)
+  expect_equal(f_auto$n_groups, 3)
+  expect_equal(f_auto$item_trait$chisq, f_fix$item_trait$chisq)
+
+  fg <- .fit_boot_realised_groups(f_auto)
+  expect_equal(fg$common, f_auto$n_groups)
+  expect_null(fg$item)
+  # a replicate that loses persons to the extremes would otherwise be scored
+  # on two intervals instead of the observed three
+  th <- f_auto$person$theta[1:120]
+  ex <- rep(FALSE, 120)
+  expect_equal(attr(.class_intervals(th, ex, NULL), "n_groups"), 2)
+  expect_equal(attr(.class_intervals(th, ex, fg$common), "n_groups"), 3)
+
+  # with the count held, the automatic fit and the same count requested
+  # explicitly share one null
+  b_auto <- fbq(f_auto, B = 99, theta = "resample", seed = 1, workers = 1)
+  b_fix <- fbq(f_fix, B = 99, theta = "resample", seed = 1, workers = 1)
+  expect_equal(b_auto$items$chisq_p_boot, b_fix$items$chisq_p_boot)
+})
+
+test_that("per-item interval counts are resolved on the observed responders", {
+  X <- simb(400, seq(-1, 1, length.out = 8), seed = 744)
+  X[121:400, 7:8] <- NA_integer_
+  fit <- rasch(X)
+  fg <- .fit_boot_realised_groups(fit)
+  # the automatic rule applies per item with missing responses, so the held
+  # counts are per item too
+  expect_equal(fg$item,
+               vapply(fit$ci_item,
+                      function(g) as.integer(max(g, na.rm = TRUE)), 1L))
+  expect_false(fg$item[7] == fg$item[1])
+  # holding those counts reproduces the observed statistics exactly
+  held <- .fit_refit(fit$X, fit$model, .refit_n_groups(fit),
+                     fit$refit_spec$anchors, fit$m, 60, 1e-8,
+                     fixed_groups = fg)
+  expect_equal(unname(held$chisq), fit$items$chisq, tolerance = 1e-10)
+})
+
+test_that("fit_bootstrap hands the replicates the count it resolved", {
+  # The interval count a replicate is scored on now travels in fixed_groups,
+  # not in n_groups, so pin that argument rather than the request alone: an
+  # automatic request carries the counts realised by the observed fit, an
+  # explicit one carries none because the request is already fixed. Every
+  # generator is pinned, including the default: its non-extreme set never
+  # moves, so holding the counts leaves its null untouched, but the value
+  # handed down is what decides the intervals and is pinned as such.
+  original <- .fit_refit
+  seen <- list()
+  local_mocked_bindings(
+    .fit_refit = function(X, model, n_groups, ..., fixed_groups = NULL) {
+      seen[[length(seen) + 1L]] <<- list(n_groups = n_groups,
+                                         fixed_groups = fixed_groups)
+      original(X, model, n_groups, ..., fixed_groups = fixed_groups)
+    })
+  X <- simb(400, seq(-1, 1, length.out = 8), seed = 744)
+  X[121:400, 7:8] <- NA_integer_
+  for (gen in c("conditional", "resample")) for (ng in list(NULL, 4L)) {
+    fit <- rasch(X, n_groups = ng)
+    seen <- list()
+    bs <- fbq(fit, B = 20, theta = gen, seed = 745, workers = 1)
+    expect_length(seen, 20L)
+    expect_true(all(vapply(seen, function(s) identical(s$n_groups, ng),
+                           logical(1))))
+    expected <- if (is.null(ng)) .fit_boot_realised_groups(fit) else NULL
+    expect_true(all(vapply(seen, function(s)
+      identical(s$fixed_groups, expected), logical(1))))
+    if (is.null(ng)) {
+      expect_equal(expected$common, fit$n_groups)
+      expect_equal(expected$item,
+                   vapply(fit$ci_item,
+                          function(g) as.integer(max(g, na.rm = TRUE)), 1L))
+    }
+    expect_equal(bs$B_used, 20)
+  }
+})
+
+test_that("an ability-sampling null saved under the old rule is refused", {
+  # The held interval count changed what the resample/fixed/normal nulls
+  # mean, so those stored results must be recomputed rather than reused. The
+  # conditional generator retains every raw score, so its non-extreme set --
+  # and its automatic interval count -- was already constant across
+  # replicates; those results are unchanged and stay current.
+  fit <- rasch(simb(154, seq(-1.2, 1.2, length.out = 6), seed = 11))
+  cond <- fbq(fit, B = 20, seed = 5, workers = 1)
+  samp <- fbq(fit, B = 20, theta = "resample", seed = 5, workers = 1)
+  expect_identical(cond$algorithm, "loo-maxt-2")
+  expect_identical(samp$algorithm, "loo-maxt-3")
+  expect_no_error(.validate_fit_bootstrap(cond, fit))
+  expect_no_error(.validate_fit_bootstrap(samp, fit))
+
+  old <- unclass(samp)
+  old$algorithm <- "loo-maxt-2"
+  old$result_signature <- NULL
+  old$result_signature <- .fit_boot_md5(old)
+  class(old) <- class(samp)
+  expect_error(.validate_fit_bootstrap(old, fit), "recompute")
+})
+
 test_that("paired-comparison fit bootstrap follows the fitted design", {
   d <- simulate_btl(5, 20, reps_per_pair = 8, seed = 41)
   fit <- btl(d, "object_a", "object_b", winner = "winner", judge = "judge")

@@ -1585,34 +1585,58 @@ print.rasch_sim_batch <- function(x, ...) {
                      check.attributes = FALSE))
 }
 
+# A fit given no id column labels its persons by row number. Those labels are
+# not identifiers: reading them as such would report a different person
+# allocation, or an unmatchable group membership, for a fit of these very rows.
+.recovery_person_ids <- function(person) {
+  if (is.null(person) || !"id" %in% names(person)) return(NULL)
+  id <- .role_text_values(person$id)
+  if (identical(id, as.character(seq_along(id)))) NULL else id
+}
+
+# The fit does carry person labels, but they are row numbers: an allocation
+# recorded per person cannot be checked against them either way.
+.recovery_rownumber_ids <- function(person) {
+  !is.null(person) && "id" %in% names(person) &&
+    is.null(.recovery_person_ids(person))
+}
+
+# Row names are presentation, not data: a fitted data frame carries the row
+# labels of whatever rows were passed and the prepared simulation carries
+# none, so compare the response keys alone.
 .recovery_row_keys <- function(x) {
   x <- as.matrix(x)
-  apply(x, 1L, function(z)
+  unname(apply(x, 1L, function(z)
     paste(ifelse(is.na(z), "<NA>", format(z, scientific = FALSE,
-                                           trim = TRUE)), collapse = "\034"))
+                                           trim = TRUE)), collapse = "\034")))
 }
 
 .recovery_check_wide <- function(fit, sim, items, fitted) {
   if (is.null(fitted)) return(invisible(NULL))
   if (!is.data.frame(sim) || is.null(colnames(fitted)) ||
       anyDuplicated(colnames(fitted)) ||
-      !setequal(colnames(fitted), items) ||
-      any(!colnames(fitted) %in% names(sim)))
+      any(!items %in% names(sim)) ||
+      any(!colnames(fitted) %in% items))
     .recovery_mismatch("the fitted items do not match the simulation")
   spec <- fit$refit_spec %||% list()
   prep_model <- if (inherits(fit, "rasch_efrm")) "PCM" else
     spec$model %||% fit$model %||% "PCM"
+  # Prepare the whole simulated item set, as the estimator did. An item that
+  # everyone answered identically is dropped in preparation, so the fit of
+  # this simulation legitimately carries fewer items than were generated;
+  # any other difference is a different item set.
   expected <- tryCatch(.prepare_X(
-    sim[, colnames(fitted), drop = FALSE],
+    sim[, items, drop = FALSE],
     na_codes = spec$na_codes %||% -1,
     model = prep_model,
     anchors = spec$anchors)$X, error = function(e) NULL)
-  if (is.null(expected) || !identical(colnames(expected), colnames(fitted)) ||
-      nrow(expected) != nrow(fitted))
+  if (is.null(expected) || nrow(expected) != nrow(fitted))
     .recovery_mismatch("the fitted score structure differs from the simulation")
+  if (!setequal(colnames(expected), colnames(fitted)))
+    .recovery_mismatch("the fitted items do not match the simulation")
+  expected <- expected[, colnames(fitted), drop = FALSE]
 
-  fid <- if (!is.null(fit$person) && "id" %in% names(fit$person))
-    .role_text_values(fit$person$id) else NULL
+  fid <- .recovery_person_ids(fit$person)
   sid <- if ("id" %in% names(sim)) .role_text_values(sim$id) else NULL
   both_ids <- !is.null(fid) && !is.null(sid)
   aligned <- both_ids && length(fid) == nrow(fitted) &&
@@ -1864,14 +1888,20 @@ print.rasch_sim_batch <- function(x, ...) {
 .recovery_efrm_groups <- function(fit, tr) {
   old_labels <- names(tr$phi) %||% sprintf("g%d", seq_along(tr$phi))
   direct <- old_labels
+  fid <- .recovery_person_ids(fit$person)
+  # Row-number person labels cannot be read as identifiers, so a simulation
+  # that records who belongs to which group offers nothing to check the
+  # fitted allocation against. Matching the group labels instead would
+  # report units for whichever people the fit grouped: withhold.
+  if (.recovery_rownumber_ids(fit$person) &&
+      !is.null(tr$groups) && !is.null(tr$person_id)) return(NULL)
   if (is.null(tr$groups) || is.null(tr$person_id) ||
-      is.null(fit$person$id) || is.null(fit$frame_group) ||
+      is.null(fid) || is.null(fit$frame_group) ||
       is.null(fit$factors) || !fit$frame_group[1L] %in% names(fit$factors)) {
     if (all(direct %in% fit$phi_table$group)) return(direct)
     stop("the planted group units cannot be matched to the fitted group labels; ",
          "recovery needs the person-to-group membership", call. = FALSE)
   }
-  fid <- .role_text_values(fit$person$id)
   at <- match(fid, .role_text_values(tr$person_id))
   if (anyNA(at) || anyDuplicated(fid) || length(fid) != length(tr$person_id))
     stop("the planted person groups cannot be matched to the fitted people",
@@ -1918,7 +1948,15 @@ print.rasch_sim_batch <- function(x, ...) {
 #' origin, so recovery and bias are reported on the anchored scale.
 #' The fit must be from these simulated responses and model family, and must
 #' have converged. Row and item order do not matter; response values and the
-#' person, judge, facet and frame allocations do.
+#' person, judge, facet and frame allocations do. A fit given no \code{id}
+#' column labels its persons by row number, which are not identifiers: the
+#' responses are still verified, but person recovery and the EFRM group units
+#' are withheld with a note rather than compared against an unverified
+#' person allocation; the EFRM set units are still reported, with the note
+#' recording that the fitted group allocation is unchecked.
+#' Pass \code{id =} when fitting to recover them.
+#' An item the estimator dropped, such as one everyone answered identically,
+#' is named in the note and left out of the comparison.
 #' Recovery is unavailable when fitting removes or merges generating response
 #' categories, because the fitted locations then describe a different scale.
 #' For a many-facet simulation, the planted rater facet must be identifiable
@@ -1942,7 +1980,9 @@ print.rasch_sim_batch <- function(x, ...) {
 #' @return A list of class \code{"rasch_recovery"}: \code{summary} (per
 #'   parameter type: n, correlation, RMSE, bias) and \code{pieces} (the true
 #'   and estimated values behind each). \code{note} identifies unrepresented
-#'   generating departures or an unverifiable original response scale.
+#'   generating departures, an unverifiable original response scale,
+#'   generated items the fit does not estimate, and comparisons withheld
+#'   because the fit carries no person identifiers.
 #' @examples
 #' d <- simulate_rasch(500, 12, seed = 1)
 #' sim_recovery(rasch(d, id = "id"), d)$summary
@@ -2133,9 +2173,18 @@ sim_recovery <- function(fit, sim) {
     if (!is.null(true_id) && !is.null(est_id)) {
       at <- match(est_id, as.character(true_id))
       keep <- !is.na(at)
-      if (any(keep))
+      if (any(keep)) {
         add(name, recovery_theta[at[keep]], fit$person$theta[keep],
             est_id[keep], centre = centre)
+      } else {
+        # A fit given no id column labels its persons by row number, so no
+        # fitted person can be paired with the person who generated the row.
+        recovery_note <<- paste(c(recovery_note, paste0(
+          "No fitted person label matches a simulated person identifier, ",
+          "as happens when the fit was given no id= column and labels its ",
+          "persons by row number, so person recovery is unavailable.")),
+          collapse = " ")
+      }
     } else if (!is.null(fit$person) &&
                length(recovery_theta) == length(fit$person$theta)) {
       # Compatibility with simulation objects created before person IDs were
@@ -2175,6 +2224,15 @@ sim_recovery <- function(fit, sim) {
     true_difficulty <- if (!is.null(rasch_calibration_truth))
       rasch_calibration_truth$difficulty else tr$difficulty
     cm <- intersect(names(true_difficulty), names(ei))
+    # An item the estimator dropped (a constant item carries no information
+    # about its difficulty) has no estimate to compare: name it rather than
+    # reporting a quietly shorter item panel.
+    unestimated <- setdiff(names(true_difficulty), cm)
+    if (length(unestimated))
+      recovery_note <- paste(c(recovery_note, paste0(
+        "The fit does not estimate generated item(s) ",
+        paste(unestimated, collapse = ", "),
+        ", so the comparison omits them.")), collapse = " ")
     item_parameter <- if (heterogeneous_slopes)
       "item location (misspecified slopes)" else "item difficulty"
     person_parameter <- if (heterogeneous_slopes)
@@ -2227,11 +2285,20 @@ sim_recovery <- function(fit, sim) {
     # recover them, not only the set units
     if (!is.null(tr$phi) && !is.null(fit$phi_table)) {
       glab <- .recovery_efrm_groups(fit, tr)
-      ephi <- fit$phi_table$phi[match(glab, fit$phi_table$group)]
-      if (length(ephi) != length(tr$phi) || any(!is.finite(ephi)))
-        stop("the planted group units cannot be matched to finite fitted group units",
-             call. = FALSE)
-      add("group unit (log)", log(tr$phi), log(ephi), glab, centre = TRUE)
+      if (is.null(glab)) {
+        recovery_note <- paste(c(recovery_note, paste0(
+          "The fitted persons are labelled by row number, so the simulated ",
+          "person-to-group membership cannot be verified (pass id= when ",
+          "fitting): the group units are withheld, and the set units are ",
+          "those of a fit whose group allocation is unchecked.")),
+          collapse = " ")
+      } else {
+        ephi <- fit$phi_table$phi[match(glab, fit$phi_table$group)]
+        if (length(ephi) != length(tr$phi) || any(!is.finite(ephi)))
+          stop("the planted group units cannot be matched to finite fitted group units",
+               call. = FALSE)
+        add("group unit (log)", log(tr$phi), log(ephi), glab, centre = TRUE)
+      }
     }
   } else if (lay == "btl_efrm") {
     set_labels <- fitted_set_labels(tr$object_sets)

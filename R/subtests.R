@@ -407,8 +407,14 @@ split_items <- function(fit, items, by) {
 #'   \code{fit}, the \code{splits} performed (order, item, factor, partial
 #'   eta-squared, source item, DIF magnitude in logits), the \code{stopped}
 #'   reason, the residual \code{dif} table, and the number of distinct source
-#'   items that still show DIF in the final fit. \code{effects} records the
-#'   factor model used.
+#'   items that still show DIF in the final fit. \code{n_untested} counts the
+#'   item-term tests the final assessment could not estimate although the
+#'   design could answer them; those terms are reported as neither DIF nor no
+#'   DIF, so the remaining-DIF count is a lower bound whenever
+#'   \code{n_untested} is positive. A split copy answered in one level of its
+#'   splitting factor only is not counted: its term is structurally absent,
+#'   not lost. Both counts are \code{NA} when no item-term test was estimable
+#'   at all. \code{effects} records the factor model used.
 #' @references Andrich, D., & Hagquist, C. (2012). Real and artificial
 #'   differential item functioning. \emph{Journal of Educational and
 #'   Behavioral Statistics}, 37(3), 387-416.
@@ -456,12 +462,17 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
 
   # significant, non-superseded group terms of the current fit, with the
   # factors to split by and the partial eta-squared to rank on
+  last_da <- NULL
   flagged <- function(cur, resolvable_only = TRUE) {
     # Splitting preserves response rows. Retain the supplied factor values,
     # including external metadata and replacements for a stored factor,
     # instead of silently reselecting columns from the original fit.
     da <- dif_anova(cur, factors = fac0, effects = effects,
                     p_adjust = p_adjust, alpha = alpha)
+    # An item-term test that is not estimable is reported as NA and reads
+    # as "not significant" here. Keep the assessment itself so the caller
+    # can tell no DIF apart from no test.
+    last_da <<- da
     s <- da$summary
     # Splitting supplies cell-specific locations and thresholds, not
     # cell-specific slopes. Restrict automatic resolution to uniform-only DIF;
@@ -487,6 +498,10 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
   splits <- list(); done <- character(0); skipped <- character(0)
   skipped_anchor <- character(0)
   stopped <- "no significant DIF remains"
+  # TRUE while `stopped` is a verdict on the DIF that remains, which the
+  # final assessment can contradict; FALSE once the loop stops for a reason
+  # of its own that stays true whatever that assessment shows.
+  stopped_is_verdict <- TRUE
   repeat {
     fl <- flagged(cur)
     if (is.null(fl) || !nrow(fl)) {
@@ -509,11 +524,14 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
       if (!key %in% done) { pick <- fl[r, ]; pick_vars <- vars[[r]]; break }
     }
     if (is.null(pick)) { stopped <- "remaining DIF cannot be resolved further"; break }
-    if (length(splits) >= max_splits) { stopped <- "reached the split cap"; break }
+    if (length(splits) >= max_splits) {
+      stopped <- "reached the split cap"; stopped_is_verdict <- FALSE; break
+    }
     n_anchor <- .n_unsplit_sources(.split_source_map(cur))
     if (n_anchor <= min_anchors) {
       stopped <- sprintf("stopped to keep %d anchor items (pervasive DIF is not artificial DIF)",
                          min_anchors)
+      stopped_is_verdict <- FALSE
       break
     }
     by_vars <- pick_vars
@@ -584,19 +602,58 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
   } else {
     .split_source_items(final_dif$item, .split_source_map(cur))
   }
+  # dif_anova reports a test it cannot estimate as an NA row rather than an
+  # error, and the summary reads NA as not significant. An item term the
+  # design could have answered is therefore silence, not a clean bill of
+  # health. A split copy is the opposite case: it lives in one level of its
+  # splitting factor only, so its item-term test is structurally absent
+  # rather than lost, and says nothing about the DIF that remains. Count
+  # only the tests that were both requested and answerable, and withhold
+  # the counts outright when none of them was estimable.
+  s_fin <- last_da$summary
+  icol <- match(s_fin$item, colnames(cur$X))
+  answerable <- vapply(seq_len(nrow(s_fin)), function(r) {
+    if (is.na(icol[r])) return(TRUE)
+    seen <- !is.na(cur$X[, icol[r]])
+    all(vapply(last_da$summary_factors[[r]], function(v) {
+      lv <- as.character(fac0[seen, v])
+      length(unique(lv[!is.na(lv)])) >= 2L
+    }, TRUE))
+  }, TRUE)
+  tested <- is.finite(s_fin$p_uniform_adj) | is.finite(s_fin$p_nonuniform_adj)
+  n_untested <- sum(answerable & !tested)
+  no_test <- !any(tested)
+  if (no_test) {
+    unknown <- paste("no item-term test in the final DIF assessment was",
+                     "estimable; remaining DIF is unknown")
+    stopped <- if (stopped_is_verdict) unknown else paste0(stopped, "; ", unknown)
+  } else if (n_untested)
+    stopped <- paste0(stopped, sprintf(
+      paste("; %d of %d item-term test(s) in the final assessment were not",
+            "estimable, so remaining DIF may be understated"),
+      n_untested, sum(answerable)))
   notes <- character(0)
+  # The assessment's own notes are kept verbatim, its count of terms it could
+  # not estimate included: those terms stay in its adjusted-probability
+  # family, so they make the verdict above conservative. That is a fact about
+  # the family, not the claim about remaining DIF that n_untested withholds.
+  if (length(last_da$notes))
+    notes <- c(notes, paste("final DIF assessment:", last_da$notes))
   if (length(skipped)) notes <- c(notes,
     sprintf("%d flagged item-factor(s) not split because one or more cells had fewer than min_n distinct responders, weak boundary estimates, or incompatible response categories (%s)",
             length(skipped), paste(skipped, collapse = "; ")))
   if (length(skipped_anchor)) notes <- c(notes,
     sprintf("%d externally anchored item-factor(s) not split (%s)",
             length(skipped_anchor), paste(skipped_anchor, collapse = "; ")))
-  out <- list(algorithm = "factor-design-resolution-1",
+  out <- list(algorithm = "factor-design-resolution-2",
               fit = cur, splits = split_df, n_splits = nrow(split_df),
               stopped = stopped, dif = final_dif, notes = notes,
               effects = effects,
-              n_remaining_dif = length(remaining_items),
-              n_nonuniform = if (is.null(final_dif)) 0L else
+              n_remaining_dif = if (no_test) NA_integer_ else
+                length(remaining_items),
+              n_untested = as.integer(n_untested),
+              n_nonuniform = if (no_test) NA_integer_ else
+                if (is.null(final_dif)) 0L else
                 sum(final_dif$nonuniform %in% TRUE))
   out <- .tag_tables(out)
   class(out) <- "rasch_resolve_dif"
@@ -612,8 +669,11 @@ print.rasch_resolve_dif <- function(x, ...) {
     print(d, row.names = FALSE)
   }
   cat(sprintf("Remaining items with significant DIF: %d\n", x$n_remaining_dif))
-  if (!is.null(x$n_nonuniform) && x$n_nonuniform)
+  if (isTRUE(x$n_untested > 0))
+    cat(sprintf("Item-term tests not estimable: %d\n", x$n_untested))
+  if (isTRUE(x$n_nonuniform > 0))
     cat(sprintf("Non-uniform item-factor findings requiring review: %d\n",
                 x$n_nonuniform))
+  if (length(x$notes)) cat("\n", paste(x$notes, collapse = "\n"), "\n", sep = "")
   invisible(x)
 }

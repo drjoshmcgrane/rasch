@@ -91,6 +91,11 @@ test_that("frame invariance withholds Wald probabilities at zero uncertainty", {
   expect_true(all(is.na(z$p[1:2])))
   expect_equal(z$statistic[3], 3)
   expect_equal(z$p[3], 2 * pnorm(-3))
+  # An analytic standard error keeps the normal reference; a bootstrap
+  # standard deviation over B draws is referred to t(B - 1).
+  zt <- .frame_invariance_wald(c(0.2, 0, 0.3), c(0, 0, 0.1), df = 29)
+  expect_equal(zt$p[3], 2 * pt(-3, 29))
+  expect_true(all(is.na(zt$p[1:2])))
 })
 
 test_that("frame bootstrap comparisons keep the observed centring family", {
@@ -143,7 +148,7 @@ test_that("a sparse polytomous bootstrap cannot enlarge the frame family", {
   expect_identical(result$boot_reps_nonconverged, 0L)
   expect_identical(result$boot_reps_errors, 1L)
   expect_identical(result$algorithm,
-                   "frame-invariance-complete-family-1")
+                   "frame-invariance-complete-family-2")
   expect_no_error(.validate_frame_invariance(result, fit))
 })
 
@@ -167,6 +172,16 @@ test_that("frame-invariance bootstrap refits the units and controls one family",
                 "30/30 usable; 0 non-converged; 0 other failures",
                 fixed = TRUE)
   expect_true(all(is.finite(z$locations$se)))
+  # Both standard errors are bootstrap standard deviations, so the reported
+  # probabilities come from t(B - 1) and not from the normal, which
+  # rejected 6.9% at nominal 5% with B = 30 in null simulation.
+  expect_equal(z$locations$p,
+               2 * pt(-abs(z$locations$statistic), z$boot_reps_used - 1L))
+  expect_equal(z$discrimination$p,
+               2 * pt(-abs(z$discrimination$statistic),
+                      z$boot_reps_used - 1L))
+  expect_false(isTRUE(all.equal(
+    z$locations$p, 2 * pnorm(-abs(z$locations$statistic)))))
   p_all <- p.adjust(c(z$locations$p, z$discrimination$p), "holm")
   expect_equal(z$locations$p_adj, head(p_all, nrow(z$locations)))
   expect_equal(z$discrimination$p_adj,
@@ -419,7 +434,7 @@ test_that("DIF resolution returns its final residual-DIF table", {
   rr <- resolve_dif(f, max_splits = 0)
   expect_named(rr, c("algorithm", "fit", "splits", "n_splits", "stopped",
                      "dif", "notes", "effects", "n_remaining_dif",
-                     "n_nonuniform"))
+                     "n_untested", "n_nonuniform"))
   expect_equal(rr$n_remaining_dif, if (is.null(rr$dif)) 0L else
     length(.split_source_items(rr$dif$item, .split_source_map(rr$fit))))
   expect_error(resolve_dif(f, min_anchors = ncol(f$X)), "min_anchors")

@@ -19,8 +19,19 @@ tf <- tempfile()
 writeLines(paste(unname(tools::md5sum(rfiles)), collapse = ""), tf)
 rtree <- substr(unname(tools::md5sum(tf)), 1, 12)
 unlink(tf)
-stopifnot(all(attempts$r_tree_md5 == rtree), all(items$r_tree_md5 == rtree),
-          all(summary$r_tree_md5 == rtree))
+# The recorded R-tree hash identifies the source the study ran against, which
+# later commits move away from. Require the three files to agree on one hash,
+# then report whether the working tree is still that source rather than
+# failing the reconstruction over a state the recorded run cannot control.
+recorded_rtree <- unique(c(attempts$r_tree_md5, items$r_tree_md5,
+                           summary$r_tree_md5))
+stopifnot(length(recorded_rtree) == 1L)
+cat(if (identical(recorded_rtree, rtree))
+      sprintf("R source tree is the one recorded for the run (%s).\n", rtree)
+    else sprintf(paste0("R source tree has moved since the run: recorded %s, ",
+                        "working tree %s. The rates below are reconstructed ",
+                        "from the recorded outputs, not re-simulated against ",
+                        "current code.\n"), recorded_rtree, rtree))
 
 equal <- function(x, y) isTRUE(all.equal(x, y, tolerance = 1e-12,
                                         check.attributes = FALSE))

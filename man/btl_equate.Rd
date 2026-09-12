@@ -77,6 +77,14 @@ shift is the precision-weighted mean
 If fewer than two common objects have usable variances but at least two have
 finite locations, their unweighted mean difference is returned as a
 descriptive fallback and recorded in \code{shift_method}.
+Every error built from those precision weights conditions on them as if
+the two calibrations' standard errors were known: \code{shift_se}, each
+drift contrast's \code{se_diff} (and so its probability and
+\code{drifting} flag), and the equated location errors that carry the
+shift. Weight uncertainty adds a positive term all of them omit, so they
+understate uncertainty -- intervals under-cover, drift probabilities run
+small -- when the calibrations rest on few judges; a judge resample of
+both calibrations is the weight-aware alternative.
 An exact common anchor determines the shift even when it is the only
 common object with usable uncertainty.
 Each object is tested using its shifted difference \eqn{d_j-\hat s}. The

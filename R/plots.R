@@ -760,7 +760,14 @@ plot_pimap <- function(fit, bins = 35, xlim = NULL, information = FALSE,
     }
     ti <- test_information(information_fit, grid, items = info_idx)
     des <- if ("design" %in% names(ti)) unique(ti$design) else "Test information"
-    cols <- rep_len(c(.rr$teal, .rr$purple, .rr$red, .rr$soft), length(des))
+    # The palette limit belongs to the plot, not to the statistics: past it,
+    # draw every design in one soft colour and count them in the legend
+    # rather than cycling colours that imply distinctions no reader can
+    # follow back to a curve.
+    pal <- c(.rr$teal, .rr$purple, .rr$red, .rr$amber)
+    named <- length(des) <= length(pal)
+    cols <- if (named) rep_len(pal, length(des)) else
+      rep(.rr$soft, length(des))
     imax <- max(ti$info, na.rm = TRUE)
     if (is.finite(imax) && imax > 0) {
       scl <- ymax * 0.92 / imax
@@ -780,19 +787,22 @@ plot_pimap <- function(fit, bins = 35, xlim = NULL, information = FALSE,
         # narrow window. Use one title rather than repeating a prefix, scale
         # only as far as remains legible, and stack the legends when they do
         # not fit side by side.
+        labs <- if (named) des else
+          sprintf("%d administrations; more than the palette can name",
+                  length(des))
         usr <- par("usr"); span <- diff(usr[1:2])
         info_cex <- 0.68
-        info_w <- max(strwidth(c("Test information", des), cex = info_cex,
+        info_w <- max(strwidth(c("Test information", labs), cex = info_cex,
                                units = "user"))
         if (info_w > 0.46 * span)
           info_cex <- max(0.50, info_cex * 0.46 * span / info_w)
         map_w <- max(strwidth(map_labels, cex = 0.76, units = "user"))
-        info_w <- max(strwidth(c("Test information", des), cex = info_cex,
+        info_w <- max(strwidth(c("Test information", labs), cex = info_cex,
                                units = "user"))
         down <- if (map_w + info_w > 0.82 * span) 0.17 else 0
-        .rr_legend("topright", des, title = "Test information",
-                   lwd = 2.5, col = cols, cex = info_cex,
-                   inset = c(0, down))
+        .rr_legend("topright", labs, title = "Test information",
+                   lwd = 2.5, col = if (named) cols else .rr$soft,
+                   cex = info_cex, inset = c(0, down))
       }
     }
   }
@@ -1062,11 +1072,17 @@ plot_tcc <- function(fit, grid = NULL) {
   op <- .rr_canvas(range(grid), c(0, Smax), "Person location (logits)",
                    "Expected total score")
   on.exit(par(op))
-  cols <- rep_len(.rr$pal, length(curves))
+  # past the palette limit, one soft colour and a count: see plot_pimap()
+  named <- length(curves) <= length(.rr$pal)
+  cols <- if (named) rep_len(.rr$pal, length(curves)) else
+    rep(.rr$soft, length(curves))
   for (j in seq_along(curves)) lines(grid, curves[[j]], lwd = 3, col = cols[j])
   abline(h = c(0, Smax), lty = 3, col = .rr$soft)
   if (length(curves) > 1L)
-    .rr_legend("topleft", names(curves), lwd = 3, col = cols)
+    .rr_legend("topleft", if (named) names(curves) else
+      sprintf("%d administrations; more than the palette can name",
+              length(curves)),
+      lwd = 3, col = if (named) cols else .rr$soft)
   invisible(NULL)
 }
 
@@ -1092,7 +1108,10 @@ plot_tif <- function(fit, grid = NULL) {
     stop("the requested grid contains no positive test information; use locations nearer the calibrated range")
   if ("design" %in% names(ti) && length(unique(ti$design)) > 1L) {
     des <- unique(ti$design)
-    cols <- rep_len(.rr$pal, length(des))
+    # past the palette limit, one soft colour and a count: see plot_pimap()
+    named <- length(des) <= length(.rr$pal)
+    cols <- if (named) rep_len(.rr$pal, length(des)) else
+      rep(.rr$soft, length(des))
     ymax <- max(ti$info, na.rm = TRUE) * 1.1
     op <- .rr_canvas(range(grid), c(0, ymax), "Person location (logits)",
                      "Test information", right = 3.6)
@@ -1120,9 +1139,11 @@ plot_tif <- function(fit, grid = NULL) {
            cex.axis = 0.8)
       mtext("SEM", side = 4, line = 2.3, col = .rr$red, cex = 0.85)
     }
-    .rr_legend("topleft", des, title = if (is.finite(scl))
-      "Solid: information; dashed: SEM" else NULL,
-      lwd = 3, col = cols)
+    .rr_legend("topleft", if (named) des else
+      sprintf("%d administrations; more than the palette can name",
+              length(des)),
+      title = if (is.finite(scl)) "Solid: information; dashed: SEM" else NULL,
+      lwd = 3, col = if (named) cols else .rr$soft)
     return(invisible(NULL))
   }
   imax <- max(ti$info[is.finite(ti$info) & ti$info > 0])

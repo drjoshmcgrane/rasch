@@ -1344,6 +1344,10 @@ print.rasch_dif <- function(x, ...) {
   cat(sprintf("%d uniform, %d non-uniform DIF flag(s) after %s adjustment.\n",
               sum(s$uniform_DIF, na.rm = TRUE),
               sum(s$nonuniform_DIF, na.rm = TRUE), x$p_adjust))
+  # a blank row is a test the design could not estimate, not an absence of
+  # DIF, and it still counts in the adjusted family: the count line above is
+  # unreadable without the notes that say so
+  if (length(x$notes)) cat("Notes:", paste(x$notes, collapse = "; "), "\n")
   invisible(x)
 }
 
@@ -1917,7 +1921,29 @@ print.rasch_dif_size <- function(x, ...) {
       score_compatible = FALSE,
       area = rep(NA_real_, length(levs)), df = NA_real_, notes = notes))
   }
-  refit <- split_items(fit, item, by = grp)
+  # A split refit can fail on this item alone (it cannot preserve the score
+  # structure, or it does not converge). Withhold this item's resolution
+  # with the reason instead of aborting a whole multi-item analysis; the
+  # virtual-item branch above already behaves this way.
+  refit <- tryCatch(split_items(fit, item, by = grp),
+                    error = function(e) e)
+  # The refusal can have any of several causes (an anchored item, a lost
+  # score category, no convergence), so carry its own message and mark the
+  # refit as never run. The cells' category structures were checked just
+  # above and agree; a caller must not report this as a category problem.
+  if (inherits(refit, "error"))
+    return(list(
+      levs = levs, loc = rep(NA_real_, length(levs)),
+      vloc = matrix(NA_real_, length(levs), length(levs)),
+      weak = stats::setNames(rep(FALSE, length(levs)), levs),
+      m_cell = matrix(NA_real_, 1L, length(levs),
+                      dimnames = list(item, levs)),
+      category_signature = category_signature,
+      score_compatible = FALSE, refit_error = conditionMessage(refit),
+      area = rep(NA_real_, length(levs)), df = NA_real_,
+      notes = c(notes, paste0(item, ": resolved contrasts withheld because ",
+                              "the split refit is unavailable: ",
+                              conditionMessage(refit)))))
   idx <- match(paste0(item, " (", levs, ")"), refit$items$item)
   if (anyNA(idx)) return(NULL)
   thr <- refit$thresholds; cv <- refit$est$cov_tau
@@ -1940,6 +1966,18 @@ print.rasch_dif_size <- function(x, ...) {
        df = .dif_refit_df(refit), notes = notes)
 }
 
+# contr.poly returns a level that carries no weight in a polynomial
+# contrast as a rounding residue (the middle level of an odd-K linear
+# trend is about -1e-17, not 0). The support rules read any non-zero
+# weight as a required cell, so leave only the weights the contrast
+# actually places.
+.dif_poly_weights <- function(cp, j, levs) {
+  w <- cp[, j]
+  w[abs(w) < 1e-10 * max(abs(w))] <- 0
+  names(w) <- levs
+  w
+}
+
 # A factor is treated as ordered when declared ordered or when its levels
 # parse as numbers (ages, waves, doses).
 .dif_is_ordered <- function(f)
@@ -1957,7 +1995,7 @@ print.rasch_dif_size <- function(x, ...) {
     sc <- suppressWarnings(as.numeric(levels(f)))
     cp <- if (!any(is.na(sc))) stats::contr.poly(K, scores = sc)
           else stats::contr.poly(K)
-    w <- cp[, 1]; names(w) <- levels(f)
+    w <- .dif_poly_weights(cp, 1L, levels(f))
     list(weights = w, label = "linear")
   } else NULL
 }
@@ -1976,9 +2014,9 @@ print.rasch_dif_size <- function(x, ...) {
     sc <- suppressWarnings(as.numeric(levels(f)))
     cp <- if (!any(is.na(sc))) stats::contr.poly(K, scores = sc)
           else stats::contr.poly(K)
-    w1 <- cp[, 1]; names(w1) <- levels(f)
+    w1 <- .dif_poly_weights(cp, 1L, levels(f))
     add(sprintf("%s: linear", fname), w1)
-    w2 <- cp[, 2]; names(w2) <- levels(f)
+    w2 <- .dif_poly_weights(cp, 2L, levels(f))
     add(sprintf("%s: quadratic", fname), w2)
   } else if (K <= 4L) {
     pr <- utils::combn(levels(f), 2)
@@ -2222,7 +2260,10 @@ print.rasch_dif_size <- function(x, ...) {
 #' its non-zero target cells; an unsupported planned contrast is not estimated
 #' but remains in the multiplicity count. Once these weights are defined,
 #' every weighted cell must meet \code{min_n} for the item; sparse cells are
-#' not dropped and the remaining weights are not renormalised. Independent between-person cells are
+#' not dropped and the remaining weights are not renormalised. A level a
+#' contrast places no weight on is not required: the middle level of an
+#' odd-length linear trend carries weight zero, and so restricts neither the
+#' nuisance strata nor the persons the test uses. Independent between-person cells are
 #' then combined with a Welch--Satterthwaite reference. If a required between-
 #' person cell has fewer than two complete person scores, residual inference is
 #' withheld rather than changing the marginal contrast by dropping that cell.
@@ -2246,7 +2287,9 @@ print.rasch_dif_size <- function(x, ...) {
 #' semidefinite resolved-location covariance leaves the logit estimate
 #' descriptive and causes Wald inference to be withheld.
 #' A contrast with withheld inference remains in the adjustment family formed
-#' by every requested item and contrast.
+#' by every requested item and contrast. When the split refit that resolves one
+#' item's locations cannot be calibrated, that item's contrasts are withheld
+#' with the reason and the other items are unaffected.
 #' For an MFRM fit, underlying items are pooled over their facet cells by
 #' default. EFRM fits are excluded because the required split refit would
 #' discard the frame units.
@@ -2507,7 +2550,11 @@ dif_contrasts <- function(fit, factors = NULL, items = NULL, within = NULL,
           length(used) >= 2L &&
           all(vapply(seq_len(nrow(rs$category_signature)), function(rr)
             length(unique(rs$category_signature[rr, used])) == 1L, TRUE))
-        if (valid_weights && !touches_weak && !category_ok) {
+        # When the split refit never ran, the withholding reason is that
+        # refusal, already reported once for the whole item; repeating it
+        # per contrast as a category mismatch would be false.
+        if (valid_weights && !touches_weak && !category_ok &&
+            is.null(rs[["refit_error"]])) {
           notes <- c(notes, paste0(
             item, " [", nm, "]: estimate and inference withheld because ",
             "the contrasted cells have different observed response-category ",
@@ -2581,7 +2628,7 @@ dif_contrasts <- function(fit, factors = NULL, items = NULL, within = NULL,
             collapse = ", "), ""))
   rownames(fam_df) <- NULL
 
-  out <- list(algorithm = "complete-contrast-cells-1",
+  out <- list(algorithm = "complete-contrast-cells-2",
               table = tab, family = fam_df,
               family_n = as.integer(family_n),
               family_n_per_item = as.integer(family_n_per_item),
