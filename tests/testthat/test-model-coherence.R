@@ -31,7 +31,7 @@ test_that("DIF contrasts refuse incompatible score structures", {
   expect_match(paste(dc$notes, collapse = " "),
                "different observed response-category structures")
   expect_error(dif_posthoc(fit, "I02", "group"),
-               "different observed response categories")
+               "different observed response-category structures")
   expect_true(all(is.na(dif_size(fit, "I02", "group")$pairs$difference)))
 })
 

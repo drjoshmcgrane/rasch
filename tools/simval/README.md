@@ -387,6 +387,21 @@ with `Rscript`, loading the in-tree package via `pkgload::load_all(".")`.
   score-conditional null generator do not model within-person dependence.
   The study and R-tree hashes are
   `abae964531ee3fc544ecc0ba226c89d6` and `17a08ef1fa4c`.
+  These recorded fixed-split flags use the uncalibrated binomial rule.
+  That rule is now descriptive: unequal subset targeting can distort its
+  null rate even when the split was fixed in advance. The study script
+  retains that benchmark explicitly through `binomial_multidimensional`;
+  the historical CSV has not been restamped. The targeted follow-up is
+  `studies/dimensionality-targeting.R`.
+- `results/dimensionality-targeting.csv` checks a fixed split between ten
+  dichotomous items at -1.5 logits and ten at +1.5, with 300 persons per
+  dataset. Across 100 unidimensional datasets, the descriptive binomial
+  rule flagged 18% (MCSE 3.8 percentage points), versus 3% for the bootstrap
+  verdict (MCSE 1.7 points; 39 reference draws). The mean significant-person
+  proportion was 6.98%. All 100 datasets and 3,900 bootstrap refits were
+  analysed, without refusals or non-convergence. This supports withholding
+  the uncalibrated verdict; it is a targeted screen, not calibration across
+  all possible splits. The CSV records the executed script and R-tree hashes.
 - `results/repeated-id-item-fit-guard.csv` checks the inferential boundary for
   stacked response data. Exact row duplication leaves threshold estimates and
   their person-clustered covariance unchanged. The ordinary item-fit

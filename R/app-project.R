@@ -567,7 +567,7 @@
   resolution <- project$results[["resolve"]]
   if (!is.null(resolution) &&
       (is_btl || !inherits(resolution, "rasch_resolve_dif") ||
-       !identical(resolution$algorithm, "factor-design-resolution-2") ||
+       !identical(resolution$algorithm, "factor-design-resolution-3") ||
        !.app_scalar_text(resolution$effects) ||
        !resolution$effects %in% c("main", "factorial")))
     fail(paste("the saved automatic DIF resolution uses a superseded",
@@ -589,7 +589,7 @@
     if (is_btl)
       fail("the saved person-subset dimensionality test accompanies a paired-comparison fit")
     if (!is.list(subtest) ||
-        !identical(subtest$algorithm, "person-subset-comparison-1"))
+        !identical(subtest$algorithm, .dimensionality_test_algorithm))
       fail(paste("the saved person-subset dimensionality test uses a superseded",
                  "person-subset comparison; recompute it"))
     problem <- tryCatch({
@@ -657,21 +657,19 @@
     !is.null(project$results[["resolve"]]) &&
     (!is.list(project$results[["resolve"]]) ||
      !identical(project$results[["resolve"]]$algorithm,
-                "factor-design-resolution-2") ||
+                "factor-design-resolution-3") ||
      !is.character(project$results[["resolve"]]$effects) ||
      length(project$results[["resolve"]]$effects) != 1L ||
      anyNA(project$results[["resolve"]]$effects) ||
      !nzchar(trimws(project$results[["resolve"]]$effects)) ||
      !project$results[["resolve"]]$effects %in% c("main", "factorial"))
-  # The person-subset comparison withdrew its paired t-test of the two subset
-  # means: that test reads the targeting of the split rather than its
-  # dimensionality. A saved result without the current stamp carries that
-  # reading, so it is dropped rather than restored beside the current verdict.
+  # Earlier person-subset results used an uncalibrated mean or binomial
+  # reference. Omit their verdicts rather than restore superseded inference.
   old_subtest <- is.list(project) && is.list(project$results) &&
     !is.null(project$results[["subtest"]]) &&
     (!is.list(project$results[["subtest"]]) ||
      !identical(project$results[["subtest"]]$algorithm,
-                "person-subset-comparison-1"))
+                .dimensionality_test_algorithm))
   old_btl_dimensionality <- FALSE
   # The residual decomposition changed from row/count residuals to the
   # pooled expected-score definition. A saved result without the current
@@ -777,10 +775,12 @@
     !is.na(project$schema) && project$schema == 2L &&
     is.list(project$results) &&
     is.list(project$results$frame_invariance) &&
-    !all(c("algorithm", "family_n", "boot_reps", "boot_reps_used",
+    (!identical(project$results$frame_invariance$algorithm,
+                "frame-invariance-complete-family-2") ||
+     !all(c("algorithm", "family_n", "boot_reps", "boot_reps_used",
            "boot_reps_nonconverged", "boot_reps_errors",
            "boot_minimum_usable", "bootstrap_stratified") %in%
-         names(project$results$frame_invariance))
+         names(project$results$frame_invariance)))
   # Earlier CJ dimensionality results can retain finite probabilities and
   # reference bands for unsupported comparison designs. Authenticate the
   # original bundle and the result's active-fit binding before omitting only
@@ -1318,7 +1318,7 @@
   if (!legacy && isTRUE(old_subtest)) {
     attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
     warning(paste("the saved person-subset dimensionality test reported the",
-                  "superseded paired t-test of the subset means and was",
+                  "superseded person-subset reference and was",
                   "omitted; recompute it with dimensionality_test() before",
                   "reporting its verdict"), call. = FALSE)
   }

@@ -24,7 +24,7 @@ test_that("automatic resolution uses the requested factorial model throughout", 
   expect_equal(additive$n_splits, 0)
 
   r <- resolve_dif(f, effects = "factorial")
-  expect_identical(r$algorithm, "factor-design-resolution-2")
+  expect_identical(r$algorithm, "factor-design-resolution-3")
   expect_identical(r$effects, "factorial")
   expect_equal(r$n_splits, 1)
   expect_identical(r$splits$item, "I1")
@@ -149,12 +149,12 @@ test_that("automatic resolution withholds its verdict when no test was run", {
 
   r <- resolve_dif(fit)
   expect_equal(r$n_splits, 0)
-  expect_match(r$stopped, "no item-term test in the final DIF assessment")
+  expect_match(r$stopped, "no DIF hypothesis in the final DIF assessment")
   expect_true(is.na(r$n_remaining_dif))
   expect_true(is.na(r$n_nonuniform))
   expect_match(paste(r$notes, collapse = " "),
                "test\\(s\\) were not estimable")
-  expect_equal(r$n_untested, nrow(dif_anova(r$fit)$summary))
+  expect_equal(r$n_untested, 2L * nrow(dif_anova(r$fit)$summary))
   expect_output(print(r), "Remaining items with significant DIF: NA")
   # the assessment's own notes reach the printed output
   expect_output(print(r), "final DIF assessment: ")
@@ -188,7 +188,7 @@ test_that("a split copy's structurally absent term is not counted untested", {
   expect_identical(sort(absent), sort(paste0("I3 (T", 1:3, ")")))
   expect_equal(r$n_untested, 0L)
   expect_identical(r$stopped, "no significant DIF remains")
-  expect_false(any(grepl("Item-term tests not estimable",
+  expect_false(any(grepl("DIF hypotheses not estimable",
                          utils::capture.output(print(r)))))
 
   # a stop reason of the loop's own is a fact about the loop, not a verdict,
@@ -221,11 +221,11 @@ test_that("automatic resolution qualifies a verdict reached on partial tests", {
   r <- resolve_dif(fit)
   expect_equal(r$n_splits, 0)
   expect_equal(r$n_remaining_dif, 0)
-  expect_equal(r$n_untested, 1L)
+  expect_equal(r$n_untested, 2L)
   # the verdict the loop reached is kept, and qualified rather than replaced
   expect_match(r$stopped, "^no significant DIF remains; ")
-  expect_match(r$stopped, "1 of 7 item-term test\\(s\\)")
-  expect_output(print(r), "Item-term tests not estimable: 1")
+  expect_match(r$stopped, "2 of 14 DIF hypotheses")
+  expect_output(print(r), "DIF hypotheses not estimable: 2")
 })
 
 test_that("a resolution saved under the superseded tag is not restored", {
@@ -278,6 +278,6 @@ test_that("a second factor's test lost to a split is still counted untested", {
   expect_identical(sort(paste(absent$item, absent$term)),
                    sort(paste(rep(paste0("I4 (", c("a", "b"), ")"), each = 2),
                               c("grp", "site"))))
-  expect_equal(r$n_untested, 2L)
-  expect_match(r$stopped, "2 of 12 item-term test\\(s\\)")
+  expect_equal(r$n_untested, 4L)
+  expect_match(r$stopped, "4 of 24 DIF hypotheses")
 })

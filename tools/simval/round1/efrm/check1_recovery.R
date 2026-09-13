@@ -57,7 +57,7 @@ for (cfg_name in names(configs)) {
                         seed = seed)
     tr <- attr(d, "truth")
     if (cfg$mcar > 0) d <- apply_mcar(d, cfg$mcar, seed)
-    fit <- tryCatch(rasch_efrm(d, item_sets = tr$item_sets, groups = "group",
+    fit <- tryCatch(rasch_efrm(d, id = "id", item_sets = tr$item_sets, groups = "group",
                                 se_method = "hybrid"),
                      error = function(e) NULL)
     if (is.null(fit)) next

@@ -1,13 +1,13 @@
 simP <- function(theta, tau) { x <- 0:length(tau); p <- exp(x * theta - c(0, cumsum(tau))); p / sum(p) }
 
-test_that("dimensionality test separates 1D from 2D data", {
+test_that("descriptive dimensionality comparisons separate 1D from 2D data", {
   set.seed(1); Np <- 1500; L <- 20
   d <- scale(seq(-2, 2, length.out = L), scale = FALSE)[, 1]; th <- rnorm(Np, 0, 1.4)
   X1 <- matrix(rbinom(Np * L, 1, plogis(outer(th, d, "-"))), Np, L); colnames(X1) <- sprintf("U%02d", 1:L)
   dt1 <- dimensionality_test(
     rasch(X1, model = "PCM"), items_positive = colnames(X1)[1:10],
     items_negative = colnames(X1)[11:20], min_score_points = 2)
-  expect_false(dt1$multidimensional)
+  expect_true(is.na(dt1$multidimensional))
 
   set.seed(2)
   thA <- rnorm(Np, 0, 1.4); thB <- 0.3 * thA + sqrt(1 - 0.3^2) * rnorm(Np, 0, 1.4)
@@ -17,7 +17,8 @@ test_that("dimensionality test separates 1D from 2D data", {
   dt2 <- dimensionality_test(
     rasch(X2, model = "PCM"), items_positive = colnames(X2)[1:10],
     items_negative = colnames(X2)[11:20], min_score_points = 2)
-  expect_true(dt2$multidimensional)
+  expect_true(is.na(dt2$multidimensional))
+  expect_true(dt2$binomial_multidimensional)
   expect_gt(dt2$prop_significant, dt1$prop_significant)
 })
 
@@ -45,7 +46,7 @@ test_that("a short automatic dimensionality split is descriptive with a caution"
   expect_match(dt$caution, "score points")
   expect_true(all(dt$score_points < 15))
   printed <- capture.output(print(dt))
-  expect_true(any(grepl("withheld for the data-driven split", printed,
+  expect_true(any(grepl("withheld without a bootstrap reference", printed,
                         fixed = TRUE)))
   expect_false(any(grepl("fit_signature", printed, fixed = TRUE)))
 })
@@ -578,7 +579,7 @@ test_that("the subset mean difference is reported without a test", {
   dt <- dimensionality_test(fit, items_positive = sprintf("I%02d", 1:10),
                             items_negative = sprintf("I%02d", 11:20),
                             min_score_points = 2)
-  expect_false(dt$multidimensional)
+  expect_true(is.na(dt$multidimensional))
   expect_null(dt$paired_t)
   smd <- dt$subset_mean_difference
   expect_true(is.list(smd))
@@ -604,7 +605,7 @@ test_that("a saved subtest with the superseded paired t-test is refused", {
   dt <- dimensionality_test(fit, items_positive = sprintf("I%02d", 1:5),
                             items_negative = sprintf("I%02d", 6:10),
                             min_score_points = 2)
-  expect_identical(dt$algorithm, "person-subset-comparison-1")
+  expect_identical(dt$algorithm, "person-subset-comparison-2")
   expect_no_error(.validate_dimensionality_test(dt, fit))
   old <- dt
   old$algorithm <- NULL
@@ -625,7 +626,7 @@ test_that("a saved project keeps its data when its subtest is superseded", {
   current <- dimensionality_test(fit, items_positive = sprintf("I%02d", 1:4),
                                  items_negative = sprintf("I%02d", 5:8),
                                  min_score_points = 2)
-  expect_identical(current$algorithm, "person-subset-comparison-1")
+  expect_identical(current$algorithm, "person-subset-comparison-2")
   old <- current
   old$algorithm <- NULL
   old$subset_mean_difference <- NULL
@@ -643,7 +644,7 @@ test_that("a saved project keeps its data when its subtest is superseded", {
   saveRDS(project, path)
   expect_error(.save_app_project(project, path), "superseded person-subset")
   expect_warning(restored <- .read_app_project(path),
-                 "paired t-test of the subset means.*omitted")
+                 "person-subset reference.*omitted")
   expect_null(restored$results$subtest)
   for (field in c("data", "base_fit", "rasch_steps", "btl_steps", "kept_fits",
                   "settings"))

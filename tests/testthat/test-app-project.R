@@ -268,6 +268,7 @@ test_that("schema-2 projects omit superseded frame-invariance inference", {
   # valid, so the reader should migrate the derived result rather than reject
   # the whole analysis file.
   old_invariance <- structure(list(
+    algorithm = "frame-invariance-complete-family-1",
     boot_reps = 100L, boot_reps_used = 85L,
     boot_reps_nonconverged = 10L, boot_reps_errors = 5L,
     boot_minimum_usable = 51L, family_n = 1L,

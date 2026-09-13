@@ -1118,10 +1118,14 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     notes <- c(notes, sprintf(
       "%d requested item-term test(s) were not estimable and remain in the adjusted-probability family",
       n_unavailable_terms))
-  if (mixed && any(is.na(terms$F_value) & terms$term != "Residuals"))
-    notes <- c(notes, paste(
-      "term(s) reported NA were not estimable from the retained design",
-      "(rank deficiency, insufficient residual information, or incomplete panels)"))
+  unavailable <- which(!is.finite(terms$F_value) & terms$term != "Residuals")
+  if (length(unavailable)) notes <- c(notes, vapply(unavailable, function(j) {
+    reason <- if (is.finite(terms$df_denom[j]) && terms$df_denom[j] <= 0)
+      "no residual degrees of freedom" else
+      "the retained design or its residual covariance does not support this test"
+    sprintf("%s [%s]: unavailable because %s; retained in the %s adjustment family",
+            terms$item[j], terms$term[j], reason, p_adjust)
+  }, ""))
   out <- list(summary = summary_tab, terms = terms,
               summary_factors = summary_factors,
               term_ids = term_ids,
@@ -1751,6 +1755,17 @@ print.rasch_dif_size <- function(x, ...) {
 }
 
 .dif_resolve <- function(fit, item, grp, min_n) {
+  withheld <- function(reason, levs = levels(droplevels(grp)),
+                        prior = notes, refit_error = NULL) {
+    list(levs = levs, loc = rep(NA_real_, length(levs)),
+         vloc = matrix(NA_real_, length(levs), length(levs)),
+         weak = stats::setNames(rep(FALSE, length(levs)), levs),
+         m_cell = matrix(NA_real_, 1L, length(levs)),
+         category_signature = matrix(NA_character_, 1L, length(levs)),
+         score_compatible = FALSE, refit_error = refit_error,
+         area = rep(NA_real_, length(levs)), df = NA_real_,
+         notes = c(prior, paste0(item, ": resolved contrasts withheld: ", reason)))
+  }
   # an UNDERLYING MFRM item resolves at the virtual level: every one of
   # its facet cells is split by the groups in one joint unstructured
   # refit of the virtual matrix (the facet decomposition is not
@@ -1773,7 +1788,8 @@ print.rasch_dif_size <- function(x, ...) {
                            as.character(grp)))
     }
     grp <- droplevels(grp)
-    if (nlevels(grp) < 2) return(NULL)
+    if (nlevels(grp) < 2) return(withheld(
+      "fewer than two levels retain min_n distinct responders"))
     levs <- levels(grp)
     category_all <- vapply(levs, function(lv)
       vapply(cols, function(cc)
@@ -1812,8 +1828,10 @@ print.rasch_dif_size <- function(x, ...) {
     vfit <- fit; class(vfit) <- "rasch"
     vfit$model <- "PCM"   # unstructured virtual thresholds refit as PCM
     refit <- tryCatch(split_items(vfit, cols, by = grp),
-                      error = function(e) NULL)
-    if (is.null(refit)) return(NULL)
+                      error = function(e) e)
+    if (inherits(refit, "error")) return(withheld(
+      paste0("the split refit is unavailable: ", conditionMessage(refit)),
+      refit_error = conditionMessage(refit)))
     thr <- refit$thresholds; cv <- refit$est$cov_tau
     if (!.covariance_supports_wald(cv, nrow(thr))) {
       notes <- c(notes, paste0(
@@ -1841,7 +1859,8 @@ print.rasch_dif_size <- function(x, ...) {
       match(paste0(cols, " (", l, ")"), refit$items$item))
     if (is.null(dim(idx_m))) idx_m <- matrix(idx_m, nrow = length(cols))
     common <- rowSums(is.na(idx_m)) == 0L
-    if (sum(common) < 1L) return(NULL)
+    if (sum(common) < 1L) return(withheld(
+      "no facet cell was resolved for every group"))
     if (any(!common))
       notes <- c(notes, sprintf(
         "%s: facet cell(s) dropped from the magnitude (not resolvable for every level): %s",
@@ -1898,7 +1917,8 @@ print.rasch_dif_size <- function(x, ...) {
     grp <- factor(ifelse(as.character(grp) %in% thin, NA, as.character(grp)))
   }
   grp <- droplevels(grp)
-  if (nlevels(grp) < 2) return(NULL)
+  if (nlevels(grp) < 2) return(withheld(
+    "fewer than two levels retain min_n distinct responders"))
   levs <- levels(grp)
   category_signature <- matrix(vapply(levs, function(lv)
     paste(sort(unique(fit$X[as.character(grp) == lv &
@@ -1945,7 +1965,8 @@ print.rasch_dif_size <- function(x, ...) {
                               "the split refit is unavailable: ",
                               conditionMessage(refit)))))
   idx <- match(paste0(item, " (", levs, ")"), refit$items$item)
-  if (anyNA(idx)) return(NULL)
+  if (anyNA(idx)) return(withheld(
+    "the split refit did not retain every requested group"))
   thr <- refit$thresholds; cv <- refit$est$cov_tau
   block <- lapply(idx, function(k) thr$id[thr$item == k])
   loc <- refit$items$location[idx]
@@ -1983,6 +2004,18 @@ print.rasch_dif_size <- function(x, ...) {
 .dif_is_ordered <- function(f)
   is.ordered(f) || !any(is.na(suppressWarnings(as.numeric(levels(f)))))
 
+.dif_poly <- function(f) {
+  sc <- suppressWarnings(as.numeric(levels(f)))
+  if (all(is.finite(sc))) {
+    if (anyDuplicated(sc))
+      stop("factor levels have colliding numeric scores: ",
+           paste(levels(f)[duplicated(sc) | duplicated(sc, fromLast = TRUE)],
+                 collapse = ", "),
+           "; relabel the levels or supply explicit contrasts", call. = FALSE)
+    stats::contr.poly(nlevels(f), scores = sc)
+  } else stats::contr.poly(nlevels(f))
+}
+
 # The leading contrast of a factor: the difference for two levels, the
 # linear trend for an ordered factor, none for a nominal many-level factor.
 .dif_leading <- function(f) {
@@ -1992,9 +2025,7 @@ print.rasch_dif_size <- function(x, ...) {
     list(weights = w,
          label = sprintf("%s - %s", levels(f)[2], levels(f)[1]))
   } else if (.dif_is_ordered(f)) {
-    sc <- suppressWarnings(as.numeric(levels(f)))
-    cp <- if (!any(is.na(sc))) stats::contr.poly(K, scores = sc)
-          else stats::contr.poly(K)
+    cp <- .dif_poly(f)
     w <- .dif_poly_weights(cp, 1L, levels(f))
     list(weights = w, label = "linear")
   } else NULL
@@ -2011,9 +2042,7 @@ print.rasch_dif_size <- function(x, ...) {
     lead <- .dif_leading(f)
     add(sprintf("%s: %s", fname, lead$label), lead$weights)
   } else if (.dif_is_ordered(f)) {
-    sc <- suppressWarnings(as.numeric(levels(f)))
-    cp <- if (!any(is.na(sc))) stats::contr.poly(K, scores = sc)
-          else stats::contr.poly(K)
+    cp <- .dif_poly(f)
     w1 <- .dif_poly_weights(cp, 1L, levels(f))
     add(sprintf("%s: linear", fname), w1)
     w2 <- .dif_poly_weights(cp, 2L, levels(f))
@@ -2311,6 +2340,8 @@ print.rasch_dif_size <- function(x, ...) {
 #'   by the design-cell labels (factor levels joined by \code{":"}).
 #'   Weights are rescaled so the positive and negative parts each sum to
 #'   one.
+#'   Numeric factor labels used for automatic trends must give distinct
+#'   numeric scores; otherwise relabel them or supply explicit contrasts.
 #' @param p_adjust Adjustment across items and contrasts. The default
 #'   \code{"holm"} controls familywise error; use \code{"BH"} only for
 #'   false-discovery-rate screening. \code{"none"} leaves probabilities
@@ -2808,10 +2839,10 @@ dif_posthoc <- function(fit, item, term, factors = NULL, within = NULL,
       paste(unavailable, collapse = ", "))))
   if (nrow(out$table) && all(!is.finite(out$table$estimate)))
     stop("no contrast in the '", out$term, "' family is estimable for item '",
-         item, "': a required design cell fell below min_n = ", min_n,
-         " responders, the resolved refits were not identified, or the ",
-         "contrasted cells used different observed response categories; ",
-         "pool sparse levels or check the factor and score coding")
+         item, "': ", if (length(out$notes)) paste(out$notes, collapse = "; ") else
+           paste0("no supported resolved comparison; possible causes include ",
+                  "sparse cells, weak identification or incompatible categories"),
+         call. = FALSE)
   class(out) <- c("rasch_dif_posthoc", class(out))
   out
 }

@@ -131,8 +131,8 @@ APP_HELP <- c(
   ),
   expl_coef_tbl = paste(
     "Reports predictor effects on item, threshold or object location in logits, with",
-    "standard errors and Holm-adjusted probabilities. Repeated-person or",
-    "judge-clustered fits use their supported cluster degrees of freedom."
+    "standard errors and Holm-adjusted probabilities. All supported fits use",
+    "a finite-df t reference based on their independent sampling units."
   ),
   expl_diag_tbl = paste(
     "Tests each available fixed item, threshold or object departure separately from",

@@ -308,7 +308,7 @@ test_that("dimensionality: 10-component PCA, scree and manual subsets", {
   et <- plot_scree(fit)
   expect_equal(nrow(et), 10)
 
-  # default split detects the planted second dimension; binomial CI fields present
+  # The uncalibrated split retains the descriptive binomial flag, not a verdict.
   dt <- dimensionality_test(fit, min_score_points = 2)
   expect_true(is.na(dt$multidimensional))
   expect_true(dt$binomial_multidimensional)
@@ -316,11 +316,14 @@ test_that("dimensionality: 10-component PCA, scree and manual subsets", {
   expect_true(dt$ci[1] >= 0 && dt$ci[2] <= 1 && dt$ci[1] < dt$ci[2])
   expect_true(dt$n + dt$n_excluded_extreme >= dt$n)
 
-  # manual subsets matching the true structure also detect it
+  # Fixed subsets also require bootstrap calibration for an inferential verdict.
   dtm <- dimensionality_test(fit, items_positive = sprintf("D%02d", 1:8),
                              items_negative = sprintf("D%02d", 9:16),
                              min_score_points = 2)
-  expect_true(dtm$multidimensional)
+  expect_true(is.na(dtm$multidimensional))
+  expect_true(dtm$binomial_multidimensional)
+  expect_identical(dtm$verdict_method,
+                   "withheld for fixed split without bootstrap reference")
   expect_identical(dtm$split, "manual")
   expect_gt(dtm$prop_significant, 0.05)
 

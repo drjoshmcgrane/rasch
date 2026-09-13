@@ -70,7 +70,14 @@ show_table <- function(x, n = 250L, digits = 3L) {
   # object would strip its class and render the table as raw text
   cap <- if (omitted > 0L)
     sprintf("First %d rows shown; %d further row(s) omitted.", n, omitted)
-  knitr::kable(x, digits = digits, row.names = FALSE, caption = cap)
+  # Emit a Markdown table with literal text cells and headers. kable's
+  # pipe format escapes pipes, but not dollar-delimited Pandoc mathematics.
+  for (cn in names(x))
+    if (is.character(x[[cn]]) || is.factor(x[[cn]]))
+      x[[cn]] <- report_text(x[[cn]])
+  names(x) <- report_text(names(x))
+  knitr::kable(x, format = "pipe", digits = digits, row.names = FALSE,
+               caption = cap)
 }
 report_columns <- function(x, columns) {
   if (is.null(x)) return(NULL)
@@ -88,7 +95,7 @@ report_text <- function(x) {
   x <- gsub("&", "&amp;", x, fixed = TRUE)
   x <- gsub("<", "&lt;", x, fixed = TRUE)
   x <- gsub(">", "&gt;", x, fixed = TRUE)
-  marks <- c("\\", "`", "*", "_", "{", "}", "#", "+", "!", "|")
+  marks <- c("\\", "`", "*", "_", "{", "}", "#", "+", "!")
   x <- vapply(strsplit(x, "", fixed = TRUE), function(chars)
     paste0(ifelse(chars %in% marks, paste0("\\", chars), chars),
            collapse = ""), character(1))
@@ -102,6 +109,8 @@ report_text <- function(x) {
   x <- gsub(")", "&#41;", x, fixed = TRUE)
   x <- gsub("[", "&#91;", x, fixed = TRUE)
   x <- gsub("]", "&#93;", x, fixed = TRUE)
+  x <- gsub("$", "&#36;", x, fixed = TRUE)
+  x <- gsub("|", "&#124;", x, fixed = TRUE)
   x
 }
 # `what` names the missing display: knitr drops a figure identical to the
@@ -206,7 +215,7 @@ if (!is_btl) {
         "consistent with unidimensionality" else
           if (resolution_limited)
             "withheld because the bootstrap resolution is insufficient" else
-            "withheld for the data-driven split"
+            "withheld without a bootstrap reference"
     print(show_table(data.frame(
       split = reported_subtest$split,
       significant_percent = 100 * reported_subtest$prop_significant,
@@ -223,8 +232,7 @@ if (!is_btl) {
         "inferential verdict at alpha %.3f.\n\n"),
         reported_subtest$bootstrap_resolution, reported_subtest$alpha))
     } else if (is.na(reported_subtest$multidimensional)) {
-      cat("The residual-derived split is descriptive until it is calibrated",
-          "by bootstrap or replaced by item subsets fixed in advance.\n\n")
+      cat(report_text(reported_subtest$verdict_note), "\n\n")
     }
   }
   cat("\n# Person estimates\n\n")

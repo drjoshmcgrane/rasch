@@ -146,7 +146,9 @@ test_that("the dimensionality panel reads the subset means descriptively", {
   dt <- list(
     split = "manual", first_eigenvalue = 1.8, prop_significant = 0.07,
     ci = c(0.03, 0.14), n = 60L, n_excluded_extreme = 2L,
-    multidimensional = FALSE, verdict_method = "fixed-split binomial",
+    multidimensional = NA,
+    verdict_method = "withheld for fixed split without bootstrap reference",
+    verdict_note = "Use B > 0 for a model-based reference.",
     alpha = 0.05,
     subset_mean_difference = list(mean_difference = 0.123,
                                   sd_difference = 0.456),

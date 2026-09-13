@@ -1948,6 +1948,7 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
                                          class = "btn-outline-secondary btn-xs")),
               card_body(fillable = FALSE,
                 uiOutput("resolve_summary"),
+                uiOutput("resolve_notes"),
                 DT::DTOutput("resolve_tbl"),
                 rcode_details("resolve_tbl"))))),
         accordion_panel(
@@ -2331,8 +2332,8 @@ panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
                            options = list(placeholder = "negative loadings on the selected component")),
             numericInput("dim_boot_B", info_label(
               "Bootstrap replicates",
-              paste("Leave at zero for a descriptive automatic-split result.",
-                    "A positive value calibrates the data-driven split;",
+              paste("Leave at zero for a descriptive result.",
+                    "A positive value calibrates either a fixed or automatic split;",
                     "99 or more is suitable for inference.")),
               value = 0, min = 0, step = 99),
             div(class = "d-flex gap-2",
@@ -5071,6 +5072,11 @@ server <- function(input, output, session) {
     if (nrow(d)) { d$eta2 <- round(d$eta2, 3); d$magnitude <- round(d$magnitude, 3) }
     num_dt(d)
   })
+  output$resolve_notes <- renderUI({
+    rr <- resolve_res(); req(!is.null(rr))
+    if (length(rr$notes))
+      p(class = "text-muted small mb-2", paste(rr$notes, collapse = " "))
+  })
   output$resolve_tbl_csv <- downloadHandler(
     filename = function() "dif_resolution.csv",
     content = function(file) {
@@ -5683,8 +5689,9 @@ server <- function(input, output, session) {
                      "Approx. response-cell-trait chi-square" else
                        "Approx. item-trait chi-square",
                    sprintf("%.2f on %d df, %s", f$total_chisq, f$total_df,
-                           p_lab(if (repeated_ids) NA_real_
-                                 else f$total_chisq_p))),
+                           if (repeated_ids || !finite1(f$total_chisq_p))
+                             "probability unavailable" else
+                             p_lab(f$total_chisq_p))),
           stat_row(if (inherits(f, c("rasch_mfrm", "rasch_efrm")))
                      "Response-cell fit residual" else "Item fit residual",
                    sprintf("mean %.2f, SD %.2f", f$item_fit_summary$mean,
@@ -7149,6 +7156,8 @@ server <- function(input, output, session) {
                  unavailable)
     base <- sprintf("Note. %s. Class intervals: %s (from the smallest cell).",
                     status, if (is.null(r$n_groups)) "NA" else r$n_groups)
+    if (unavailable) base <- paste(base,
+      "Unavailable tests remain in the Holm adjustment family.")
     if (identical(r$effects, "factorial")) {
       sup <- sum(d$superseded, na.rm = TRUE)
       if (sup)
@@ -7933,6 +7942,11 @@ server <- function(input, output, session) {
                        type = "warning")
       return(NULL)
     }
+    if (!nrow(a)) {
+      showNotification("Reference CSV contains no objects - ignored.",
+                       type = "warning")
+      return(NULL)
+    }
     if (anyDuplicated(names(a))) {
       showNotification("Reference CSV has duplicate column names - ignored.",
                        type = "warning")
@@ -8453,6 +8467,7 @@ server <- function(input, output, session) {
     else restored_project_resources()[["eq_reference"]]
     validate(need(!is.null(a) && all(c("item", "location") %in% names(a)),
                   "The reference CSV needs columns item, location (and ideally se)."))
+    validate(need(nrow(a) > 0L, "The reference CSV contains no items."))
     a
   })
   # reference: an uploaded calibration CSV, or a fit kept on the Compare page
@@ -9306,17 +9321,13 @@ server <- function(input, output, session) {
         "consistent with unidimensionality" else
           if (resolution_limited)
             "withheld because the bootstrap resolution is insufficient" else
-            "withheld for the data-driven split"
+            "withheld without a bootstrap reference"
     cat(sprintf("Verdict: %s\n", verdict))
     if (!is.null(dt$p_boot))
       cat(sprintf("Bootstrap p: %s (%d of %d replicates used)\n",
                   fmt_p(dt$p_boot), dt$bootstrap$B_used, dt$bootstrap$B))
     if (!is.null(dt$caution)) cat("Caution:", dt$caution, "\n")
-    # a split chosen from the residuals is chosen to disagree: the binomial
-    # rule is interpretable only for a split fixed in advance
-    if (dt$split != "manual" && is.null(dt$p_boot))
-      cat("Note: the split was chosen from the residuals; name the subsets by",
-          "content or use bootstrap calibration for an inferential verdict.\n")
+    if (length(dt$verdict_note)) cat("Note:", dt$verdict_note, "\n")
     if (isTRUE(resolution_limited))
       cat(sprintf(paste0(
         "Note: the smallest attainable bootstrap p is %.3f; increase B for ",
@@ -10164,6 +10175,7 @@ server <- function(input, output, session) {
                              else character(0))
 
       rr <- p$results %||% list()
+      dim_computed(NULL)
       resolve_res(rr$resolve %||% NULL); lr_res(rr$lr %||% NULL)
       rescore_res(rr$rescore %||% NULL); contr_res(rr$contrasts %||% NULL)
       bdif_res(rr$btl_dif %||% NULL)

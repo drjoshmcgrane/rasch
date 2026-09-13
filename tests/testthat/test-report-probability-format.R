@@ -13,15 +13,19 @@ test_that("frame unit report probabilities are formatted before relabelling", {
       identical(e[[2L]], as.name("show_table")), setup)
   expect_length(assignment, 1L)
   env <- new.env(parent = asNamespace("rasch"))
+  text_assignment <- Filter(function(e)
+    is.call(e) && identical(e[[1L]], as.name("<-")) &&
+      identical(e[[2L]], as.name("report_text")), setup)
+  eval(text_assignment[[1L]], env)
   eval(assignment[[1L]], env)
   # Exercise the actual template formatter, not a duplicate implementation.
   tab <- data.frame(set = c("A", "B"), p_alpha_adj = c(1e-8, .04),
                      p_kappa_adj = c(2e-9, NA_real_))
   rendered <- paste(env$show_table(tab), collapse = "\n")
-  expect_match(rendered, "adjusted p (alpha)", fixed = TRUE)
-  expect_match(rendered, "adjusted p (kappa)", fixed = TRUE)
+  expect_match(rendered, "adjusted p &#40;alpha&#41;", fixed = TRUE)
+  expect_match(rendered, "adjusted p &#40;kappa&#41;", fixed = TRUE)
   expect_equal(lengths(regmatches(rendered,
-    gregexpr("< 0.001", rendered, fixed = TRUE))), 2L)
+    gregexpr("&lt; 0.001", rendered, fixed = TRUE))), 2L)
   expect_match(rendered, "0.040", fixed = TRUE)
   text <- paste(lines, collapse = "\n")
   expect_match(text, 'names(au)[names(au) == "p_adj.x"] <- "p_alpha_adj"',
@@ -61,4 +65,47 @@ test_that("report text escapes brackets for the dialect it renders in", {
   expect_match(out[2], "&amp;\\#40;", fixed = TRUE)
   expect_match(out[2], "&lt;em&gt;markup&lt;/em&gt;", fixed = TRUE)
   expect_match(out[2], "\\*emphasis\\*", fixed = TRUE)
+})
+
+test_that("report table labels remain literal after Pandoc conversion", {
+  skip_if_not_installed("knitr"); skip_if_not_installed("rmarkdown")
+  skip_if_not(rmarkdown::pandoc_available())
+  template <- testthat::test_path("..", "..", "inst", "rmarkdown", "rasch-report.Rmd")
+  if (!file.exists(template))
+    template <- system.file("rmarkdown", "rasch-report.Rmd", package = "rasch")
+  lines <- readLines(template, warn = FALSE)
+  start <- which(lines == "```{r setup, include=FALSE}")
+  end <- which(seq_along(lines) > start & lines == "```")[1L]
+  expr <- as.list(parse(text = lines[(start + 1L):(end - 1L)]))
+  env <- new.env(parent = asNamespace("rasch"))
+  for (e in expr) if (is.call(e) && identical(e[[1L]], as.name("<-")) &&
+    as.character(e[[2L]]) %in% c("report_text", "show_table")) eval(e, env)
+  tab <- data.frame(label = c("a$b", "c$d", "item|set"), value = c(.4, .5, .6))
+  names(tab)[1] <- "item$label"
+  md <- tempfile(fileext = ".md"); html <- tempfile(fileext = ".html")
+  on.exit(unlink(c(md, html)), add = TRUE)
+  writeLines(as.character(env$show_table(tab)), md)
+  rmarkdown::pandoc_convert(md, to = "html", output = html,
+    from = "markdown+tex_math_dollars+tex_math_single_backslash")
+  out <- paste(readLines(html, warn = FALSE), collapse = "\n")
+  expect_match(out, "a$b", fixed = TRUE)
+  expect_match(out, "c$d", fixed = TRUE)
+  expect_match(out, "item$label", fixed = TRUE)
+  expect_match(out, "item|set", fixed = TRUE)
+  expect_false(grepl('class="math', out, fixed = TRUE))
+  tex <- tempfile(fileext = ".tex")
+  docx <- tempfile(fileext = ".docx")
+  xml_dir <- tempfile(); dir.create(xml_dir)
+  on.exit(unlink(c(tex, docx, xml_dir), recursive = TRUE), add = TRUE)
+  rmarkdown::pandoc_convert(md, to = "latex", output = tex,
+    from = "markdown+tex_math_dollars+tex_math_single_backslash")
+  expect_match(paste(readLines(tex, warn = FALSE), collapse = "\n"),
+               "a\\$b", fixed = TRUE)
+  rmarkdown::pandoc_convert(md, to = "docx", output = docx,
+    from = "markdown+tex_math_dollars+tex_math_single_backslash")
+  utils::unzip(docx, files = "word/document.xml", exdir = xml_dir)
+  xml <- paste(readLines(file.path(xml_dir, "word/document.xml"),
+                         warn = FALSE), collapse = "\n")
+  expect_match(xml, "a$b", fixed = TRUE)
+  expect_false(grepl("<m:oMath", xml, fixed = TRUE))
 })

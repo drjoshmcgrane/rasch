@@ -676,7 +676,8 @@ test_that("a between level with no complete panels yields NA terms, not a crash"
   expect_s3_class(dif_anova(f), "rasch_dif")
   df <- dif_anova(f, effects = "factorial")
   expect_true(any(is.na(df$terms$F_value[df$terms$term == "occ:grp"])))
-  expect_true(any(grepl("not estimable", df$notes)))
+  expect_true(any(grepl("I1 [occ:grp]: unavailable because", df$notes,
+                        fixed = TRUE)))
   expect_true(any(grepl("dropped from the within-person", df$notes)))
 })
 

@@ -447,12 +447,15 @@ test_that("exports accept DIF only from the fitted model being reported", {
 test_that("every DIF surface says which requested tests were not estimable", {
   fit <- sim_unestimable_dif()
   da <- dif_anova(fit, effects = "factorial")
-  expect_true(any(grepl("not estimable", da$notes, fixed = TRUE)))
+  refusal <- "I1 [occ:grp]: unavailable because"
+  expect_true(any(grepl(refusal, da$notes, fixed = TRUE)))
+  expect_true(any(grepl("retained in the holm adjustment family", da$notes,
+                        fixed = TRUE)))
 
   # a blank summary row otherwise reads as "nothing to report" while the
   # withheld test still counts in the adjusted family
   printed <- paste(utils::capture.output(print(da)), collapse = "\n")
-  expect_match(printed, "not estimable", fixed = TRUE)
+  expect_match(printed, refusal, fixed = TRUE)
 
   html <- tempfile(fileext = ".html")
   on.exit(unlink(html), add = TRUE)
@@ -463,7 +466,7 @@ test_that("every DIF surface says which requested tests were not estimable", {
   expect_match(document,
                "<h2>Differential item functioning</h2><p class='note'>",
                fixed = TRUE)
-  expect_match(document, "not estimable", fixed = TRUE)
+  expect_match(document, refusal, fixed = TRUE)
 
   out <- tempfile("dif-note-output-")
   on.exit(unlink(out, recursive = TRUE), add = TRUE)
@@ -471,7 +474,7 @@ test_that("every DIF surface says which requested tests were not estimable", {
                                 item_plots = FALSE, dpi = 40, dif = da))
   summary <- paste(readLines(file.path(out, "summary.txt")), collapse = "\n")
   expect_match(summary, "DIF notes:", fixed = TRUE)
-  expect_match(summary, "not estimable", fixed = TRUE)
+  expect_match(summary, refusal, fixed = TRUE)
 })
 
 test_that("a paired-comparison export records the DIF notes", {
@@ -519,13 +522,15 @@ test_that("report_document delivers a parenthesised note as prose", {
   on.exit(unlink(html), add = TRUE)
   report_document(fit, html, format = "html", dif = da)
   document <- paste(readLines(html, warn = FALSE), collapse = "\n")
-  expect_match(document, "not estimable", fixed = TRUE)
+  prose <- gsub("[[:space:]]+", " ", document)
+  expect_match(prose, "unavailable because", fixed = TRUE)
   # pandoc reads "\(" and "\[" as mathematics under tex_math_single_backslash:
   # a backslash-escaped parenthesis sets the clause as an equation and
   # deletes the parentheses from the reported note
   expect_false(grepl("class=\"math", document, fixed = TRUE))
-  expect_match(document, "(rank deficiency", fixed = TRUE)
-  expect_match(document, "term(s)", fixed = TRUE)
+  expect_match(prose, "(their between-person information is retained)",
+               fixed = TRUE)
+  expect_match(prose, "panel(s)", fixed = TRUE)
 })
 
 test_that("report_document writes a self-contained HTML report", {

@@ -404,17 +404,20 @@ split_items <- function(fit, items, by) {
 #'   \code{"factorial"} also tests their interactions. The same model is
 #'   used at every round and in the final DIF assessment.
 #' @return A list of class \code{"rasch_resolve_dif"}: the final resolved
-#'   \code{fit}, the \code{splits} performed (order, item, factor, partial
-#'   eta-squared, source item, DIF magnitude in logits), the \code{stopped}
+#'   \code{fit}, the \code{splits} performed (\code{order}, \code{item},
+#'   \code{factor}, \code{base_item}, \code{eta2}, \code{magnitude} in logits), the \code{stopped}
 #'   reason, the residual \code{dif} table, and the number of distinct source
 #'   items that still show DIF in the final fit. \code{n_untested} counts the
-#'   item-term tests the final assessment could not estimate although the
+#'   uniform and non-uniform hypotheses the final assessment could not estimate although the
 #'   design could answer them; those terms are reported as neither DIF nor no
 #'   DIF, so the remaining-DIF count is a lower bound whenever
 #'   \code{n_untested} is positive. A split copy answered in one level of its
 #'   splitting factor only is not counted: its term is structurally absent,
-#'   not lost. Both counts are \code{NA} when no item-term test was estimable
-#'   at all. \code{effects} records the factor model used.
+#'   not lost. \code{n_remaining_dif} is \code{NA} when no hypothesis was
+#'   estimable. \code{n_nonuniform} counts significant non-uniform item-factor
+#'   findings and is \code{NA} if any answerable non-uniform hypothesis is
+#'   unavailable, or no hypothesis was estimable. \code{n_untested} is always
+#'   a count. \code{effects} records the factor model used.
 #' @references Andrich, D., & Hagquist, C. (2012). Real and artificial
 #'   differential item functioning. \emph{Journal of Educational and
 #'   Behavioral Statistics}, 37(3), 387-416.
@@ -497,6 +500,7 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
   cur <- fit
   splits <- list(); done <- character(0); skipped <- character(0)
   skipped_anchor <- character(0)
+  refusal_notes <- character(0)
   stopped <- "no significant DIF remains"
   # TRUE while `stopped` is a verdict on the DIF that remains, which the
   # final assessment can contradict; FALSE once the loop stops for a reason
@@ -552,14 +556,19 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
     # adequate, non-boundary support and a common score-category structure.
     intended_levels <- levels(droplevels(grp[!is.na(grp)]))
     support <- tryCatch(.dif_resolve(cur, pick$item, grp, min_n),
-                        error = function(e) NULL)
-    support_ok <- !is.null(support) &&
+                        error = function(e) e)
+    support_ok <- !is.null(support) && !inherits(support, "error") &&
       setequal(support$levs, intended_levels) &&
       !any(support$weak %in% TRUE) &&
       !identical(support$score_compatible, FALSE) &&
       all(is.finite(support$loc))
     if (!support_ok) {
-      skipped <- c(skipped, paste(pick$item, pick$factor))
+      reason <- if (inherits(support, "error")) conditionMessage(support) else
+        support$notes
+      if (length(reason)) refusal_notes <- c(refusal_notes,
+        paste0(pick$item, " [", pick$factor, "]: not split: ",
+               paste(reason, collapse = "; "))) else
+        skipped <- c(skipped, paste(pick$item, pick$factor))
       done <- c(done, key)
       next
     }
@@ -578,8 +587,12 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
       if (length(d)) max(d) else NA_real_
     } else NA_real_
     refit <- tryCatch(split_items(cur, pick$item, by = grp),
-                      error = function(e) NULL)
-    if (is.null(refit)) { done <- c(done, key); next }
+                      error = function(e) e)
+    if (inherits(refit, "error")) {
+      refusal_notes <- c(refusal_notes, paste0(pick$item, " [", pick$factor,
+        "]: not split: ", conditionMessage(refit)))
+      done <- c(done, key); next
+    }
     base_map <- .split_source_map(cur)
     splits[[length(splits) + 1L]] <- list(
       order = length(splits) + 1L, item = pick$item, factor = pick$factor,
@@ -615,24 +628,35 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
   answerable <- vapply(seq_len(nrow(s_fin)), function(r) {
     if (is.na(icol[r])) return(TRUE)
     seen <- !is.na(cur$X[, icol[r]])
-    all(vapply(last_da$summary_factors[[r]], function(v) {
-      lv <- as.character(fac0[seen, v])
-      length(unique(lv[!is.na(lv)])) >= 2L
-    }, TRUE))
+    vars <- last_da$summary_factors[[r]]
+    cells <- unique(fac0[seen, vars, drop = FALSE])
+    cells <- droplevels(cells[stats::complete.cases(cells), , drop = FALSE])
+    if (!all(vapply(cells, function(v) length(unique(v)) >= 2L, TRUE)))
+      return(FALSE)
+    if (length(vars) == 1L) return(TRUE)
+    # The full interaction requires every contrast, not merely two observed
+    # levels of each constituent factor. Stand-in names allow arbitrary labels.
+    cells[] <- lapply(cells, factor)
+    names(cells) <- paste0("f", seq_along(vars))
+    mm <- stats::model.matrix(stats::reformulate(
+      paste(names(cells), collapse = "*")), cells)
+    qr(mm)$rank == ncol(mm)
   }, TRUE)
-  tested <- is.finite(s_fin$p_uniform_adj) | is.finite(s_fin$p_nonuniform_adj)
-  n_untested <- sum(answerable & !tested)
-  no_test <- !any(tested)
+  uniform_tested <- is.finite(s_fin$p_uniform_adj)
+  nonuniform_tested <- is.finite(s_fin$p_nonuniform_adj)
+  n_untested <- sum(answerable & !uniform_tested) +
+    sum(answerable & !nonuniform_tested)
+  no_test <- !any(uniform_tested | nonuniform_tested)
   if (no_test) {
-    unknown <- paste("no item-term test in the final DIF assessment was",
+    unknown <- paste("no DIF hypothesis in the final DIF assessment was",
                      "estimable; remaining DIF is unknown")
     stopped <- if (stopped_is_verdict) unknown else paste0(stopped, "; ", unknown)
   } else if (n_untested)
     stopped <- paste0(stopped, sprintf(
-      paste("; %d of %d item-term test(s) in the final assessment were not",
+      paste("; %d of %d DIF hypotheses in the final assessment were not",
             "estimable, so remaining DIF may be understated"),
-      n_untested, sum(answerable)))
-  notes <- character(0)
+      n_untested, 2L * sum(answerable)))
+  notes <- unique(refusal_notes)
   # The assessment's own notes are kept verbatim, its count of terms it could
   # not estimate included: those terms stay in its adjusted-probability
   # family, so they make the verdict above conservative. That is a fact about
@@ -645,14 +669,15 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
   if (length(skipped_anchor)) notes <- c(notes,
     sprintf("%d externally anchored item-factor(s) not split (%s)",
             length(skipped_anchor), paste(skipped_anchor, collapse = "; ")))
-  out <- list(algorithm = "factor-design-resolution-2",
+  out <- list(algorithm = "factor-design-resolution-3",
               fit = cur, splits = split_df, n_splits = nrow(split_df),
               stopped = stopped, dif = final_dif, notes = notes,
               effects = effects,
               n_remaining_dif = if (no_test) NA_integer_ else
                 length(remaining_items),
               n_untested = as.integer(n_untested),
-              n_nonuniform = if (no_test) NA_integer_ else
+              n_nonuniform = if (no_test || any(answerable & !nonuniform_tested))
+                NA_integer_ else
                 if (is.null(final_dif)) 0L else
                 sum(final_dif$nonuniform %in% TRUE))
   out <- .tag_tables(out)
@@ -670,7 +695,9 @@ print.rasch_resolve_dif <- function(x, ...) {
   }
   cat(sprintf("Remaining items with significant DIF: %d\n", x$n_remaining_dif))
   if (isTRUE(x$n_untested > 0))
-    cat(sprintf("Item-term tests not estimable: %d\n", x$n_untested))
+    cat(sprintf("DIF hypotheses not estimable: %d\n", x$n_untested))
+  if (is.na(x$n_nonuniform))
+    cat("Non-uniform DIF count unavailable: one or more required tests were not estimable.\n")
   if (isTRUE(x$n_nonuniform > 0))
     cat(sprintf("Non-uniform item-factor findings requiring review: %d\n",
                 x$n_nonuniform))

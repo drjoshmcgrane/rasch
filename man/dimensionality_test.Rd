@@ -44,7 +44,7 @@ test lacks power where nonparametric alternatives still flag.}
 \item{B}{Number of parametric-bootstrap replicates that calibrate the
 proportion of significant tests under the fitted model (see Details).
 The default \code{0} reports the binomial interval and descriptive
-reading alone; an automatic split then has no inferential verdict. Each
+reading alone; neither split then has an inferential verdict. Each
 replicate refits the calibration, so \code{B = 200} costs about two hundred
 fits; the bootstrap is available for single-facet fits with a common
 unit whose thresholds were estimated directly.}
@@ -77,9 +77,10 @@ A list with the proportion of significant tests, its
   persons) the list carries a \code{note} explaining why and
   \code{multidimensional = NA}. Every result carries \code{algorithm},
   the stamp of the calculation that produced it; a saved result without
-  the current stamp reported the superseded paired t-test of the subset
-  means, so an analysis file carrying one opens with that result dropped
-  and a warning, and the rest of the analysis intact.
+  the current stamp used a superseded mean or binomial reference. An
+  analysis file carrying one opens with that result dropped and a warning,
+  and the rest of the analysis intact. \code{verdict_note} explains why a
+  descriptive comparison has no inferential verdict.
 }
 \description{
 Estimates each person separately on two item subsets and compares the two
@@ -94,34 +95,33 @@ standard normal and about \code{alpha} of the tests should reach
 significance. Persons with an extreme score on either subset are excluded
 (their weighted-likelihood estimates are most biased there). The
 proportion of significant tests is reported with a Clopper--Pearson
-binomial confidence interval. For a split fixed in
-advance, a lower bound above \code{alpha} signals multidimensionality. The
+binomial confidence interval. The interval describes the observed
+proportion; it is not a calibrated test of dimensionality. The
 test requires a converged calibration and one response row per person.
 }
 \details{
-The binomial reading holds for a split fixed in advance. A split chosen
+The binomial reference assumes a per-person null rejection rate of
+\code{alpha}. Unequal targeting and short-subset estimation bias can
+violate that assumption even for a split fixed in advance. A split chosen
 from the residuals is chosen to make the two subsets disagree, so its
 proportion runs above \code{alpha} under unidimensionality. Package
 simulations confirmed that applying the fixed-split binomial rule after
 choosing the split from the same residuals is anti-conservative. Without
-bootstrap calibration the data-driven split therefore has no binary verdict:
+bootstrap calibration neither split therefore has a binary verdict:
 \code{multidimensional} is \code{NA}, while the interval and uncalibrated
-binomial reading remain available descriptively. Two inferential routes
-are available. A content-based split, named through \code{items_positive}
-and \code{items_negative}, supports the conventional fixed-split binomial
-rule without the selection induced by the residual-derived split. Otherwise
-\code{B > 0} calibrates the data-driven split by a parametric bootstrap:
+binomial reading remain available descriptively.
+\code{B > 0} supplies a model-based reference for either split:
 each replicate draws responses from the fitted model conditional on every
 person's raw score and missingness pattern, refits the calibration,
-repeats the residual-component split on its own residuals and recomputes
+retains a fixed split or repeats a residual-component split on its own
+residuals and recomputes
 the proportion, so the bootstrap probability \code{p_boot} carries the
 same selection the observed proportion carries. With \code{B > 0} the
 verdict is \code{p_boot <= alpha}; the binomial interval is still reported,
 as a description of the observed proportion rather than a test of it.
 A one-sided bootstrap probability cannot be smaller than
-\code{1/(B_used + 1)}. If that floor exceeds \code{alpha}, a data-driven
-split has no rejection region and its verdict is withheld. A split fixed
-in advance retains its binomial verdict in that case.
+\code{1/(B_used + 1)}. If that floor exceeds \code{alpha}, the bootstrap
+has no rejection region and the verdict is withheld for either split.
 
 The mean difference between the two subset estimates is reported but not
 tested. Each subset estimate is a weighted-likelihood estimate on a short
@@ -133,8 +133,8 @@ persons. A t-test of that difference therefore tests the targeting of the
 split rather than its dimensionality -- it rejects for every sample large
 enough on unidimensional data -- so the difference is reported as a
 description of the split and the inference is withheld. The person-level
-comparisons, whose standard errors carry each person's subset
-uncertainty, are the test.
+comparisons also carry this bias; their proportion needs the bootstrap
+reference before it can support a dimensionality verdict.
 }
 \examples{
 set.seed(1)

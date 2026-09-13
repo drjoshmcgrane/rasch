@@ -32,17 +32,28 @@
   rest of the analysis saveable.
 * The app's dependence and spread panels print the note explaining why a
   statistic was withheld, as the console does, rather than an unexplained NA.
-* `sim_recovery()` accepts a fit made without an identifier column, matching
-  persons on their responses rather than on labels the fit never held, and
+* `sim_recovery()` accepts a fit made without an identifier column, verifying
+  the response rows without treating row numbers as person identifiers, and
   accepts a fit whose estimator dropped an item with no variation. Both
   cases previously failed with a claim that the fit did not belong to the
-  simulation. A person-to-group allocation that differs from the planted one
-  is still refused.
+  simulation. Person and group-unit recovery requires verified identifiers;
+  legacy person truth can instead be paired by unique response patterns.
+  When identifiers are absent, group allocation is explicitly unchecked.
 * Test characteristic, test information and targeting displays enumerate the
-  administration designs actually observed. Item-level missingness no longer
-  produces one curve per person, and a design that no person was
-  administered is never formed. Where more designs exist than the palette
-  can name, the legend counts them instead of cycling colours.
+  administration designs actually observed, including distinct missing-item
+  patterns. A design that no person was administered is never formed.
+  Large design collections no longer overflow the legend or recycle colours;
+  person-item maps retain their person and threshold distributions.
+* Fixed-subset dimensionality comparisons now require bootstrap calibration
+  for a verdict, as residual-derived splits do. Unequal targeting can distort
+  the binomial reference even when the subsets were chosen in advance.
+  Observed proportions and intervals remain available descriptively.
+* DIF resolution counts unavailable uniform and non-uniform hypotheses
+  separately and distinguishes missing interaction cells from failed tests.
+  Refused comparisons retain their explanation in the console and app.
+* Opening a saved analysis clears the previous dimensionality result. Old
+  dimensionality, DIF-resolution and frame-invariance results are omitted
+  when their calculation has been superseded; source files are unchanged.
 * `test_information(items = )` labels each curve with the items that
   produced it, and no longer returns a curve twice.
 * Extended frame score curves use the same design enumeration and labels as

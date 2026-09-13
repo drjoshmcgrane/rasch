@@ -58,7 +58,7 @@ one <- function(r, design, departure, n_items, tag) {
                auto$B_errors %||% NA else auto$bootstrap$B_errors))
   c(status = "analysed", prop = auto$prop_significant,
     binomial = auto$binomial_multidimensional,
-    fixed = fixed$multidimensional, bootstrap = auto$multidimensional,
+    fixed = fixed$binomial_multidimensional, bootstrap = auto$multidimensional,
     B_used = auto$bootstrap$B_used,
     B_nonconv = auto$bootstrap$B_nonconverged,
     B_errors = auto$bootstrap$B_errors)
@@ -99,7 +99,8 @@ for (s in seq_len(nrow(scenarios))) {
   add("mean significant person comparisons, automatic split", mean(prop),
       "effect", "descriptive rate, not a rejection probability")
   add("fixed-split binomial decision", mean(fixed),
-      if (null) "type1" else "power")
+      if (null) "type1" else "power",
+      "descriptive benchmark; the public inferential verdict requires bootstrap calibration")
   add("automatic-split uncalibrated binomial decision", mean(binomial),
       if (null) "type1" else "power",
       "descriptive benchmark; the public inferential verdict is withheld")

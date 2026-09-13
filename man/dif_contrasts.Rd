@@ -39,7 +39,9 @@ fitted model is used, so stacked designs retain their pairing.}
 structure) or a named list of numeric cell-weight vectors, each named
 by the design-cell labels (factor levels joined by \code{":"}).
 Weights are rescaled so the positive and negative parts each sum to
-one.}
+one.
+Numeric factor labels used for automatic trends must give distinct
+numeric scores; otherwise relabel them or supply explicit contrasts.}
 
 \item{p_adjust}{Adjustment across items and contrasts. The default
 \code{"holm"} controls familywise error; use \code{"BH"} only for

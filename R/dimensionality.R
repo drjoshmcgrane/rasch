@@ -540,33 +540,32 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 50,
 #' significance. Persons with an extreme score on either subset are excluded
 #' (their weighted-likelihood estimates are most biased there). The
 #' proportion of significant tests is reported with a Clopper--Pearson
-#' binomial confidence interval. For a split fixed in
-#' advance, a lower bound above \code{alpha} signals multidimensionality. The
+#' binomial confidence interval. The interval describes the observed
+#' proportion; it is not a calibrated test of dimensionality. The
 #' test requires a converged calibration and one response row per person.
 #'
-#' The binomial reading holds for a split fixed in advance. A split chosen
+#' The binomial reference assumes a per-person null rejection rate of
+#' \code{alpha}. Unequal targeting and short-subset estimation bias can
+#' violate that assumption even for a split fixed in advance. A split chosen
 #' from the residuals is chosen to make the two subsets disagree, so its
 #' proportion runs above \code{alpha} under unidimensionality. Package
 #' simulations confirmed that applying the fixed-split binomial rule after
 #' choosing the split from the same residuals is anti-conservative. Without
-#' bootstrap calibration the data-driven split therefore has no binary verdict:
+#' bootstrap calibration neither split therefore has a binary verdict:
 #' \code{multidimensional} is \code{NA}, while the interval and uncalibrated
-#' binomial reading remain available descriptively. Two inferential routes
-#' are available. A content-based split, named through \code{items_positive}
-#' and \code{items_negative}, supports the conventional fixed-split binomial
-#' rule without the selection induced by the residual-derived split. Otherwise
-#' \code{B > 0} calibrates the data-driven split by a parametric bootstrap:
+#' binomial reading remain available descriptively.
+#' \code{B > 0} supplies a model-based reference for either split:
 #' each replicate draws responses from the fitted model conditional on every
 #' person's raw score and missingness pattern, refits the calibration,
-#' repeats the residual-component split on its own residuals and recomputes
+#' retains a fixed split or repeats a residual-component split on its own
+#' residuals and recomputes
 #' the proportion, so the bootstrap probability \code{p_boot} carries the
 #' same selection the observed proportion carries. With \code{B > 0} the
 #' verdict is \code{p_boot <= alpha}; the binomial interval is still reported,
 #' as a description of the observed proportion rather than a test of it.
 #' A one-sided bootstrap probability cannot be smaller than
-#' \code{1/(B_used + 1)}. If that floor exceeds \code{alpha}, a data-driven
-#' split has no rejection region and its verdict is withheld. A split fixed
-#' in advance retains its binomial verdict in that case.
+#' \code{1/(B_used + 1)}. If that floor exceeds \code{alpha}, the bootstrap
+#' has no rejection region and the verdict is withheld for either split.
 #'
 #' The mean difference between the two subset estimates is reported but not
 #' tested. Each subset estimate is a weighted-likelihood estimate on a short
@@ -578,8 +577,8 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 50,
 #' split rather than its dimensionality -- it rejects for every sample large
 #' enough on unidimensional data -- so the difference is reported as a
 #' description of the split and the inference is withheld. The person-level
-#' comparisons, whose standard errors carry each person's subset
-#' uncertainty, are the test.
+#' comparisons also carry this bias; their proportion needs the bootstrap
+#' reference before it can support a dimensionality verdict.
 #'
 #' @param fit A fitted object from \code{\link{rasch}} with one response row
 #'   per person. Repeated identifiers are refused because the person-level
@@ -603,7 +602,7 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 50,
 #' @param B Number of parametric-bootstrap replicates that calibrate the
 #'   proportion of significant tests under the fitted model (see Details).
 #'   The default \code{0} reports the binomial interval and descriptive
-#'   reading alone; an automatic split then has no inferential verdict. Each
+#'   reading alone; neither split then has an inferential verdict. Each
 #'   replicate refits the calibration, so \code{B = 200} costs about two hundred
 #'   fits; the bootstrap is available for single-facet fits with a common
 #'   unit whose thresholds were estimated directly.
@@ -632,9 +631,10 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 50,
 #'   persons) the list carries a \code{note} explaining why and
 #'   \code{multidimensional = NA}. Every result carries \code{algorithm},
 #'   the stamp of the calculation that produced it; a saved result without
-#'   the current stamp reported the superseded paired t-test of the subset
-#'   means, so an analysis file carrying one opens with that result dropped
-#'   and a warning, and the rest of the analysis intact.
+#'   the current stamp used a superseded mean or binomial reference. An
+#'   analysis file carrying one opens with that result dropped and a warning,
+#'   and the rest of the analysis intact. \code{verdict_note} explains why a
+#'   descriptive comparison has no inferential verdict.
 #' @references
 #' Smith, E. V. Jr. (2002). Detecting and evaluating the impact of
 #' multidimensionality using item fit statistics and principal component
@@ -763,10 +763,15 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
   binomial_verdict <- bt$conf.int[1] > alpha
   out <- list(prop_significant = tt$n_sig / n, ci = as.numeric(bt$conf.int),
               n = n, n_excluded_extreme = tt$n_excluded_extreme,
-              multidimensional = if (manual) binomial_verdict else NA,
+              multidimensional = NA,
               binomial_multidimensional = binomial_verdict,
-              verdict_method = if (manual) "fixed-split binomial" else
+              verdict_method = if (manual)
+                "withheld for fixed split without bootstrap reference" else
                 "withheld for data-driven split",
+              verdict_note = paste(
+                "The binomial reference assumes a per-person null rate of alpha;",
+                "unequal subset targeting and estimation bias can violate it.",
+                "Use B > 0 for a model-based reference."),
               split = split_source,
               score_points = score_points,
               caution = caution,
@@ -784,8 +789,8 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
                 n = n, note = paste0(
                   "descriptive: the subsets differ in targeting as well as ",
                   "in content, so no test of this mean against zero is a ",
-                  "test of unidimensionality; read the person-level ",
-                  "comparisons for that")))
+                  "test of unidimensionality; use the bootstrap-calibrated ",
+                  "proportion of person-level comparisons for inference")))
   if (B > 0L) {
     boot <- .dim_bootstrap(fit, pos = pos, neg = neg, manual = manual,
                            component = component, alpha = alpha, B = B,
@@ -796,36 +801,33 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
     if (out$bootstrap_resolution <= alpha) {
       out$multidimensional <- out$p_boot <= alpha
       out$verdict_method <- "parametric bootstrap"
+      out$verdict_note <- NULL
     } else {
       # A p-value floor above alpha gives the bootstrap no rejection region.
-      # Do not turn that inability to test into evidence of fit. A manual
-      # split still has its pre-specified binomial test; a data-driven split
-      # has no fallback inferential verdict.
+      # Do not turn that inability to test into evidence of fit. The
+      # uncalibrated binomial reading is not a fallback for either split.
       warning(sprintf(paste0(
         "with %d usable replicates the smallest attainable bootstrap p is ",
         "%.3f (> alpha %.3f); the bootstrap verdict is unavailable"),
         boot$B_used, out$bootstrap_resolution, alpha), call. = FALSE)
-      out$multidimensional <- if (manual) binomial_verdict else NA
-      out$verdict_method <- if (manual)
-        "fixed-split binomial (bootstrap resolution insufficient)" else
-        "withheld: bootstrap resolution insufficient for data-driven split"
+      out$multidimensional <- NA
+      out$verdict_method <- "withheld: bootstrap resolution insufficient"
+      out$verdict_note <- "Increase B: the attainable bootstrap probabilities cannot reach alpha."
     }
     out$bootstrap <- boot
   }
   .dimensionality_test_result(out, fit)
 }
 
-.dimensionality_test_algorithm <- "person-subset-comparison-1"
+.dimensionality_test_algorithm <- "person-subset-comparison-2"
 
 # Computed diagnostic results can be saved in an app project or supplied to a
 # report. Bind them to the fitted model, as for scree and fit-bootstrap
 # results, so an analysis from an earlier structural fit cannot be presented
 # beside a later calibration.
 .dimensionality_test_result <- function(x, fit) {
-  # Stamp the calculation. Results saved before this stamp reported a paired
-  # t-test of the two subset means, which tests the targeting of the split
-  # and not its dimensionality (see Details), so they are not restored beside
-  # the current verdict: an analysis file drops them on restore and warns.
+  # Stamp the reference calculation. Earlier mean and binomial verdicts
+  # lacked calibration for subset targeting; reopening drops them and warns.
   x$algorithm <- .dimensionality_test_algorithm
   class(x) <- c("rasch_dimensionality_test", "list")
   attr(x, "fit_signature") <- .fit_boot_signature(fit)
@@ -843,8 +845,7 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
       !.fit_boot_hash_matches(signature, unsigned) ||
       !.fit_boot_signature_matches(attr(result, "fit_signature"), fit))
     stop("`subtest` must be a dimensionality_test() result from this fitted model")
-  # A result without the current stamp carries the superseded paired t-test
-  # of the subset means, which its displays would present as an inferential
+  # A result without the current stamp carries a superseded inferential
   # reading of the split. Refuse it here; .read_app_project() drops such a
   # result from a saved analysis with a warning before it reaches this point.
   if (!identical(result$algorithm, .dimensionality_test_algorithm))
@@ -872,8 +873,9 @@ print.rasch_dimensionality_test <- function(x, ...) {
         if (grepl("resolution insufficient", x$verdict_method %||% "",
                   fixed = TRUE))
           "withheld because the bootstrap resolution is insufficient" else
-          "withheld for the data-driven split"
+          "withheld without a bootstrap reference"
   cat("Verdict:", verdict, "\n")
+  if (length(x$verdict_note)) cat(x$verdict_note, "\n")
   if (!is.null(x$p_boot))
     cat(sprintf("Bootstrap p: %s (%d of %d replicates used)\n",
                 .fmt_p(x$p_boot), x$bootstrap$B_used, x$bootstrap$B))

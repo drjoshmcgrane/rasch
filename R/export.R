@@ -778,7 +778,7 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
       if (identical(dt$multidimensional, FALSE)) "consistent with one dimension" else
         if (resolution_limited)
           "inferential verdict withheld because bootstrap resolution is insufficient" else
-          "inferential verdict withheld for the data-driven split"
+          "inferential verdict withheld without a bootstrap reference"
     cat(sprintf("\nUnidimensionality t-test: %.1f%% significant (Clopper-Pearson 95%% CI %.1f%% to %.1f%%), %s\n",
                 100 * dt$prop_significant, 100 * dt$ci[1], 100 * dt$ci[2],
                 verdict))
@@ -793,7 +793,7 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
           "for an inferential verdict at alpha %.3f\n"),
           dt$bootstrap_resolution, dt$alpha))
       else
-        cat("Note: the item split was chosen from the residuals; use a content split or a bootstrap calibration for an inferential verdict\n")
+        cat("Note:", dt$verdict_note, "\n")
     }
   } else cat("\nUnidimensionality t-test:", dt$note, "\n")
   cat(sprintf("Average residual correlation: %.3f; binary Q3 flags withheld (no universal critical value)\n",
@@ -1131,7 +1131,7 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
       if (identical(dt$multidimensional, FALSE)) "consistent with one dimension" else
         if (resolution_limited)
           "inferential verdict withheld because bootstrap resolution is insufficient" else
-          "inferential verdict withheld for the data-driven split"
+          "inferential verdict withheld without a bootstrap reference"
     paste0(sprintf("<p>%.1f%% of person subset t-tests significant (95%% CI %.1f-%.1f%%): %s.</p>",
             100 * dt$prop_significant, 100 * dt$ci[1], 100 * dt$ci[2], verdict),
            if (!is.null(dt$p_boot)) sprintf(
@@ -1145,7 +1145,7 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
                "Increase B for an inferential verdict at alpha %.3f.</p>"),
                dt$bootstrap_resolution, dt$alpha) else
            if (is.na(dt$multidimensional))
-             "<p class='note'>The item split was chosen from the residuals. Use a content split or a bootstrap calibration for an inferential verdict.</p>" else "")
+             paste0("<p class='note'>", esc(dt$verdict_note), "</p>") else "")
   }
   else sprintf("<p class='note'>%s</p>", esc(dt$note))
   ctt <- tryCatch(ctt_table(fit), error = function(e) NULL)

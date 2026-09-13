@@ -1652,7 +1652,11 @@ print.rasch_sim_batch <- function(x, ...) {
               sort(.recovery_row_keys(expected)))
   }
   if (!same) .recovery_mismatch("at least one fitted response differs")
-  invisible(NULL)
+  # A unique response key can recover the ordering of legacy truth vectors.
+  # Duplicate patterns verify the dataset, but cannot identify a person.
+  keys <- .recovery_row_keys(expected)
+  invisible(if (aligned) match(fid, sid) else if (!anyDuplicated(keys))
+    match(.recovery_row_keys(fitted), keys) else NULL)
 }
 
 # A successful fit after category compression estimates a different response
@@ -1955,6 +1959,9 @@ print.rasch_sim_batch <- function(x, ...) {
 #' person allocation; the EFRM set units are still reported, with the note
 #' recording that the fitted group allocation is unchecked.
 #' Pass \code{id =} when fitting to recover them.
+#' Legacy truth without identifiers can be matched by unique response rows,
+#' provided its person truth remains in the simulation data's original order.
+#' Duplicate response patterns leave legacy person recovery unavailable.
 #' An item the estimator dropped, such as one everyone answered identically,
 #' is named in the note and left out of the comparison.
 #' Recovery is unavailable when fitting removes or merges generating response
@@ -2135,8 +2142,9 @@ sim_recovery <- function(fit, sim) {
     recovery_note <- paste(c(recovery_note,
       "The original category count was not recorded in this simulation, so response-scale equivalence cannot be verified."),
       collapse = " ")
+  person_order <- NULL
   if (lay == "rasch") {
-    .recovery_check_wide(fit, sim, names(tr$difficulty), fit$X)
+    person_order <- .recovery_check_wide(fit, sim, names(tr$difficulty), fit$X)
   } else if (lay == "btl") {
     .recovery_check_btl(fit, sim)
   } else if (lay == "mfrm") {
@@ -2146,7 +2154,7 @@ sim_recovery <- function(fit, sim) {
                        error = function(e) NULL)
     if (is.null(source))
       .recovery_mismatch("the fitted frame-to-item responses are unavailable")
-    .recovery_check_wide(fit, sim, names(tr$difficulty), source)
+    person_order <- .recovery_check_wide(fit, sim, names(tr$difficulty), source)
   } else if (lay == "btl_efrm") {
     .recovery_check_btl(fit, sim)
   }
@@ -2187,9 +2195,16 @@ sim_recovery <- function(fit, sim) {
       }
     } else if (!is.null(fit$person) &&
                length(recovery_theta) == length(fit$person$theta)) {
-      # Compatibility with simulation objects created before person IDs were
-      # recorded in their truth attributes.
-      add(name, recovery_theta, fit$person$theta, centre = centre)
+      if (length(person_order) == length(recovery_theta) &&
+          !anyNA(person_order)) {
+        add(name, recovery_theta[person_order], fit$person$theta, centre = centre)
+      } else {
+        recovery_note <<- paste(c(recovery_note,
+          paste("Legacy person recovery is unavailable: the simulation has no",
+                "person identifiers and response patterns do not uniquely pair",
+                "its persons with the fit. Preserve identifiers in simulation",
+                "truth and pass id= when refitting.")), collapse = " ")
+      }
     }
   }
   # Set labels are presentation metadata. A caller may give the same item or

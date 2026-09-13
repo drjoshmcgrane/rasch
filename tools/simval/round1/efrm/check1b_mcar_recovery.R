@@ -36,7 +36,7 @@ for (r in seq_len(n_reps)) {
                       set_unit_ratio = 1.3, group_unit_ratio = 1.2, seed = seed)
   tr <- attr(d, "truth")
   d <- apply_mcar(d, 0.25, seed)
-  fit <- tryCatch(rasch_efrm(d, item_sets = tr$item_sets, groups = "group", se_method = "hybrid"),
+  fit <- tryCatch(rasch_efrm(d, id = "id", item_sets = tr$item_sets, groups = "group", se_method = "hybrid"),
                    error = function(e) { cat("  refused (rep", r, "):", conditionMessage(e), "\n"); NULL })
   if (is.null(fit)) { n_refused <- n_refused + 1L; next }
   rec <- sim_recovery(fit, d)
