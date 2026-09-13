@@ -22,6 +22,7 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
+      NOT_CRAN: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: r-lib/actions/setup-pandoc@v2
@@ -34,6 +35,8 @@ jobs:
         with:
           extra-packages: any::rcmdcheck
           needs: check
+      - name: Verify precomputed vignette inputs
+        run: Rscript tools/vignettes/precompute.R --check
       - uses: r-lib/actions/check-r-package@v2
         with:
           upload-snapshots: true

@@ -1,6 +1,6 @@
 ---
 title: "DIF with several person factors and repeated measures"
-author: "Josh McGrane"
+author: "Joshua A McGrane"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{DIF with several person factors and repeated measures}

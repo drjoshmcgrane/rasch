@@ -1,6 +1,6 @@
 ---
 title: "The Extended Frame of Reference model"
-author: "Josh McGrane"
+author: "Joshua A McGrane"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{The Extended Frame of Reference model}
@@ -11,6 +11,7 @@ vignette: >
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 options(digits = 4)
+source("precomputed.R")
 ```
 
 ```{r library}
@@ -49,6 +50,9 @@ frame-dependent unit.
 
 ## Fit the model
 
+The distributed vignette uses a precomputed fit, including its bootstrap
+uncertainty. The code below reproduces the calculation.
+
 ```{r simulate}
 d <- simulate_efrm(
   n_per_group = 150,
@@ -65,7 +69,7 @@ d
 The simulated data carry the units the fit below has to recover: a set-unit
 ratio of 1.30 and a group-unit ratio of 1.10.
 
-```{r fit}
+```{r fit, eval = recompute}
 fit <- rasch_efrm(
   d,
   item_sets = truth$item_sets,
@@ -77,6 +81,13 @@ fit <- rasch_efrm(
   seed = 25
 )
 fit
+```
+
+```{r fit-precomputed, echo = FALSE}
+if (!recompute) {
+  fit <- vignette_result("extended-frame-reference")$fit
+  fit
+}
 ```
 
 The principal model-specific tables are:

@@ -650,8 +650,8 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 50,
 #' dimensionality_test(
 #'   rasch(X), items_positive = paste0("I", 1:4),
 #'   items_negative = paste0("I", 5:8))$multidimensional
-#' \donttest{
-#' # calibrate the data-driven split under the fitted model
+#' \dontrun{
+#' # A longer run calibrates the data-driven split under the fitted model.
 #' dimensionality_test(rasch(X), B = 99, workers = 1, seed = 1)$p_boot
 #' }
 #' @export

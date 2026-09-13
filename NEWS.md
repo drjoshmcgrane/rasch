@@ -1,5 +1,8 @@
 # rasch 1.12.1
 
+* CRAN checks use shorter workflow fixtures and recorded vignette bootstrap
+  calculations. The full tests and scripts to regenerate those calculations
+  remain in the repository; estimation and replication defaults are unchanged.
 * Automatic DIF resolution withholds its verdict when the final assessment
   could not estimate a single item-term test, instead of reporting that no
   DIF remains. Where only some tests were estimable the stop reason says how

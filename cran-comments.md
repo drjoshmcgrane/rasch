@@ -1,70 +1,47 @@
 # CRAN comments for rasch 1.12.1
 
-## Summary of this update
+## Summary
 
-This is a maintenance update to rasch 1.12.0, and chiefly a correctness
-release. A sustained internal review of the
-package found and corrected a number of defects that could report a wrong
-number rather than an error. The most consequential is the covariance of
-the centred location differences in `frame_invariance()`, which was
-computed without the transpose of the centring matrix: when compared items
-differed in maximum score, every standard error, test statistic and
-probability in that table was wrong, over-flagging the dichotomous items
-and hiding the polytomous one.
+This maintenance update corrects estimation, diagnostic, plotting and saved
+analysis defects described in NEWS. It also adds app simulation controls,
+supplementary weighted person estimates and a data-structures vignette.
 
-Procedures that compare a fit with a refit now refuse an explanatory fit
-rather than silently releasing its design restriction, and the parallel
-scree reference refits under the model that was fitted. Derived fits carry
-the estimation controls they were built from. Simulation now plants what
-its recorded generating values claim, and refuses requests it cannot plant.
-Exports no longer report success they did not achieve: an archive in which
-nothing could be drawn is an error rather than a path to a file that was
-never written.
+The author's name has been updated from Josh McGrane to Joshua A McGrane.
+This is the same author and maintainer; the email address is unchanged.
 
-Input and selection boundaries are hardened throughout, so that a
-mis-specified role, identifier, key or display control is refused where it
-is written instead of changing the analysis in silence.
+## Check time
 
-The application gains simulation of explanatory models and supplementary
-weighted person measures, and a saved analysis now restores its data roles
-and estimation controls. A data-structures vignette has been added, making
-eight in total.
+CRAN runs representative end-to-end workflows and focused regression tests.
+The complete test suite remains enabled with `NOT_CRAN=true`, including in
+continuous integration on Windows, macOS and Linux. Statistical validation
+studies remain in the repository.
 
-## Test environments
+Three vignettes use recorded model or bootstrap calculations. The analysis
+code, datasets, seeds and replication counts are retained; tables and
+figures are rebuilt from those results. The regeneration script executes
+the vignette code and records source and result hashes. Source builds and
+CI verify these records. One longer bootstrap example is marked as optional.
+The package's statistical computations and default replication counts have
+not been reduced to shorten checks. CRAN's two-core limit is respected.
 
-* local: macOS (aarch64-apple-darwin20), R 4.6.1
-* win-builder: R-release and R-devel
-* GitHub Actions: macOS, Windows and Ubuntu; R devel, release and oldrel
+## Verification
 
-## R CMD check results
+`R CMD check --as-cran --timings` on macOS, R 4.6.1
+(aarch64-apple-darwin23): 0 errors, 0 warnings, 0 notes. The CRAN test
+selection passed 743 expectations, with 28 longer tests skipped on CRAN.
+All eight vignettes and the PDF and HTML manuals passed.
 
-0 errors | 0 warnings | 0 notes locally; win-builder adds the
-incoming-feasibility NOTE only.
+On the same machine, building the source package fell from 180 to 60 seconds
+and the full check from 473 to 315 seconds. Within the check, tests fell
+from 77 to 47 seconds and vignette rebuilding from 108 to 27 seconds.
+Overall check times include variable network checks.
 
-The check-time measures introduced at 1.12.0 are retained: the test suite
-runs a small core on CRAN that exercises every estimator once, and the
-complete suite runs whenever NOT_CRAN is true, locally and in continuous
-integration on three operating systems. Simulation-intensive and
-bootstrap-calibration tests use `skip_on_cran()`.
+The recorded-vignette tests and scree redraw also passed under R 4.5.1.
+This tarball was uploaded to win-builder for R-release and R-devel on
+13 September 2026. Both returned 0 errors, 0 warnings and 0 notes on
+Windows Server 2022:
 
-Any words flagged by the incoming spell check are author surnames from the
-references cited in the help pages.
+* R-release (R 4.6.1): installation 36 seconds; check 371 seconds.
+* R-devel (2026-09-12 r90533): installation 35 seconds; check 406 seconds.
 
-Some check services report the BugReports URL,
-https://github.com/drjoshmcgrane/rasch/issues, as possibly invalid. The
-issue tracker is enabled and the repository is public: the GitHub API
-reports `has_issues: true` for it, and the repository root and
-documentation site both resolve normally. GitHub returns 404 to
-unauthenticated non-browser requests for the /issues and /pulls paths
-alike, and pull requests cannot be disabled on a public repository, so
-the status reflects that behaviour rather than a broken link.
-
-The package was built from source with its eight vignettes before checking.
-
-## Current CRAN status
-
-Version 1.12.0 is currently OK on all CRAN check flavours.
-
-## Reverse dependencies
-
-There are no known reverse dependencies.
+These times are from the result notifications; both logs have been verified.

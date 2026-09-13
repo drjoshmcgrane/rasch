@@ -1,6 +1,6 @@
 ---
 title: "Rasch analysis of comparative judgements"
-author: "Josh McGrane"
+author: "Joshua A McGrane"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Rasch analysis of comparative judgements}
@@ -12,6 +12,7 @@ vignette: >
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>",
                       fig.width = 7, fig.height = 4.2)
 options(digits = 4)
+source("precomputed.R")
 ```
 
 ```{r library}
@@ -142,9 +143,22 @@ dim_data <- simulate_btl(
 )
 dim_fit <- btl(dim_data, object_a = "object_a", object_b = "object_b",
                winner = "winner", judge = "judge")
+```
+
+The dimensionality reference is precomputed in the distributed vignette.
+The following call reproduces it.
+
+```{r dimensions, eval = recompute}
 dimensions <- btl_dimensionality(dim_fit, reps = 20, seed = 2026,
                                 independent_comparisons = TRUE)
 dimensions
+```
+
+```{r dimensions-precomputed, echo = FALSE}
+if (!recompute) {
+  dimensions <- vignette_result("paired-comparisons")$dimensions
+  dimensions
+}
 ```
 
 ```{r plot-transitivity, fig.alt = "Per-judge consistency of the paired comparisons."}

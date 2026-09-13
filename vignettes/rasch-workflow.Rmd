@@ -1,6 +1,6 @@
 ---
 title: "A Rasch analysis workflow"
-author: "Josh McGrane"
+author: "Joshua A McGrane"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{A Rasch analysis workflow}
@@ -12,6 +12,7 @@ vignette: >
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>",
                       fig.width = 7, fig.height = 4.2)
 options(digits = 4)
+source("precomputed.R")
 ```
 
 ```{r library}
@@ -26,6 +27,9 @@ relevant part of the latent trait.
 
 The same analyses are available in the Shiny application, which follows this
 same order; the closing section maps each step onto its panel.
+
+The distributed vignette uses precomputed calibration and bootstrap results.
+The code shown below reproduces them.
 
 ## Fit the model required by the scoring structure
 
@@ -55,7 +59,7 @@ visible without changing the commands used for observed data. Before fitting
 observed data, check the coding and frequency of every category. Negative
 scores are read as missing; valid categories begin at zero.
 
-```{r fit}
+```{r fit, eval = recompute}
 d <- simulate_rasch(
   n_persons = 600,
   n_items = 12,
@@ -70,6 +74,14 @@ d <- simulate_rasch(
 )
 
 fit <- rasch(d, model = "PCM", id = "id", factors = "group")
+```
+
+```{r fit-precomputed, include = FALSE}
+if (!recompute) {
+  recorded <- vignette_result("rasch-workflow")
+  d <- recorded$d
+  fit <- recorded$fit
+}
 ```
 
 ## Overall summary and reliability
@@ -316,7 +328,7 @@ subsets fixed in advance. A dimensionality verdict therefore uses a
 parametric bootstrap, retaining a fixed split or repeating the selection
 when the split comes from the residuals.
 
-```{r trait-dependence}
+```{r trait-dependence, eval = recompute}
 dimensionality <- dimensionality_test(
   fit,
   items_positive = paste0("I", sprintf("%02d", 1:6)),
@@ -325,8 +337,16 @@ dimensionality <- dimensionality_test(
 )
 ```
 
-```{r residual-scree, fig.alt = "Residual eigenvalues against the score-conditional model-reference band."}
+```{r trait-dependence-precomputed, include = FALSE}
+if (!recompute) dimensionality <- recorded$dimensionality
+```
+
+```{r residual-scree, eval = recompute, fig.alt = "Residual eigenvalues against the score-conditional model-reference band."}
 scree <- plot_scree(fit, seed = 2026)
+```
+
+```{r residual-scree-precomputed, echo = FALSE, eval = !recompute, fig.alt = "Residual eigenvalues against the score-conditional model-reference band."}
+scree <- plot_scree(fit, result = recorded$scree)
 ```
 
 The band shows the residual eigenvalues expected under the fitted model. Red

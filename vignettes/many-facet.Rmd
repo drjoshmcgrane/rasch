@@ -1,6 +1,6 @@
 ---
 title: "Many-facet Rasch measurement"
-author: "Josh McGrane"
+author: "Joshua A McGrane"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Many-facet Rasch measurement}

@@ -24,4 +24,5 @@
 ^tmp$
 ^output$
 ^tools/simval$
+^tools/vignettes$
 ^vignettes/articles$

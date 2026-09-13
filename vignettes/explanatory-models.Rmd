@@ -1,5 +1,6 @@
 ---
 title: "Explanatory Rasch models"
+author: "Joshua A McGrane"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Explanatory Rasch models}

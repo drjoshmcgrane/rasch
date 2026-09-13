@@ -1,0 +1,92 @@
+# Small end-to-end fixtures for CRAN. Tests of bias, coverage, power and
+# repeatability remain in the full suite; tiny bootstrap counts here test
+# execution and accounting, not the accuracy of their tail probabilities.
+test_that("core item-response workflows retain estimation and diagnostics", {
+  d <- simulate_rasch(160, 6, n_groups = 2, seed = 810)
+  f <- rasch(d, id = "id", factors = "group", n_groups = 2)
+  expect_true(f$est$converged)
+  expect_true(all(is.finite(f$person$theta)))
+  expect_s3_class(sim_recovery(f, d), "rasch_recovery")
+  expect_true(is.finite(f$psi$PSI))
+  expect_s3_class(score_table(f), "data.frame")
+  weights <- setNames(rep(1, 6), f$items$item)
+  expect_equal(weighted_person_estimates(f, weights)$theta, f$person$theta)
+  expect_length(residual_pca(f)$eigenvalues, ncol(f$X))
+  expect_equal(dim(residual_correlations(f)$matrix), rep(ncol(f$X), 2))
+
+  da <- dif_anova(f, n_groups = 2)
+  expect_s3_class(da, "rasch_dif")
+  db <- suppressWarnings(dif_bootstrap(f, da, B = 3, workers = 1, seed = 811))
+  expect_identical(db$B_used, 3L)
+  expect_equal(db$family_n, sum(!da$term_ids %in% c("Residuals", "ci")))
+  expect_true(all(db$terms$p_boot_adj >= db$terms$p_boot, na.rm = TRUE))
+  bs <- suppressWarnings(fit_bootstrap(f, B = 3, workers = 1, seed = 812))
+  expect_identical(bs$B_used, 3L)
+  expect_equal(nrow(bs$items), ncol(f$X))
+  dim <- dimensionality_test(f, items_positive = f$items$item[1:3],
+                             items_negative = f$items$item[4:6])
+  expect_true(is.na(dim$multidimensional))
+  split <- split_items(f, f$items$item[1], by = "group")
+  expect_equal(ncol(split$X), ncol(f$X) + 1L)
+  combined <- combine_items(f, f$items$item[1:2])
+  expect_equal(ncol(combined$X), ncol(f$X) - 1L)
+
+  grDevices::pdf(NULL)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  expect_no_error(plot_icc(f, item = 1))
+  expect_no_error(plot_pimap(f, information = TRUE))
+  expect_no_error(plot_scree(f, reps = 20, seed = 813))
+})
+
+test_that("core polytomous and explanatory workflows retain their restrictions", {
+  d <- simulate_rasch(180, 6, model = "RSM", n_categories = 3, seed = 814)
+  pcm <- rasch(d, id = "id", model = "PCM")
+  rsm <- rasch(d, id = "id", model = "RSM")
+  expect_true(pcm$est$converged && rsm$est$converged)
+  lr <- lr_test(pcm)
+  expect_s3_class(lr, "rasch_lr")
+  expect_equal(lr$fit_rsm$items$location, rsm$items$location)
+  expect_s3_class(compare_fits(PCM = pcm, RSM = rsm), "rasch_compare")
+  q <- data.frame(item = pcm$items$item, domain = rep(0:1, each = 3))
+  explanatory <- rasch_explanatory(d, q, ~ domain, id = "id", level = "item")
+  expect_s3_class(explanatory, "rasch_explanatory")
+  expect_true(explanatory$est$converged)
+  expect_s3_class(explanatory_test(explanatory), "data.frame")
+  expect_s3_class(explanatory_diagnostics(explanatory), "data.frame")
+  grDevices::pdf(NULL)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  expect_no_error(plot_ccc(pcm, item = 1))
+  expect_no_error(plot_threshold_map(pcm))
+})
+
+test_that("core multiple-rating and frame workflows fit their declared models", {
+  d <- simulate_mfrm(80, 4, 3, n_categories = 3, seed = 815)
+  m <- rasch_mfrm(d, "person", "item", "score", facets = "rater")
+  expect_true(m$est$converged)
+  expect_s3_class(m, "rasch_mfrm")
+  e <- simulate_efrm(n_per_group = 90, items_per_set = 6, n_sets = 2,
+                     n_groups = 2, seed = 816)
+  f <- rasch_efrm(e, item_sets = attr(e, "truth")$item_sets,
+                  groups = "group", id = "id", boot_reps = 0)
+  expect_s3_class(f, "rasch_efrm")
+  expect_true(f$est$converged)
+  expect_equal(nrow(f$phi_table), 2L)
+  expect_equal(nrow(f$alpha_table), 2L)
+})
+
+test_that("core comparative-judgement workflows cover ordered and explanatory fits", {
+  d <- simulate_btl(6, 20, reps_per_pair = 30, seed = 817)
+  f <- btl(d, "object_a", "object_b", winner = "winner", judge = "judge")
+  expect_true(f$converged)
+  q <- data.frame(object = f$objects$object, domain = rep(0:1, each = 3))
+  e <- btl_explanatory(d, q, ~ domain, "object_a", "object_b",
+                       winner = "winner", judge = "judge")
+  expect_true(e$converged)
+  expect_s3_class(e, "rasch_btl_explanatory")
+  p <- simulate_btl(5, 20, reps_per_pair = 30, model = "polytomous",
+                    n_categories = 3, seed = 818)
+  fp <- btl(p, "object_a", "object_b", response = "response", judge = "judge")
+  expect_true(fp$converged)
+  expect_identical(fp$m, 2L)
+  expect_s3_class(btl_transitivity(f), "rasch_btl_transitivity")
+})
