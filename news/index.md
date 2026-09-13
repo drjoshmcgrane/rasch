@@ -2,6 +2,8 @@
 
 ## rasch 1.12.1
 
+CRAN release: 2026-09-13
+
 - CRAN checks use shorter workflow fixtures and recorded vignette
   bootstrap calculations. The full tests and scripts to regenerate those
   calculations remain in the repository; estimation and replication

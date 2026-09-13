@@ -45,7 +45,7 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="1.12.1" id="rasch-1121">rasch 1.12.1<a class="anchor" aria-label="anchor" href="#rasch-1121"></a></h2>
+<h2 class="pkg-version" data-toc-text="1.12.1" id="rasch-1121">rasch 1.12.1<a class="anchor" aria-label="anchor" href="#rasch-1121"></a></h2><p class="text-muted">CRAN release: 2026-09-13</p>
 <ul><li><p>CRAN checks use shorter workflow fixtures and recorded vignette bootstrap calculations. The full tests and scripts to regenerate those calculations remain in the repository; estimation and replication defaults are unchanged. Export examples use a smaller demonstration dataset and screen-resolution plots to keep their running times below CRAN’s per-example limit.</p></li>
 <li><p>Automatic DIF resolution withholds its verdict when the final assessment could not estimate a single item-term test, instead of reporting that no DIF remains. Where only some tests were estimable the stop reason says how many were not, and the counts of remaining and non-uniform DIF are reported as unavailable rather than as zero. Saved resolutions from earlier versions are dropped when a project is reopened.</p></li>
 <li><p>Planned DIF contrasts withhold only the affected item when a split refit is refused, and say why, instead of abandoning the whole call. The refusal reason is reported in place of an unrelated response-category note.</p></li>
