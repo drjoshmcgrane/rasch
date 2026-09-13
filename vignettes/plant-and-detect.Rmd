@@ -1,6 +1,6 @@
 ---
 title: "Simulation-based checks of Rasch diagnostics"
-author: "Joshua A McGrane"
+author: "Joshua A. McGrane"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Simulation-based checks of Rasch diagnostics}

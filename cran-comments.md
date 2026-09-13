@@ -1,12 +1,39 @@
 # CRAN comments for rasch 1.12.1
 
+## Resubmission
+
+The Debian incoming check flagged two examples exceeding five seconds:
+`report_html` (5.648 s) and `save_outputs` (5.379 s). Both now use 80 persons
+and four items instead of 150 persons and six items. The HTML example also
+uses 96 dpi, matching the PNG export example. Both examples still run in
+checks and retain all 50 simulated scree-reference datasets. No package
+function, statistical default or test selection has changed.
+
+The final tarball passed `R CMD check --as-cran --timings` on macOS,
+R 4.6.1: 0 errors, 0 warnings, 0 notes. The five-second example threshold
+was set explicitly. Both ordinary examples and the `--run-donttest` pass
+were OK; the latter recorded 1.819 s for `report_html` and 1.754 s for
+`save_outputs`. The slowest example was 2.322 s. The CRAN test
+selection passed 743 expectations, with 28 skips. All eight vignettes and
+both manuals passed. The check took 299 seconds, including network checks.
+
+The final rebuild adds the full stop in the author's middle initial across
+metadata and documentation. The packaged author and maintainer fields,
+citation, licence, manual page and all eight rendered vignette bylines were
+verified as Joshua A. McGrane. This name-corrected tarball is the one
+checked above and supplied with this resubmission.
+
+The vignette calculations were regenerated for the revised source hashes;
+all three saved result files reproduced byte-for-byte. Rendered numerical
+outputs and figure descriptions also match the previous tarball.
+
 ## Summary
 
 This maintenance update corrects estimation, diagnostic, plotting and saved
 analysis defects described in NEWS. It also adds app simulation controls,
 supplementary weighted person estimates and a data-structures vignette.
 
-The author's name has been updated from Josh McGrane to Joshua A McGrane.
+The author's name has been updated from Josh McGrane to Joshua A. McGrane.
 This is the same author and maintainer; the email address is unchanged.
 
 ## Check time
@@ -24,7 +51,7 @@ CI verify these records. One longer bootstrap example is marked as optional.
 The package's statistical computations and default replication counts have
 not been reduced to shorten checks. CRAN's two-core limit is respected.
 
-## Verification
+## Previous submission checks
 
 `R CMD check --as-cran --timings` on macOS, R 4.6.1
 (aarch64-apple-darwin23): 0 errors, 0 warnings, 0 notes. The CRAN test
@@ -37,7 +64,7 @@ from 77 to 47 seconds and vignette rebuilding from 108 to 27 seconds.
 Overall check times include variable network checks.
 
 The recorded-vignette tests and scree redraw also passed under R 4.5.1.
-This tarball was uploaded to win-builder for R-release and R-devel on
+The original submission was uploaded to win-builder for R-release and R-devel on
 13 September 2026. Both returned 0 errors, 0 warnings and 0 notes on
 Windows Server 2022:
 

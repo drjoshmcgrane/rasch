@@ -1,6 +1,6 @@
 ---
 title: "The Extended Frame of Reference model"
-author: "Joshua A McGrane"
+author: "Joshua A. McGrane"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{The Extended Frame of Reference model}

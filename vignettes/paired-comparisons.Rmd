@@ -1,6 +1,6 @@
 ---
 title: "Rasch analysis of comparative judgements"
-author: "Joshua A McGrane"
+author: "Joshua A. McGrane"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Rasch analysis of comparative judgements}

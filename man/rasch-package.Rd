@@ -101,11 +101,11 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Joshua A McGrane \email{drjoshmcgrane@gmail.com}
+\strong{Maintainer}: Joshua A. McGrane \email{drjoshmcgrane@gmail.com}
 
 Authors:
 \itemize{
-  \item Joshua A McGrane \email{drjoshmcgrane@gmail.com}
+  \item Joshua A. McGrane \email{drjoshmcgrane@gmail.com}
 }
 
 }
