@@ -101,9 +101,9 @@ Invisibly, `file`.
 
 ``` r
 set.seed(1)
-d <- seq(-2, 2, length.out = 6)
-X <- matrix(rbinom(150 * 6, 1, plogis(outer(rnorm(150), d, "-"))), 150, 6)
-colnames(X) <- paste0("I", 1:6)
+d <- seq(-1.5, 1.5, length.out = 4)
+X <- matrix(rbinom(80 * 4, 1, plogis(outer(rnorm(80), d, "-"))), 80, 4)
+colnames(X) <- paste0("I", 1:4)
 out <- file.path(tempdir(), "report.html")
-report_html(rasch(X), out)
+report_html(rasch(X), out, dpi = 96)
 ```
