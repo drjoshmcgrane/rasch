@@ -14,6 +14,9 @@ information over the relevant part of the latent trait.
 The same analyses are available in the Shiny application, which follows
 this same order; the closing section maps each step onto its panel.
 
+The distributed vignette uses precomputed calibration and bootstrap
+results. The code shown below reproduces them.
+
 ## Fit the model required by the scoring structure
 
 `rasch` fits the partial credit model by default (Rasch 1960; Andrich
@@ -275,7 +278,7 @@ fit$targeting
 #> [1] -0.0148
 #> 
 #> $item_mean
-#> [1] 3.706e-17
+#> [1] 0
 #> 
 #> $threshold_range
 #> [1] -3.179  2.894
@@ -409,7 +412,7 @@ scree <- plot_scree(fit, seed = 2026)
 ```
 
 ![Residual eigenvalues against the score-conditional model-reference
-band.](rasch-workflow_files/figure-html/residual-scree-1.png)
+band.](rasch-workflow_files/figure-html/residual-scree-precomputed-1.png)
 
 The band shows the residual eigenvalues expected under the fitted model.
 Red points clear its familywise 5% limit; the returned table contains

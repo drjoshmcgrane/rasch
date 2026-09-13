@@ -104,8 +104,8 @@ Useful links:
 
 ## Author
 
-**Maintainer**: Josh McGrane <drjoshmcgrane@gmail.com>
+**Maintainer**: Joshua A McGrane <drjoshmcgrane@gmail.com>
 
 Authors:
 
-- Josh McGrane <drjoshmcgrane@gmail.com>
+- Joshua A McGrane <drjoshmcgrane@gmail.com>

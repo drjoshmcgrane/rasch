@@ -2,7 +2,7 @@
 
 ## Authors
 
-- **Josh McGrane**. Author, maintainer.
+- **Joshua A McGrane**. Author, maintainer.
 
 ## Citation
 
@@ -15,7 +15,7 @@ Theory*. R package version 1.12.1,
 
     @Manual{,
       title = {{rasch}: Models and Diagnostics for Rasch Measurement Theory},
-      author = {Josh McGrane},
+      author = {Joshua A McGrane},
       year = {2026},
       note = {R package version 1.12.1},
       url = {https://CRAN.R-project.org/package=rasch},

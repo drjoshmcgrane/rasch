@@ -35,6 +35,9 @@ frame-dependent unit.
 
 ## Fit the model
 
+The distributed vignette uses a precomputed fit, including its bootstrap
+uncertainty. The code below reproduces the calculation.
+
 ``` r
 
 d <- simulate_efrm(
@@ -69,36 +72,37 @@ fit <- rasch_efrm(
   seed = 25
 )
 fit
-#> rasch extended frame of reference analysis: 16 items in 2 set(s) x 2 group(s) = 4 frames, 300 persons
-#> Within-frame pairwise conditional ML: converged in 10 iterations
-#> PSI 0.781, separation quality: reasonable
-#> 
-#> Person group units (phi):
-#>  group   phi se_log_phi
-#>     g1 0.897      0.040
-#>     g2 1.115      0.040
-#> 
-#> Item set units (alpha) and locations:
-#>   set alpha se_log_alpha     mu n_items
-#>  set1 0.840        0.043  0.081       8
-#>  set2 1.190        0.043 -0.081       8
-#> 
-#> Equal-unit comparison: 2(ll_EFRM - ll_equal) = 20.620 with 1 extra unit parameter(s)
-#> (composite likelihood: descriptive; informative for group units (phi))
-#> Omnibus Wald tests of equal units (Holm-adjusted family):
-#>               term df df2   wald      f       p   p_adj significant
-#>  group units (phi)  1 Inf  7.442  7.442   0.006   0.006           *
-#>  set units (alpha)  1  49 16.034 16.034 < 0.001 < 0.001           *
-#> Holm-adjusted exploratory unit contrasts (H0: unit = 1):
-#>        parameter estimate    se      z  df       p   p_adj significant
-#>      log phi[g1]   -0.109 0.040 -2.728 Inf   0.006   0.006           *
-#>      log phi[g2]    0.109 0.040  2.728 Inf   0.006                    
-#>  log alpha[set1]   -0.174 0.043 -4.004  49 < 0.001 < 0.001           *
-#>  log alpha[set2]    0.174 0.043  4.004  49 < 0.001                    
-#> (the units are centred: the second row of a two-row family restates the first, so its adjustment is withheld)
-#> 
-#> Notes: person measures use the weighted score; per-group score curves replace the raw-score table (see score_curves); a universal raw-score conversion is not defined across the expanded frame response cells; use score_curves and design-specific information; two centred unit rows are one hypothesis: the adjusted probability and flag are reported on the first row of the pair and withheld on the second, which restates it
 ```
+
+    #> rasch extended frame of reference analysis: 16 items in 2 set(s) x 2 group(s) = 4 frames, 300 persons
+    #> Within-frame pairwise conditional ML: converged in 10 iterations
+    #> PSI 0.781, separation quality: reasonable
+    #> 
+    #> Person group units (phi):
+    #>  group   phi se_log_phi
+    #>     g1 0.897      0.040
+    #>     g2 1.115      0.040
+    #> 
+    #> Item set units (alpha) and locations:
+    #>   set alpha se_log_alpha     mu n_items
+    #>  set1 0.840        0.043  0.081       8
+    #>  set2 1.190        0.043 -0.081       8
+    #> 
+    #> Equal-unit comparison: 2(ll_EFRM - ll_equal) = 20.620 with 1 extra unit parameter(s)
+    #> (composite likelihood: descriptive; informative for group units (phi))
+    #> Omnibus Wald tests of equal units (Holm-adjusted family):
+    #>               term df df2   wald      f       p   p_adj significant
+    #>  group units (phi)  1 Inf  7.442  7.442   0.006   0.006           *
+    #>  set units (alpha)  1  49 16.034 16.034 < 0.001 < 0.001           *
+    #> Holm-adjusted exploratory unit contrasts (H0: unit = 1):
+    #>        parameter estimate    se      z  df       p   p_adj significant
+    #>      log phi[g1]   -0.109 0.040 -2.728 Inf   0.006   0.006           *
+    #>      log phi[g2]    0.109 0.040  2.728 Inf   0.006                    
+    #>  log alpha[set1]   -0.174 0.043 -4.004  49 < 0.001 < 0.001           *
+    #>  log alpha[set2]    0.174 0.043  4.004  49 < 0.001                    
+    #> (the units are centred: the second row of a two-row family restates the first, so its adjustment is withheld)
+    #> 
+    #> Notes: person measures use the weighted score; per-group score curves replace the raw-score table (see score_curves); a universal raw-score conversion is not defined across the expanded frame response cells; use score_curves and design-specific information; two centred unit rows are one hypothesis: the adjusted probability and flag are reported on the first row of the pair and withheld on the second, which restates it
 
 The principal model-specific tables are:
 

@@ -1,4 +1,4 @@
 # License
 
     YEAR: 2026
-    COPYRIGHT HOLDER: Josh McGrane
+    COPYRIGHT HOLDER: Joshua A McGrane

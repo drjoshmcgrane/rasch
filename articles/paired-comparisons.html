@@ -72,7 +72,7 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.svg" class="logo" alt=""><h1>Rasch analysis of comparative judgements</h1>
-                        <h4 data-toc-skip class="author">Josh
+                        <h4 data-toc-skip class="author">Joshua A
 McGrane</h4>
             
       
@@ -265,17 +265,20 @@ is retained as the raw probability.</p>
 <span>  second_attribute <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>rho <span class="op">=</span> <span class="fl">0.3</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">47</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">dim_fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/btl.html">btl</a></span><span class="op">(</span><span class="va">dim_data</span>, object_a <span class="op">=</span> <span class="st">"object_a"</span>, object_b <span class="op">=</span> <span class="st">"object_b"</span>,</span>
-<span>               winner <span class="op">=</span> <span class="st">"winner"</span>, judge <span class="op">=</span> <span class="st">"judge"</span><span class="op">)</span></span>
-<span><span class="va">dimensions</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/btl_dimensionality.html">btl_dimensionality</a></span><span class="op">(</span><span class="va">dim_fit</span>, reps <span class="op">=</span> <span class="fl">20</span>, seed <span class="op">=</span> <span class="fl">2026</span>,</span>
-<span>                                independent_comparisons <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="va">dimensions</span></span>
-<span><span class="co">#&gt; Paired-comparison residual dimensionality: 4 bimension(s)</span></span>
-<span><span class="co">#&gt; Leading bimension strength 1.078 (68% of residual; reference 5% upper limit: 1.421; adjusted p = 0.476) -&gt; within the conditional reference</span></span>
-<span><span class="co">#&gt; Note: the simulated reference assumes conditionally independent comparison outcomes given the fitted probabilities and any modeled history; it is not cluster-robust</span></span></code></pre></div>
+<span>               winner <span class="op">=</span> <span class="st">"winner"</span>, judge <span class="op">=</span> <span class="st">"judge"</span><span class="op">)</span></span></code></pre></div>
+<p>The dimensionality reference is precomputed in the distributed
+vignette. The following call reproduces it.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">dimensions</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/btl_dimensionality.html">btl_dimensionality</a></span><span class="op">(</span><span class="va">dim_fit</span>, reps <span class="op">=</span> <span class="fl">20</span>, seed <span class="op">=</span> <span class="fl">2026</span>,</span>
+<span>                                independent_comparisons <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">dimensions</span></span></code></pre></div>
+<pre><code><span><span class="co">#&gt; Paired-comparison residual dimensionality: 4 bimension(s)</span></span>
+<span><span class="co">#&gt; Leading bimension strength 1.078 (68% of residual; reference 5% upper limit: 1.421; adjusted p = 0.476) -&gt; within the conditional reference</span></span>
+<span><span class="co">#&gt; Note: the simulated reference assumes conditionally independent comparison outcomes given the fitted probabilities and any modeled history; it is not cluster-robust</span></span></code></pre>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_btl_transitivity.html">plot_btl_transitivity</a></span><span class="op">(</span><span class="va">tr</span><span class="op">)</span></span></code></pre></div>
 <p><img src="paired-comparisons_files/figure-html/plot-transitivity-1.png" class="r-plt" alt="Per-judge consistency of the paired comparisons." width="672"></p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_btl_scree.html">plot_btl_scree</a></span><span class="op">(</span><span class="va">dimensions</span><span class="op">)</span></span></code></pre></div>
 <p><img src="paired-comparisons_files/figure-html/plot-scree-1.png" class="r-plt" alt="Residual bimension strengths against the simulated noise reference." width="672"></p>
 <p>The decomposition compares observed and fitted expected points within
@@ -307,7 +310,7 @@ effective judges in every relevant factor cell; estimates remain
 descriptive below that boundary. The tables report both counts. Panel
 and experience are null in this example, so an adjusted flag would be a
 false positive rather than a planted result.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">bd</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/btl_dif.html">btl_dif</a></span><span class="op">(</span><span class="va">fit</span>, <span class="va">d</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"panel"</span>, <span class="st">"experience"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="va">bd_order</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">bd</span><span class="op">$</span><span class="va">summary</span><span class="op">$</span><span class="va">p_uniform_adj</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">bd</span><span class="op">$</span><span class="va">summary</span><span class="op">[</span><span class="va">bd_order</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
@@ -332,7 +335,7 @@ false positive rather than a planted result.</p>
 the complete object-by-term family. It is a sensitivity analysis beside
 the primary HC3 residual analysis. Its familywise probabilities refer to
 the fitted global invariant null.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">bd_boot</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/dif_bootstrap.html">dif_bootstrap</a></span><span class="op">(</span><span class="va">fit</span>, <span class="va">bd</span>, B <span class="op">=</span> <span class="fl">999</span>, seed <span class="op">=</span> <span class="fl">2026</span><span class="op">)</span></span>
 <span><span class="va">bd_boot</span><span class="op">$</span><span class="va">summary</span></span></code></pre></div>
 </div>
@@ -349,7 +352,7 @@ usable variances. If they do not, the function uses the unweighted mean
 location difference, labels it in <code>shift_method</code>, and keeps
 the link descriptive. An exact common anchor fixes the shift even when
 other common objects have unavailable SEs.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">eq</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/btl_equate.html">btl_equate</a></span><span class="op">(</span><span class="va">current_panel</span>, <span class="va">reference_panel</span>, independent <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">eq</span><span class="op">$</span><span class="va">table</span></span>
 <span><span class="va">eq</span><span class="op">$</span><span class="va">equated</span>                 <span class="co"># reference panel on the current panel's origin</span></span></code></pre></div>
@@ -391,7 +394,7 @@ The cross-set likelihood holds the within-set locations and panel units
 fixed. It estimates the set transformations directly from the comparison
 outcomes and does not use the finite-grid person-distribution link in
 <code><a href="../reference/rasch_efrm.html">rasch_efrm()</a></code>.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">de</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_btl_efrm.html">simulate_btl_efrm</a></span><span class="op">(</span></span>
 <span>  n_objects_per_set <span class="op">=</span> <span class="fl">5</span>, n_sets <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  n_judges_per_panel <span class="op">=</span> <span class="fl">6</span>, n_panels <span class="op">=</span> <span class="fl">2</span>,</span>
@@ -543,7 +546,7 @@ Press.)</p>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Josh McGrane.</p>
+  <p>Developed by Joshua A McGrane.</p>
 </div>
 
 <div class="pkgdown-footer-right">

@@ -46,7 +46,8 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.12.1" id="rasch-1121">rasch 1.12.1<a class="anchor" aria-label="anchor" href="#rasch-1121"></a></h2>
-<ul><li><p>Automatic DIF resolution withholds its verdict when the final assessment could not estimate a single item-term test, instead of reporting that no DIF remains. Where only some tests were estimable the stop reason says how many were not, and the counts of remaining and non-uniform DIF are reported as unavailable rather than as zero. Saved resolutions from earlier versions are dropped when a project is reopened.</p></li>
+<ul><li><p>CRAN checks use shorter workflow fixtures and recorded vignette bootstrap calculations. The full tests and scripts to regenerate those calculations remain in the repository; estimation and replication defaults are unchanged.</p></li>
+<li><p>Automatic DIF resolution withholds its verdict when the final assessment could not estimate a single item-term test, instead of reporting that no DIF remains. Where only some tests were estimable the stop reason says how many were not, and the counts of remaining and non-uniform DIF are reported as unavailable rather than as zero. Saved resolutions from earlier versions are dropped when a project is reopened.</p></li>
 <li><p>Planned DIF contrasts withhold only the affected item when a split refit is refused, and say why, instead of abandoning the whole call. The refusal reason is reported in place of an unrelated response-category note.</p></li>
 <li><p>A linear trend across an ordered factor is no longer withheld because the middle level carries the rounding residue that <code><a href="https://rdrr.io/r/stats/contrast.html" class="external-link">contr.poly()</a></code> leaves in place of an exact zero. Contrast weights below a relative tolerance are zeroed, so a level with no weight is no longer treated as a required cell. Saved planned contrasts from earlier versions are dropped on reopening.</p></li>
 <li><p>The notes recording which requested DIF tests were not estimable reach every surface that reports the analysis: the console, the HTML report, the Word and PDF report, and the saved summary, not only the app.</p></li>
@@ -628,7 +629,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Josh McGrane.</p>
+  <p>Developed by Joshua A McGrane.</p>
 </div>
 
 <div class="pkgdown-footer-right">

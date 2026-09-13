@@ -248,11 +248,10 @@ of two Smiths?). Rasch Measurement Transactions, 20(1), 1048–1051.</p>
 <span class="r-in"><span>  <span class="fu"><a href="rasch.html">rasch</a></span><span class="op">(</span><span class="va">X</span><span class="op">)</span>, items_positive <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"I"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>  items_negative <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"I"</span>, <span class="fl">5</span><span class="op">:</span><span class="fl">8</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">multidimensional</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] NA</span>
-<span class="r-in"><span><span class="co"># \donttest{</span></span></span>
-<span class="r-in"><span><span class="co"># calibrate the data-driven split under the fitted model</span></span></span>
+<span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
+<span class="r-in"><span><span class="co"># A longer run calibrates the data-driven split under the fitted model.</span></span></span>
 <span class="r-in"><span><span class="fu">dimensionality_test</span><span class="op">(</span><span class="fu"><a href="rasch.html">rasch</a></span><span class="op">(</span><span class="va">X</span><span class="op">)</span>, B <span class="op">=</span> <span class="fl">99</span>, workers <span class="op">=</span> <span class="fl">1</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">$</span><span class="va">p_boot</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1</span>
-<span class="r-in"><span><span class="co"># }</span></span></span>
+<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
@@ -260,7 +259,7 @@ of two Smiths?). Rasch Measurement Transactions, 20(1), 1048–1051.</p>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Josh McGrane.</p>
+  <p>Developed by Joshua A McGrane.</p>
 </div>
 
 <div class="pkgdown-footer-right">
