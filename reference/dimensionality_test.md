@@ -12,9 +12,9 @@ standard normal and about `alpha` of the tests should reach
 significance. Persons with an extreme score on either subset are
 excluded (their weighted-likelihood estimates are most biased there).
 The proportion of significant tests is reported with a Clopper–Pearson
-binomial confidence interval. For a split fixed in advance, a lower
-bound above `alpha` signals multidimensionality. The test requires a
-converged calibration and one response row per person.
+binomial confidence interval. The interval describes the observed
+proportion; it is not a calibrated test of dimensionality. The test
+requires a converged calibration and one response row per person.
 
 ## Usage
 
@@ -73,10 +73,10 @@ dimensionality_test(
   Number of parametric-bootstrap replicates that calibrate the
   proportion of significant tests under the fitted model (see Details).
   The default `0` reports the binomial interval and descriptive reading
-  alone; an automatic split then has no inferential verdict. Each
-  replicate refits the calibration, so `B = 200` costs about two hundred
-  fits; the bootstrap is available for single-facet fits with a common
-  unit whose thresholds were estimated directly.
+  alone; neither split then has an inferential verdict. Each replicate
+  refits the calibration, so `B = 200` costs about two hundred fits; the
+  bootstrap is available for single-facet fits with a common unit whose
+  thresholds were estimated directly.
 
 - workers:
 
@@ -109,36 +109,35 @@ used, non-converged and failed. When the comparison itself is
 unavailable (undefined split, degenerate subsets, too few persons) the
 list carries a `note` explaining why and `multidimensional = NA`. Every
 result carries `algorithm`, the stamp of the calculation that produced
-it; a saved result without the current stamp reported the superseded
-paired t-test of the subset means, so an analysis file carrying one
-opens with that result dropped and a warning, and the rest of the
-analysis intact.
+it; a saved result without the current stamp used a superseded mean or
+binomial reference. An analysis file carrying one opens with that result
+dropped and a warning, and the rest of the analysis intact.
+`verdict_note` explains why a descriptive comparison has no inferential
+verdict.
 
 ## Details
 
-The binomial reading holds for a split fixed in advance. A split chosen
-from the residuals is chosen to make the two subsets disagree, so its
+The binomial reference assumes a per-person null rejection rate of
+`alpha`. Unequal targeting and short-subset estimation bias can violate
+that assumption even for a split fixed in advance. A split chosen from
+the residuals is chosen to make the two subsets disagree, so its
 proportion runs above `alpha` under unidimensionality. Package
 simulations confirmed that applying the fixed-split binomial rule after
 choosing the split from the same residuals is anti-conservative. Without
-bootstrap calibration the data-driven split therefore has no binary
-verdict: `multidimensional` is `NA`, while the interval and uncalibrated
-binomial reading remain available descriptively. Two inferential routes
-are available. A content-based split, named through `items_positive` and
-`items_negative`, supports the conventional fixed-split binomial rule
-without the selection induced by the residual-derived split. Otherwise
-`B > 0` calibrates the data-driven split by a parametric bootstrap: each
-replicate draws responses from the fitted model conditional on every
-person's raw score and missingness pattern, refits the calibration,
-repeats the residual-component split on its own residuals and recomputes
-the proportion, so the bootstrap probability `p_boot` carries the same
+bootstrap calibration neither split therefore has a binary verdict:
+`multidimensional` is `NA`, while the interval and uncalibrated binomial
+reading remain available descriptively. `B > 0` supplies a model-based
+reference for either split: each replicate draws responses from the
+fitted model conditional on every person's raw score and missingness
+pattern, refits the calibration, retains a fixed split or repeats a
+residual-component split on its own residuals and recomputes the
+proportion, so the bootstrap probability `p_boot` carries the same
 selection the observed proportion carries. With `B > 0` the verdict is
 `p_boot <= alpha`; the binomial interval is still reported, as a
 description of the observed proportion rather than a test of it. A
 one-sided bootstrap probability cannot be smaller than `1/(B_used + 1)`.
-If that floor exceeds `alpha`, a data-driven split has no rejection
-region and its verdict is withheld. A split fixed in advance retains its
-binomial verdict in that case.
+If that floor exceeds `alpha`, the bootstrap has no rejection region and
+the verdict is withheld for either split.
 
 The mean difference between the two subset estimates is reported but not
 tested. Each subset estimate is a weighted-likelihood estimate on a
@@ -150,8 +149,9 @@ with the number of persons. A t-test of that difference therefore tests
 the targeting of the split rather than its dimensionality – it rejects
 for every sample large enough on unidimensional data – so the difference
 is reported as a description of the split and the inference is withheld.
-The person-level comparisons, whose standard errors carry each person's
-subset uncertainty, are the test.
+The person-level comparisons also carry this bias; their proportion
+needs the bootstrap reference before it can support a dimensionality
+verdict.
 
 ## References
 
@@ -172,7 +172,7 @@ colnames(X) <- paste0("I", 1:8)
 dimensionality_test(
   rasch(X), items_positive = paste0("I", 1:4),
   items_negative = paste0("I", 5:8))$multidimensional
-#> [1] FALSE
+#> [1] NA
 # \donttest{
 # calibrate the data-driven split under the fitted model
 dimensionality_test(rasch(X), B = 99, workers = 1, seed = 1)$p_boot

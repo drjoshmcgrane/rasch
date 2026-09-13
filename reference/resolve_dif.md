@@ -75,17 +75,19 @@ resolve_dif(
 ## Value
 
 A list of class `"rasch_resolve_dif"`: the final resolved `fit`, the
-`splits` performed (order, item, factor, partial eta-squared, source
-item, DIF magnitude in logits), the `stopped` reason, the residual `dif`
-table, and the number of distinct source items that still show DIF in
-the final fit. `n_untested` counts the item-term tests the final
-assessment could not estimate although the design could answer them;
-those terms are reported as neither DIF nor no DIF, so the remaining-DIF
-count is a lower bound whenever `n_untested` is positive. A split copy
-answered in one level of its splitting factor only is not counted: its
-term is structurally absent, not lost. Both counts are `NA` when no
-item-term test was estimable at all. `effects` records the factor model
-used.
+`splits` performed (`order`, `item`, `factor`, `base_item`, `eta2`,
+`magnitude` in logits), the `stopped` reason, the residual `dif` table,
+and the number of distinct source items that still show DIF in the final
+fit. `n_untested` counts the uniform and non-uniform hypotheses the
+final assessment could not estimate although the design could answer
+them; those terms are reported as neither DIF nor no DIF, so the
+remaining-DIF count is a lower bound whenever `n_untested` is positive.
+A split copy answered in one level of its splitting factor only is not
+counted: its term is structurally absent, not lost. `n_remaining_dif` is
+`NA` when no hypothesis was estimable. `n_nonuniform` counts significant
+non-uniform item-factor findings and is `NA` if any answerable
+non-uniform hypothesis is unavailable, or no hypothesis was estimable.
+`n_untested` is always a count. `effects` records the factor model used.
 
 ## References
 

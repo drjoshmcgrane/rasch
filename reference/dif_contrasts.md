@@ -58,7 +58,9 @@ dif_contrasts(
   `"auto"` (derive the family from the factor structure) or a named list
   of numeric cell-weight vectors, each named by the design-cell labels
   (factor levels joined by `":"`). Weights are rescaled so the positive
-  and negative parts each sum to one.
+  and negative parts each sum to one. Numeric factor labels used for
+  automatic trends must give distinct numeric scores; otherwise relabel
+  them or supply explicit contrasts.
 
 - p_adjust:
 

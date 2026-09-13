@@ -309,7 +309,7 @@ principal reliability indices.</p>
 <span><span class="co">#&gt; [1] -0.0148</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; $item_mean</span></span>
-<span><span class="co">#&gt; [1] -5.204e-17</span></span>
+<span><span class="co">#&gt; [1] 3.706e-17</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; $threshold_range</span></span>
 <span><span class="co">#&gt; [1] -3.179  2.894</span></span>
@@ -392,17 +392,17 @@ t_n=\frac{\hat\theta_{nA}-\hat\theta_{nB}}
 {\sqrt{\operatorname{SE}(\hat\theta_{nA})^2+
        \operatorname{SE}(\hat\theta_{nB})^2}}.
 \]</span></p>
-<p>Under unidimensionality, about the nominated alpha level of these
-comparisons should be significant when the subsets were fixed in
-advance. The exact binomial interval and the score points in each subset
-are part of the result. A split selected from the residuals is
-descriptive unless its selection is repeated in a parametric
-bootstrap.</p>
+<p>The observed proportion, binomial interval and score points describe
+the comparison. Unequal targeting can shift the per-person null rate
+even for subsets fixed in advance. A dimensionality verdict therefore
+uses a parametric bootstrap, retaining a fixed split or repeating the
+selection when the split comes from the residuals.</p>
 <div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">dimensionality</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/dimensionality_test.html">dimensionality_test</a></span><span class="op">(</span></span>
 <span>  <span class="va">fit</span>,</span>
 <span>  items_positive <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"I"</span>, <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"%02d"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  items_negative <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"I"</span>, <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"%02d"</span>, <span class="fl">7</span><span class="op">:</span><span class="fl">12</span><span class="op">)</span><span class="op">)</span></span>
+<span>  items_negative <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"I"</span>, <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"%02d"</span>, <span class="fl">7</span><span class="op">:</span><span class="fl">12</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  B <span class="op">=</span> <span class="fl">199</span>, seed <span class="op">=</span> <span class="fl">2026</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scree</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_scree.html">plot_scree</a></span><span class="op">(</span><span class="va">fit</span>, seed <span class="op">=</span> <span class="fl">2026</span><span class="op">)</span></span></code></pre></div>
@@ -414,10 +414,10 @@ contains both raw and adjusted simulation probabilities.</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_pca.html">plot_pca</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
 <p><img src="rasch-workflow_files/figure-html/trait-dependence-plot-1.png" class="r-plt" alt="Loadings of items on the first residual component." width="672"></p>
 <p>Here, 3.0% of the person comparisons are significant (Clopper–Pearson
-95% interval 1.8% to 4.8%). The test does not flag trait dependence, but
-one opposed subset contains only 18 score points. A quiet result from a
-short subtest is inconclusive rather than evidence that a secondary
-trait is absent.</p>
+95% interval 1.8% to 4.8%). The bootstrap probability is 0.655. The
+smaller subset contains 18 score points. A quiet result from a short
+subtest is inconclusive rather than evidence that a secondary trait is
+absent.</p>
 </div>
 <div class="section level2">
 <h2 id="differential-item-functioning">Differential item functioning<a class="anchor" aria-label="anchor" href="#differential-item-functioning"></a>
@@ -539,7 +539,11 @@ so a partial map cannot be read as the whole instrument.</p>
 <p>The remaining analyses sit under two menus that divide them by the
 assumption they examine. <strong>Independence</strong> holds local
 dependence and trait dimensionality — the residual correlations and
-principal components of this vignette’s dependence section.</p>
+principal components of this vignette’s dependence section. For the
+person-subset test, choose the same item subsets as above and set
+Bootstrap replicates to 199 and Random seed to 2026. With zero
+replicates, the app reports the comparisons descriptively, without a
+verdict.</p>
 <p><img src="figures/app-local.png" class="r-plt" alt="The Local dependence panel, showing the residual correlation matrix and its nominated screening threshold." width="100%"></p>
 <p><strong>Invariance</strong> holds differential item functioning,
 equating, guessing, facets and extended frames. The DIF panel runs

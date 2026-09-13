@@ -146,17 +146,20 @@ used at every round and in the final DIF assessment.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list of class <code>"rasch_resolve_dif"</code>: the final resolved
-  <code>fit</code>, the <code>splits</code> performed (order, item, factor, partial
-  eta-squared, source item, DIF magnitude in logits), the <code>stopped</code>
+  <code>fit</code>, the <code>splits</code> performed (<code>order</code>, <code>item</code>,
+  <code>factor</code>, <code>base_item</code>, <code>eta2</code>, <code>magnitude</code> in logits), the <code>stopped</code>
   reason, the residual <code>dif</code> table, and the number of distinct source
   items that still show DIF in the final fit. <code>n_untested</code> counts the
-  item-term tests the final assessment could not estimate although the
+  uniform and non-uniform hypotheses the final assessment could not estimate although the
   design could answer them; those terms are reported as neither DIF nor no
   DIF, so the remaining-DIF count is a lower bound whenever
   <code>n_untested</code> is positive. A split copy answered in one level of its
   splitting factor only is not counted: its term is structurally absent,
-  not lost. Both counts are <code>NA</code> when no item-term test was estimable
-  at all. <code>effects</code> records the factor model used.</p>
+  not lost. <code>n_remaining_dif</code> is <code>NA</code> when no hypothesis was
+  estimable. <code>n_nonuniform</code> counts significant non-uniform item-factor
+  findings and is <code>NA</code> if any answerable non-uniform hypothesis is
+  unavailable, or no hypothesis was estimable. <code>n_untested</code> is always
+  a count. <code>effects</code> records the factor model used.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>

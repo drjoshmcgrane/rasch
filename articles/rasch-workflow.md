@@ -275,7 +275,7 @@ fit$targeting
 #> [1] -0.0148
 #> 
 #> $item_mean
-#> [1] -5.204e-17
+#> [1] 3.706e-17
 #> 
 #> $threshold_range
 #> [1] -3.179  2.894
@@ -387,18 +387,19 @@ subsets \\A\\ and \\B\\, the person-level statistic is
 {\sqrt{\operatorname{SE}(\hat\theta\_{nA})^2+
 \operatorname{SE}(\hat\theta\_{nB})^2}}. \\
 
-Under unidimensionality, about the nominated alpha level of these
-comparisons should be significant when the subsets were fixed in
-advance. The exact binomial interval and the score points in each subset
-are part of the result. A split selected from the residuals is
-descriptive unless its selection is repeated in a parametric bootstrap.
+The observed proportion, binomial interval and score points describe the
+comparison. Unequal targeting can shift the per-person null rate even
+for subsets fixed in advance. A dimensionality verdict therefore uses a
+parametric bootstrap, retaining a fixed split or repeating the selection
+when the split comes from the residuals.
 
 ``` r
 
 dimensionality <- dimensionality_test(
   fit,
   items_positive = paste0("I", sprintf("%02d", 1:6)),
-  items_negative = paste0("I", sprintf("%02d", 7:12))
+  items_negative = paste0("I", sprintf("%02d", 7:12)),
+  B = 199, seed = 2026
 )
 ```
 
@@ -423,10 +424,10 @@ plot_pca(fit)
 component.](rasch-workflow_files/figure-html/trait-dependence-plot-1.png)
 
 Here, 3.0% of the person comparisons are significant (Clopper–Pearson
-95% interval 1.8% to 4.8%). The test does not flag trait dependence, but
-one opposed subset contains only 18 score points. A quiet result from a
-short subtest is inconclusive rather than evidence that a secondary
-trait is absent.
+95% interval 1.8% to 4.8%). The bootstrap probability is 0.655. The
+smaller subset contains 18 score points. A quiet result from a short
+subtest is inconclusive rather than evidence that a secondary trait is
+absent.
 
 ## Differential item functioning
 
@@ -590,7 +591,10 @@ distribution against the item thresholds.](figures/app-targeting.png)
 The remaining analyses sit under two menus that divide them by the
 assumption they examine. **Independence** holds local dependence and
 trait dimensionality — the residual correlations and principal
-components of this vignette’s dependence section.
+components of this vignette’s dependence section. For the person-subset
+test, choose the same item subsets as above and set Bootstrap replicates
+to 199 and Random seed to 2026. With zero replicates, the app reports
+the comparisons descriptively, without a verdict.
 
 ![The Local dependence panel, showing the residual correlation matrix
 and its nominated screening threshold.](figures/app-local.png)

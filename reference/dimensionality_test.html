@@ -17,8 +17,8 @@ standard normal and about alpha of the tests should reach
 significance. Persons with an extreme score on either subset are excluded
 (their weighted-likelihood estimates are most biased there). The
 proportion of significant tests is reported with a Clopper–Pearson
-binomial confidence interval. For a split fixed in
-advance, a lower bound above alpha signals multidimensionality. The
+binomial confidence interval. The interval describes the observed
+proportion; it is not a calibrated test of dimensionality. The
 test requires a converged calibration and one response row per person."><meta property="og:description" content="Estimates each person separately on two item subsets and compares the two
 estimates with a per-person t-test (Smith 2002). By default the subsets
 are defined by the sign of a residual-component loading (the first by
@@ -31,8 +31,8 @@ standard normal and about alpha of the tests should reach
 significance. Persons with an extreme score on either subset are excluded
 (their weighted-likelihood estimates are most biased there). The
 proportion of significant tests is reported with a Clopper–Pearson
-binomial confidence interval. For a split fixed in
-advance, a lower bound above alpha signals multidimensionality. The
+binomial confidence interval. The interval describes the observed
+proportion; it is not a calibrated test of dimensionality. The
 test requires a converged calibration and one response row per person."><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch/logo.svg"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
@@ -86,8 +86,8 @@ standard normal and about <code>alpha</code> of the tests should reach
 significance. Persons with an extreme score on either subset are excluded
 (their weighted-likelihood estimates are most biased there). The
 proportion of significant tests is reported with a Clopper–Pearson
-binomial confidence interval. For a split fixed in
-advance, a lower bound above <code>alpha</code> signals multidimensionality. The
+binomial confidence interval. The interval describes the observed
+proportion; it is not a calibrated test of dimensionality. The
 test requires a converged calibration and one response row per person.</p>
     </div>
 
@@ -148,7 +148,7 @@ test lacks power where nonparametric alternatives still flag.</p></dd>
 <dd><p>Number of parametric-bootstrap replicates that calibrate the
 proportion of significant tests under the fitted model (see Details).
 The default <code>0</code> reports the binomial interval and descriptive
-reading alone; an automatic split then has no inferential verdict. Each
+reading alone; neither split then has an inferential verdict. Each
 replicate refits the calibration, so <code>B = 200</code> costs about two hundred
 fits; the bootstrap is available for single-facet fits with a common
 unit whose thresholds were estimated directly.</p></dd>
@@ -187,35 +187,35 @@ see <code><a href="rasch_rng.html">rasch_rng</a></code>.</p></dd>
   persons) the list carries a <code>note</code> explaining why and
   <code>multidimensional = NA</code>. Every result carries <code>algorithm</code>,
   the stamp of the calculation that produced it; a saved result without
-  the current stamp reported the superseded paired t-test of the subset
-  means, so an analysis file carrying one opens with that result dropped
-  and a warning, and the rest of the analysis intact.</p>
+  the current stamp used a superseded mean or binomial reference. An
+  analysis file carrying one opens with that result dropped and a warning,
+  and the rest of the analysis intact. <code>verdict_note</code> explains why a
+  descriptive comparison has no inferential verdict.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The binomial reading holds for a split fixed in advance. A split chosen
+    <p>The binomial reference assumes a per-person null rejection rate of
+<code>alpha</code>. Unequal targeting and short-subset estimation bias can
+violate that assumption even for a split fixed in advance. A split chosen
 from the residuals is chosen to make the two subsets disagree, so its
 proportion runs above <code>alpha</code> under unidimensionality. Package
 simulations confirmed that applying the fixed-split binomial rule after
 choosing the split from the same residuals is anti-conservative. Without
-bootstrap calibration the data-driven split therefore has no binary verdict:
+bootstrap calibration neither split therefore has a binary verdict:
 <code>multidimensional</code> is <code>NA</code>, while the interval and uncalibrated
-binomial reading remain available descriptively. Two inferential routes
-are available. A content-based split, named through <code>items_positive</code>
-and <code>items_negative</code>, supports the conventional fixed-split binomial
-rule without the selection induced by the residual-derived split. Otherwise
-<code>B &gt; 0</code> calibrates the data-driven split by a parametric bootstrap:
+binomial reading remain available descriptively.
+<code>B &gt; 0</code> supplies a model-based reference for either split:
 each replicate draws responses from the fitted model conditional on every
 person's raw score and missingness pattern, refits the calibration,
-repeats the residual-component split on its own residuals and recomputes
+retains a fixed split or repeats a residual-component split on its own
+residuals and recomputes
 the proportion, so the bootstrap probability <code>p_boot</code> carries the
 same selection the observed proportion carries. With <code>B &gt; 0</code> the
 verdict is <code>p_boot &lt;= alpha</code>; the binomial interval is still reported,
 as a description of the observed proportion rather than a test of it.
 A one-sided bootstrap probability cannot be smaller than
-<code>1/(B_used + 1)</code>. If that floor exceeds <code>alpha</code>, a data-driven
-split has no rejection region and its verdict is withheld. A split fixed
-in advance retains its binomial verdict in that case.</p>
+<code>1/(B_used + 1)</code>. If that floor exceeds <code>alpha</code>, the bootstrap
+has no rejection region and the verdict is withheld for either split.</p>
 <p>The mean difference between the two subset estimates is reported but not
 tested. Each subset estimate is a weighted-likelihood estimate on a short
 test, and the two subsets differ in difficulty, so their estimation bias
@@ -226,8 +226,8 @@ persons. A t-test of that difference therefore tests the targeting of the
 split rather than its dimensionality – it rejects for every sample large
 enough on unidimensional data – so the difference is reported as a
 description of the split and the inference is withheld. The person-level
-comparisons, whose standard errors carry each person's subset
-uncertainty, are the test.</p>
+comparisons also carry this bias; their proportion needs the bootstrap
+reference before it can support a dimensionality verdict.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
@@ -247,7 +247,7 @@ of two Smiths?). Rasch Measurement Transactions, 20(1), 1048–1051.</p>
 <span class="r-in"><span><span class="fu">dimensionality_test</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="rasch.html">rasch</a></span><span class="op">(</span><span class="va">X</span><span class="op">)</span>, items_positive <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"I"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>  items_negative <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"I"</span>, <span class="fl">5</span><span class="op">:</span><span class="fl">8</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">multidimensional</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] NA</span>
 <span class="r-in"><span><span class="co"># \donttest{</span></span></span>
 <span class="r-in"><span><span class="co"># calibrate the data-driven split under the fitted model</span></span></span>
 <span class="r-in"><span><span class="fu">dimensionality_test</span><span class="op">(</span><span class="fu"><a href="rasch.html">rasch</a></span><span class="op">(</span><span class="va">X</span><span class="op">)</span>, B <span class="op">=</span> <span class="fl">99</span>, workers <span class="op">=</span> <span class="fl">1</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">$</span><span class="va">p_boot</span></span></span>

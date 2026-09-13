@@ -18,8 +18,11 @@ verified, but person recovery and the EFRM group units are withheld with
 a note rather than compared against an unverified person allocation; the
 EFRM set units are still reported, with the note recording that the
 fitted group allocation is unchecked. Pass `id =` when fitting to
-recover them. An item the estimator dropped, such as one everyone
-answered identically, is named in the note and left out of the
+recover them. Legacy truth without identifiers can be matched by unique
+response rows, provided its person truth remains in the simulation
+data's original order. Duplicate response patterns leave legacy person
+recovery unavailable. An item the estimator dropped, such as one
+everyone answered identically, is named in the note and left out of the
 comparison. Recovery is unavailable when fitting removes or merges
 generating response categories, because the fitted locations then
 describe a different scale. For a many-facet simulation, the planted

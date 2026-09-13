@@ -5,9 +5,9 @@
       fontURL: "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/output/chtml/fonts/woff-v2"
     }
   };
-</script><script src="../lightswitch.js"></script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/Source_Sans_3-0.4.10/font.css" rel="stylesheet"><link href="../deps/JetBrains_Mono-0.4.10/font.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Compare fitted and generating parameters — sim_recovery"><meta name="description" content='Compares fitted parameters with the generating values from a
+</script><script src="../lightswitch.js"></script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/Source_Sans_3-0.4.10/font.css" rel="stylesheet"><link href="../deps/JetBrains_Mono-0.4.10/font.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Compare fitted and generating parameters — sim_recovery"><meta name="description" content="Compares fitted parameters with the generating values from a
 simulate_* function (carried on the data as
-attr(sim, "truth")): item difficulties and person abilities for a
+attr(sim, &quot;truth&quot;)): item difficulties and person abilities for a
 Rasch fit, object locations for a paired-comparison fit, rater severities
 (with item and person measures) for a many-facet fit, set and group units
 for a Rasch frames fit, and common object locations, panel and set units,
@@ -24,6 +24,9 @@ are withheld with a note rather than compared against an unverified
 person allocation; the EFRM set units are still reported, with the note
 recording that the fitted group allocation is unchecked.
 Pass id = when fitting to recover them.
+Legacy truth without identifiers can be matched by unique response rows,
+provided its person truth remains in the simulation data's original order.
+Duplicate response patterns leave legacy person recovery unavailable.
 An item the estimator dropped, such as one everyone answered identically,
 is named in the note and left out of the comparison.
 Recovery is unavailable when fitting removes or merges generating response
@@ -40,9 +43,9 @@ Rasch recovery uses the equivalently rescaled item thresholds and person
 locations. When the generator includes a departure that the fitted model
 does not represent, the comparisons are labelled as descriptive rather
 than as recovery of a single correctly specified target. This includes,
-for example, heterogeneous item discriminations in an ordinary Rasch fit.'><meta property="og:description" content='Compares fitted parameters with the generating values from a
+for example, heterogeneous item discriminations in an ordinary Rasch fit."><meta property="og:description" content="Compares fitted parameters with the generating values from a
 simulate_* function (carried on the data as
-attr(sim, "truth")): item difficulties and person abilities for a
+attr(sim, &quot;truth&quot;)): item difficulties and person abilities for a
 Rasch fit, object locations for a paired-comparison fit, rater severities
 (with item and person measures) for a many-facet fit, set and group units
 for a Rasch frames fit, and common object locations, panel and set units,
@@ -59,6 +62,9 @@ are withheld with a note rather than compared against an unverified
 person allocation; the EFRM set units are still reported, with the note
 recording that the fitted group allocation is unchecked.
 Pass id = when fitting to recover them.
+Legacy truth without identifiers can be matched by unique response rows,
+provided its person truth remains in the simulation data's original order.
+Duplicate response patterns leave legacy person recovery unavailable.
 An item the estimator dropped, such as one everyone answered identically,
 is named in the note and left out of the comparison.
 Recovery is unavailable when fitting removes or merges generating response
@@ -75,7 +81,7 @@ Rasch recovery uses the equivalently rescaled item thresholds and person
 locations. When the generator includes a departure that the fitted model
 does not represent, the comparisons are labelled as descriptive rather
 than as recovery of a single correctly specified target. This includes,
-for example, heterogeneous item discriminations in an ordinary Rasch fit.'><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch/logo.svg"></head><body>
+for example, heterogeneous item discriminations in an ordinary Rasch fit."><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch/logo.svg"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -135,6 +141,9 @@ are withheld with a note rather than compared against an unverified
 person allocation; the EFRM set units are still reported, with the note
 recording that the fitted group allocation is unchecked.
 Pass <code>id =</code> when fitting to recover them.
+Legacy truth without identifiers can be matched by unique response rows,
+provided its person truth remains in the simulation data's original order.
+Duplicate response patterns leave legacy person recovery unavailable.
 An item the estimator dropped, such as one everyone answered identically,
 is named in the note and left out of the comparison.
 Recovery is unavailable when fitting removes or merges generating response
