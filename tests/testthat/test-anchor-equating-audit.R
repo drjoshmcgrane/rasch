@@ -411,18 +411,27 @@ test_that("a single anchor changes only the origin and propagates downstream", {
   X <- sapply(truth, function(tau)
     vapply(theta, draw_item, integer(1), tau = tau))
   colnames(X) <- paste0("I", 1:5)
-  free <- rasch(X)
+  # Separate refits use different coordinates. Fit tightly, but allow for
+  # numerical differences across BLAS/LAPACK builds when comparing them.
+  # Exact anchor values are checked separately at stricter tolerance.
+  fit_tol <- 1e-12
+  comparison_tol <- 1e-8
+  free <- rasch(X, tol = fit_tol)
+  expect_true(free$est$converged)
   shift <- 0.8
   anchored <- rasch(X, anchors = data.frame(
     item = "I2", k = NA_real_, tau = free$items$location[2] + shift
-  ))
+  ), tol = fit_tol)
+  expect_true(anchored$est$converged)
+  expect_equal(anchored$items$location[2], free$items$location[2] + shift,
+               tolerance = 1e-12)
   expect_equal(unlist(anchored$tau_list),
-               unlist(free$tau_list) + shift, tolerance = 1e-10)
+               unlist(free$tau_list) + shift, tolerance = comparison_tol)
   ok <- is.finite(free$person$theta) & is.finite(anchored$person$theta)
   expect_equal(anchored$person$theta[ok], free$person$theta[ok] + shift,
-               tolerance = 1e-10)
-  expect_equal(anchored$person$se, free$person$se, tolerance = 1e-10)
-  expect_equal(anchored$residuals, free$residuals, tolerance = 1e-10)
+               tolerance = comparison_tol)
+  expect_equal(anchored$person$se, free$person$se, tolerance = comparison_tol)
+  expect_equal(anchored$residuals, free$residuals, tolerance = comparison_tol)
   q <- stats::setNames(seq(0.5, 1.5, length.out = ncol(X)), colnames(X))
   weighted_free <- weighted_person_estimates(free, q)
   weighted_anchored <- weighted_person_estimates(anchored, q)
@@ -430,8 +439,9 @@ test_that("a single anchor changes only the origin and propagates downstream", {
     is.finite(weighted_anchored$theta)
   expect_equal(weighted_anchored$theta[weighted_ok],
                weighted_free$theta[weighted_ok] + shift,
-               tolerance = 1e-8)
-  expect_equal(weighted_anchored$se, weighted_free$se, tolerance = 1e-8)
+               tolerance = comparison_tol)
+  expect_equal(weighted_anchored$se, weighted_free$se,
+               tolerance = comparison_tol)
   expect_equal(weighted_anchored$weighted_score,
                weighted_free$weighted_score, tolerance = 1e-12)
   M <- nrow(free$thresholds)
@@ -440,7 +450,7 @@ test_that("a single anchor changes only the origin and propagates downstream", {
   anchor_mean[rows] <- 1 / length(rows)
   H <- diag(M) - matrix(1, M, 1L) %*% t(anchor_mean)
   expect_equal(anchored$est$cov_tau,
-               H %*% free$est$cov_tau %*% t(H), tolerance = 1e-10)
+               H %*% free$est$cov_tau %*% t(H), tolerance = comparison_tol)
 
   # Fixing one numerical threshold also identifies only the origin. Its
   # covariance is the free covariance translated by that threshold, while
@@ -450,23 +460,27 @@ test_that("a single anchor changes only the origin and propagates downstream", {
   threshold_anchored <- rasch(X, anchors = data.frame(
     item = "I3", k = 1L,
     tau = free$thresholds$tau[anchor_row] + shift
-  ))
+  ), tol = fit_tol)
+  expect_true(threshold_anchored$est$converged)
+  expect_equal(threshold_anchored$thresholds$tau[anchor_row],
+               free$thresholds$tau[anchor_row] + shift, tolerance = 1e-12)
   H_threshold <- diag(M)
   H_threshold <- H_threshold -
     matrix(1, M, 1L) %*% H_threshold[anchor_row, , drop = FALSE]
   expect_equal(threshold_anchored$thresholds$tau,
-               free$thresholds$tau + shift, tolerance = 1e-7)
+               free$thresholds$tau + shift, tolerance = comparison_tol)
   expect_equal(threshold_anchored$est$cov_tau,
                H_threshold %*% free$est$cov_tau %*% t(H_threshold),
-               tolerance = 1e-7)
+               tolerance = comparison_tol)
   ok_threshold <- is.finite(free$person$theta) &
     is.finite(threshold_anchored$person$theta)
   expect_equal(threshold_anchored$person$theta[ok_threshold],
-               free$person$theta[ok_threshold] + shift, tolerance = 1e-7)
+               free$person$theta[ok_threshold] + shift,
+               tolerance = comparison_tol)
   expect_equal(threshold_anchored$person$se, free$person$se,
-               tolerance = 1e-7)
+               tolerance = comparison_tol)
   expect_equal(threshold_anchored$residuals, free$residuals,
-               tolerance = 1e-7)
+               tolerance = comparison_tol)
 
   d <- simulate_btl(6, 20, 5, seed = 602)
   b0 <- btl(d, "object_a", "object_b", "winner")
