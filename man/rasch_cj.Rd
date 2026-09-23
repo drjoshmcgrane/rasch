@@ -20,6 +20,9 @@ rasch_cj(
   units = c(comparisons = NA, rankings = NA),
   items = NULL,
   na_codes = -1,
+  objects = c("items", "persons"),
+  anchors = NULL,
+  id = NULL,
   maxit = 200,
   tol = 1e-08
 )
@@ -27,7 +30,8 @@ rasch_cj(
 \arguments{
 \item{data}{Persons-by-items response data, dichotomous or polytomous, as
 for \code{\link{rasch}}, or \code{NULL} to combine comparisons and
-rankings without responses.}
+rankings without responses. In the person mode, responses to the
+anchored items, coded from 0 to the item's top category.}
 
 \item{comparisons}{Optional data frame of paired comparisons, one row
 each.}
@@ -61,6 +65,19 @@ to fix at the response unit.}
 
 \item{na_codes}{As in \code{\link{rasch}}.}
 
+\item{objects}{What the judges compare: \code{"items"} (the default),
+or \code{"persons"} to measure the persons from their responses and
+judgements of their work.}
+
+\item{anchors}{Person mode only: the calibrated item thresholds, as a
+\code{\link{rasch}} fit, an item-mode \code{rasch_cj} fit, or a data
+frame with columns \code{item}, \code{k} and \code{tau} giving every
+threshold of every item in \code{data}.}
+
+\item{id}{Person mode only: the name of a column of \code{data} holding
+the person identifiers the judgement tables use, or a vector of them,
+one per row. Defaults to the row names.}
+
 \item{maxit, tol}{Newton iteration cap and convergence tolerance on the
 parameter scale.}
 }
@@ -77,6 +94,17 @@ An object of class \code{"rasch_cj"} with components
   \code{cov_items} (covariance of the item locations), \code{loglik},
   \code{converged}, \code{iterations}, frame sizes in \code{n}, the
   \code{reference} frame, and \code{notes}.
+
+  In the person mode, \code{mode} is \code{"persons"} and the object
+  holds \code{persons} (person, n_items, raw, max_raw, the combined
+  location and se, the location and se from responses alone,
+  \code{Inf} or \code{-Inf} at an extreme score, the centred location
+  from each judgement frame alone on the test scale, whether each frame
+  reaches the person, and whether the person was set aside as extreme),
+  \code{units}, \code{invariance} (a list with the per-person table
+  \code{persons}), \code{anchors} (the thresholds used), \code{cov}
+  (covariance of the estimated locations), \code{loglik},
+  \code{converged}, \code{iterations}, \code{n} and \code{notes}.
 }
 \description{
 Fits one set of item thresholds to persons' responses and to judges'
@@ -150,6 +178,50 @@ columns are refused because no responses define the thresholds.
 
 Ties are dropped with a note; judge clustering and judge fit are not
 provided.
+
+\strong{Measuring persons.} With \code{objects = "persons"} the judges
+compare the persons' work rather than the items, and the function
+locates each person from their responses and from those judgements
+together. The items must be calibrated already: \code{anchors} gives
+their thresholds, from \code{\link{rasch}}, from an item-mode
+\code{rasch_cj} fit, or as a data frame. The response block is then the
+partial credit likelihood of each person's responses given the anchored
+thresholds, one location per person, and the judgement blocks are as
+above with the persons as objects and units relative to the test. The
+items are held, so a person's information grows with their own items and
+judgements, and the standard errors are from the observed information.
+The judgement tables name persons by the row names of \code{data}, by
+the \code{id} column or vector, or by \code{"P1"}, \code{"P2"}, ...
+when there are none; a person judged but absent from \code{data} has no
+responses and is placed by the judgements. Threshold columns have no
+meaning here and are ignored.
+
+A person has a finite location when the evidence points both ways: a
+score inside its range, or at least one win and one loss (a rank above
+someone and a rank below someone) among the persons being estimated.
+A person lacking either is set aside as extreme and reported at the Warm
+estimate from their responses, as \code{rasch} reports extreme persons,
+or with no location if they have no responses; a judged group none of
+whose members has responses is not on the test scale and is refused. The
+invariance table compares each frame's separate placement of every
+person, divided by the fitted unit and centred within each connected
+block of the design over the persons both frames locate, with the
+response placement, by a Wald contrast with Holm adjustment. There is no
+likelihood ratio test in this mode: the separate model has a location
+per person per frame, so its parameters grow with the persons and the
+ratio is not chi-square. A person who fails is one whose judged work
+does not match their responses.
+
+The unit of a judgement frame is estimated alongside one location per
+person, so it carries the incidental-parameter bias of joint estimation
+rather than the consistency of the item mode, where persons are
+conditioned out. In simulations with 300 persons, 8 to 40 dichotomous
+items and 4 to 20 comparisons per person the unit was 5 to 10 percent
+high and its standard error understated, while the person locations and
+their standard errors were calibrated. Fix the unit with \code{units}
+when it is known. Too few judgements per person leave the unit without
+a maximum, because some ordering of the persons the responses allow
+agrees with every judgement; the fit then reports a runaway unit.
 }
 \examples{
 set.seed(1)
@@ -165,6 +237,16 @@ fit <- rasch_cj(X, comparisons = cj, object_a = "a", object_b = "b",
                 winner = "winner")
 fit$units
 fit$invariance$lr
+
+# persons from their responses and judgements of their work
+pairs <- cbind(sample(300, 1200, replace = TRUE), sample(300, 1200, replace = TRUE))
+pairs <- pairs[pairs[, 1] != pairs[, 2], ]
+p_a <- plogis(0.8 * (theta[pairs[, 1]] - theta[pairs[, 2]]))
+work <- data.frame(a = paste0("P", pairs[, 1]), b = paste0("P", pairs[, 2]))
+work$winner <- ifelse(runif(nrow(work)) < p_a, work$a, work$b)
+pfit <- rasch_cj(X, comparisons = work, object_a = "a", object_b = "b",
+                 winner = "winner", objects = "persons", anchors = fit)
+head(pfit$persons)
 }
 \references{
 Bradley, R. A. and Terry, M. E. (1952). Rank analysis of

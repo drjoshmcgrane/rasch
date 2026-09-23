@@ -443,3 +443,207 @@ test_that("judgement identifiers are trimmed and mismatches are named", {
   expect_error(rasch_cj(X, comparisons = cmp), "not items: 'i01'")
 })
 
+
+# person mode: responses to anchored items and judgements of the persons
+
+cj_person_sim <- function(seed = 3, I = 12, N = 150, K = 600, alpha = 0.7,
+                          n_rank = 0, kappa = 0.9, rank_size = 4, m = 1,
+                          shift = NULL) {
+  set.seed(seed)
+  tau <- lapply(seq_len(I), function(i)
+    sort(seq(-0.8, 0.8, length.out = m) + (i - (I + 1) / 2) * 3.6 / I))
+  names(tau) <- sprintf("I%02d", seq_len(I))
+  theta <- stats::rnorm(N)
+  ids <- sprintf("S%03d", seq_len(N))
+  X <- sapply(tau, function(t) {
+    cs <- c(0, cumsum(t)); lp <- outer(theta, 0:m) - rep(cs, each = N)
+    P <- exp(lp - apply(lp, 1, max)); P <- P / rowSums(P)
+    apply(P, 1, function(p) sample(0:m, 1, prob = p))
+  })
+  rownames(X) <- ids
+  th_j <- theta
+  if (!is.null(shift)) th_j[match(names(shift), ids)] <- th_j[match(names(shift), ids)] + shift
+  pa <- t(replicate(K, sample(N, 2)))
+  p <- stats::plogis(alpha * (th_j[pa[, 1]] - th_j[pa[, 2]]))
+  cj <- data.frame(a = ids[pa[, 1]], b = ids[pa[, 2]],
+                   winner = ids[ifelse(stats::runif(K) < p, pa[, 1], pa[, 2])],
+                   stringsAsFactors = FALSE)
+  rk <- NULL
+  if (n_rank > 0) {
+    rk <- do.call(rbind, lapply(seq_len(n_rank), function(j) {
+      s <- sample(N, rank_size)
+      g <- -log(-log(stats::runif(rank_size)))
+      data.frame(ranking = j, item = ids[s[order(-(kappa * th_j[s] + g))]],
+                 rank = seq_len(rank_size), stringsAsFactors = FALSE)
+    }))
+  }
+  anchors <- data.frame(item = rep(names(tau), each = m), k = rep(seq_len(m), I),
+                        tau = unlist(tau), stringsAsFactors = FALSE)
+  list(X = X, cj = cj, rk = rk, theta = theta, anchors = anchors, ids = ids)
+}
+
+test_that("the person mode recovers the persons, the units and its standard errors", {
+  s <- cj_person_sim(n_rank = 80)
+  fit <- rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
+                  winner = "winner", rankings = s$rk, objects = "persons",
+                  anchors = s$anchors)
+  expect_s3_class(fit, "rasch_cj")
+  expect_identical(fit$mode, "persons")
+  expect_true(fit$converged)
+  ps <- fit$persons
+  expect_identical(ps$person, s$ids)
+  expect_equal(fit$units$frame, c("responses", "comparisons", "rankings"))
+  expect_true(abs(fit$units$unit[2] - 0.7) < 2.5 * fit$units$se[2])
+  expect_true(abs(fit$units$unit[3] - 0.9) < 2.5 * fit$units$se[3])
+  ok <- !ps$extreme & is.finite(ps$location_responses)
+  rmse_joint <- sqrt(mean((ps$location - s$theta)[ok]^2))
+  rmse_resp <- sqrt(mean((ps$location_responses - s$theta)[ok]^2))
+  expect_lt(rmse_joint, rmse_resp)
+  z <- (ps$location - s$theta)[!ps$extreme] / ps$se[!ps$extreme]
+  expect_true(abs(stats::sd(z) - 1) < 0.15)
+  # the response-only reference is the per-person maximum likelihood
+  # location given the anchors
+  j <- which(ok)[1]
+  ml <- stats::optimize(function(t) rasch:::.cj_person_parts(t, s$X[j, , drop = FALSE],
+                                                             split(s$anchors$tau, s$anchors$item)[colnames(s$X)])$ll,
+                        c(-6, 6), maximum = TRUE)$maximum
+  expect_equal(ps$location_responses[j], ml, tolerance = 1e-4)
+  # the response block is the person likelihood: its gradient checks
+  th <- c(-0.4, 1.1); Xs <- s$X[1:2, ]
+  tl <- split(s$anchors$tau, s$anchors$item)[colnames(s$X)]
+  p <- rasch:::.cj_person_parts(th, Xs, tl)
+  expect_equal(p$g, num_grad(function(t) sum(rasch:::.cj_person_parts(t, Xs, tl)$ll), th),
+               tolerance = 1e-4)
+  inv <- fit$invariance$persons
+  expect_null(fit$invariance$lr)
+  expect_true(all(c("frame", "person", "reference", "judgements", "difference",
+                    "se", "z", "p", "p_adj") %in% names(inv)))
+  expect_lt(mean(inv$p < 0.05, na.rm = TRUE), 0.1)
+  expect_output(print(fit), "Combined person measurement: 150 persons")
+  expect_output(print(fit), "Unit of comparisons relative to responses")
+  expect_output(print(fit), "Persons placed differently by the rankings")
+  # fixed unit
+  f1 <- rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
+                 winner = "winner", objects = "persons", anchors = s$anchors,
+                 units = c(comparisons = 1))
+  expect_equal(f1$units$unit[2], 1)
+  expect_false(f1$units$estimated[2])
+})
+
+test_that("the person mode places extreme scorers and judged-only persons by the judgements", {
+  s <- cj_person_sim(seed = 5, I = 10, N = 60, K = 300, alpha = 0.8)
+  X <- s$X; X[1, ] <- 1L; X[2, ] <- 0L; X[3, ] <- 1L
+  cj <- s$cj
+  # S001 wins every comparison it is in: no downward evidence
+  w1 <- cj$a == "S001" | cj$b == "S001"; cj$winner[w1] <- "S001"
+  extra <- data.frame(a = c("Q1", "Q2", "S010"), b = c("S005", "Q1", "Q2"),
+                      winner = c("Q1", "Q1", "S010"), stringsAsFactors = FALSE)
+  rf <- rasch(X[4:60, ])
+  fit <- rasch_cj(X, comparisons = rbind(cj, extra), object_a = "a", object_b = "b",
+                  winner = "winner", objects = "persons", anchors = rf)
+  ps <- fit$persons
+  expect_equal(nrow(ps), 62)
+  expect_true(ps$extreme[1])
+  wle <- rasch:::.person_estimates(X[1, , drop = FALSE], rf$tau_list)
+  expect_equal(ps$location[1], wle$theta)
+  expect_true(is.infinite(ps$location_responses[1]))
+  # S002 and S003 have extreme scores but wins and losses: finite joint locations
+  expect_false(any(ps$extreme[2:3]))
+  expect_true(all(is.finite(ps$location[2:3])))
+  expect_lt(ps$location[2], ps$location[3])
+  # Q1 lost to no one and Q2 won nothing: set aside with no location; they
+  # have no responses to fall back on
+  q <- match(c("Q1", "Q2"), ps$person)
+  expect_true(all(ps$extreme[q]))
+  expect_true(all(is.na(ps$location[q])))
+  expect_true(all(is.na(ps$location_responses[q])))
+  expect_true(any(grepl("judged person\\(s\\) without responses", fit$notes)))
+  expect_true(any(grepl("extreme person\\(s\\) set aside", fit$notes)))
+  # a judged-only person with evidence both ways is placed
+  extra2 <- data.frame(a = c("Q1", "S010"), b = c("S005", "Q1"),
+                       winner = c("Q1", "S010"), stringsAsFactors = FALSE)
+  f2 <- rasch_cj(X, comparisons = rbind(cj, extra2), object_a = "a", object_b = "b",
+                 winner = "winner", objects = "persons", anchors = rf)
+  q1 <- match("Q1", f2$persons$person)
+  expect_true(is.finite(f2$persons$location[q1]))
+  expect_equal(f2$persons$n_items[q1], 0L)
+  # a judged group with no link to a person with responses is refused
+  bad <- rbind(cj, data.frame(a = c("Q3", "Q4"), b = c("Q4", "Q3"),
+                              winner = c("Q3", "Q4"), stringsAsFactors = FALSE))
+  expect_error(rasch_cj(X, comparisons = bad, object_a = "a", object_b = "b",
+                        winner = "winner", objects = "persons", anchors = rf),
+               "cannot be placed on the test scale: Q3, Q4")
+})
+
+test_that("the person mode takes anchors from a data frame, rasch() or rasch_cj(), and names ids", {
+  s <- cj_person_sim(seed = 8, I = 8, N = 120, K = 400, m = 3)
+  fit <- rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
+                  winner = "winner", objects = "persons", anchors = s$anchors)
+  expect_true(fit$converged)
+  expect_equal(nrow(fit$anchors), 24)
+  expect_true(all(fit$persons$max_raw == 24))
+  # from a rasch_cj() item fit, an id column and an item subset
+  cj_items <- rasch_cj(s$X, comparisons = data.frame(a = "I01", b = "I05", winner = "I05")[rep(1, 20), ],
+                       object_a = "a", object_b = "b", winner = "winner")
+  D <- data.frame(id = s$ids, s$X, check.names = FALSE)
+  f2 <- rasch_cj(D, comparisons = s$cj, object_a = "a", object_b = "b",
+                 winner = "winner", objects = "persons", anchors = cj_items,
+                 id = "id", items = colnames(s$X)[1:6])
+  expect_identical(f2$persons$person, s$ids)
+  expect_true(any(grepl("2 anchored item\\(s\\) not in the data ignored", f2$notes)))
+  expect_equal(f2$persons$n_items[1], 6L)
+  # from a rasch() fit, with the id as a vector
+  rf <- rasch(s$X)
+  f3 <- rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
+                 winner = "winner", objects = "persons", anchors = rf, id = s$ids)
+  expect_true(f3$converged)
+  # refusals
+  expect_error(rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
+                        winner = "winner", objects = "persons"),
+               "needs `anchors`")
+  expect_error(rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
+                        winner = "winner", anchors = rf),
+               "`anchors` is for the person mode")
+  expect_error(rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
+                        winner = "winner", objects = "persons", anchors = rf,
+                        id = "nope"),
+               "`id` must name a column")
+  anc_bad <- s$anchors[s$anchors$k != 2, ]
+  expect_error(rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
+                        winner = "winner", objects = "persons", anchors = anc_bad),
+               "thresholds 1..m")
+  Xd <- s$X[, 1:4]
+  expect_error(rasch_cj(Xd, comparisons = s$cj, object_a = "a", object_b = "b",
+                        winner = "winner", objects = "persons",
+                        anchors = s$anchors[s$anchors$item != "I01", ]),
+               "without anchored thresholds: I01")
+  expect_error(rasch_cj(NULL, comparisons = s$cj, object_a = "a", object_b = "b",
+                        winner = "winner", rankings = s$cj, objects = "persons",
+                        anchors = rf),
+               "needs response data")
+})
+
+test_that("the person mode flags a person whose work is judged unlike their responses", {
+  s <- cj_person_sim(seed = 11, I = 8, N = 200, K = 800, alpha = 1.3, m = 3,
+                     shift = c(S001 = 3))
+  fit <- rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
+                  winner = "winner", objects = "persons", anchors = s$anchors)
+  inv <- fit$invariance$persons
+  r <- inv$person == "S001"
+  expect_gt(inv$difference[r], 1.5)
+  expect_lt(inv$p[r], 0.05)
+  expect_gt(fit$persons$location[1], fit$persons$location_responses[1])
+})
+
+test_that("the person mode reports a unit with no maximum when judgements are too sparse", {
+  s <- cj_person_sim(seed = 2, I = 8, N = 100, K = 110, alpha = 0.8)
+  fit <- rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
+                  winner = "winner", objects = "persons", anchors = s$anchors,
+                  maxit = 60)
+  expect_true(any(grepl("unit ran away", fit$notes)))
+  f1 <- rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
+                 winner = "winner", objects = "persons", anchors = s$anchors,
+                 units = c(comparisons = 1))
+  expect_true(f1$converged)
+  expect_true(all(is.finite(f1$persons$se[!f1$persons$extreme])))
+})

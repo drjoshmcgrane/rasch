@@ -34,7 +34,17 @@
   an anchor table for `rasch()`, so the person estimates and fit diagnostics
   of the anchored analysis follow from the combined calibration. With
   `data = NULL` the comparisons become the reference frame and rankings are
-  combined with them alone. No existing estimator is changed.
+  combined with them alone. With `objects = "persons"` the judges compare
+  the persons' work instead, and each person is located from their
+  responses to already calibrated items (`anchors`, from `rasch()`, a
+  `rasch_cj()` item fit, or a data frame) and from the judgements together,
+  the judgement frames again carrying their own units; a person is finite
+  when the evidence points both ways, extreme persons fall back to the Warm
+  estimate from their responses, judged persons without responses are
+  placed by the judgements, and a per-person table tests whether the judged
+  work matches the responses. The unit in this mode is estimated jointly
+  with the person locations and runs a few percent high in simulation; the
+  documentation gives the figures. No existing estimator is changed.
 * CRAN checks use shorter workflow fixtures and recorded vignette bootstrap
   calculations. The full tests and scripts to regenerate those calculations
   remain in the repository; estimation and replication defaults are unchanged.

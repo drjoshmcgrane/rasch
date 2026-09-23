@@ -335,10 +335,10 @@
 
 # Resolve item and threshold columns from a judgement source to object keys:
 # the item name for an item location, "item:k" for its k-th threshold.
-.cj_object_keys <- function(it, thr, items, m, what) {
+.cj_object_keys <- function(it, thr, items, m, what, noun = "items") {
   unknown <- setdiff(unique(it), items)
   if (length(unknown))
-    stop("`", what, "` names objects that are not items: ",
+    stop("`", what, "` names objects that are not ", noun, ": ",
          paste(sQuote(unknown, FALSE), collapse = ", "), call. = FALSE)
   if (is.null(thr)) return(it)
   thr <- suppressWarnings(as.numeric(thr))
@@ -358,7 +358,8 @@
 
 # Resolve comparison rows to (winner key, loser key).
 .cj_comparison_keys <- function(comparisons, object_a, object_b, winner,
-                                threshold_a, threshold_b, items, m, notes) {
+                                threshold_a, threshold_b, items, m, notes,
+                                noun = "items") {
   need <- c(object_a, object_b, winner)
   miss <- setdiff(need, names(comparisons))
   if (length(miss))
@@ -369,8 +370,8 @@
   w <- .role_text_values(comparisons[[winner]])
   if (anyNA(a) || anyNA(b) || anyNA(w))
     stop("`comparisons` has missing objects or winners", call. = FALSE)
-  ka <- .cj_object_keys(a, comparisons[[threshold_a]], items, m, "comparisons")
-  kb <- .cj_object_keys(b, comparisons[[threshold_b]], items, m, "comparisons")
+  ka <- .cj_object_keys(a, comparisons[[threshold_a]], items, m, "comparisons", noun)
+  kb <- .cj_object_keys(b, comparisons[[threshold_b]], items, m, "comparisons", noun)
   if (any(ka == kb))
     stop("`comparisons` compares an object with itself", call. = FALSE)
   tie <- tolower(w) %in% c("tie", "draw")
@@ -391,7 +392,7 @@
 
 # Resolve ranking rows to a list of object-key vectors, one per ranking.
 .cj_ranking_keys <- function(rankings, ranking, item, rank, threshold,
-                             items, m, notes) {
+                             items, m, notes, noun = "items") {
   need <- c(ranking, item, rank)
   miss <- setdiff(need, names(rankings))
   if (length(miss))
@@ -403,7 +404,7 @@
   if (anyNA(id) || anyNA(it) || anyNA(rk))
     stop("`rankings` has missing ranking identifiers, items or ranks",
          call. = FALSE)
-  key <- .cj_object_keys(it, rankings[[threshold]], items, m, "rankings")
+  key <- .cj_object_keys(it, rankings[[threshold]], items, m, "rankings", noun)
   out <- vector("list", 0L); dropped <- 0L
   for (g in split(seq_along(id), id)) {
     o <- order(rk[g])
@@ -495,9 +496,54 @@
 #' Ties are dropped with a note; judge clustering and judge fit are not
 #' provided.
 #'
+#' \strong{Measuring persons.} With \code{objects = "persons"} the judges
+#' compare the persons' work rather than the items, and the function
+#' locates each person from their responses and from those judgements
+#' together. The items must be calibrated already: \code{anchors} gives
+#' their thresholds, from \code{\link{rasch}}, from an item-mode
+#' \code{rasch_cj} fit, or as a data frame. The response block is then the
+#' partial credit likelihood of each person's responses given the anchored
+#' thresholds, one location per person, and the judgement blocks are as
+#' above with the persons as objects and units relative to the test. The
+#' items are held, so a person's information grows with their own items and
+#' judgements, and the standard errors are from the observed information.
+#' The judgement tables name persons by the row names of \code{data}, by
+#' the \code{id} column or vector, or by \code{"P1"}, \code{"P2"}, ...
+#' when there are none; a person judged but absent from \code{data} has no
+#' responses and is placed by the judgements. Threshold columns have no
+#' meaning here and are ignored.
+#'
+#' A person has a finite location when the evidence points both ways: a
+#' score inside its range, or at least one win and one loss (a rank above
+#' someone and a rank below someone) among the persons being estimated.
+#' A person lacking either is set aside as extreme and reported at the Warm
+#' estimate from their responses, as \code{rasch} reports extreme persons,
+#' or with no location if they have no responses; a judged group none of
+#' whose members has responses is not on the test scale and is refused. The
+#' invariance table compares each frame's separate placement of every
+#' person, divided by the fitted unit and centred within each connected
+#' block of the design over the persons both frames locate, with the
+#' response placement, by a Wald contrast with Holm adjustment. There is no
+#' likelihood ratio test in this mode: the separate model has a location
+#' per person per frame, so its parameters grow with the persons and the
+#' ratio is not chi-square. A person who fails is one whose judged work
+#' does not match their responses.
+#'
+#' The unit of a judgement frame is estimated alongside one location per
+#' person, so it carries the incidental-parameter bias of joint estimation
+#' rather than the consistency of the item mode, where persons are
+#' conditioned out. In simulations with 300 persons, 8 to 40 dichotomous
+#' items and 4 to 20 comparisons per person the unit was 5 to 10 percent
+#' high and its standard error understated, while the person locations and
+#' their standard errors were calibrated. Fix the unit with \code{units}
+#' when it is known. Too few judgements per person leave the unit without
+#' a maximum, because some ordering of the persons the responses allow
+#' agrees with every judgement; the fit then reports a runaway unit.
+#'
 #' @param data Persons-by-items response data, dichotomous or polytomous, as
 #'   for \code{\link{rasch}}, or \code{NULL} to combine comparisons and
-#'   rankings without responses.
+#'   rankings without responses. In the person mode, responses to the
+#'   anchored items, coded from 0 to the item's top category.
 #' @param comparisons Optional data frame of paired comparisons, one row
 #'   each.
 #' @param object_a,object_b,winner Column names in \code{comparisons}, as in
@@ -521,6 +567,16 @@
 #'   to fix at the response unit.
 #' @param items Optional item columns to analyse, as in \code{\link{rasch}}.
 #' @param na_codes As in \code{\link{rasch}}.
+#' @param objects What the judges compare: \code{"items"} (the default),
+#'   or \code{"persons"} to measure the persons from their responses and
+#'   judgements of their work.
+#' @param anchors Person mode only: the calibrated item thresholds, as a
+#'   \code{\link{rasch}} fit, an item-mode \code{rasch_cj} fit, or a data
+#'   frame with columns \code{item}, \code{k} and \code{tau} giving every
+#'   threshold of every item in \code{data}.
+#' @param id Person mode only: the name of a column of \code{data} holding
+#'   the person identifiers the judgement tables use, or a vector of them,
+#'   one per row. Defaults to the row names.
 #' @param maxit,tol Newton iteration cap and convergence tolerance on the
 #'   parameter scale.
 #' @return An object of class \code{"rasch_cj"} with components
@@ -535,6 +591,17 @@
 #'   \code{cov_items} (covariance of the item locations), \code{loglik},
 #'   \code{converged}, \code{iterations}, frame sizes in \code{n}, the
 #'   \code{reference} frame, and \code{notes}.
+#'
+#'   In the person mode, \code{mode} is \code{"persons"} and the object
+#'   holds \code{persons} (person, n_items, raw, max_raw, the combined
+#'   location and se, the location and se from responses alone,
+#'   \code{Inf} or \code{-Inf} at an extreme score, the centred location
+#'   from each judgement frame alone on the test scale, whether each frame
+#'   reaches the person, and whether the person was set aside as extreme),
+#'   \code{units}, \code{invariance} (a list with the per-person table
+#'   \code{persons}), \code{anchors} (the thresholds used), \code{cov}
+#'   (covariance of the estimated locations), \code{loglik},
+#'   \code{converged}, \code{iterations}, \code{n} and \code{notes}.
 #' @references Bradley, R. A. and Terry, M. E. (1952). Rank analysis of
 #'   incomplete block designs: I. The method of paired comparisons.
 #'   Biometrika, 39, 324--345.
@@ -560,6 +627,16 @@
 #'                 winner = "winner")
 #' fit$units
 #' fit$invariance$lr
+#'
+#' # persons from their responses and judgements of their work
+#' pairs <- cbind(sample(300, 1200, replace = TRUE), sample(300, 1200, replace = TRUE))
+#' pairs <- pairs[pairs[, 1] != pairs[, 2], ]
+#' p_a <- plogis(0.8 * (theta[pairs[, 1]] - theta[pairs[, 2]]))
+#' work <- data.frame(a = paste0("P", pairs[, 1]), b = paste0("P", pairs[, 2]))
+#' work$winner <- ifelse(runif(nrow(work)) < p_a, work$a, work$b)
+#' pfit <- rasch_cj(X, comparisons = work, object_a = "a", object_b = "b",
+#'                  winner = "winner", objects = "persons", anchors = fit)
+#' head(pfit$persons)
 #' @export
 rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
                      object_b = "object_b", winner = "winner",
@@ -567,13 +644,21 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
                      rankings = NULL, ranking = "ranking", item = "item",
                      rank = "rank", threshold = "threshold",
                      units = c(comparisons = NA, rankings = NA),
-                     items = NULL, na_codes = -1, maxit = 200, tol = 1e-8) {
+                     items = NULL, na_codes = -1,
+                     objects = c("items", "persons"), anchors = NULL,
+                     id = NULL, maxit = 200, tol = 1e-8) {
+  objects <- match.arg(objects)
   has_resp <- !is.null(data)
   if (has_resp) .check_column_names(data)
   .check_controls(maxit, tol)
   if (is.null(comparisons) && is.null(rankings))
     stop("supply `comparisons`, `rankings`, or both; with responses alone use rasch()",
          call. = FALSE)
+  if (objects == "items" && !is.null(anchors))
+    stop("`anchors` is for the person mode: set `objects = \"persons\"`",
+         call. = FALSE)
+  if (objects == "items" && !is.null(id))
+    stop("`id` is for the person mode: set `objects = \"persons\"`", call. = FALSE)
   if (!has_resp && (is.null(comparisons) || is.null(rankings)))
     stop("without responses, supply both `comparisons` and `rankings`; ",
          "for one judgement source alone use btl()", call. = FALSE)
@@ -595,6 +680,11 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
   if (any(!is.na(u_spec) & u_spec != 1))
     stop("a fixed unit must be 1; other values rescale the reference frame",
          call. = FALSE)
+  if (objects == "persons")
+    return(.cj_persons(data, anchors, id, comparisons, object_a, object_b,
+                       winner, threshold_a, threshold_b, rankings, ranking,
+                       item, rank, threshold, u_spec, items, na_codes, maxit,
+                       tol, match.call()))
   notes <- character(0)
   ref <- if (has_resp) "responses" else "comparisons"
   if (!has_resp) u_spec[["comparisons"]] <- 1
@@ -942,12 +1032,21 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
 
 #' @export
 print.rasch_cj <- function(x, ...) {
-  n_thr <- if (is.null(x$thresholds)) nrow(x$items) else nrow(x$thresholds)
-  cat(sprintf(paste0("Combined calibration: %d items%s from %d informative ",
-                     "persons, %d comparisons, %d rankings\n"),
-              nrow(x$items),
-              if (n_thr > nrow(x$items)) sprintf(" (%d thresholds)", n_thr) else "",
-              x$n[["persons"]], x$n[["comparisons"]], x$n[["rankings"]]))
+  if (identical(x$mode, "persons")) {
+    ps <- x$persons
+    cat(sprintf(paste0("Combined person measurement: %d persons (%d with ",
+                       "responses to %d anchored items, %d extreme) from %d ",
+                       "comparisons, %d rankings\n"),
+                nrow(ps), x$n[["persons"]], length(unique(x$anchors$item)),
+                sum(ps$extreme), x$n[["comparisons"]], x$n[["rankings"]]))
+  } else {
+    n_thr <- if (is.null(x$thresholds)) nrow(x$items) else nrow(x$thresholds)
+    cat(sprintf(paste0("Combined calibration: %d items%s from %d informative ",
+                       "persons, %d comparisons, %d rankings\n"),
+                nrow(x$items),
+                if (n_thr > nrow(x$items)) sprintf(" (%d thresholds)", n_thr) else "",
+                x$n[["persons"]], x$n[["comparisons"]], x$n[["rankings"]]))
+  }
   cat(sprintf("Full likelihood: %s in %d iterations; log-likelihood %.2f\n",
               if (x$converged) "converged" else "NOT converged", x$iterations,
               x$loglik))
@@ -960,17 +1059,32 @@ print.rasch_cj <- function(x, ...) {
                   " (fixed)" else ""))
   }
   lr <- x$invariance$lr
-  if (is.finite(lr$p))
+  if (!is.null(lr) && is.finite(lr$p))
     cat(sprintf("Invariance across frames: LR %.2f on %d df, p = %s\n",
                 lr$statistic, lr$df, .fmt_p(lr$p)))
-  tab <- x$invariance$items
-  if (!is.null(tab)) {
-    hit <- !is.na(tab$p_adj) & tab$p_adj < 0.05
-    lab <- if ("threshold" %in% names(tab))
-      ifelse(is.na(tab$threshold), tab$item, paste0(tab$item, ":", tab$threshold))
-    else tab$item
-    cat(sprintf("Objects differing between frames (Holm p < 0.05): %s\n",
-                if (any(hit)) paste(unique(lab[hit]), collapse = ", ") else "none"))
+  if (identical(x$mode, "persons")) {
+    tab <- x$invariance$persons
+    if (!is.null(tab)) {
+      for (f in unique(tab$frame)) {
+        r <- tab$frame == f & !is.na(tab$p)
+        hit <- r & tab$p_adj < 0.05
+        cat(sprintf(paste0("Persons placed differently by the %s (%d with a ",
+                           "contrast): %d at p < 0.05, %d at Holm p < 0.05%s\n"),
+                    f, sum(r), sum(tab$p[r] < 0.05), sum(hit),
+                    if (any(hit)) paste0(": ", paste(tab$person[hit], collapse = ", "))
+                    else ""))
+      }
+    }
+  } else {
+    tab <- x$invariance$items
+    if (!is.null(tab)) {
+      hit <- !is.na(tab$p_adj) & tab$p_adj < 0.05
+      lab <- if ("threshold" %in% names(tab))
+        ifelse(is.na(tab$threshold), tab$item, paste0(tab$item, ":", tab$threshold))
+      else tab$item
+      cat(sprintf("Objects differing between frames (Holm p < 0.05): %s\n",
+                  if (any(hit)) paste(unique(lab[hit]), collapse = ", ") else "none"))
+    }
   }
   for (n in x$notes) cat("Note: ", n, "\n", sep = "")
   invisible(x)
