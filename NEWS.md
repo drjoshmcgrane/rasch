@@ -1,5 +1,22 @@
 # rasch 1.12.1
 
+* `rasch_cj()` calibrates items from item responses, paired comparisons and
+  rankings in one full likelihood: the conditional likelihood of the
+  responses under the partial credit model, a Bradley-Terry block for the
+  comparisons and a Plackett-Luce block for the rankings. The judged objects
+  are items, located at the mean of their thresholds, or single thresholds
+  when the judgement tables name them, so a judgement can inform where a
+  polytomous item sits or where one of its category boundaries sits. Each
+  judgement frame carries its own unit relative to the responses, estimated
+  with a standard error or fixed at 1, and a likelihood ratio test with
+  per-object Wald checks reports whether the frames agree. A frame that
+  judges only some objects is tested on those alone. Items with no response
+  variation are left out of the conditional likelihood and located by the
+  judgements, so they must be judged. The fitted thresholds are returned as
+  an anchor table for `rasch()`, so the person estimates and fit diagnostics
+  of the anchored analysis follow from the combined calibration. With
+  `data = NULL` the comparisons become the reference frame and rankings are
+  combined with them alone. No existing estimator is changed.
 * CRAN checks use shorter workflow fixtures and recorded vignette bootstrap
   calculations. The full tests and scripts to regenerate those calculations
   remain in the repository; estimation and replication defaults are unchanged.
