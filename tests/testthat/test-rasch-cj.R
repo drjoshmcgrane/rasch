@@ -647,3 +647,185 @@ test_that("the person mode reports a unit with no maximum when judgements are to
   expect_true(f1$converged)
   expect_true(all(is.finite(f1$persons$se[!f1$persons$extreme])))
 })
+
+# Two tests of one construct with no item in common, linked only by
+# judgements. Test B is written in a unit rho times the reference: its
+# item spread is rho times the true spread, and in the person mode its
+# persons respond at rho theta - c.
+cj_two_tests <- function(seed = 21, I = 10, N = 400, K = 800, alpha = 0.8,
+                         rho = 1.5, shift = 0.6, persons = FALSE) {
+  set.seed(seed)
+  delta <- seq(-1.6, 1.6, length.out = I); delta <- delta - mean(delta)
+  dA <- delta; names(dA) <- sprintf("A%02d", seq_len(I))
+  dB <- delta; names(dB) <- sprintf("B%02d", seq_len(I))
+  gen <- function(theta, d) {
+    X <- sapply(d, function(v) as.integer(stats::runif(length(theta)) <
+                                            stats::plogis(theta - v)))
+    X
+  }
+  if (!persons) {
+    XA <- gen(stats::rnorm(N), dA)
+    XB <- gen(stats::rnorm(N), rho * dB)
+    all <- c(dA, dB)
+    pairs <- t(utils::combn(names(all), 2))[sample(choose(2 * I, 2), K, TRUE), ]
+    p_a <- stats::plogis(alpha * (all[pairs[, 1]] - all[pairs[, 2]]))
+    cj <- data.frame(a = pairs[, 1], b = pairs[, 2],
+                     winner = ifelse(stats::runif(K) < p_a, pairs[, 1], pairs[, 2]),
+                     stringsAsFactors = FALSE)
+    return(list(XA = XA, XB = XB, cj = cj, dA = dA, dB = dB))
+  }
+  theta <- stats::rnorm(2 * N, 0, 1.2)
+  ids <- sprintf("S%03d", seq_len(2 * N))
+  XA <- gen(theta[seq_len(N)], dA); rownames(XA) <- ids[seq_len(N)]
+  XB <- gen(rho * theta[N + seq_len(N)] - shift, dB); rownames(XB) <- ids[N + seq_len(N)]
+  pa <- t(replicate(K, sample(2 * N, 2)))
+  p <- stats::plogis(alpha * (theta[pa[, 1]] - theta[pa[, 2]]))
+  cj <- data.frame(a = ids[pa[, 1]], b = ids[pa[, 2]],
+                   winner = ids[ifelse(stats::runif(K) < p, pa[, 1], pa[, 2])],
+                   stringsAsFactors = FALSE)
+  anchors <- data.frame(item = c(names(dA), names(dB)), k = 1L, tau = c(dA, dB),
+                        stringsAsFactors = FALSE)
+  list(XA = XA, XB = XB, cj = cj, theta = theta, ids = ids, anchors = anchors)
+}
+
+test_that("two disconnected tests are calibrated together with a unit for the second", {
+  s <- cj_two_tests()
+  fit <- rasch_cj(list(A = s$XA, B = s$XB), comparisons = s$cj, object_a = "a",
+                  object_b = "b", winner = "winner")
+  expect_true(fit$converged)
+  expect_identical(fit$tests, c("A", "B"))
+  expect_identical(fit$reference, "A")
+  expect_identical(fit$units$frame, c("A", "B", "comparisons"))
+  uB <- fit$units[fit$units$frame == "B", ]
+  expect_true(uB$estimated)
+  expect_lt(abs(uB$unit - 1.5), 2.5 * uB$se)
+  ua <- fit$units[fit$units$frame == "comparisons", ]
+  expect_lt(abs(ua$unit - 0.8), 2.5 * ua$se)
+  # items of both tests on one scale in the unit of A
+  it <- fit$items
+  expect_identical(it$item, c(names(s$dA), names(s$dB)))
+  expect_lt(sqrt(mean((it$location - c(s$dA, s$dB))^2)), 0.2)
+  expect_true(all(is.na(it$location_B[seq_len(10)])))
+  expect_true(all(is.na(it$location_A[10 + seq_len(10)])))
+  expect_true(all(is.finite(it$location_A[seq_len(10)])))
+  # the separate calibration of B is in B's own unit; scaled by the unit
+  # it matches the joint locations
+  expect_lt(sqrt(mean((it$location_B[10 + 1:10] -
+                         (it$location[10 + 1:10] - mean(it$location[10 + 1:10])))^2)), 0.15)
+  # one free location per item in each frame (9 + 9 + 19), less the joint
+  # parameters (19 locations and 2 units)
+  expect_equal(fit$invariance$lr$df, 16L)
+  expect_gt(fit$invariance$lr$p, 0.001)
+  inv <- fit$invariance$items
+  expect_setequal(unique(paste(inv$frame, inv$against)),
+                  c("B comparisons", "comparisons A"))
+  expect_equal(sum(inv$frame == "B"), 10L)
+  expect_true(all(inv$p_adj > 0.05, na.rm = TRUE))
+  expect_output(print(fit), "Unit of B relative to A")
+  expect_output(print(fit), "Unit of comparisons relative to A")
+})
+
+test_that("a test's unit can be fixed and the tests are checked for consistency", {
+  s <- cj_two_tests()
+  fix <- rasch_cj(list(A = s$XA, B = s$XB), comparisons = s$cj, object_a = "a",
+                  object_b = "b", winner = "winner", units = c(B = 1))
+  expect_equal(fix$units$unit[fix$units$frame == "B"], 1)
+  expect_false(fix$units$estimated[fix$units$frame == "B"])
+  expect_equal(fix$invariance$lr$df, 17L)
+  free <- rasch_cj(list(A = s$XA, B = s$XB), comparisons = s$cj, object_a = "a",
+                   object_b = "b", winner = "winner")
+  expect_gte(free$loglik, fix$loglik - 1e-8)
+  expect_output(print(fix), "Unit of B relative to A: 1.000 \\(fixed\\)")
+  # the reference test's unit is 1 by definition
+  expect_error(rasch_cj(list(A = s$XA, B = s$XB), comparisons = s$cj, object_a = "a",
+                        object_b = "b", winner = "winner", units = c(A = 1)),
+               "reference")
+  expect_error(rasch_cj(list(s$XA, s$XB), comparisons = s$cj, object_a = "a",
+                        object_b = "b", winner = "winner"), "named")
+  expect_error(rasch_cj(list(A = s$XA, comparisons = s$XB), comparisons = s$cj,
+                        object_a = "a", object_b = "b", winner = "winner"),
+               "comparisons")
+  # an item in both tests must have the same categories
+  XB2 <- cbind(s$XB, A01 = rep(0:2, length.out = nrow(s$XB)))
+  expect_error(rasch_cj(list(A = s$XA, B = XB2), comparisons = s$cj, object_a = "a",
+                        object_b = "b", winner = "winner"),
+               "different categories across tests")
+  # without a judgement between the tests there is no link
+  cjA <- s$cj[s$cj$a %in% names(s$dA) & s$cj$b %in% names(s$dA), ]
+  expect_error(rasch_cj(list(A = s$XA, B = s$XB), comparisons = cjA, object_a = "a",
+                        object_b = "b", winner = "winner"), "connect|link|disconnected")
+})
+
+test_that("persons from two disconnected tests are measured on one scale", {
+  s <- cj_two_tests(persons = TRUE, N = 150, K = 2000, alpha = 0.9, rho = 1.4)
+  fit <- rasch_cj(list(A = s$XA, B = s$XB), comparisons = s$cj, object_a = "a",
+                  object_b = "b", winner = "winner", objects = "persons",
+                  anchors = s$anchors)
+  expect_true(fit$converged)
+  expect_identical(fit$mode, "persons")
+  expect_identical(fit$reference, "A")
+  expect_identical(fit$units$frame, c("A", "B", "comparisons"))
+  tt <- fit$tests
+  expect_identical(tt$test, c("A", "B"))
+  expect_equal(tt$unit[1], 1); expect_equal(tt$shift[1], 0)
+  # the unit carries the same upward bias as in the single-test person
+  # mode, so the check is loose; the origin shift is recovered
+  expect_lt(abs(tt$unit[2] - 1.4), 0.45)
+  expect_lt(abs(tt$shift[2] - 0.6), 3 * tt$se_shift[2])
+  expect_equal(tt$unit[2], fit$units$unit[2])
+  ps <- fit$persons
+  expect_identical(ps$person, s$ids)
+  expect_identical(ps$test, rep(c("A", "B"), each = 150))
+  expect_gt(stats::cor(ps$location, s$theta), 0.85)
+  expect_lt(sqrt(mean((ps$location - s$theta)^2)), 0.75)
+  # response-only locations of B are mapped to the common scale
+  finite <- is.finite(ps$location_responses)
+  expect_gt(stats::cor(ps$location_responses[finite], s$theta[finite]), 0.75)
+  expect_true(all(c("test", "item", "k", "tau") %in% names(fit$anchors)))
+  expect_output(print(fit), "Unit of B relative to A")
+  expect_output(print(fit), "Unit of comparisons relative to A")
+  # the anchors and ids can come per test
+  fit2 <- rasch_cj(list(A = s$XA, B = s$XB), comparisons = s$cj, object_a = "a",
+                   object_b = "b", winner = "winner", objects = "persons",
+                   anchors = list(A = s$anchors[1:10, ], B = s$anchors[11:20, ]),
+                   id = list(A = s$ids[1:150], B = s$ids[151:300]))
+  expect_equal(fit2$loglik, fit$loglik)
+  expect_error(rasch_cj(list(A = s$XA, B = s$XB), comparisons = s$cj, object_a = "a",
+                        object_b = "b", winner = "winner", objects = "persons",
+                        anchors = list(A = s$anchors[1:10, ])), "no element for test B")
+  # a fixed unit leaves the shift free
+  fix <- rasch_cj(list(A = s$XA, B = s$XB), comparisons = s$cj, object_a = "a",
+                  object_b = "b", winner = "winner", objects = "persons",
+                  anchors = s$anchors, units = c(B = 1))
+  expect_equal(fix$tests$unit[2], 1)
+  expect_true(is.na(fix$tests$se_unit[2]))
+  expect_false(is.na(fix$tests$se_shift[2]))
+  expect_gte(fit$loglik, fix$loglik - 1e-8)
+})
+
+test_that("the person mode refuses tests it cannot place", {
+  s <- cj_two_tests(persons = TRUE, N = 60, K = 600, alpha = 0.9, rho = 1.4)
+  idsA <- s$ids[1:60]; idsB <- s$ids[61:120]
+  # no judgement across the tests
+  cjA <- s$cj[s$cj$a %in% idsA & s$cj$b %in% idsA, ]
+  expect_error(rasch_cj(list(A = s$XA, B = s$XB), comparisons = cjA, object_a = "a",
+                        object_b = "b", winner = "winner", objects = "persons",
+                        anchors = s$anchors), "no judgement links test B to test A")
+  # one judged person in B: the origin is placed once the unit is fixed
+  one <- idsB[which(rowSums(s$XB) > 0 & rowSums(s$XB) < 10)[1]]
+  cj1 <- rbind(cjA, s$cj[(s$cj$a == one & s$cj$b %in% idsA) |
+                           (s$cj$b == one & s$cj$a %in% idsA), ])
+  expect_error(rasch_cj(list(A = s$XA, B = s$XB), comparisons = cj1, object_a = "a",
+                        object_b = "b", winner = "winner", objects = "persons",
+                        anchors = s$anchors), "units = c\\(B = 1\\)")
+  fix <- rasch_cj(list(A = s$XA, B = s$XB), comparisons = cj1, object_a = "a",
+                  object_b = "b", winner = "winner", objects = "persons",
+                  anchors = s$anchors, units = c(B = 1))
+  expect_true(fix$converged)
+  expect_true(is.finite(fix$tests$shift[2]))
+  # identifiers are unique across tests
+  XB2 <- s$XB; rownames(XB2)[1] <- idsA[1]
+  expect_error(rasch_cj(list(A = s$XA, B = XB2), comparisons = s$cj, object_a = "a",
+                        object_b = "b", winner = "winner", objects = "persons",
+                        anchors = s$anchors), "unique across tests: S001")
+})

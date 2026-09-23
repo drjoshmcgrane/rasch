@@ -31,7 +31,9 @@ rasch_cj(
 \item{data}{Persons-by-items response data, dichotomous or polytomous, as
 for \code{\link{rasch}}, or \code{NULL} to combine comparisons and
 rankings without responses. In the person mode, responses to the
-anchored items, coded from 0 to the item's top category.}
+anchored items, coded from 0 to the item's top category. A named list
+of such tables gives several tests, the first the reference; the
+judgements must link them.}
 
 \item{comparisons}{Optional data frame of paired comparisons, one row
 each.}
@@ -58,8 +60,9 @@ threshold number of each row, \code{NA} for the item's location. Used
 only when the column is present.}
 
 \item{units}{Named vector giving the unit of the \code{comparisons} and
-\code{rankings} frames: \code{NA} (the default) to estimate, or \code{1}
-to fix at the response unit.}
+\code{rankings} frames, and of each test after the first when
+\code{data} is a list: \code{NA} (the default) to estimate, or
+\code{1} to fix at the reference unit.}
 
 \item{items}{Optional item columns to analyse, as in \code{\link{rasch}}.}
 
@@ -72,11 +75,13 @@ judgements of their work.}
 \item{anchors}{Person mode only: the calibrated item thresholds, as a
 \code{\link{rasch}} fit, an item-mode \code{rasch_cj} fit, or a data
 frame with columns \code{item}, \code{k} and \code{tau} giving every
-threshold of every item in \code{data}.}
+threshold of every item in \code{data}; with several tests, one such
+object covering every test's items, or a list of them named by test.}
 
 \item{id}{Person mode only: the name of a column of \code{data} holding
 the person identifiers the judgement tables use, or a vector of them,
-one per row. Defaults to the row names.}
+one per row; with several tests, a column name found in each table or
+a list of vectors named by test. Defaults to the row names.}
 
 \item{maxit, tol}{Newton iteration cap and convergence tolerance on the
 parameter scale.}
@@ -93,7 +98,9 @@ An object of class \code{"rasch_cj"} with components
   \code{\link{rasch}}), \code{cov} (covariance of the thresholds),
   \code{cov_items} (covariance of the item locations), \code{loglik},
   \code{converged}, \code{iterations}, frame sizes in \code{n}, the
-  \code{reference} frame, and \code{notes}.
+  \code{reference} frame, the \code{tests} named in \code{data}, and
+  \code{notes}. The per-object invariance table has an \code{against}
+  column naming the frame each row is compared with.
 
   In the person mode, \code{mode} is \code{"persons"} and the object
   holds \code{persons} (person, n_items, raw, max_raw, the combined
@@ -101,8 +108,10 @@ An object of class \code{"rasch_cj"} with components
   \code{Inf} or \code{-Inf} at an extreme score, the centred location
   from each judgement frame alone on the test scale, whether each frame
   reaches the person, and whether the person was set aside as extreme),
-  \code{units}, \code{invariance} (a list with the per-person table
-  \code{persons}), \code{anchors} (the thresholds used), \code{cov}
+  \code{units}, \code{tests} (with several tests: test, unit,
+  se_unit, shift, se_shift), \code{invariance} (a list with the
+  per-person table \code{persons}), \code{anchors} (the thresholds
+  used, by test when there are several), \code{cov}
   (covariance of the estimated locations), \code{loglik},
   \code{converged}, \code{iterations}, \code{n} and \code{notes}.
 }
@@ -179,6 +188,22 @@ columns are refused because no responses define the thresholds.
 Ties are dropped with a note; judge clustering and judge fit are not
 provided.
 
+\strong{Several tests.} Two tests of one construct with no item in
+common cannot be equated from their responses, and nothing says their
+responses are in the same unit. Give \code{data} as a named list, one
+response table per test, and the judgements link them: each test is
+its own conditional block with its own unit relative to the first,
+the reference, whose unit is 1. The judgements must reach items of every
+test, since only they connect the tests. The origin of each block is
+free in the conditional likelihood, so the tests differ by a unit only,
+and the joint fit places all the items on the reference scale. An item
+in more than one test is one item, and must have the same categories in
+each. The invariance table compares each test after the first with each
+judgement frame, and each judgement frame with the reference test, and
+the likelihood ratio test counts the free locations of every frame
+against the joint parameters as before. Fix a test's unit at 1 by
+naming it in \code{units}.
+
 \strong{Measuring persons.} With \code{objects = "persons"} the judges
 compare the persons' work rather than the items, and the function
 locates each person from their responses and from those judgements
@@ -222,6 +247,20 @@ their standard errors were calibrated. Fix the unit with \code{units}
 when it is known. Too few judgements per person leave the unit without
 a maximum, because some ordering of the persons the responses allow
 agrees with every judgement; the fit then reports a runaway unit.
+
+Persons from several tests are measured together in the same way: a
+named list of response tables, each with its own anchors (one anchor
+set covering every item, or a list of sets named by test), and the
+judgements compare persons across the tests. A person of a test after
+the first responds at their location times that test's unit, less its
+origin shift, on the test's own scale; the judgements identify both,
+and the \code{tests} table reports them. A test after the first needs
+at least one judged person with a score inside its range for its
+origin and two for its unit; fix the unit at 1 by naming the test in
+\code{units} when there is only one. Response-only locations are
+mapped to the reference scale by the fitted unit and shift, and the
+unit carries the same upward bias as the judgement units. Person
+identifiers must be unique across the tests.
 }
 \examples{
 set.seed(1)
@@ -247,6 +286,19 @@ work$winner <- ifelse(runif(nrow(work)) < p_a, work$a, work$b)
 pfit <- rasch_cj(X, comparisons = work, object_a = "a", object_b = "b",
                  winner = "winner", objects = "persons", anchors = fit)
 head(pfit$persons)
+
+# two tests with no item in common, linked by comparisons of their items
+delta2 <- 1.5 * delta; names(delta2) <- sprintf("J\%02d", 1:8)
+X2 <- sapply(delta2, function(d) as.integer(runif(300) < plogis(rnorm(300) - d)))
+both <- c(delta, delta / 1)
+names(both) <- c(names(delta), names(delta2))
+pairs <- t(combn(names(both), 2))[sample(120, 400, replace = TRUE), ]
+p_a <- plogis(0.6 * (both[pairs[, 1]] - both[pairs[, 2]]))
+cj2 <- data.frame(a = pairs[, 1], b = pairs[, 2],
+                  winner = ifelse(runif(400) < p_a, pairs[, 1], pairs[, 2]))
+two <- rasch_cj(list(first = X, second = X2), comparisons = cj2,
+                object_a = "a", object_b = "b", winner = "winner")
+two$units
 }
 \references{
 Bradley, R. A. and Terry, M. E. (1952). Rank analysis of

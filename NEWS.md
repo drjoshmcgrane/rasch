@@ -44,7 +44,16 @@
   placed by the judgements, and a per-person table tests whether the judged
   work matches the responses. The unit in this mode is estimated jointly
   with the person locations and runs a few percent high in simulation; the
-  documentation gives the figures. No existing estimator is changed.
+  documentation gives the figures. Tests of one construct with no item in
+  common are linked by the judgements: `data` as a named list gives one
+  response frame per test, the first the reference, and each other test
+  carries its own unit, estimated or fixed by naming the test in `units`.
+  In the item mode each test is its own conditional block and the joint
+  fit places every item on the reference scale, with the likelihood ratio
+  and per-object tests extended across the tests; in the person mode each
+  further test also carries an origin shift, both identified by the
+  judgements and reported in a `tests` table, and every person is measured
+  on the reference scale. No existing estimator is changed.
 * CRAN checks use shorter workflow fixtures and recorded vignette bootstrap
   calculations. The full tests and scripts to regenerate those calculations
   remain in the repository; estimation and replication defaults are unchanged.

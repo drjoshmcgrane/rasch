@@ -114,72 +114,109 @@
   out
 }
 
-.cj_persons <- function(data, anchors, id, comparisons, object_a, object_b,
-                        winner, threshold_a, threshold_b, rankings, ranking,
-                        item, rank, threshold, u_spec, items, na_codes, maxit,
-                        tol, call) {
-  if (is.null(data))
-    stop("the person mode needs response data; a judgement of persons alone ",
-         "is btl() or pl()", call. = FALSE)
-  if (is.null(anchors))
-    stop("the person mode needs `anchors`: the item thresholds from rasch() ",
-         "or rasch_cj()", call. = FALSE)
-  .check_na_codes(na_codes)
+# One test's response table resolved to an integer matrix against its
+# anchors, with the person identifiers.
+.cj_person_test <- function(data, anchors, id, items, na_codes, label, multi) {
   tau_all <- .cj_anchor_list(anchors)
-  notes <- character(0)
-
-  # persons: an id column or vector, else the row names
   D <- if (is.data.frame(data)) data else as.data.frame(data)
+  where <- if (multi) paste0(" in test ", label) else ""
   if (!is.null(id)) {
     if (is.character(id) && length(id) == 1L && id %in% names(D)) {
       ids <- .role_text_values(D[[id]]); D <- D[, setdiff(names(D), id), drop = FALSE]
-    } else if (length(id) == nrow(D)) {
+    } else if (length(id) == nrow(D) && !(is.character(id) && length(id) == 1L)) {
       ids <- .role_text_values(id)
-    } else stop("`id` must name a column of `data` or give one identifier per row",
-                call. = FALSE)
+    } else stop("`id` must name a column of `data`", where,
+                " or give one identifier per row", call. = FALSE)
   } else {
     rn <- rownames(D)
     ids <- if (is.null(rn) || identical(rn, as.character(seq_len(nrow(D)))))
       sprintf("P%d", seq_len(nrow(D))) else .role_text_values(rn)
   }
   if (anyNA(ids) || any(!nzchar(ids)))
-    stop("person identifiers must be non-missing and non-empty", call. = FALSE)
-  if (anyDuplicated(ids))
-    stop("person identifiers must be unique: ",
-         paste(unique(ids[duplicated(ids)]), collapse = ", "), call. = FALSE)
-  N <- length(ids)
-
-  # items: those in the data with anchored thresholds; categories must lie
-  # within the anchored range, so nothing is rescored
-  if (!is.null(items)) D <- D[, items, drop = FALSE]
+    stop("person identifiers", where, " must be non-missing and non-empty",
+         call. = FALSE)
+  if (!is.null(items)) {
+    sel <- if (multi) intersect(items, names(D)) else items
+    D <- D[, sel, drop = FALSE]
+  }
+  if (!ncol(D)) stop("no items", where, call. = FALSE)
   item_names <- names(D)
   no_anchor <- setdiff(item_names, names(tau_all))
   if (length(no_anchor))
-    stop("item(s) in `data` without anchored thresholds: ",
+    stop("item(s)", where, " without anchored thresholds: ",
          paste(no_anchor, collapse = ", "), call. = FALSE)
-  unused <- setdiff(names(tau_all), item_names)
-  if (length(unused))
-    notes <- c(notes, sprintf("%d anchored item(s) not in the data ignored", length(unused)))
   tau_list <- tau_all[item_names]
   m <- vapply(tau_list, length, 1L)
-  X <- as.matrix(D)
+  X <- as.matrix(D); N <- nrow(X)
   code <- matrix(.missing_code_mask(as.vector(X), na_codes), N, ncol(X))
   Xi <- suppressWarnings(apply(X, 2, function(col) as.integer(as.character(col))))
   dim(Xi) <- dim(X); dimnames(Xi) <- list(NULL, item_names)
   Xi[code | (!is.na(Xi) & Xi < 0)] <- NA_integer_
   over <- sweep(Xi, 2, m, ">")
   if (any(over, na.rm = TRUE))
-    stop("response(s) above the anchored top category in: ",
+    stop("response(s)", where, " above the anchored top category in: ",
          paste(item_names[colSums(over, na.rm = TRUE) > 0], collapse = ", "),
          call. = FALSE)
-  X <- Xi
-  n_items <- rowSums(!is.na(X))
-  raw <- rowSums(X, na.rm = TRUE); raw[n_items == 0L] <- NA_integer_
-  max_raw <- as.vector((!is.na(X)) %*% m)
+  list(X = Xi, ids = ids, tau_list = tau_list, m = m, all_anchored = names(tau_all))
+}
+
+.cj_persons <- function(data, anchors, id, comparisons, object_a, object_b,
+                        winner, threshold_a, threshold_b, rankings, ranking,
+                        item, rank, threshold, u_spec, items, na_codes, maxit,
+                        tol, call) {
+  if (!length(data))
+    stop("the person mode needs response data; a judgement of persons alone ",
+         "is btl() or pl()", call. = FALSE)
+  if (is.null(anchors))
+    stop("the person mode needs `anchors`: the item thresholds from rasch() ",
+         "or rasch_cj()", call. = FALSE)
+  .check_na_codes(na_codes)
+  test_names <- names(data); nt <- length(test_names)
+  multi <- !identical(test_names, "responses")
+  ref <- test_names[1]
+  notes <- character(0)
+
+  # anchors and ids per test: one set for every test, or a list by test
+  anchor_of <- function(t) {
+    if (is.list(anchors) && !is.data.frame(anchors) &&
+        !inherits(anchors, c("rasch", "rasch_cj"))) {
+      if (is.null(anchors[[t]]))
+        stop("`anchors` has no element for test ", t, call. = FALSE)
+      anchors[[t]]
+    } else anchors
+  }
+  id_of <- function(t) {
+    if (is.list(id)) {
+      if (is.null(id[[t]])) stop("`id` has no element for test ", t, call. = FALSE)
+      id[[t]]
+    } else id
+  }
+  tests <- list(); ids <- character(0); test <- character(0)
+  for (t in test_names) {
+    z <- .cj_person_test(data[[t]], anchor_of(t), id_of(t), items, na_codes, t, multi)
+    tests[[t]] <- z
+    ids <- c(ids, z$ids); test <- c(test, rep(t, length(z$ids)))
+  }
+  unused <- length(setdiff(unlist(lapply(tests, function(z) z$all_anchored)),
+                           unlist(lapply(tests, function(z) names(z$tau_list)))))
+  if (unused)
+    notes <- c(notes, sprintf("%d anchored item(s) not in %s ignored", unused,
+                              if (multi) "any test" else "the data"))
+  if (anyDuplicated(ids))
+    stop("person identifiers must be unique",
+         if (multi) " across tests" else "", ": ",
+         paste(unique(ids[duplicated(ids)]), collapse = ", "), call. = FALSE)
+  N <- length(ids)
+  row_in_test <- unlist(lapply(tests, function(z) seq_along(z$ids)), use.names = FALSE)
+  n_items <- unlist(lapply(tests, function(z) rowSums(!is.na(z$X))), use.names = FALSE)
+  raw <- unlist(lapply(tests, function(z) rowSums(z$X, na.rm = TRUE)), use.names = FALSE)
+  max_raw <- unlist(lapply(tests, function(z) as.vector((!is.na(z$X)) %*% z$m)),
+                    use.names = FALSE)
+  raw[n_items == 0L] <- NA_integer_
   has_resp <- n_items > 0L
 
-  # judgement sources name persons; a person judged but not in the data has
-  # no responses and is placed by the judgements alone
+  # judgement sources name persons; a person judged but in no test has no
+  # responses and is placed by the judgements alone
   judged_ids <- character(0)
   if (!is.null(comparisons))
     judged_ids <- c(judged_ids, .role_text_values(comparisons[[object_a]]),
@@ -187,15 +224,14 @@
   if (!is.null(rankings)) judged_ids <- c(judged_ids, .role_text_values(rankings[[item]]))
   judged_ids <- setdiff(unique(judged_ids[!is.na(judged_ids)]), ids)
   if (length(judged_ids)) {
-    ids <- c(ids, judged_ids)
-    X <- rbind(X, matrix(NA_integer_, length(judged_ids), ncol(X)))
+    nj <- length(judged_ids)
+    ids <- c(ids, judged_ids); test <- c(test, rep(NA_character_, nj))
+    row_in_test <- c(row_in_test, rep(NA_integer_, nj))
+    n_items <- c(n_items, rep(0L, nj)); raw <- c(raw, rep(NA_integer_, nj))
+    max_raw <- c(max_raw, rep(0L, nj)); has_resp <- c(has_resp, rep(FALSE, nj))
     N <- length(ids)
-    n_items <- rowSums(!is.na(X))
-    raw <- rowSums(X, na.rm = TRUE); raw[n_items == 0L] <- NA_integer_
-    max_raw <- as.vector((!is.na(X)) %*% m)
-    has_resp <- n_items > 0L
     notes <- c(notes, sprintf("%d judged person(s) without responses, placed by the judgements",
-                              length(judged_ids)))
+                              nj))
   }
   cmp <- if (!is.null(comparisons))
     .cj_comparison_keys(comparisons, object_a, object_b, winner, threshold_a,
@@ -235,54 +271,116 @@
                               n_cmp_dropped))
 
   # every judged group must contain a person with responses, or it has no
-  # place on the test scale
+  # place on the test scale; and every test must be linked by judgements
+  # to the reference test, or its origin is not identified
   fk <- n_fit; pos <- match(seq_len(N), fit_idx)
-  adj <- matrix(FALSE, fk, fk)
+  adj <- matrix(FALSE, fk + nt, fk + nt)
   adj[cbind(pos[win], pos[lose])] <- TRUE
   for (v in rk) adj[pos[v], pos[v]] <- TRUE
+  resp_fit <- has_resp[fit_idx]
+  adj[cbind(which(resp_fit), fk + match(test[fit_idx][resp_fit], test_names))] <- TRUE
   adj <- adj | t(adj); diag(adj) <- TRUE
   comp <- .cj_components(adj)
-  resp_fit <- has_resp[fit_idx]
-  orphan <- unique(comp[!resp_fit])
-  orphan <- orphan[!vapply(orphan, function(g) any(resp_fit[comp == g]), NA)]
+  orphan <- setdiff(unique(comp[seq_len(fk)]), comp[fk + seq_len(nt)])
   if (length(orphan))
     stop("judged person(s) with no responses and no judged link to a person ",
          "with responses cannot be placed on the test scale: ",
-         paste(ids[fit_idx][comp %in% orphan], collapse = ", "), call. = FALSE)
+         paste(ids[fit_idx][comp[seq_len(fk)] %in% orphan], collapse = ", "),
+         call. = FALSE)
+  unlinked <- test_names[comp[fk + seq_len(nt)] != comp[fk + 1L]]
+  if (length(unlinked))
+    stop("no judgement links test ", paste(unlinked, collapse = ", "),
+         " to test ", ref, ", so the tests cannot share a scale", call. = FALSE)
+  finite_resp <- has_resp & !is.na(raw) & raw > 0 & raw < max_raw
+  # a test's origin needs a judged person of the test with a location from
+  # responses, and its unit needs two
+  reached <- rep(FALSE, N); reached[c(win, lose, unlist(rk))] <- TRUE
+  for (t in test_names[-1]) {
+    n_link <- sum(finite_resp & reached & test %in% t & in_set)
+    if (n_link < 1L)
+      stop("no judged person in test ", t, " has a location from their ",
+           "responses, so the test's origin cannot be placed", call. = FALSE)
+    if (is.na(u_spec[[t]]) && n_link < 2L)
+      stop("test ", t, " has only one judged person with a location from ",
+           "their responses, so its unit cannot be estimated; fix it with ",
+           "units = c(", t, " = 1)", call. = FALSE)
+  }
 
-  # parameters: theta of the fitted persons, then the log units
-  frames <- c("responses", if (has_cmp) "comparisons", if (has_rk) "rankings")
-  free <- c(if (has_cmp) is.na(u_spec[["comparisons"]]),
-            if (has_rk) is.na(u_spec[["rankings"]]))
-  names(free) <- setdiff(frames, "responses")
+  # parameters: theta of the fitted persons; for each test after the
+  # first, its log unit when free and its origin shift; then the log units
+  # of the judgement frames
+  frames <- c(test_names, if (has_cmp) "comparisons", if (has_rk) "rankings")
+  free <- vapply(setdiff(frames, ref), function(f) is.na(u_spec[[f]]), NA)
+  names(free) <- setdiff(frames, ref)
   nu <- sum(free); u_pos <- integer(0)
   if (nu) u_pos <- fk + seq_len(nu)
   names(u_pos) <- names(free)[free]
-  unit_of <- function(th, f) if (isTRUE(free[[f]])) exp(th[u_pos[[f]]]) else 1
+  c_pos <- integer(0)
+  if (nt > 1L) c_pos <- fk + nu + seq_len(nt - 1L)
+  names(c_pos) <- test_names[-1]
+  np <- fk + nu + length(c_pos)
+  unit_of <- function(th, f) if (isTRUE(free[f])) exp(th[u_pos[[f]]]) else 1
+  shift_of <- function(th, t) if (t %in% names(c_pos)) th[c_pos[[t]]] else 0
   W <- matrix(0, fk, fk)
   if (length(win))
     W <- matrix(as.numeric(table(factor(pos[win], levels = seq_len(fk)),
                                  factor(pos[lose], levels = seq_len(fk)))), fk, fk)
   rk_f <- lapply(rk, function(v) pos[v])
-  Xf <- X[fit_idx, , drop = FALSE]
+  test_fit <- test[fit_idx]
+  rows_of <- lapply(test_names, function(t) which(test_fit %in% t)); names(rows_of) <- test_names
+  X_of <- lapply(test_names, function(t)
+    tests[[t]]$X[row_in_test[fit_idx][rows_of[[t]]], , drop = FALSE]); names(X_of) <- test_names
 
+  # the response block: a fitted person of test t responds at
+  # rho_t theta - c_t on the test's own scale
+  resp_block <- function(theta, th) {
+    ll <- g <- h <- numeric(fk); per <- list()
+    for (t in test_names) {
+      rows <- rows_of[[t]]
+      if (!length(rows)) next
+      rho <- unit_of(th, t); e <- rho * theta[rows] - shift_of(th, t)
+      p <- .cj_person_parts(e, X_of[[t]], tests[[t]]$tau_list)
+      ll[rows] <- p$ll; g[rows] <- rho * p$g; h[rows] <- rho^2 * p$h
+      per[[t]] <- list(rows = rows, f1 = p$g, f2 = p$h, rho = rho, theta = theta[rows])
+    }
+    list(ll = ll, g = g, h = h, per = per)
+  }
   fn <- function(th) {
     theta <- th[seq_len(fk)]
-    ll <- sum(.cj_person_parts(theta, Xf, tau_list)$ll)
+    ll <- sum(resp_block(theta, th)$ll)
     if (has_cmp) ll <- ll + .cj_bt_ll(theta, unit_of(th, "comparisons"), W)
     if (has_rk) ll <- ll + .cj_pl_ll(theta, unit_of(th, "rankings"), rk_f)
     ll
   }
   assemble <- function(th) {
-    theta <- th[seq_len(fk)]; np <- fk + nu
+    theta <- th[seq_len(fk)]
     g <- numeric(np); H <- matrix(0, np, np)
-    p <- .cj_person_parts(theta, Xf, tau_list)
+    p <- resp_block(theta, th)
     g[seq_len(fk)] <- p$g; diag(H)[seq_len(fk)] <- p$h
+    for (t in names(p$per)) {
+      q <- p$per[[t]]; rows <- q$rows; rho <- q$rho
+      if (isTRUE(free[t])) {
+        k <- u_pos[[t]]
+        g[k] <- rho * sum(q$f1 * q$theta)
+        H[rows, k] <- H[k, rows] <- rho * q$f1 + rho^2 * q$theta * q$f2
+        H[k, k] <- rho * sum(q$f1 * q$theta) + rho^2 * sum(q$f2 * q$theta^2)
+      }
+      if (t %in% names(c_pos)) {
+        kc <- c_pos[[t]]
+        g[kc] <- -sum(q$f1)
+        H[rows, kc] <- H[kc, rows] <- -rho * q$f2
+        H[kc, kc] <- sum(q$f2)
+        if (isTRUE(free[t])) {
+          k <- u_pos[[t]]
+          H[k, kc] <- H[kc, k] <- -rho * sum(q$f2 * q$theta)
+        }
+      }
+    }
     add <- function(parts, f) {
       jo <- seq_len(fk)
       g[jo] <<- g[jo] + parts$g[jo]
       H[jo, jo] <<- H[jo, jo] + parts$H[jo, jo]
-      if (isTRUE(free[[f]])) {
+      if (isTRUE(free[f])) {
         k <- u_pos[[f]]
         g[k] <<- parts$g[fk + 1L]
         H[jo, k] <<- H[jo, k] + parts$H[jo, fk + 1L]
@@ -297,11 +395,16 @@
   gr <- function(th) assemble(th)$g
   he <- function(th) assemble(th)$H
 
-  # separate calibrations: responses alone per person (the supremum, at an
-  # infinite location, for a person with an extreme score held by the
-  # judgements), and each judgement frame alone over the persons it reaches
-  finite_resp <- has_resp & !is.na(raw) & raw > 0 & raw < max_raw
-  ml <- .cj_person_ml(X, tau_list, finite_resp, maxit, tol)
+  # separate calibrations: responses alone per person on the test's own
+  # scale (infinite at an extreme score), and each judgement frame alone
+  # over the persons it reaches, after setting aside those extreme within
+  # the frame
+  ml_theta <- rep(NA_real_, N); ml_se <- rep(NA_real_, N)
+  for (t in test_names) {
+    rows <- which(test %in% t)
+    ml <- .cj_person_ml(tests[[t]]$X, tests[[t]]$tau_list, finite_resp[rows], maxit, tol)
+    ml_theta[rows] <- ml$theta; ml_se[rows] <- ml$se
+  }
   sep <- list(); judged <- list(); blocks <- list()
   none <- rep(FALSE, fk)
   frame_alone <- function(f, win_f, lose_f, rk_f) {
@@ -345,21 +448,22 @@
     }
   }
 
-  # start at the response estimates where finite, else at the judged
-  # position within the frame, else zero
+  # start at the response estimates where finite (each test at its own
+  # origin and unit), else at the judged position within the frame, else
+  # zero
   start <- rep(0, fk)
   fr <- finite_resp[fit_idx]
-  start[fr] <- ml$theta[fit_idx][fr]
+  start[fr] <- ml_theta[fit_idx][fr]
   for (f in names(sep)) {
     s <- sep[[f]]; jo <- judged[[f]]
     if (!s$converged) next
     fill <- !fr & seq_len(fk) %in% jo
     if (any(fill)) start[fill] <- s$par[match(which(fill), jo)]
   }
-  th0 <- c(start, rep(0, nu))
+  th0 <- c(start, rep(0, np - fk))
   fit <- .cj_newton(th0, fn, gr, he, maxit, tol)
   th <- fit$par; theta <- th[seq_len(fk)]
-  covth <- tryCatch(solve(-fit$H), error = function(e) matrix(NA_real_, fk + nu, fk + nu))
+  covth <- tryCatch(solve(-fit$H), error = function(e) matrix(NA_real_, np, np))
   cov_t <- covth[seq_len(fk), seq_len(fk), drop = FALSE]
   se_t <- sqrt(pmax(diag(cov_t), 0))
   if (!fit$converged) {
@@ -368,12 +472,16 @@
   }
   for (f in names(free)[free]) {
     if (unit_of(th, f) > 1e3)
-      notes <- c(notes, sprintf(paste0("the %s unit ran away: the judgements ",
+      notes <- c(notes, if (f %in% test_names)
+        sprintf("the unit of %s ran away: its responses and the judgements do not pin its scale", f)
+        else sprintf(paste0("the %s unit ran away: the judgements ",
         "never disagree with an ordering of the persons the responses allow, ",
         "so they are too few per person to give the unit a maximum; ",
         "fix it with units = c(%s = 1)"), f, f))
     if (unit_of(th, f) < 1e-3)
-      notes <- c(notes, sprintf(paste0("the %s unit collapsed towards zero: ",
+      notes <- c(notes, if (f %in% test_names)
+        sprintf("the unit of %s collapsed towards zero: its responses carry no information about the persons", f)
+        else sprintf(paste0("the %s unit collapsed towards zero: ",
         "the judgements carry no information about the persons, or their ",
         "orientation is reversed (the winner or first rank should be the ",
         "person with the higher location)"), f))
@@ -383,23 +491,40 @@
   for (f in names(free)) {
     r <- match(f, units_tab$frame)
     units_tab$unit[r] <- unit_of(th, f)
-    units_tab$estimated[r] <- isTRUE(free[[f]])
-    if (isTRUE(free[[f]]) && fit$converged) {
+    units_tab$estimated[r] <- isTRUE(free[f])
+    if (isTRUE(free[f]) && fit$converged) {
       k <- u_pos[[f]]
       units_tab$se[r] <- units_tab$unit[r] * sqrt(max(covth[k, k], 0))
     }
   }
+  tests_tab <- data.frame(test = test_names, unit = 1, se_unit = NA_real_,
+                          shift = 0, se_shift = NA_real_, stringsAsFactors = FALSE)
+  for (t in test_names[-1]) {
+    r <- match(t, tests_tab$test); ru <- match(t, units_tab$frame)
+    tests_tab$unit[r] <- units_tab$unit[ru]; tests_tab$se_unit[r] <- units_tab$se[ru]
+    tests_tab$shift[r] <- shift_of(th, t)
+    if (fit$converged) tests_tab$se_shift[r] <- sqrt(max(covth[c_pos[[t]], c_pos[[t]]], 0))
+  }
+
+  # response-only locations on the common scale: (e + c_t) / rho_t at the
+  # fitted unit and shift of the person's test
+  rho_p <- rep(1, N); c_p <- rep(0, N)
+  for (t in test_names[-1]) {
+    rho_p[test %in% t] <- unit_of(th, t); c_p[test %in% t] <- shift_of(th, t)
+  }
+  loc_resp <- (ml_theta + c_p) / rho_p; se_resp <- ml_se / rho_p
 
   # invariance: each frame's separate locations against the response
   # locations, person by person. There is no likelihood ratio test here:
   # the separate model has a location per person per frame, so its
   # parameters grow with the persons and the ratio is not chi-square.
-  persons <- data.frame(person = ids, n_items = n_items, raw = raw,
+  persons <- data.frame(person = ids, test = test, n_items = n_items, raw = raw,
                         max_raw = max_raw, location = NA_real_, se = NA_real_,
-                        location_responses = ml$theta, se_responses = ml$se,
+                        location_responses = loc_resp, se_responses = se_resp,
                         stringsAsFactors = FALSE, row.names = NULL)
+  if (!multi) persons$test <- NULL
   persons$location[fit_idx] <- theta; persons$se[fit_idx] <- se_t
-  ref_theta <- ml$theta[fit_idx]; ref_se <- ml$se[fit_idx]
+  ref_theta <- loc_resp[fit_idx]; ref_se <- se_resp[fit_idx]
   inv_tab <- NULL
   for (f in names(sep)) {
     u <- unit_of(th, f); s <- sep[[f]]; jo <- judged[[f]]; cp <- blocks[[f]]
@@ -439,24 +564,33 @@
   persons$rankings <- seq_len(N) %in% fit_idx[judged$rankings]
   persons$extreme <- !in_set
   # extreme persons at the Warm estimate from their responses, as rasch()
-  # reports them
-  if (any(!in_set & has_resp)) {
-    wle <- .person_estimates(X[!in_set & has_resp, , drop = FALSE], tau_list)
-    persons$location[!in_set & has_resp] <- wle$theta
-    persons$se[!in_set & has_resp] <- wle$se
+  # reports them, mapped to the common scale
+  for (t in test_names) {
+    rows <- which(!in_set & has_resp & test %in% t)
+    if (!length(rows)) next
+    wle <- .person_estimates(tests[[t]]$X[row_in_test[rows], , drop = FALSE],
+                             tests[[t]]$tau_list)
+    persons$location[rows] <- (wle$theta + c_p[rows]) / rho_p[rows]
+    persons$se[rows] <- wle$se / rho_p[rows]
   }
   dimnames(cov_t) <- list(ids[fit_idx], ids[fit_idx])
+  anchors_tab <- do.call(rbind, lapply(test_names, function(t) {
+    z <- tests[[t]]
+    data.frame(test = t, item = rep(names(z$tau_list), z$m),
+               k = unlist(lapply(z$m, seq_len), use.names = FALSE),
+               tau = unlist(z$tau_list, use.names = FALSE),
+               stringsAsFactors = FALSE, row.names = NULL)
+  }))
+  if (!multi) anchors_tab$test <- NULL
 
   structure(list(persons = persons, units = units_tab,
+                 tests = if (multi) tests_tab else NULL,
                  invariance = list(persons = inv_tab),
-                 anchors = data.frame(item = rep(item_names, m),
-                                      k = unlist(lapply(m, seq_len), use.names = FALSE),
-                                      tau = unlist(tau_list, use.names = FALSE),
-                                      stringsAsFactors = FALSE),
+                 anchors = anchors_tab,
                  cov = cov_t, loglik = fit$ll,
                  converged = fit$converged, iterations = fit$iterations,
                  n = c(persons = sum(has_resp), comparisons = cmp$n, rankings = rkl$n),
-                 reference = "responses", mode = "persons", notes = notes,
+                 reference = ref, mode = "persons", notes = notes,
                  call = call),
             class = "rasch_cj")
 }
