@@ -432,6 +432,33 @@ NONE_CH <- c(None = "(none)")
   invisible(NULL)
 }
 
+# The controls .restore_app_settings() updates do not reach the server until
+# the browser has applied them and echoed the new values back, a round trip
+# after the flush that sent them. These are the ids and values sent, so an
+# observer can tell that echo -- which must leave the reinstated results
+# alone -- from a later change the user made, which must clear them.
+.restored_input_values <- function(settings) {
+  if (!is.list(settings) || !length(settings)) return(list())
+  dynamic <- grep("^exp_(type|ref|order)_[0-9]+$", names(settings),
+                  value = TRUE)
+  ids <- unique(c(.project_radio_inputs, .project_select_inputs,
+                  .project_selectize_inputs, .project_checkbox_inputs,
+                  .project_numeric_inputs, dynamic))
+  settings[intersect(ids, names(settings))]
+}
+
+# An echoed control reports the value the restore sent; the same control
+# changed by hand reports another one. A number survives the round trip as a
+# number, but not necessarily in the storage mode it was saved in.
+.same_input_value <- function(current, restored) {
+  if (is.null(current) || is.null(restored))
+    return(is.null(current) && is.null(restored))
+  if (length(current) != length(restored)) return(FALSE)
+  if (is.numeric(current) && is.numeric(restored))
+    return(isTRUE(all.equal(as.numeric(current), as.numeric(restored))))
+  identical(as.character(current), as.character(restored))
+}
+
 
 .efrm_detected_cores <- if (requireNamespace("rasch", quietly = TRUE))
   getFromNamespace(".efrm_available_workers", "rasch")() else if (
@@ -2311,9 +2338,14 @@ panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
         value = "dim_ttest",
         accordion_info(
           paste("Smith's test compares each person's estimates from two item",
-                "subsets. A split fixed in advance uses the binomial interval;",
-                "a residual-derived split needs bootstrap calibration for an",
-                "inferential verdict.")),
+                "subsets. The binomial interval describes the proportion of",
+                "significant person differences for either split; a",
+                "dimensionality verdict needs bootstrap replicates (B > 0)",
+                "whether the split is fixed in advance or residual-derived.",
+                "The bootstrap generates from a single-facet Rasch model, so",
+                "it refuses an explanatory, many-facet or extended-frame fit,",
+                "unequal frame units and principal-component thresholds; for",
+                "those the comparison stays descriptive.")),
         layout_columns(col_widths = breakpoints(sm = 12, xl = c(4, 8)),
           div(
             h6(span("t-test item subsets",
@@ -2334,7 +2366,9 @@ panel_dim <- nav_panel("Trait", value = "p_dim", icon = bs_icon("diagram-3"),
               "Bootstrap replicates",
               paste("Leave at zero for a descriptive result.",
                     "A positive value calibrates either a fixed or automatic split;",
-                    "99 or more is suitable for inference.")),
+                    "99 or more is suitable for inference.",
+                    "A fit the bootstrap cannot generate from refuses a",
+                    "positive value and says why.")),
               value = 0, min = 0, step = 99),
             div(class = "d-flex gap-2",
               div(class = "flex-fill",
@@ -2861,6 +2895,10 @@ server <- function(input, output, session) {
   # file clears the example selection
   observeEvent(input$demo_choice, {
     dc <- input$demo_choice
+    # A restore sets this control to "none" and the browser echoes that back
+    # a round trip later, after the restore has finished. The echo is not a
+    # change of selection, and the analysis it reinstated stands.
+    if (!inputs_changed("demo_choice")) return(invisible(NULL))
     invalidate_source_results("The example dataset selection changed")
     if (!identical(dc, "none")) {
       sim_data(NULL); sim_truth_val(NULL); sim_code_val(NULL)
@@ -3705,6 +3743,11 @@ server <- function(input, output, session) {
     validate(need(all(c(id_col, "set") %in% names(mp)),
                   paste0("The ", label, "-set CSV needs columns ",
                          id_col, " and set.")))
+    # a header-only map assigns nothing, and the missing-id fill-in below
+    # would turn it into a single "(rest)" set without saying so
+    validate(need(nrow(mp) > 0L,
+                  paste0("The ", label, "-set CSV has no rows; add one row per ",
+                         id_col, " to assign.")))
     ids <- as.character(mp[[id_col]])
     sets <- as.character(mp$set)
     validate(need(!anyNA(ids) && all(nzchar(trimws(ids))),
@@ -3890,6 +3933,35 @@ server <- function(input, output, session) {
   analysis_steps <- reactiveVal(list())
   btl_analysis_steps <- reactiveVal(list())
   restoring_project <- reactiveVal(FALSE)
+  # The values the observers that clear a result on a setting change last
+  # acted on. An id the app itself updated -- a restore applying a saved
+  # setting, the fit observer resetting a control -- is recorded when the
+  # update is sent, so the browser's echo of it a round trip later reads as
+  # no change at all; see .restored_input_values() above.
+  last_input_values <- reactiveVal(list())
+  record_input_values <- function(values) {
+    if (!length(values)) return(invisible(NULL))
+    seen <- last_input_values()
+    seen[names(values)] <- values
+    last_input_values(seen)
+    invisible(NULL)
+  }
+  # TRUE when one of the named controls now carries a value other than the
+  # one last recorded for it, compared with .same_input_value() so an integer
+  # that comes back as a double still matches. An id with no record has
+  # changed. The record then advances to what the controls read now, so the
+  # next comparison is against the values this invalidation acted on.
+  inputs_changed <- function(ids) {
+    seen <- last_input_values()
+    current <- stats::setNames(
+      lapply(ids, function(id) isolate(input[[id]])), ids)
+    changed <- !all(vapply(ids, function(id)
+      id %in% names(seen) && .same_input_value(current[[id]], seen[[id]]),
+      logical(1)))
+    seen[ids] <- current
+    last_input_values(seen)
+    changed
+  }
   active_step <- function() {
     h <- analysis_steps()
     if (length(h)) h[[length(h)]] else NULL
@@ -4027,7 +4099,7 @@ server <- function(input, output, session) {
     guess_res(NULL); contr_res(NULL); rescore_res(NULL)
     person_weight_state(NULL)
     restored_dimensionality(NULL); restored_subtest(NULL)
-    dim_computed(NULL)
+    dim_computed(NULL); dim_refusal(NULL)
     restored_invariance(NULL)
     # An automatic resolution sets the override fit itself, so its trace
     # must survive its own refit; a fresh run or another override clears it.
@@ -4301,7 +4373,15 @@ server <- function(input, output, session) {
     code_notes <- character(0)
 
     if (identical(input$model_type, "efrm")) {
-      sm <- ef_setmap()
+      # the item-set map refuses an unusable upload in the app's validation
+      # voice; an observer discards that, so the button would do nothing
+      sm <- tryCatch(ef_setmap(), error = function(e) e)
+      if (inherits(sm, "error")) {
+        if (nzchar(conditionMessage(sm)))
+          showNotification(paste("Analysis failed:", conditionMessage(sm)),
+                           type = "error", duration = 10)
+        return(invisible(NULL))
+      }
       run_source$resources["ef_setmap"] <- list(sm)
       reps_raw <- suppressWarnings(as.numeric(input$ef_reps))
       if (length(reps_raw) != 1L || !is.finite(reps_raw) ||
@@ -4934,6 +5014,10 @@ server <- function(input, output, session) {
     updateSelectInput(session, "pca_component",
                       choices = seq_len(max(1L, min(10L, length(its) - 1L))),
                       selected = 1)
+    # This reset is the app's own and echoes back like any other update.
+    # Record it, so the observer that clears the t-test on a component
+    # change does not read the reset as the user's choice.
+    record_input_values(list(pca_component = "1"))
     updateSelectInput(session, "dep_item", choices = its,
                       selected = its[min(2L, length(its))])
     updateSelectInput(session, "ind_item", choices = its, selected = its[1])
@@ -4979,9 +5063,19 @@ server <- function(input, output, session) {
 
   observeEvent(input$make_split, {
     f <- fit()
+    # dif_res() carries a refusal in the app's validation voice, which an
+    # observer would otherwise discard without a word. Every selector below
+    # reads it, so catch it before one of them aborts the observer.
+    dr <- tryCatch(dif_res(), error = function(e) e)
+    if (inherits(dr, "error")) {
+      if (nzchar(conditionMessage(dr)))
+        showNotification(paste("DIF analysis failed:", conditionMessage(dr)),
+                         type = "error", duration = 10)
+      return()
+    }
     it <- dif_sel_item()
     vars <- dif_sel_vars()
-    selected <- dif_res()$summary[dif_sel_row(), , drop = FALSE]
+    selected <- dr$summary[dif_sel_row(), , drop = FALSE]
     if (isTRUE(selected$nonuniform_DIF)) {
       showNotification(
         paste("This item has non-uniform DIF. A location split cannot model",
@@ -4989,6 +5083,13 @@ server <- function(input, output, session) {
         type = "warning", duration = 10)
       return()
     }
+    # a FALSE flag on an untested term rules nothing out: split, but say so
+    if (!isTRUE(is.finite(selected$p_nonuniform_adj)))
+      showNotification(
+        paste("The non-uniform term is untested for this item, so a change in",
+              "discrimination is not ruled out. The location split proceeds;",
+              "read it with that in mind."),
+        type = "warning", duration = 12)
     req(it %in% f$items$item,
         !is.null(f$factors), length(vars) >= 1, all(vars %in% names(f$factors)))
     # one factor -> split by the factor name; an interaction row -> split by
@@ -5074,8 +5175,13 @@ server <- function(input, output, session) {
   })
   output$resolve_notes <- renderUI({
     rr <- resolve_res(); req(!is.null(rr))
-    if (length(rr$notes))
-      p(class = "text-muted small mb-2", paste(rr$notes, collapse = " "))
+    # each note is an independent refusal, and the refusals carry their own
+    # "; " separators: joined on a space they read as one sentence
+    if (length(rr$notes) == 1L)
+      p(class = "text-muted small mb-2", rr$notes)
+    else if (length(rr$notes))
+      tags$ul(class = "text-muted small mb-2 ps-3",
+              lapply(rr$notes, function(n) tags$li(n)))
   })
   output$resolve_tbl_csv <- downloadHandler(
     filename = function() "dif_resolution.csv",
@@ -5136,7 +5242,16 @@ server <- function(input, output, session) {
     it <- sel_source_item()
     req(length(it) == 1L)
     if (identical(inv_se(), "bootstrap")) {
-      inv <- efrm_invariance()
+      # the invariance reactives refuse a malformed replicate count or seed
+      # in the app's validation voice, which an observer would discard
+      inv <- tryCatch(efrm_invariance(), error = function(e) e)
+      if (inherits(inv, "error")) {
+        if (nzchar(conditionMessage(inv)))
+          showNotification(paste("Frame invariance is unavailable:",
+                                 conditionMessage(inv)),
+                           type = "warning", duration = 10)
+        return()
+      }
       if (!is.character(inv)) {
         loc <- any(inv$locations$item == it & inv$locations$flagged %in% TRUE)
         dsc <- any(inv$discrimination$item == it &
@@ -5869,6 +5984,11 @@ server <- function(input, output, session) {
   output$expl_boxes <- renderUI({
     f <- expl_fit(); tst <- explanatory_test(f)
     p <- tst$p_kent[1L]
+    # print.rasch_explanatory() prints no comparison line when the design
+    # leaves nothing to test; the tile names that reason (and a failed Kent
+    # calibration) rather than showing a missing-looking probability
+    test_df <- tst$df[1L]
+    saturated <- !is.finite(p) && is.finite(test_df) && test_df <= 0
     metric_grid(
       metric_tile("metric_expl_model", "Model",
                   if (inherits(f, "rasch_btl_explanatory"))
@@ -5882,7 +6002,13 @@ server <- function(input, output, session) {
                   if (is.finite(tst$r_squared[1L]))
                     sprintf("%.2f", tst$r_squared[1L]) else "—",
                   icon = "graph-up"),
-      metric_tile("metric_expl_test", "Against free calibration", p_lab(p),
+      metric_tile("metric_expl_test", "Against free calibration",
+                  if (is.finite(p)) p_lab(p)
+                  else if (saturated) "No comparison" else "Unavailable",
+                  if (is.finite(p)) NULL
+                  else if (saturated)
+                    "The explanatory restrictions span every free item parameter (0 df)"
+                  else "The Kent-adjusted comparison is unavailable for this calibration",
                   icon = "chisq",
                   status = if (!is.finite(p)) "neutral"
                     else if (p < .05) "bad" else "good"))
@@ -6460,14 +6586,24 @@ server <- function(input, output, session) {
   chisq_res <- reactive(chisq_detail(fit(), sel_item()))
   output$chisq_caption <- renderUI({
     cd <- chisq_res()
+    # chisq_detail() withholds the probability when person IDs repeat; the
+    # caption then says so, as the stat box and print.rasch() do, rather
+    # than printing "p = NA"
+    withheld <- .has_repeated_residual_units(fit())
     p(class = "small mb-2",
       tags$b(cd$item),
       sprintf(" (location %.3f): total chi-square ", cd$location),
       tags$b(sprintf("%.3f", cd$chisq)),
-      sprintf(paste0(" on %d df, p = %s; whole-sample mean = %.3f. ",
+      sprintf(paste0(" on %d df, %s; whole-sample mean = %.3f. ",
                      "Intervals with fewer than 2 responders carry no ",
                      "chi-square contribution."),
-              cd$df, fmt_p(cd$p), cd$ave))
+              cd$df,
+              if (withheld || !finite1(cd$p)) "probability unavailable" else
+                p_lab(cd$p),
+              cd$ave),
+      if (withheld)
+        paste(" The probability is withheld because person IDs repeat and",
+              "the chi-square reference assumes independent response rows."))
   })
   output$chisq_int_tbl <- renderDT({
     d <- chisq_res()$intervals
@@ -7096,7 +7232,8 @@ server <- function(input, output, session) {
                    p_adjust = "holm", alpha = dif_alpha()))
   })
   observeEvent(list(input$dif_effects, input$dif_alpha), {
-    if (!isTRUE(restoring_project())) dif_boot_val(NULL)
+    if (!isTRUE(restoring_project()) &&
+        inputs_changed(c("dif_effects", "dif_alpha"))) dif_boot_val(NULL)
   }, ignoreInit = TRUE)
   # code footer: omit the effects argument when there is only one factor
   dif_effects_arg <- function()
@@ -7156,8 +7293,13 @@ server <- function(input, output, session) {
                  unavailable)
     base <- sprintf("Note. %s. Class intervals: %s (from the smallest cell).",
                     status, if (is.null(r$n_groups)) "NA" else r$n_groups)
-    if (unavailable) base <- paste(base,
-      "Unavailable tests remain in the Holm adjustment family.")
+    # dif_anova() discloses dropped panels, approximate F references, pooled
+    # residuals and unavailable tests in its own notes, which the panel never
+    # showed. The hand-written family clause gives way to the notes when they
+    # already name the adjustment family, so the count is not stated twice.
+    notes <- r$notes
+    if (unavailable && !any(grepl("family", notes, fixed = TRUE)))
+      base <- paste(base, "Unavailable tests remain in the Holm adjustment family.")
     if (identical(r$effects, "factorial")) {
       sup <- sum(d$superseded, na.rm = TRUE)
       if (sup)
@@ -7169,7 +7311,10 @@ server <- function(input, output, session) {
       base <- paste0(base,
         sprintf(" Within-subject factor(s) tested by repeated-measures ANOVA: %s.",
                 paste(within, collapse = ", ")))
-    base
+    if (!length(notes)) return(base)
+    if (length(notes) == 1L) return(paste0(base, " ", notes, "."))
+    tagList(base, tags$ul(class = "mb-0 ps-3",
+                          lapply(notes, function(n) tags$li(n))))
   })
   # the items of the DIF summary in rendered row order (curate only drops
   # columns, so the order is preserved). The selected row drives the group-ICC
@@ -7250,15 +7395,33 @@ server <- function(input, output, session) {
       return(p(class = "text-muted small mb-2", conditionMessage(ph)))
     s <- dif_res()$summary[dif_sel_row(), , drop = FALSE]
     flagged <- isTRUE(s$uniform_DIF) || isTRUE(s$nonuniform_DIF)
+    # the DIF flags are FALSE both for a term tested and not significant and
+    # for one that could not be tested; read the adjusted probabilities, so an
+    # untested term is never reported as a null result
+    pp <- c(s$p_uniform_adj, s$p_nonuniform_adj)
+    untested <- c("uniform", "non-uniform")[!is.finite(pp)]
     base <- p(
-      class = paste("small mb-2", if (flagged) "text-body" else "text-muted"),
+      class = paste("small mb-2",
+                    if (flagged || length(untested)) "text-body" else "text-muted"),
       if (flagged)
         "The omnibus term is significant; use these adjusted comparisons to locate it."
+      else if (length(untested) == length(pp))
+        paste("The omnibus term is untested for this item, not",
+              "non-significant; treat individual comparisons as exploratory.")
+      else if (length(untested))
+        sprintf(paste("The tested omnibus term is not significant and the %s",
+                      "term is untested; treat individual comparisons as",
+                      "exploratory."), untested)
       else
         "The omnibus term is not significant; treat individual comparisons as exploratory."
     )
-    extra <- if (length(ph$notes))
-      p(class = "text-muted small mb-2", paste(ph$notes, collapse = " "))
+    # each note is an independent withholding, and the notes carry their own
+    # ": " and "; ": joined on a space they read as one sentence
+    extra <- if (length(ph$notes) == 1L)
+      p(class = "text-muted small mb-2", ph$notes)
+    else if (length(ph$notes))
+      tags$ul(class = "text-muted small mb-2 ps-3",
+              lapply(ph$notes, function(n) tags$li(n)))
     else NULL
     tagList(base, extra)
   })
@@ -8985,7 +9148,16 @@ server <- function(input, output, session) {
     }
     panel_map <- setNames(as.character(df[[pcol]])[first], jd[first])
     objs <- base$objects$object
-    sm <- btlef_build_sets(objs)
+    # the object-set map refuses an unusable upload in the app's validation
+    # voice; an observer discards that, so the button would do nothing
+    sm <- tryCatch(btlef_build_sets(objs), error = function(e) e)
+    if (inherits(sm, "error")) {
+      if (nzchar(conditionMessage(sm)))
+        showNotification(paste("Frame estimation failed:",
+                               conditionMessage(sm)),
+                         type = "error", duration = 10)
+      return(invisible(NULL))
+    }
     se_method <- input$btlef_se %||% "judge_bootstrap"
     boot_reps_raw <- suppressWarnings(as.numeric(input$btlef_boot))
     if (length(boot_reps_raw) != 1L || !is.finite(boot_reps_raw) ||
@@ -9212,9 +9384,12 @@ server <- function(input, output, session) {
   # --------------------------------------------------------- dimensionality --
   dim_subsets <- reactiveVal(NULL)
   dim_computed <- reactiveVal(NULL)
+  # a run the bootstrap refuses produces no result but has a reason; it is
+  # held beside the result and cleared with it
+  dim_refusal <- reactiveVal(NULL)
   observeEvent(input$dim_apply, {
     restored_subtest(NULL)
-    dim_computed(NULL)
+    dim_computed(NULL); dim_refusal(NULL)
     dim_subsets(NULL)
     dm_res(NULL)
     s <- NULL
@@ -9258,33 +9433,45 @@ server <- function(input, output, session) {
     workers <- as.integer(workers_raw)
     seed <- as.integer(seed_raw)
     f <- fit()
+    # soft() belongs to a render or reactive context, where its validation
+    # message has somewhere to appear; inside an observer shiny discards it.
+    # Keep the refusal itself, so the notification names it here and dim_res()
+    # prints it in place of a prompt to press Run again.
     value <- withProgress(
       message = if (is.finite(B) && B > 0L)
         "Calibrating the dimensionality test…" else
           "Running the dimensionality test…", value = 0.4,
-      soft(if (is.null(s)) dimensionality_test(
+      tryCatch(if (is.null(s)) dimensionality_test(
         f, component = pca_k(), B = B, workers = workers, seed = seed)
       else dimensionality_test(f, items_positive = s$pos,
                                items_negative = s$neg, B = B,
-                               workers = workers, seed = seed)))
-    dim_computed(value)
-    showNotification(if (is.null(s)) sprintf(
-      "Ran the t-test on the automatic split (residual component %d).", pca_k())
-      else "Ran the t-test on the nominated item subsets.", type = "message")
+                               workers = workers, seed = seed),
+        rasch_refusal = function(e) e))
+    if (inherits(value, "rasch_refusal")) {
+      dim_refusal(conditionMessage(value))
+      showNotification(paste("The t-test was not run:", conditionMessage(value)),
+                       type = "warning", duration = 12)
+    } else {
+      dim_computed(value)
+      showNotification(if (is.null(s)) sprintf(
+        "Ran the t-test on the automatic split (residual component %d).", pca_k())
+        else "Ran the t-test on the nominated item subsets.", type = "message")
+    }
     # the magnitude table is computed from the subsets in force at ITS run;
     # a changed split makes it stale
     dm_res(NULL)
   })
   observeEvent(input$pca_component, {
-    dm_res(NULL)
-    if (!isTRUE(restoring_project())) {
-      dim_computed(NULL)
+    if (!isTRUE(restoring_project()) && inputs_changed("pca_component")) {
+      dm_res(NULL)
+      dim_computed(NULL); dim_refusal(NULL)
       restored_subtest(NULL)
     }
   }, ignoreInit = TRUE)
   observeEvent(c(input$dim_boot_B, input$dim_workers, input$dim_boot_seed), {
-    if (!isTRUE(restoring_project())) {
-      dim_computed(NULL)
+    if (!isTRUE(restoring_project()) &&
+        inputs_changed(c("dim_boot_B", "dim_workers", "dim_boot_seed"))) {
+      dim_computed(NULL); dim_refusal(NULL)
       restored_subtest(NULL)
     }
   }, ignoreInit = TRUE)
@@ -9301,6 +9488,9 @@ server <- function(input, output, session) {
         !inherits(tryCatch(.validate_dimensionality_test(saved, f),
                            error = function(e) e), "error")) return(saved)
     value <- dim_computed()
+    # a refused run is a result: report its reason, not a prompt to run again
+    refused <- dim_refusal()
+    if (!is.null(refused)) validate(need(FALSE, refused))
     validate(need(!is.null(value),
                   "Choose item subsets or an automatic component, then press Run t-test."))
     value
@@ -9366,7 +9556,15 @@ server <- function(input, output, session) {
     f <- fit()
     s <- dim_subsets()
     if (is.null(s)) {
-      dr <- dim_res()
+      # dim_res() answers a refused or unrun t-test in the app's validation
+      # voice, which an observer would otherwise discard without a word
+      dr <- tryCatch(dim_res(), error = function(e) e)
+      if (inherits(dr, "error")) {
+        if (nzchar(conditionMessage(dr)))
+          showNotification(paste("No usable subsets:", conditionMessage(dr)),
+                           type = "warning", duration = 10)
+        return()
+      }
       if (!is.null(dr$note)) {
         showNotification(paste("No usable subsets:", dr$note), type = "warning")
         return()
@@ -9800,7 +9998,7 @@ server <- function(input, output, session) {
     bdif_meta(NULL)
     btlef_res(NULL)
     dim_subsets(NULL)
-    dim_computed(NULL)
+    dim_computed(NULL); dim_refusal(NULL)
     dm_res(NULL)
     dep_res(NULL)
     spread_res(NULL)
@@ -10049,12 +10247,16 @@ server <- function(input, output, session) {
     selected <- !is.null(dim_subsets()) || length(input$dim_pos) > 0L ||
       length(input$dim_neg) > 0L || pca_k() != 1L ||
       length(B) != 1L || !is.finite(B) || B != 0
-    if (isTRUE(strict) && selected)
-      stop("The selected dimensionality t-test is unavailable: ",
-           conditionMessage(value),
+    if (isTRUE(strict) && selected) {
+      # the app's own validation strings end in a full stop and a package
+      # refusal does not: close the quoted sentence before the next begins
+      reason <- trimws(conditionMessage(value))
+      if (!grepl("[.!?]$", reason)) reason <- paste0(reason, ".")
+      stop("The selected dimensionality t-test is unavailable: ", reason,
            " Run a supported t-test before exporting; the report cannot ",
            "substitute its default item split or bootstrap settings.",
            call. = FALSE)
+    }
     # No optional t-test has been selected: the writer may use its usual
     # descriptive default. Project saving also retains unfinished settings.
     NULL
@@ -10175,7 +10377,7 @@ server <- function(input, output, session) {
                              else character(0))
 
       rr <- p$results %||% list()
-      dim_computed(NULL)
+      dim_computed(NULL); dim_refusal(NULL)
       resolve_res(rr$resolve %||% NULL); lr_res(rr$lr %||% NULL)
       rescore_res(rr$rescore %||% NULL); contr_res(rr$contrasts %||% NULL)
       bdif_res(rr$btl_dif %||% NULL)
@@ -10195,18 +10397,36 @@ server <- function(input, output, session) {
     # raw_data() first refreshes the choices available to every role control;
     # applying the stored selections after that flush prevents the automatic
     # name guesses from overwriting the saved analysis configuration.
-    session$onFlushed(function() {
-      .restore_app_settings(session, restored_project_settings())
+    # A flushed callback runs in the session's reactive domain but in no
+    # reactive context, so every reactiveVal it reads must be isolated. An
+    # unisolated read aborts the callback and, through flushPendingSessions(),
+    # the R process itself.
+    session$onFlushed(function() isolate({
+      settings <- restored_project_settings()
+      .restore_app_settings(session, settings)
       # Projects saved before the subset selectors became ordinary saved
       # settings still carry the nominated split with their result. Reflect
       # that split in the controls as well as in the restored calculation.
       s <- dim_subsets()
+      subsets <- NULL
       if (is.list(s)) {
         updateSelectizeInput(session, "dim_pos", selected = s$pos %||% character(0))
         updateSelectizeInput(session, "dim_neg", selected = s$neg %||% character(0))
+        subsets <- list(dim_pos = s$pos %||% character(0),
+                        dim_neg = s$neg %||% character(0))
       }
+      # The flag ends with this flush, but every control the restore updated
+      # echoes back a round trip later. Record the values sent -- the
+      # restore's own "none" for the example selection included -- so the
+      # observers that clear a result when their control changes read the
+      # echo as no change at all, while anything the user changes afterwards
+      # differs from the record and clears as before. The values are
+      # recorded in the order they were sent, so each control is recorded at
+      # the value it ends on.
+      record_input_values(c(list(demo_choice = "none"),
+                            .restored_input_values(settings), subsets))
       restoring_project(FALSE)
-    }, once = TRUE)
+    }), once = TRUE)
     showNotification(paste("Saved analysis opened. The active fit, its history,",
                            "data roles and estimation settings have been restored."),
                      type = "message", duration = 7)

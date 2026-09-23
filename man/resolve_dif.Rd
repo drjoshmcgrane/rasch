@@ -54,11 +54,16 @@ A list of class \code{"rasch_resolve_dif"}: the final resolved
   DIF, so the remaining-DIF count is a lower bound whenever
   \code{n_untested} is positive. A split copy answered in one level of its
   splitting factor only is not counted: its term is structurally absent,
-  not lost. \code{n_remaining_dif} is \code{NA} when no hypothesis was
-  estimable. \code{n_nonuniform} counts significant non-uniform item-factor
-  findings and is \code{NA} if any answerable non-uniform hypothesis is
-  unavailable, or no hypothesis was estimable. \code{n_untested} is always
-  a count. \code{effects} records the factor model used.
+  not lost. A split's \code{magnitude} is \code{NA} when the
+  complete-design post-hoc comparison that supplies it failed or returned
+  no trustworthy finite estimate; the split still stands, and \code{notes}
+  names the item, the factor and the reason. An \code{NA} magnitude is an
+  unmeasured difference, not a zero one. \code{n_remaining_dif} is
+  \code{NA} when no hypothesis was estimable. \code{n_nonuniform} counts
+  significant non-uniform item-factor findings and is \code{NA} if any
+  answerable non-uniform hypothesis is unavailable, or no hypothesis was
+  estimable. \code{n_untested} is always a count. \code{effects} records
+  the factor model used.
 }
 \description{
 Splits items with uniform DIF one at a time, beginning with the largest

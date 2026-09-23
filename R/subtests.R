@@ -413,11 +413,16 @@ split_items <- function(fit, items, by) {
 #'   DIF, so the remaining-DIF count is a lower bound whenever
 #'   \code{n_untested} is positive. A split copy answered in one level of its
 #'   splitting factor only is not counted: its term is structurally absent,
-#'   not lost. \code{n_remaining_dif} is \code{NA} when no hypothesis was
-#'   estimable. \code{n_nonuniform} counts significant non-uniform item-factor
-#'   findings and is \code{NA} if any answerable non-uniform hypothesis is
-#'   unavailable, or no hypothesis was estimable. \code{n_untested} is always
-#'   a count. \code{effects} records the factor model used.
+#'   not lost. A split's \code{magnitude} is \code{NA} when the
+#'   complete-design post-hoc comparison that supplies it failed or returned
+#'   no trustworthy finite estimate; the split still stands, and \code{notes}
+#'   names the item, the factor and the reason. An \code{NA} magnitude is an
+#'   unmeasured difference, not a zero one. \code{n_remaining_dif} is
+#'   \code{NA} when no hypothesis was estimable. \code{n_nonuniform} counts
+#'   significant non-uniform item-factor findings and is \code{NA} if any
+#'   answerable non-uniform hypothesis is unavailable, or no hypothesis was
+#'   estimable. \code{n_untested} is always a count. \code{effects} records
+#'   the factor model used.
 #' @references Andrich, D., & Hagquist, C. (2012). Real and artificial
 #'   differential item functioning. \emph{Journal of Educational and
 #'   Behavioral Statistics}, 37(3), 387-416.
@@ -578,9 +583,9 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
       cur, pick$item, term = by_vars,
       factors = fac0,
       p_adjust = p_adjust, alpha = alpha, min_n = min_n),
-      error = function(e) NULL)
+      error = function(e) e)
     # DIF magnitude in logits, over the trustworthy (non-weak) pairs only
-    mag <- if (!is.null(dp)) {
+    mag <- if (!inherits(dp, "error")) {
       d <- abs(dp$table$estimate[is.finite(dp$table$estimate) &
                                    (is.finite(dp$table$se) |
                                       is.finite(dp$table$statistic))])
@@ -593,6 +598,14 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
         "]: not split: ", conditionMessage(refit)))
       done <- c(done, key); next
     }
+    # The split does not depend on the post-hoc, but a magnitude it could
+    # not supply must say so: an empty cell in the splits table otherwise
+    # reads as no difference. Carry the post-hoc's own reason.
+    if (is.na(mag)) refusal_notes <- c(refusal_notes, paste0(
+      pick$item, " [", pick$factor, "]: split, but its DIF magnitude is ",
+      "unavailable because the complete-design post-hoc comparison ",
+      if (inherits(dp, "error")) paste0("failed: ", conditionMessage(dp)) else
+        "returns no trustworthy finite estimate"))
     base_map <- .split_source_map(cur)
     splits[[length(splits) + 1L]] <- list(
       order = length(splits) + 1L, item = pick$item, factor = pick$factor,

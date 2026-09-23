@@ -554,7 +554,8 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 50,
 #' bootstrap calibration neither split therefore has a binary verdict:
 #' \code{multidimensional} is \code{NA}, while the interval and uncalibrated
 #' binomial reading remain available descriptively.
-#' \code{B > 0} supplies a model-based reference for either split:
+#' \code{B > 0} supplies a model-based reference for either split
+#' (\code{verdict_note} says so, or says why this fit has none):
 #' each replicate draws responses from the fitted model conditional on every
 #' person's raw score and missingness pattern, refits the calibration,
 #' retains a fixed split or repeats a residual-component split on its own
@@ -605,7 +606,9 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 50,
 #'   reading alone; neither split then has an inferential verdict. Each
 #'   replicate refits the calibration, so \code{B = 200} costs about two hundred
 #'   fits; the bootstrap is available for single-facet fits with a common
-#'   unit whose thresholds were estimated directly.
+#'   unit whose thresholds were estimated directly. For any other fit
+#'   \code{B > 0} is refused, and the \code{B = 0} note says the comparison
+#'   stays descriptive for that fit instead of pointing at the bootstrap.
 #' @param workers Number of parallel workers for the bootstrap refits.
 #' @param seed Optional integer seed for the bootstrap; the replicates are
 #'   reproducible for a given seed whatever the worker count. The bootstrap
@@ -634,7 +637,8 @@ plot_scree <- function(fit, n_components = 10, parallel = TRUE, reps = 50,
 #'   the current stamp used a superseded mean or binomial reference. An
 #'   analysis file carrying one opens with that result dropped and a warning,
 #'   and the rest of the analysis intact. \code{verdict_note} explains why a
-#'   descriptive comparison has no inferential verdict.
+#'   descriptive comparison has no inferential verdict and whether
+#'   \code{B > 0} can supply one for this fit.
 #' @references
 #' Smith, E. V. Jr. (2002). Detecting and evaluating the impact of
 #' multidimensionality using item fit statistics and principal component
@@ -771,7 +775,7 @@ dimensionality_test <- function(fit, alpha = 0.05, items_positive = NULL,
               verdict_note = paste(
                 "The binomial reference assumes a per-person null rate of alpha;",
                 "unequal subset targeting and estimation bias can violate it.",
-                "Use B > 0 for a model-based reference."),
+                .dim_reference_advice(fit)),
               split = split_source,
               score_points = score_points,
               caution = caution,
@@ -930,6 +934,30 @@ print.rasch_dimensionality_test <- function(x, ...) {
   pos <- which(ldg > 0)
   list(pos = pos, neg = setdiff(seq_len(ncol(Z)), pos),
        first_eigen = pca$first_eigen)
+}
+
+# The closing sentence of the B = 0 verdict note. A fit the bootstrap can
+# refit is pointed at B > 0; a fit it refuses is told so, with the refusal's
+# own reason, rather than sent down a route that errors.
+.dim_reference_advice <- function(fit) {
+  reason <- tryCatch({
+    .dim_bootstrap_check(fit)
+    NULL
+  }, rasch_refusal = function(e) conditionMessage(e))
+  if (is.null(reason)) return("Use B > 0 for a model-based reference.")
+  # A refusal is written to stand alone, and some close with a remedy in a
+  # second sentence. Only the opening sentence is the reason this comparison
+  # has no reference: quote that inside the parentheses and let any remedy
+  # follow as the sentence it was written as, so the note reads the same
+  # whichever refusal it carries.
+  parts <- strsplit(reason, "(?<=\\.)\\s+", perl = TRUE)[[1L]]
+  remedy <- parts[-1L]
+  if (length(remedy) && !grepl("\\.$", remedy[length(remedy)]))
+    remedy[length(remedy)] <- paste0(remedy[length(remedy)], ".")
+  paste(c(paste0("No bootstrap reference is available for this fit (",
+                 sub("\\.$", "", parts[1L]),
+                 "), so this comparison stays descriptive."), remedy),
+        collapse = " ")
 }
 
 # The bootstrap generates from a single-facet Rasch model with a common

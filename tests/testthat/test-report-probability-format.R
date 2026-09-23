@@ -65,6 +65,11 @@ test_that("report text escapes brackets for the dialect it renders in", {
   expect_match(out[2], "&amp;\\#40;", fixed = TRUE)
   expect_match(out[2], "&lt;em&gt;markup&lt;/em&gt;", fixed = TRUE)
   expect_match(out[2], "\\*emphasis\\*", fixed = TRUE)
+  # pandoc's default dialect reads ^x^ as superscript, ~x~ as subscript and
+  # ~~x~~ as strikeout, so an item name that closes one of those spans is
+  # escaped like the other inline markers, once
+  sup <- env$report_text(c("x^2^", "H~2~O", "~~old~~"))
+  expect_identical(sup, c("x\\^2\\^", "H\\~2\\~O", "\\~\\~old\\~\\~"))
 })
 
 test_that("report table labels remain literal after Pandoc conversion", {
@@ -80,7 +85,9 @@ test_that("report table labels remain literal after Pandoc conversion", {
   env <- new.env(parent = asNamespace("rasch"))
   for (e in expr) if (is.call(e) && identical(e[[1L]], as.name("<-")) &&
     as.character(e[[2L]]) %in% c("report_text", "show_table")) eval(e, env)
-  tab <- data.frame(label = c("a$b", "c$d", "item|set"), value = c(.4, .5, .6))
+  tab <- data.frame(label = c("a$b", "c$d", "item|set", "x^2^", "H~2~O",
+                              "~~old~~"),
+                    value = c(.4, .5, .6, .7, .8, .9))
   names(tab)[1] <- "item$label"
   md <- tempfile(fileext = ".md"); html <- tempfile(fileext = ".html")
   on.exit(unlink(c(md, html)), add = TRUE)
@@ -92,6 +99,12 @@ test_that("report table labels remain literal after Pandoc conversion", {
   expect_match(out, "c$d", fixed = TRUE)
   expect_match(out, "item$label", fixed = TRUE)
   expect_match(out, "item|set", fixed = TRUE)
+  expect_match(out, "x^2^", fixed = TRUE)
+  expect_match(out, "H~2~O", fixed = TRUE)
+  expect_match(out, "~~old~~", fixed = TRUE)
+  expect_false(grepl("<sup>", out, fixed = TRUE))
+  expect_false(grepl("<sub>", out, fixed = TRUE))
+  expect_false(grepl("<del>", out, fixed = TRUE))
   expect_false(grepl('class="math', out, fixed = TRUE))
   tex <- tempfile(fileext = ".tex")
   docx <- tempfile(fileext = ".docx")
@@ -107,5 +120,9 @@ test_that("report table labels remain literal after Pandoc conversion", {
   xml <- paste(readLines(file.path(xml_dir, "word/document.xml"),
                          warn = FALSE), collapse = "\n")
   expect_match(xml, "a$b", fixed = TRUE)
+  expect_match(xml, "x^2^", fixed = TRUE)
+  expect_match(xml, "H~2~O", fixed = TRUE)
+  expect_false(grepl("vertAlign", xml, fixed = TRUE))
+  expect_false(grepl("<w:strike", xml, fixed = TRUE))
   expect_false(grepl("<m:oMath", xml, fixed = TRUE))
 })

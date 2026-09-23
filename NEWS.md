@@ -21,7 +21,10 @@
   Saved planned contrasts from earlier versions are dropped on reopening.
 * The notes recording which requested DIF tests were not estimable reach
   every surface that reports the analysis: the console, the HTML report, the
-  Word and PDF report, and the saved summary, not only the app.
+  Word and PDF report, the saved summary and the application's DIF panel
+  footer, which was the last surface to omit them. The footer's own
+  adjustment-family sentence gives way to the note that states it, so the
+  count is not given twice.
 * Item and person tables in the app colour and embolden cells by their own
   value again. A conditional style was passed to the table as a function
   where an expression was expected, so every flag was decided from the row
@@ -52,7 +55,8 @@
 * Fixed-subset dimensionality comparisons now require bootstrap calibration
   for a verdict, as residual-derived splits do. Unequal targeting can distort
   the binomial reference even when the subsets were chosen in advance.
-  Observed proportions and intervals remain available descriptively.
+  Observed proportions and intervals remain available descriptively, and
+  the Shiny app's t-test panel says so.
 * DIF resolution counts unavailable uniform and non-uniform hypotheses
   separately and distinguishes missing interaction cells from failed tests.
   Refused comparisons retain their explanation in the console and app.
@@ -100,11 +104,14 @@
   person-subset tests are dropped when a project is reopened.
 * Printing a dependence result saved by an earlier version reports its
   statistic again instead of failing, and a withheld item-trait probability
-  prints as unavailable rather than as an empty value, in the console and in
-  the saved summary alike.
-* Notes containing parentheses or brackets appear as prose in the Word, PDF
-  and HTML reports. They were escaped in a way the report renderer read as
-  mathematics.
+  prints as unavailable rather than as an empty value, in the console, in the
+  saved summary and in the Shiny app's fit-summary box and item chi-square
+  caption alike; the caption names the repeated person IDs as the reason.
+* Notes, tables and prose containing parentheses, brackets, `^` or `~`
+  appear as written in the Word, PDF and HTML reports. Parentheses and
+  brackets were escaped in a way the report renderer read as mathematics,
+  and an item named `x^2^` or `H~2~O` arrived as a superscript or a
+  subscript.
 * The simulation-validation studies run from the tree as committed: the
   conditional DIF bootstrap confirmation pins the committed helper, the
   item-fit interval checker verifies against the current sources, and the
@@ -1691,6 +1698,109 @@
   policies agreeing in direction.
 * The heaviest examples are smaller, and CRAN runs fewer scenario test
   blocks, keeping the check well inside the incoming pretest budget.
+* `dimensionality_test()`'s `B = 0` note says when no bootstrap reference is
+  available for the fit -- extended-frame, many-facet, explanatory,
+  unequal-discrimination, principal-component-threshold and fully anchored
+  scoring fits -- quoting the refusal's own reason, and that the comparison
+  stays descriptive there, instead of pointing every fit at `B > 0`. Only
+  the refusal's opening sentence is quoted inside the parentheses; a remedy
+  it offers follows as the sentence it was written as.
+* The Shiny app's predictor-effects explainer states the degrees-of-freedom
+  rule of each family: Rasch explanatory fits use a t reference on
+  independent person units minus one, and comparative judgement fits use
+  judge-cluster degrees of freedom when judges are identified and a normal
+  reference otherwise.
+* Opening a saved analysis no longer ends the session. The settings restore
+  runs in a flushed callback, which a live session runs outside any reactive
+  context; its reactive reads are now isolated. The defect was invisible
+  under `testServer`, whose mock session isolates flushed callbacks itself.
+* Reopening a saved analysis keeps the results it reinstates, and an
+  example dataset chosen beforehand no longer takes them away again. The
+  controls the restore updates are applied by the browser and echoed back
+  to the app one round trip later, and the observers that clear a computed
+  result when their control changes read that echo as a change of the
+  user's: a saved person-subset t-test, dimension-magnitude table or DIF
+  bootstrap was reinstated and then discarded a moment later, and with an
+  example dataset selected the fit, every restored result and the analysis
+  history went with it. Each of those observers now compares its control
+  with the value it last acted on, which the restore records for every
+  control it updates. A setting that does not change invalidates nothing,
+  whether the restore left it where it stood or set it to the value it
+  already held. A setting the user changes afterwards still clears the
+  result it invalidates, including a return to a value the restore had
+  sent, and a change to one control of a group while its neighbours stay
+  put.
+* The application's t-test panel reports a bootstrap the fitted model
+  refuses, and its magnitude button reports a refused item split. Both
+  raised a refusal the observer discarded -- a positive number of
+  replicates on an explanatory, many-facet or extended-frame fit, on
+  unequal frame units or on principal-component thresholds; the t-test's
+  automatic split of the items -- so the button appeared to do nothing. The
+  panel now names the reason in a notification, prints it in place of the
+  result and carries it into the export, where a package refusal is closed
+  off as a sentence before the export's own advice begins. The panel blurb
+  and the replicate label say which fits have no bootstrap reference.
+* The DIF panel's split button and Resolve by frame say why they cannot
+  proceed. Each reads a result the fit may refuse -- the DIF ANOVA, a
+  frame-invariance calculation -- and shiny discards a validation message
+  raised inside an observer, so a refused analysis produced silence.
+* The DIF post-hoc caption no longer reads a withheld omnibus test as not
+  significant. An item whose adjusted probabilities are unavailable is
+  reported as untested, and a manual split on an item whose non-uniform test
+  never ran warns that a change in discrimination is not ruled out.
+* The Extended Frames and paired-comparison frames panels refuse a set map
+  with no rows, and Run Analysis and Estimate frame units say why an
+  unusable item-set or object-set CSV stopped them. A header-only CSV
+  assigned nothing, and the rule that fills in unmapped items then placed
+  the whole instrument in one `(rest)` set, so an unusable upload read as a
+  deliberate design and was saved with the project as one; the reader's
+  refusals -- no rows, duplicate or unknown ids, a blank cell -- then had no
+  display surface, and the button did nothing and said nothing.
+* The explanatory summary tile reports that no comparison exists when the
+  restrictions span every free item parameter, and reports an unavailable
+  Kent calibration as unavailable, instead of displaying `p = NA`. The
+  console has always omitted the comparison line at zero degrees of freedom.
+* The automatic DIF resolution panel and the DIF post-hoc caption list their
+  notes. They were joined on a space, and since each note carries its own
+  punctuation, a thin-cell refusal ran straight into an externally anchored
+  one, and several withheld contrasts read as a single sentence with no
+  visible boundary.
+* `dif_anova()` decides whether a uniform (HC3) or CR3 term test is
+  available from the tested term's own contrasts on the model's full-rank
+  columns, not from the rank of the whole model matrix. An aliased nuisance
+  column -- an unoccupied factor-by-class-interval cell, say -- no longer
+  withholds the robust test of every fully observed item. A term whose own
+  contrasts are aliased, or whose Type II degrees of freedom no longer count
+  them all, is still reported as `NA`, now with the aliasing named in its
+  notes.
+* Every withheld row in `dif_anova()` carries the reason that applies to it.
+  A within-person term whose between-person factor lost a level with the
+  incomplete panels still says so; one refused because an empty
+  between-person cell aliases the balanced grand mean now says that, instead
+  of sending the reader to check panel completeness; and a CR3 term test
+  refused because the retained design fits one person cluster's own rows
+  exactly no longer reports the tested term's robust covariance as singular.
+  The Notes line counts withheld DIF tests and withheld class-interval rows
+  on separate lines, each integer matching the per-row notes it covers: the
+  class interval is a nuisance term, so its rows never claim a place in the
+  multiplicity family, and a withheld test is no longer described as
+  retained in the `none` adjustment family when `p_adjust = "none"`.
+  `?dif_anova` documents the distinction.
+* `dif_size()` no longer adds a response-category diagnosis to a pooled MFRM
+  split refit that was refused for another reason; the refusal's own message
+  stands, as it already does in `dif_contrasts()`.
+* The resolved-contrast note for differing response-category structures no
+  longer puts a space before the item's colon.
+* `resolve_dif()` says why a split carries no magnitude when the
+  complete-design post-hoc comparison fails, and `?resolve_dif` documents
+  that an `NA` magnitude is an unmeasured difference rather than a zero one.
+* `equate_tests()`, `plot_equate()` and `btl_equate()` refuse a reference or
+  bank with no entries by name, instead of failing inside a data-frame
+  assignment; a saved paired-comparison bank records the same refusal.
+* A saved frame-invariance result that is not a list is refused as not a
+  `frame_invariance()` result, rather than through an R internal message.
+* The legacy person-recovery note names the pairing the layout actually
+  attempted, and gives a remedy the simulator supports.
 
 # rasch 1.12.0
 

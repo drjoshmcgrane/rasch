@@ -149,6 +149,11 @@
   .check_column_names(reference)
   if (!all(c("item", "location") %in% names(reference)))
     stop("reference needs columns item, location (and ideally se)")
+  # Each default below is a length-one value, which `$<-.data.frame` refuses
+  # on a zero-row frame with an implementation message. A reference with no
+  # items cannot link anything: say so before filling its optional columns.
+  if (nrow(reference) == 0L)
+    stop("reference has no items; it needs at least one item to equate")
   if (!"se" %in% names(reference)) reference$se <- NA_real_
   if (!"max" %in% names(reference)) reference$max <- NA_integer_
   out <- reference[, c("item", "location", "se", "max")]

@@ -95,7 +95,11 @@ report_text <- function(x) {
   x <- gsub("&", "&amp;", x, fixed = TRUE)
   x <- gsub("<", "&lt;", x, fixed = TRUE)
   x <- gsub(">", "&gt;", x, fixed = TRUE)
-  marks <- c("\\", "`", "*", "_", "{", "}", "#", "+", "!")
+  # Pandoc's default dialect also reads "^x^" as superscript, "~x~" as
+  # subscript and "~~x~~" as strikeout, so an item named "x^2^" or
+  # "H~2~O" would arrive as markup. A backslash escape carries a caret
+  # and a tilde literally into HTML, Word and PDF alike.
+  marks <- c("\\", "`", "*", "_", "{", "}", "#", "+", "!", "^", "~")
   x <- vapply(strsplit(x, "", fixed = TRUE), function(chars)
     paste0(ifelse(chars %in% marks, paste0("\\", chars), chars),
            collapse = ""), character(1))

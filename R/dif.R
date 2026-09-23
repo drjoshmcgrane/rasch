@@ -249,6 +249,7 @@
     Fv <- (ss_t / df_t) / mse
     p_t <- stats::pf(Fv, df_t, df_res, lower.tail = FALSE)
     df_denom <- df_res
+    reason <- NA_character_
     # Judge-level residual means can have very different precision when
     # comparison workloads differ. HC3 retains the equal-judge estimand but
     # does not impose a common residual variance. The robust Wald statistic is
@@ -258,17 +259,39 @@
     if (variance == "cr3" ||
         (variance == "hc3" && (is.null(robust_terms) || tt %in% robust_terms))) {
       Fv <- p_t <- NA_real_
+      why <- paste("the retained design or its residual covariance does",
+                   "not support this test")
       X <- stats::model.matrix(m1)
       asg <- attr(X, "assign")
       labs <- attr(stats::terms(m1), "term.labels")
       ti <- which(vapply(labs, function(lab)
         setequal(.term_vars(tt), .term_vars(lab)), TRUE))
       jj <- which(asg == ti)
-      X <- X * sqrt(d$.dif_weights)
-      qrX <- qr(X)
-      if (length(jj) && qrX$rank == ncol(X)) {
+      # An aliased NUISANCE column -- an empty class-interval-by-factor cell
+      # elsewhere in the model -- says nothing about the term under test.
+      # model.matrix() keeps aliased columns, so judge availability on the
+      # columns lm itself estimated (its pivoted full-rank set) and from the
+      # tested term's own contrasts: a term whose contrasts all survive that
+      # pivoting, and whose Type II degrees of freedom count them all, is
+      # estimable and gets its robust Wald test on the retained columns. A
+      # term entangled with the deficiency is withheld with that reason.
+      est <- !is.na(stats::coef(m1))
+      cf <- stats::coef(m1)[est]
+      jj <- if (length(jj)) match(jj, which(est)) else jj
+      X <- X[, est, drop = FALSE] * sqrt(d$.dif_weights)
+      estimable <- length(jj) > 0L && !anyNA(jj) && length(jj) == df_t
+      if (!estimable) {
+        why <- paste("the tested term is aliased with the rest of the",
+                     "retained design")
+      } else {
         Xi <- tryCatch(solve(crossprod(X)), error = function(e) NULL)
+        if (is.null(Xi))
+          why <- "the retained design's cross-product cannot be inverted"
         if (!is.null(Xi)) {
+          # a cluster whose own rows the design fits exactly leaves no
+          # delete-cluster residual; that is a fault of the cluster, not
+          # of the tested term, and is reported as such below
+          bad_cluster <- FALSE
           if (variance == "cr3") {
             # CR3 is the cluster analogue of HC3. Weighted rows sum to one
             # per person; delete-person leverage accounts for the jointly
@@ -281,7 +304,8 @@
               if (!is.finite(rcond(A)) || rcond(A) < 1e-10) return(NULL)
               drop(crossprod(Xg, solve(A, er[ii])))
             })
-            Vr <- if (any(vapply(scores, is.null, TRUE)))
+            bad_cluster <- any(vapply(scores, is.null, TRUE))
+            Vr <- if (bad_cluster)
               matrix(NA_real_, ncol(X), ncol(X)) else
                 Xi %*% crossprod(do.call(rbind, scores)) %*% Xi
           } else {
@@ -290,7 +314,7 @@
             Vr <- Xi %*% crossprod(X * ae) %*% Xi
           }
           Vt <- Vr[jj, jj, drop = FALSE]
-          bt <- stats::coef(m1)[jj]
+          bt <- cf[jj]
           Wr <- if (.covariance_is_psd(Vt))
             tryCatch(drop(t(bt) %*% solve(Vt, bt)),
                      error = function(e) NA_real_) else NA_real_
@@ -298,22 +322,31 @@
             Fv <- Wr / length(jj)
             p_t <- if (is.finite(df_denom) && df_denom > 0)
               stats::pf(Fv, length(jj), df_denom, lower.tail = FALSE) else NA_real_
-          }
+          } else why <- if (bad_cluster) paste(
+            "the retained design fits one person cluster's own rows",
+            "exactly, leaving it no delete-cluster residual") else paste(
+            "the robust covariance of the tested term is singular or not",
+            "positive semidefinite")
         }
       }
+      # the reason travels with the row: the caller names it in the note it
+      # writes for every withheld test
+      if (!is.finite(Fv)) reason <- why
     }
     out[[length(out) + 1L]] <- data.frame(
       term = tt, df = df_t, df_denom = df_denom, gg_epsilon = NA_real_,
       sum_sq = ss_t, mean_sq = ss_t / df_t,
       F_value = Fv, p = p_t,
-      resid_ss = rss_full, stringsAsFactors = FALSE)
+      resid_ss = rss_full, unavailable_reason = reason,
+      stringsAsFactors = FALSE)
   }
   if (!length(out)) return(NULL)
   rbind(do.call(rbind, out),
         data.frame(term = "Residuals", df = df_res, df_denom = NA_real_,
                    gg_epsilon = NA_real_, sum_sq = rss_full,
                    mean_sq = mse, F_value = NA_real_, p = NA_real_,
-                   resid_ss = NA_real_, stringsAsFactors = FALSE))
+                   resid_ss = NA_real_, unavailable_reason = NA_character_,
+                   stringsAsFactors = FALSE))
 }
 
 # Within-stratum tests on the person-by-within-cell mean matrix Y (complete
@@ -333,10 +366,15 @@
   mk <- function(tl, resp) stats::as.formula(paste(
     resp, "~", if (length(tl)) paste(tl, collapse = " + ") else "1"))
   out <- list(); resid_pool <- 0; resid_df <- 0
-  na_row <- function(tt) data.frame(
+  # A withheld row carries the cause that applies to IT. The two refusals
+  # below are different faults -- a factor level lost with the incomplete
+  # panels, and an empty between-cell aliasing the balanced grand mean --
+  # and a shared note would send the analyst after the wrong one.
+  na_row <- function(tt, why) data.frame(
     term = tt, df = NA_real_, df_denom = NA_real_, gg_epsilon = NA_real_,
     sum_sq = NA_real_, mean_sq = NA_real_, F_value = NA_real_, p = NA_real_,
-    resid_ss = NA_real_, stringsAsFactors = FALSE)
+    resid_ss = NA_real_, unavailable_reason = why,
+    stringsAsFactors = FALSE)
   # between design for the scores: only terms whose factors survive the
   # complete-panel filtering with at least two levels (a group observed at
   # a single occasion pattern can lose every complete panel; its
@@ -353,7 +391,9 @@
     w_t <- intersect(tv, names(wlv))
     b_t <- setdiff(tv, w_t)
     if (any(b_t %in% bad_vars)) {         # non-estimable after filtering
-      out[[length(out) + 1L]] <- na_row(tt)
+      out[[length(out) + 1L]] <- na_row(tt, paste(
+        "the complete within-person panels do not retain two levels of",
+        "every factor in this term"))
       next
     }
     Cm <- matrix(1, 1, 1)
@@ -404,7 +444,11 @@
                             sum(f_full$residuals^2), 0)
       }
       if (df_t1 < 1L) {
-        out[[length(out) + 1L]] <- na_row(tt)
+        # the grand-mean column is in the span of the rest: every factor
+        # level is present, but some factorial combination of them is not
+        out[[length(out) + 1L]] <- na_row(tt, paste(
+          "an empty cell of the between-person design aliases the balanced",
+          "grand mean that carries this within-person effect"))
         next
       }
       df_t <- m * df_t1
@@ -435,7 +479,8 @@
       sum_sq = ss_t, mean_sq = ss_t / df_t,
       F_value = Fv,
       p = stats::pf(Fv, eps * df_t, eps * df_err, lower.tail = FALSE),
-      resid_ss = rss_f, stringsAsFactors = FALSE)
+      resid_ss = rss_f, unavailable_reason = NA_character_,
+      stringsAsFactors = FALSE)
     resid_pool <- rss_f; resid_df <- df_err
   }
   if (!length(out)) return(NULL)
@@ -444,7 +489,8 @@
                    gg_epsilon = NA_real_, sum_sq = resid_pool,
                    mean_sq = if (resid_df > 0) resid_pool / resid_df else
                      NA_real_, F_value = NA_real_, p = NA_real_,
-                   resid_ss = NA_real_, stringsAsFactors = FALSE))
+                   resid_ss = NA_real_, unavailable_reason = NA_character_,
+                   stringsAsFactors = FALSE))
 }
 
 # Shared validation of the DIF-family arguments; every public DIF entry
@@ -508,6 +554,16 @@
 #' Effects that cannot be estimated from the retained design are reported
 #' as \code{NA}, including within-person effects whose adjusted mean is
 #' confounded with between-person terms in an incomplete factorial design.
+#' A term is judged on its own contrasts: an empty cell elsewhere in the
+#' item's model (an unoccupied factor-by-class-interval combination, say)
+#' aliases a nuisance column without withholding the terms the design still
+#' estimates, which are tested on the retained full-rank columns. A term
+#' whose own contrasts are aliased, or whose Type II degrees of freedom no
+#' longer count them all, is the one reported as \code{NA}. Every withheld
+#' row is named in \code{notes} with the reason that applies to it. A
+#' withheld DIF test stays in the multiplicity family; a withheld
+#' class-interval row is a nuisance term, never a member of it, and its
+#' note and the counts on the \code{notes} summary say so.
 #'
 #' When identifiers repeat, the person is the unit of analysis. Between-person
 #' terms use person means and the between-person error stratum. Within-person
@@ -928,6 +984,8 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     absent$df <- absent$df_denom <- absent$gg_epsilon <-
       absent$sum_sq <- absent$mean_sq <- absent$F_value <-
       absent$p <- absent$resid_ss <- NA_real_
+    absent$unavailable_reason <-
+      "the item's own design yields no table for this term"
     terms <- rbind(terms, absent[names(terms)])
   }
 
@@ -1114,18 +1172,50 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
       "with equal total weight per person and person-cluster CR3 covariance",
       "for all between-person terms; F references are approximate. Items:",
       paste(joint_between_items, collapse = ", ")))
-  if (n_unavailable_terms > 0L)
-    notes <- c(notes, sprintf(
-      "%d requested item-term test(s) were not estimable and remain in the adjusted-probability family",
-      n_unavailable_terms))
+  # The aggregate and the per-row notes count the same events: both are
+  # taken from the rows that carry no F, because a requested term absent
+  # from an item's table and a term present with an NA statistic are
+  # equally withheld tests. The class interval's own main effect is not one
+  # of them: planned_dif_terms drops it and family_member excludes it, so
+  # its rows are counted and worded on their own instead of being reported
+  # as requested tests the family retains. "none" is an allowed p_adjust:
+  # there is then no adjustment family to be retained in, only the family
+  # the tests were requested as.
+  unadjusted <- identical(p_adjust, "none")
+  family_name <- if (unadjusted)
+    "requested family, which carries no multiplicity adjustment" else
+    "adjusted-probability family"
+  family_txt <- if (unadjusted) paste("retained in the", family_name) else
+    sprintf("retained in the %s adjustment family", p_adjust)
+  ci_txt <- paste("not a requested DIF test, so it joins no adjustment",
+                  "family")
   unavailable <- which(!is.finite(terms$F_value) & terms$term != "Residuals")
+  in_family <- family_member[unavailable]
+  if (sum(in_family))
+    notes <- c(notes, sprintf(paste(
+      "%d requested item-term test(s) were not estimable and are named one",
+      "by one in the notes that follow; all of them remain in the %s"),
+      sum(in_family), family_name))
+  if (sum(!in_family))
+    notes <- c(notes, sprintf(paste(
+      "%d class-interval main-effect row(s) carry no F and are named in the",
+      "notes that follow as well; the class interval is a nuisance term,",
+      "not a requested DIF test, and joins no adjustment family"),
+      sum(!in_family)))
   if (length(unavailable)) notes <- c(notes, vapply(unavailable, function(j) {
-    reason <- if (is.finite(terms$df_denom[j]) && terms$df_denom[j] <= 0)
-      "no residual degrees of freedom" else
-      "the retained design or its residual covariance does not support this test"
-    sprintf("%s [%s]: unavailable because %s; retained in the %s adjustment family",
-            terms$item[j], terms$term[j], reason, p_adjust)
+    # the stratum's own reason where it recorded one, and the generic
+    # design reason for a row that reached here without one
+    reason <- terms$unavailable_reason[j]
+    if (is.finite(terms$df_denom[j]) && terms$df_denom[j] <= 0)
+      reason <- "no residual degrees of freedom"
+    if (is.na(reason))
+      reason <- paste("the retained design or its residual covariance does",
+                      "not support this test")
+    sprintf("%s [%s]: unavailable because %s; %s",
+            terms$item[j], terms$term[j], reason,
+            if (family_member[j]) family_txt else ci_txt)
   }, ""))
+  terms$unavailable_reason <- NULL
   out <- list(summary = summary_tab, terms = terms,
               summary_factors = summary_factors,
               term_ids = term_ids,
@@ -1525,6 +1615,7 @@ dif_size <- function(fit, item, by, p_adjust = "holm", alpha = 0.05,
   grp <- droplevels(grp)
 
   inference_df <- NA_real_
+  refit_refused <- FALSE
   if (mfrm_item) {
     # underlying MFRM item: pooled virtual-level resolution (one joint
     # unstructured refit of the virtual matrix; see .dif_resolve)
@@ -1535,6 +1626,10 @@ dif_size <- function(fit, item, by, p_adjust = "holm", alpha = 0.05,
     category_signature <- rs$category_signature
     area_level <- rs$area
     structure_ok <- !identical(rs$score_compatible, FALSE)
+    # The pooled refit can be refused for reasons of its own (an anchored
+    # item, no convergence). That refusal is already in rs$notes: the
+    # category diagnosis below must not be added on top of it.
+    refit_refused <- !is.null(rs[["refit_error"]])
     inference_df <- rs$df %||% NA_real_
     notes <- c(notes, rs$notes)
   } else {
@@ -1614,7 +1709,7 @@ dif_size <- function(fit, item, by, p_adjust = "holm", alpha = 0.05,
     all(category_signature[, pr[k, 1]] ==
           category_signature[, pr[k, 2]]), TRUE)
   pair_invalid <- pair_weak | !same_categories | !structure_ok
-  if (any(!same_categories) || !structure_ok) {
+  if (!refit_refused && (any(!same_categories) || !structure_ok)) {
     bad <- !same_categories | !structure_ok
     bad_pairs <- paste0(levs[pr[bad, 1]], " versus ",
                         levs[pr[bad, 2]])
@@ -1928,8 +2023,8 @@ print.rasch_dif_size <- function(x, ...) {
   structure_ok <- length(unique(category_signature[1L, ])) == 1L &&
     identical(unname(category_signature[1L, 1L]), expected_signature)
   if (!structure_ok) {
-    notes <- c(notes, paste(
-      item, ": resolved contrasts withheld because groups have different",
+    notes <- c(notes, paste0(
+      item, ": resolved contrasts withheld because groups have different ",
       "observed response-category structures"))
     return(list(
       levs = levs, loc = rep(NA_real_, length(levs)),

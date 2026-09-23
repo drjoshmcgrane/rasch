@@ -43,6 +43,12 @@
     .check_column_names(reference)
     if (!all(c("object", "location") %in% names(reference)))
       stop("a bank needs columns 'object' and 'location' (and ideally 'se')")
+    # The default below is a length-one value, which `$<-.data.frame`
+    # refuses on a zero-row frame with an implementation message. A bank
+    # with no objects cannot link anything: say so before filling its
+    # optional column.
+    if (nrow(reference) == 0L)
+      stop("a bank has no objects; it needs at least one object to equate")
     if (!"se" %in% names(reference)) reference$se <- NA_real_
     out <- data.frame(object = .role_text_values(reference$object),
                       location = .bank_numeric(reference$location, "location"),

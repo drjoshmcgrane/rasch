@@ -672,11 +672,14 @@ frame_invariance <- function(fit, alpha = 0.05, adjust = c("holm", "none"),
   if (is.null(invariance)) return(invisible(NULL))
   if (!inherits(fit, "rasch_efrm"))
     stop("`invariance` is only available for an EFRM fit")
+  # `$` on an atomic value raises an implementation message, so establish
+  # the result's class and type before reading anything out of it.
+  if (!inherits(invariance, "rasch_frame_invariance") || !is.list(invariance))
+    stop("`invariance` must be a frame_invariance() result from this fitted model")
   signature <- invariance$result_signature
   unsigned <- unclass(invariance)
   unsigned$result_signature <- NULL
-  if (!inherits(invariance, "rasch_frame_invariance") ||
-      !identical(invariance$algorithm,
+  if (!identical(invariance$algorithm,
                  "frame-invariance-complete-family-2") ||
       !is.data.frame(invariance$summary) ||
       !is.data.frame(invariance$locations) ||

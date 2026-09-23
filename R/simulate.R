@@ -2143,8 +2143,13 @@ sim_recovery <- function(fit, sim) {
       "The original category count was not recorded in this simulation, so response-scale equivalence cannot be verified."),
       collapse = " ")
   person_order <- NULL
+  # Pairing legacy persons by response pattern needs one pattern per person,
+  # which only the wide layouts supply. Record whether that pairing was
+  # attempted, so a withheld comparison can say what actually happened.
+  pattern_pairing <- FALSE
   if (lay == "rasch") {
     person_order <- .recovery_check_wide(fit, sim, names(tr$difficulty), fit$X)
+    pattern_pairing <- !is.null(fit$X)
   } else if (lay == "btl") {
     .recovery_check_btl(fit, sim)
   } else if (lay == "mfrm") {
@@ -2155,6 +2160,7 @@ sim_recovery <- function(fit, sim) {
     if (is.null(source))
       .recovery_mismatch("the fitted frame-to-item responses are unavailable")
     person_order <- .recovery_check_wide(fit, sim, names(tr$difficulty), source)
+    pattern_pairing <- TRUE
   } else if (lay == "btl_efrm") {
     .recovery_check_btl(fit, sim)
   }
@@ -2199,11 +2205,18 @@ sim_recovery <- function(fit, sim) {
           !anyNA(person_order)) {
         add(name, recovery_theta[person_order], fit$person$theta, centre = centre)
       } else {
-        recovery_note <<- paste(c(recovery_note,
+        # Name the pairing that was actually tried: the wide layouts fall
+        # back on response patterns, the others never had one to try.
+        recovery_note <<- paste(c(recovery_note, if (pattern_pairing)
           paste("Legacy person recovery is unavailable: the simulation has no",
                 "person identifiers and response patterns do not uniquely pair",
-                "its persons with the fit. Preserve identifiers in simulation",
-                "truth and pass id= when refitting.")), collapse = " ")
+                "its persons with the fit. Re-simulate with the current",
+                "simulator, which records person identifiers in the truth.") else
+          paste("Legacy person recovery is unavailable: the simulation has no",
+                "person identifiers, and this layout has no response pattern",
+                "to pair its persons with the fit. Re-simulate with the current",
+                "simulator, which records person identifiers in the truth.")),
+          collapse = " ")
       }
     }
   }
