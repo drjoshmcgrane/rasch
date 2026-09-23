@@ -1,5 +1,19 @@
 # rasch 1.12.1
 
+* `pl()` analyses rankings with the Plackett-Luce model, as `btl()` analyses
+  paired comparisons: each ranking is read as a sequence of choices, the
+  object locations are estimated by maximum likelihood on the logit scale
+  with a sum-zero origin or anchors, and standard errors are sandwich
+  errors clustered by judge or by ranking under the conditions `btl()`
+  applies, or information-based errors on request. Objects and judges
+  receive infit, outfit and fit residuals from the stage choices, each
+  ranking a surprise statistic, and the objects a separation index. Extreme
+  objects are set aside and placed by extrapolation, partial and top-k
+  rankings are accepted, and a reversal check fits the rankings worst-first
+  as well as best-first and reports the Vuong statistic for the two
+  readings, so a ranking process that did not proceed best-first can be
+  recognised. `plot_pl()` draws the object map. A ranking of two objects
+  reproduces `btl()`.
 * `rasch_cj()` calibrates items from item responses, paired comparisons and
   rankings in one full likelihood: the conditional likelihood of the
   responses under the partial credit model, a Bradley-Terry block for the
