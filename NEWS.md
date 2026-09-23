@@ -12,8 +12,12 @@
   rankings are accepted, and a reversal check fits the rankings worst-first
   as well as best-first and reports the Vuong statistic for the two
   readings, so a ranking process that did not proceed best-first can be
-  recognised. `plot_pl()` draws the object map. A ranking of two objects
-  reproduces `btl()`.
+  recognised. An invariance check tests Luce's axiom in the manner of
+  Andersen's test: the locations from the first choice of each ranking
+  against those from the later choices (or early against late halves with
+  `split = "half"`), with a likelihood ratio and Holm-adjusted per-object
+  contrasts naming the objects that move. `plot_pl()` draws the object
+  map. A ranking of two objects reproduces `btl()`.
 * `rasch_cj()` calibrates items from item responses, paired comparisons and
   rankings in one full likelihood: the conditional likelihood of the
   responses under the partial credit model, a Bradley-Terry block for the

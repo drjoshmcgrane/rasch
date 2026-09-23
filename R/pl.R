@@ -30,7 +30,7 @@
   # ranking index. Returns the cells of the informative stages (stage,
   # obj, y per cell) and the ranking of each stage.
   rid <- split(seq_along(rk_id), rk_id)
-  cs <- co <- cy <- cr <- vector("list", length(rid))
+  cs <- co <- cy <- cr <- cp <- vector("list", length(rid))
   st <- 0L
   for (i in seq_along(rid)) {
     r <- rid[[i]]
@@ -44,10 +44,11 @@
     co[[i]] <- unlist(lapply(seq_len(n_st), function(s) obj[s:n]))
     cy[[i]] <- unlist(lapply(sizes, function(z) c(1L, rep(0L, z - 1L))))
     cr[[i]] <- rep(rk_id[r][1L], n_st)
+    cp[[i]] <- seq_len(n_st)
     st <- st + n_st
   }
   list(stage = unlist(cs), obj = unlist(co), y = unlist(cy),
-       ranking = unlist(cr), n_stages = st)
+       ranking = unlist(cr), position = unlist(cp), n_stages = st)
 }
 
 .pl_prob <- function(beta, cells) {
@@ -132,6 +133,76 @@
   }
 }
 
+# fit the model to a subset of the stages: objects extreme within the
+# subset are set aside, the fitted objects must be connected, and the
+# origin is the anchors present or a sum-zero constraint. NULL when the
+# subset cannot be fitted.
+.pl_group_fit <- function(cells, sel_stage, fk, anch, cl_ids, sandwich,
+                          maxit, tol) {
+  sel <- sel_stage[cells$stage]
+  kept <- unique(cells$stage[sel])
+  g <- list(stage = match(cells$stage[sel], kept), obj = cells$obj[sel],
+            y = cells$y[sel], n_stages = length(kept))
+  cl <- cl_ids[kept]
+  in_set <- rep(TRUE, fk)
+  repeat {
+    present <- tabulate(g$obj, fk)
+    chosen <- tabulate(g$obj[g$y == 1L], fk)
+    ext <- which(in_set & present > 0 & (chosen == 0 | chosen == present))
+    if (!length(ext)) break
+    in_set[ext] <- FALSE
+    drop_stage <- unique(g$stage[g$y == 1L & g$obj %in% ext])
+    keep <- !(g$obj %in% ext) & !(g$stage %in% drop_stage)
+    size <- tabulate(g$stage[keep], g$n_stages)
+    keep <- keep & size[g$stage] >= 2L
+    kept <- unique(g$stage[keep])
+    cl <- cl[kept]
+    g <- list(stage = match(g$stage[keep], kept), obj = g$obj[keep],
+              y = g$y[keep], n_stages = length(kept))
+    if (!g$n_stages) return(NULL)
+  }
+  fit_idx <- which(in_set & tabulate(g$obj, fk) > 0)
+  m <- length(fit_idx)
+  if (m < 2L) return(NULL)
+  adj <- matrix(FALSE, fk, fk)
+  ch <- g$obj[g$y == 1L][g$stage]
+  adj[cbind(ch[g$y == 0L], g$obj[g$y == 0L])] <- TRUE
+  if (!all(.pl_reach(adj[fit_idx, fit_idx, drop = FALSE]))) return(NULL)
+  g$obj <- match(g$obj, fit_idx)
+  a_idx <- which(fit_idx %in% anch$idx)
+  beta0 <- numeric(m)
+  if (length(a_idx)) {
+    beta0[a_idx] <- anch$value[match(fit_idx[a_idx], anch$idx)]
+    free <- setdiff(seq_len(m), a_idx)
+    if (!length(free)) return(NULL)
+    B <- diag(m)[, free, drop = FALSE]
+  } else {
+    B <- rbind(diag(m - 1L), -1)
+  }
+  np <- ncol(B)
+  fit <- .pl_newton(g, m, B, beta0, rep(0, np), maxit, tol)
+  if (!isTRUE(fit$converged)) return(NULL)
+  H <- crossprod(B, .pl_hess(fit$beta, g, m) %*% B)
+  bread <- tryCatch(solve(-H), error = function(e) NULL)
+  if (is.null(bread)) return(NULL)
+  cov_th <- bread
+  se_type <- "model"
+  if (sandwich) {
+    cl <- match(cl, unique(cl))
+    G <- .pl_scores(fit$beta, g, m, cl) %*% B
+    M <- crossprod(G)
+    sv <- svd(M, nu = 0, nv = 0)$d
+    if (length(sv) && max(sv) > 0 &&
+        sum(sv > max(sv) * sqrt(.Machine$double.eps)) >= np) {
+      cov_th <- bread %*% M %*% bread
+      se_type <- "sandwich"
+    }
+  }
+  list(fit_idx = fit_idx, beta = fit$beta, cov = B %*% cov_th %*% t(B),
+       ll = fit$ll, np = np, n_stages = g$n_stages, cells = g,
+       anchored = length(a_idx) > 0, se_type = se_type)
+}
+
 #' Rank analysis with the Plackett-Luce model
 #'
 #' Calibrates objects from rankings. Each ranking is read as a sequence of
@@ -186,6 +257,31 @@
 #' and the correlation and largest difference between the two sets of
 #' locations. It is a check on the ranking process, not on the objects.
 #'
+#' \strong{Invariance check.} Luce's choice axiom, which the model rests
+#' on, says that once an object is chosen the remaining objects compete on
+#' the same scale as before. The locations estimated from the first choice
+#' of each ranking should then agree with the locations estimated from the
+#' later choices, in the way item locations should agree across class
+#' intervals in Andersen's (1973) test. The check fits the model to the two
+#' groups of choices (\code{split = "first"}: first choice against later
+#' choices; \code{split = "half"}: the early against the late half of each
+#' ranking), each with its own extreme objects set aside and its own
+#' connectivity required, and reports the likelihood ratio against the
+#' pooled fit on the stages both groups kept, with degrees of freedom the
+#' free parameters of the groups less those of the pooled fit. Each object
+#' calibrated in both groups also receives a Wald contrast of its two
+#' locations, the groups centred on the objects they share unless both are
+#' on the anchor scale, with Holm-adjusted p values. The contrasts use the
+#' same covariance as the main fit; the likelihood ratio treats the choices
+#' as independent, which holds within a ranking but not across the rankings
+#' of one judge, so with few judges read the Wald contrasts rather than the
+#' ratio. The check is withheld with a note when every ranking has a single
+#' informative choice (a design of pairs), when a group cannot calibrate
+#' the objects on its own, or when fewer than two objects are calibrated in
+#' both groups. It answers a different question from the reversal check: a
+#' set of rankings may fit better reversed and still be invariant across
+#' positions, or fail invariance in either direction.
+#'
 #' @param data A data frame in long format: one row per object per ranking.
 #' @param ranking,object,rank Names of the columns holding the ranking
 #'   identifier, the object and the rank (1 = highest). A missing rank
@@ -198,17 +294,27 @@
 #' @param se \code{"sandwich"} (clustered Godambe errors, withheld when the
 #'   cluster design does not support them) or \code{"model"} (inverse
 #'   observed information of the Plackett-Luce likelihood).
+#' @param split How the choices are grouped for the invariance check:
+#'   \code{"first"} (the first choice of each ranking against the later
+#'   choices) or \code{"half"} (the early half of each ranking against the
+#'   late half).
 #' @param maxit,tol Newton-Raphson controls.
 #' @return A \code{"rasch_pl"} object with \code{objects} (location, se,
 #'   rankings, stages, chosen, infit, outfit, fit residual, extreme flag),
 #'   \code{judges} (when a judge column is given), \code{rankings} (one row
 #'   per ranking with its log-likelihood and surprise \code{z}),
 #'   \code{reversal} (the reversal check, or \code{NULL} when no ranking is
-#'   complete with three or more objects), \code{osi} (object separation),
+#'   complete with three or more objects), \code{invariance} (the
+#'   invariance check: \code{groups}, \code{lr}, \code{df}, \code{p} and the
+#'   per-object contrasts in \code{objects}, or \code{NULL} when withheld),
+#'   \code{osi} (object separation),
 #'   \code{loglik}, \code{cov_beta}, \code{converged}, \code{iterations},
 #'   \code{n_rankings}, \code{n_stages}, \code{se_type}, \code{anchors},
 #'   \code{notes} and the \code{call}.
 #' @references
+#' Andersen, E. B. (1973). A goodness of fit test for the Rasch model.
+#' Psychometrika, 38, 123--140.
+#'
 #' Luce, R. D. (1959). Individual Choice Behavior. Wiley.
 #'
 #' Plackett, R. L. (1975). The analysis of permutations. Applied
@@ -236,13 +342,15 @@
 #' fit <- pl(rk)
 #' fit
 #' fit$reversal$z
+#' fit$invariance$objects
 #' @export
 pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
                judge = NULL, anchors = NULL, ties = c("drop", "error"),
-               se = c("sandwich", "model"), maxit = 100, tol = 1e-8) {
+               se = c("sandwich", "model"), split = c("first", "half"),
+               maxit = 100, tol = 1e-8) {
   .check_column_names(data)
   .check_controls(maxit, tol)
-  ties <- match.arg(ties); se <- match.arg(se)
+  ties <- match.arg(ties); se <- match.arg(se); split <- match.arg(split)
   data <- as.data.frame(data)
   for (nm in c("ranking", "object", "rank", "judge")) {
     v <- get(nm, inherits = FALSE)
@@ -364,7 +472,7 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
     kept <- unique(cells$stage[sel])
     cells <- list(stage = match(cells$stage[sel], kept), obj = cells$obj[sel],
                   y = cells$y[sel], ranking = cells$ranking[kept],
-                  n_stages = length(kept))
+                  position = cells$position[kept], n_stages = length(kept))
     if (!cells$n_stages) break
   }
   # objects that are listed but never in an informative stage
@@ -619,8 +727,101 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
     }
   }
 
+  # invariance check across choice positions (Luce's axiom): the objects
+  # remaining after a choice should compete on the same scale as before
+  invariance <- NULL
+  if (isTRUE(fit$converged)) {
+    pos <- cells$position
+    grp <- if (split == "first") ifelse(pos == 1L, 1L, 2L) else {
+      n_st_r <- tabulate(cells$ranking, R)
+      ifelse(pos <= ceiling(n_st_r[cells$ranking] / 2), 1L, 2L)
+    }
+    labels <- if (split == "first") c("first choice", "later choices") else
+      c("early choices", "late choices")
+    anch <- list(idx = anch_idx, value = beta0[anch_idx])
+    gf <- if (all(1:2 %in% grp)) lapply(1:2, function(g)
+      .pl_group_fit(cells, grp == g, fk, anch, cl_ids,
+                    se_available && se == "sandwich", maxit, tol)) else
+      list(NULL, NULL)
+    common <- if (any(vapply(gf, is.null, NA))) integer(0) else
+      intersect(gf[[1]]$fit_idx, gf[[2]]$fit_idx)
+    if (!all(1:2 %in% grp)) {
+      notes <- c(notes, "invariance check withheld: every ranking has a single informative choice")
+    } else if (any(vapply(gf, is.null, NA))) {
+      notes <- c(notes, sprintf(
+        "invariance check withheld: the %s do not calibrate the objects on their own",
+        labels[which(vapply(gf, is.null, NA))[1]]))
+    } else if (length(common) < 2L) {
+      notes <- c(notes, "invariance check withheld: fewer than two objects calibrated in both choice groups")
+    } else {
+      # the restricted model is fitted to the stages the groups kept
+      same <- sum(vapply(gf, function(g) g$n_stages, 0L)) == cells$n_stages
+      if (same) {
+        ll_pool <- fit$ll; np_pool <- np
+      } else {
+        u1 <- gf[[1]]$cells; u2 <- gf[[2]]$cells
+        pool_idx <- sort(union(gf[[1]]$fit_idx, gf[[2]]$fit_idx))
+        uc <- list(stage = c(u1$stage, u2$stage + u1$n_stages),
+                   obj = match(c(gf[[1]]$fit_idx[u1$obj],
+                                 gf[[2]]$fit_idx[u2$obj]), pool_idx),
+                   y = c(u1$y, u2$y), n_stages = u1$n_stages + u2$n_stages)
+        m <- length(pool_idx)
+        a_idx <- which(pool_idx %in% anch_idx)
+        b0 <- numeric(m)
+        if (length(a_idx)) {
+          b0[a_idx] <- beta0[match(pool_idx[a_idx], anch_idx)]
+          Bp <- diag(m)[, setdiff(seq_len(m), a_idx), drop = FALSE]
+        } else Bp <- rbind(diag(m - 1L), -1)
+        pf <- .pl_newton(uc, m, Bp, b0, rep(0, ncol(Bp)), maxit, tol)
+        ll_pool <- pf$ll; np_pool <- ncol(Bp)
+      }
+      lr <- 2 * (gf[[1]]$ll + gf[[2]]$ll - ll_pool)
+      df_lr <- gf[[1]]$np + gf[[2]]$np - np_pool
+      # per-object contrast, each group centred on the common objects
+      # unless both are on the anchor scale
+      centre <- !(gf[[1]]$anchored && gf[[2]]$anchored)
+      loc_g <- lapply(gf, function(g) {
+        cidx <- match(common, g$fit_idx)
+        m <- length(g$fit_idx)
+        Cm <- diag(m)[cidx, , drop = FALSE]
+        if (centre) {
+          cvec <- as.numeric(seq_len(m) %in% cidx) / length(cidx)
+          Cm <- Cm - matrix(cvec, length(cidx), m, byrow = TRUE)
+        }
+        list(loc = drop(Cm %*% g$beta),
+             var = pmax(diag(Cm %*% g$cov %*% t(Cm)), 0))
+      })
+      d <- loc_g[[1]]$loc - loc_g[[2]]$loc
+      se_d <- sqrt(loc_g[[1]]$var + loc_g[[2]]$var)
+      zc <- ifelse(se_d > 0, d / se_d, NA_real_)
+      p_obj <- 2 * stats::pnorm(-abs(zc))
+      inv_obj <- data.frame(object = objs[fit_idx][common],
+                            group1 = loc_g[[1]]$loc, group2 = loc_g[[2]]$loc,
+                            difference = d, se = se_d, z = zc, p = p_obj,
+                            p_adj = stats::p.adjust(p_obj, "holm"),
+                            stringsAsFactors = FALSE)
+      names(inv_obj)[2:3] <- if (split == "first") c("first", "later") else
+        c("early", "late")
+      rownames(inv_obj) <- NULL
+      invariance <- list(
+        split = split, labels = labels,
+        groups = data.frame(group = labels,
+                            stages = vapply(gf, function(g) g$n_stages, 0L),
+                            objects = vapply(gf, function(g) length(g$fit_idx), 0L),
+                            loglik = vapply(gf, function(g) g$ll, 0),
+                            stringsAsFactors = FALSE),
+        lr = lr, df = df_lr,
+        p = if (df_lr >= 1) stats::pchisq(lr, df_lr, lower.tail = FALSE) else NA_real_,
+        loglik_pooled = ll_pool,
+        objects = inv_obj,
+        se_type = if (all(vapply(gf, function(g) g$se_type, "") == "sandwich"))
+          "sandwich" else "model")
+    }
+  }
+
   out <- list(objects = objects, judges = judges, rankings = rankings,
-              reversal = reversal, osi = osi, loglik = fit$ll,
+              reversal = reversal, invariance = invariance, osi = osi,
+              loglik = fit$ll,
               cov_beta = cov_beta, converged = fit$converged,
               iterations = fit$iterations, n_rankings = R,
               n_stages = cells0$n_stages,
@@ -658,6 +859,14 @@ print.rasch_pl <- function(x, ...) {
                        "p = %s; location correlation %.3f\n"),
                 r$n_rankings, r$loglik_forward, r$loglik_reversed, r$z,
                 .fmt_p(r$p), r$correlation))
+  }
+  if (!is.null(x$invariance)) {
+    v <- x$invariance
+    flag <- v$objects$object[!is.na(v$objects$p_adj) & v$objects$p_adj < 0.05]
+    cat(sprintf(paste0("Invariance check (%s vs %s): LR = %.2f on %d df, ",
+                       "p = %s; objects moving (Holm p < 0.05): %s\n"),
+                v$labels[1], v$labels[2], v$lr, v$df, .fmt_p(v$p),
+                if (length(flag)) paste(flag, collapse = ", ") else "none"))
   }
   print(.fmt_df(x$objects[, c("object", "location", "se", "rankings",
                               "chosen", "fit_resid", "extreme")]),

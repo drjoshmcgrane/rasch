@@ -13,6 +13,7 @@ pl(
   anchors = NULL,
   ties = c("drop", "error"),
   se = c("sandwich", "model"),
+  split = c("first", "half"),
   maxit = 100,
   tol = 1e-08
 )
@@ -36,6 +37,11 @@ ranking with a note, or \code{"error"}.}
 cluster design does not support them) or \code{"model"} (inverse
 observed information of the Plackett-Luce likelihood).}
 
+\item{split}{How the choices are grouped for the invariance check:
+\code{"first"} (the first choice of each ranking against the later
+choices) or \code{"half"} (the early half of each ranking against the
+late half).}
+
 \item{maxit, tol}{Newton-Raphson controls.}
 }
 \value{
@@ -44,7 +50,10 @@ A \code{"rasch_pl"} object with \code{objects} (location, se,
   \code{judges} (when a judge column is given), \code{rankings} (one row
   per ranking with its log-likelihood and surprise \code{z}),
   \code{reversal} (the reversal check, or \code{NULL} when no ranking is
-  complete with three or more objects), \code{osi} (object separation),
+  complete with three or more objects), \code{invariance} (the
+  invariance check: \code{groups}, \code{lr}, \code{df}, \code{p} and the
+  per-object contrasts in \code{objects}, or \code{NULL} when withheld),
+  \code{osi} (object separation),
   \code{loglik}, \code{cov_beta}, \code{converged}, \code{iterations},
   \code{n_rankings}, \code{n_stages}, \code{se_type}, \code{anchors},
   \code{notes} and the \code{call}.
@@ -102,6 +111,31 @@ are complete and hold at least three objects, reports the Vuong (1989)
 statistic for the two non-nested models (positive favours best-first)
 and the correlation and largest difference between the two sets of
 locations. It is a check on the ranking process, not on the objects.
+
+\strong{Invariance check.} Luce's choice axiom, which the model rests
+on, says that once an object is chosen the remaining objects compete on
+the same scale as before. The locations estimated from the first choice
+of each ranking should then agree with the locations estimated from the
+later choices, in the way item locations should agree across class
+intervals in Andersen's (1973) test. The check fits the model to the two
+groups of choices (\code{split = "first"}: first choice against later
+choices; \code{split = "half"}: the early against the late half of each
+ranking), each with its own extreme objects set aside and its own
+connectivity required, and reports the likelihood ratio against the
+pooled fit on the stages both groups kept, with degrees of freedom the
+free parameters of the groups less those of the pooled fit. Each object
+calibrated in both groups also receives a Wald contrast of its two
+locations, the groups centred on the objects they share unless both are
+on the anchor scale, with Holm-adjusted p values. The contrasts use the
+same covariance as the main fit; the likelihood ratio treats the choices
+as independent, which holds within a ranking but not across the rankings
+of one judge, so with few judges read the Wald contrasts rather than the
+ratio. The check is withheld with a note when every ranking has a single
+informative choice (a design of pairs), when a group cannot calibrate
+the objects on its own, or when fewer than two objects are calibrated in
+both groups. It answers a different question from the reversal check: a
+set of rankings may fit better reversed and still be invariant across
+positions, or fail invariance in either direction.
 }
 \examples{
 set.seed(1)
@@ -117,8 +151,12 @@ rk <- do.call(rbind, lapply(1:60, function(r) {
 fit <- pl(rk)
 fit
 fit$reversal$z
+fit$invariance$objects
 }
 \references{
+Andersen, E. B. (1973). A goodness of fit test for the Rasch model.
+Psychometrika, 38, 123--140.
+
 Luce, R. D. (1959). Individual Choice Behavior. Wiley.
 
 Plackett, R. L. (1975). The analysis of permutations. Applied

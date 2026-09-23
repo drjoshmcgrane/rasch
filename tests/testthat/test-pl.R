@@ -3,13 +3,18 @@
 
 pl_sim <- function(seed, R, size = 5, judges = NULL,
                    beta = c(A = -1.5, B = -0.5, C = 0, D = 0.5, E = 1.5),
-                   worst_first = FALSE) {
+                   worst_first = FALSE, later_shift = NULL) {
   set.seed(seed)
   do.call(rbind, lapply(seq_len(R), function(r) {
     rem <- sample(names(beta), size); ord <- character(0)
     sgn <- if (worst_first) -1 else 1
     while (length(rem) > 1) {
-      pick <- sample(rem, 1, prob = exp(sgn * beta[rem]))
+      b <- sgn * beta[rem]
+      # a location that changes once the first choice is made breaks
+      # Luce's axiom
+      if (!is.null(later_shift) && length(ord) && later_shift[1] %in% rem)
+        b[later_shift[1]] <- b[later_shift[1]] + as.numeric(later_shift[2])
+      pick <- sample(rem, 1, prob = exp(b))
       ord <- c(ord, pick); rem <- setdiff(rem, pick)
     }
     ord <- c(ord, rem)
@@ -90,6 +95,67 @@ test_that("the reversal check recognises worst-first rankings", {
   expect_lt(f$reversal$p, 0.05)
   expect_equal(nrow(f$reversal$objects), 5L)
   expect_output(print(f), "Reversal check on 300 complete rankings")
+})
+
+test_that("the invariance check holds under the model and catches a later-stage shift", {
+  fit <- pl(pl_sim(27, 150))
+  v <- fit$invariance
+  expect_equal(v$labels, c("first choice", "later choices"))
+  expect_equal(v$groups$stages, c(150L, 450L))
+  expect_equal(v$df, 4L)
+  expect_equal(v$lr, 2 * (sum(v$groups$loglik) - fit$loglik), tolerance = 1e-8)
+  expect_true(v$p > 0.01)
+  expect_false(any(v$objects$p_adj < 0.05))
+  expect_equal(v$se_type, "sandwich")
+  expect_output(print(fit), "Invariance check \\(first choice vs later choices\\)")
+  expect_output(print(fit), "objects moving \\(Holm p < 0.05\\): none")
+  # the group locations are each centred on the common objects
+  expect_equal(mean(v$objects$first), 0, tolerance = 1e-8)
+  expect_equal(mean(v$objects$later), 0, tolerance = 1e-8)
+
+  shifted <- pl(pl_sim(22, 150, later_shift = c("C", 1.5)))
+  w <- shifted$invariance
+  expect_true(w$p < 0.001)
+  expect_equal(w$objects$object[w$objects$p_adj < 0.05], "C")
+  expect_true(w$objects$difference[w$objects$object == "C"] < -0.8)
+  expect_output(print(shifted), "objects moving \\(Holm p < 0.05\\): C")
+
+  # the reversal check is a different question and is untouched
+  expect_true(shifted$reversal$z > 2)
+
+  # early vs late halves, with the group columns named for the split
+  half <- pl(pl_sim(23, 120), split = "half")
+  expect_equal(half$invariance$labels, c("early choices", "late choices"))
+  expect_equal(half$invariance$groups$stages, c(240L, 240L))
+  expect_true(all(c("early", "late") %in% names(half$invariance$objects)))
+
+  # the null distribution is close to its reference
+  ps <- vapply(31:50, function(s) pl(pl_sim(s, 60))$invariance$p, 0)
+  expect_true(mean(ps < 0.05) <= 0.2)
+
+  # a design of pairs has one choice per ranking: nothing to compare
+  pairs <- pl(pl_sim(24, 80, size = 2))
+  expect_null(pairs$invariance)
+  expect_match(paste(pairs$notes, collapse = "; "),
+               "invariance check withheld: every ranking has a single informative choice")
+})
+
+test_that("the invariance check survives objects extreme within a group", {
+  # F is so far ahead it is chosen first almost every time and is then
+  # absent from the later stages, or never chosen among them
+  beta <- c(A = -1, B = -0.5, C = 0, D = 0.5, E = 1, F = 6)
+  fit <- pl(pl_sim(25, 120, size = 6, beta = beta))
+  v <- fit$invariance
+  expect_false(is.null(v))
+  expect_true(is.finite(v$lr) && v$df >= 1)
+  expect_true(all(v$objects$object %in% c("A", "B", "C", "D", "E")))
+  expect_true(v$p > 0.001)
+  # anchored fits compare on the anchor scale without centring
+  anch <- pl(pl_sim(26, 120), anchors = c(A = -1.5, E = 1.5))
+  a <- anch$invariance
+  expect_false(is.null(a))
+  expect_equal(a$df, 3L)   # three free objects in each group and pooled
+  expect_equal(a$objects$difference[a$objects$object %in% c("A", "E")], c(0, 0))
 })
 
 test_that("judges are clustered, fitted and flagged", {
