@@ -213,7 +213,7 @@ test_that("input errors are specific", {
   expect_error(rasch_cj(s$X), "supply `comparisons`, `rankings`, or both")
   bad <- s$cj; bad$a[1] <- "Z9"
   expect_error(rasch_cj(s$X, comparisons = bad, object_a = "a", object_b = "b",
-                        winner = "winner"), "not items: Z9")
+                        winner = "winner"), "not items: 'Z9'")
   bad <- s$cj; bad$winner[1] <- "I07"; bad$a[1] <- "I01"; bad$b[1] <- "I02"
   expect_error(rasch_cj(s$X, comparisons = bad, object_a = "a", object_b = "b",
                         winner = "winner"), "neither compared object")
@@ -432,3 +432,14 @@ test_that("a frame judging a subset of items is tested on those alone", {
   expect_equal(fit2$invariance$lr$df, 10L - 2L - 1L)
   expect_gt(fit2$invariance$lr$p, 0.001)
 })
+
+test_that("judgement identifiers are trimmed and mismatches are named", {
+  X <- pcm_sim(5, N = 150, m = rep(1, 5), K = 20)$X
+  cmp <- data.frame(object_a = c(" I01", "I02 "), object_b = c("I03", "I04"),
+                    winner = c("I03 ", " I02"), stringsAsFactors = FALSE)
+  fit <- rasch_cj(X, comparisons = cmp)
+  expect_equal(fit$n[["comparisons"]], 2L)
+  cmp$object_a[1] <- "i01"
+  expect_error(rasch_cj(X, comparisons = cmp), "not items: 'i01'")
+})
+

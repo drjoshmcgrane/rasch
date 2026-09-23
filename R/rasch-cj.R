@@ -339,7 +339,7 @@
   unknown <- setdiff(unique(it), items)
   if (length(unknown))
     stop("`", what, "` names objects that are not items: ",
-         paste(unknown, collapse = ", "), call. = FALSE)
+         paste(sQuote(unknown, FALSE), collapse = ", "), call. = FALSE)
   if (is.null(thr)) return(it)
   thr <- suppressWarnings(as.numeric(thr))
   has <- !is.na(thr)
@@ -364,9 +364,9 @@
   if (length(miss))
     stop("`comparisons` lacks column(s): ", paste(miss, collapse = ", "),
          call. = FALSE)
-  a <- as.character(comparisons[[object_a]])
-  b <- as.character(comparisons[[object_b]])
-  w <- as.character(comparisons[[winner]])
+  a <- .role_text_values(comparisons[[object_a]])
+  b <- .role_text_values(comparisons[[object_b]])
+  w <- .role_text_values(comparisons[[winner]])
   if (anyNA(a) || anyNA(b) || anyNA(w))
     stop("`comparisons` has missing objects or winners", call. = FALSE)
   ka <- .cj_object_keys(a, comparisons[[threshold_a]], items, m, "comparisons")
@@ -397,8 +397,8 @@
   if (length(miss))
     stop("`rankings` lacks column(s): ", paste(miss, collapse = ", "),
          call. = FALSE)
-  id <- as.character(rankings[[ranking]])
-  it <- as.character(rankings[[item]])
+  id <- .role_text_values(rankings[[ranking]])
+  it <- .role_text_values(rankings[[item]])
   rk <- suppressWarnings(as.numeric(rankings[[rank]]))
   if (anyNA(id) || anyNA(it) || anyNA(rk))
     stop("`rankings` has missing ranking identifiers, items or ranks",
@@ -602,9 +602,9 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
   if (!has_resp) {
     # judgement-only fit: the comparisons are the reference frame and the
     # items are whatever the two sources name, each a single location
-    item_names <- unique(c(as.character(comparisons[[object_a]]),
-                           as.character(comparisons[[object_b]]),
-                           as.character(rankings[[item]])))
+    item_names <- unique(c(.role_text_values(comparisons[[object_a]]),
+                           .role_text_values(comparisons[[object_b]]),
+                           .role_text_values(rankings[[item]])))
     item_names <- item_names[!is.na(item_names)]
     X <- matrix(NA_integer_, 0L, length(item_names),
                 dimnames = list(NULL, item_names))
