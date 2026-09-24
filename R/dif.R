@@ -113,6 +113,44 @@
   rowSums(is.finite(residuals)) > 0L
 }
 
+# Bundles are named sets of at least two fitted items. Their names join
+# the item names in the DIF table, so they must not collide with them.
+.dif_bundles <- function(bundles, items) {
+  if (is.null(bundles)) return(list())
+  if (!is.list(bundles) || !length(bundles) || is.data.frame(bundles))
+    stop("`bundles` must be a named list of item-name vectors", call. = FALSE)
+  nms <- names(bundles)
+  if (is.null(nms) || anyNA(nms) || any(!nzchar(nms)))
+    stop("every bundle needs a name", call. = FALSE)
+  if (anyDuplicated(nms))
+    stop("bundle name(s) used more than once: ",
+         paste(unique(nms[duplicated(nms)]), collapse = ", "), call. = FALSE)
+  clash <- intersect(nms, items)
+  if (length(clash))
+    stop("bundle name(s) are also item names: ",
+         paste(clash, collapse = ", "), call. = FALSE)
+  out <- lapply(nms, function(b) {
+    members <- bundles[[b]]
+    if (!is.character(members) || anyNA(members) || !length(members))
+      stop("bundle '", b, "' must name its items", call. = FALSE)
+    members <- unique(members)
+    missing <- setdiff(members, items)
+    if (length(missing))
+      stop("bundle '", b, "' names item(s) not in the analysis: ",
+           paste(missing, collapse = ", "), call. = FALSE)
+    if (length(members) < 2L)
+      stop("bundle '", b, "' needs at least two items; test one item as ",
+           "itself", call. = FALSE)
+    if (length(members) >= length(items))
+      stop("bundle '", b, "' is the whole test: under the conditional ",
+           "calibration a bundle is identified against the items outside ",
+           "it, so nothing remains to compare with", call. = FALSE)
+    members
+  })
+  names(out) <- nms
+  out
+}
+
 .dif_repeated_support <- function(id, usable) {
   if (is.null(id)) return(FALSE)
   if (length(id) != length(usable))
@@ -599,6 +637,21 @@
 #' are always pooled by item; the frame-defining factors remain excluded.
 #' Inference is available only from a converged calibration.
 #'
+#' \strong{Bundles.} A bundle names a set of items that might function
+#' differently as a group, such as the items sharing a passage or a
+#' response format, even when no one of them shows DIF on its own
+#' (differential bundle functioning, Douglas, Roussos and Stout 1996).
+#' Each bundle is tested as one more row of the table: its residual is the
+#' standardised sum \eqn{\sum_{i \in B} z_i / \sqrt{n_B}} of its members'
+#' residuals, exactly the pooling an MFRM item receives over its facet
+#' cells, so a common shift that is too small to flag item by item
+#' accumulates. Under the conditional calibration a bundle's shift is
+#' identified against the items outside it, so a bundle cannot be the whole
+#' test; differential test functioning is a question for \code{\link{dtf}},
+#' which measures it from a resolved calibration with named anchors. Bundle
+#' rows join the same adjustment family as the items and take no post-hoc
+#' follow-up; \code{\link{dtf}} reports a flagged bundle's shift.
+#'
 #' @param fit A fitted object from \code{\link{rasch}},
 #'   \code{\link{rasch_mfrm}}, or \code{\link{rasch_efrm}}.
 #' @param factors A vector (one factor), a data frame of person factors, or a
@@ -631,6 +684,10 @@
 #'   marginal contrasts in logits using \code{\link{dif_posthoc}}. Their
 #'   probabilities are adjusted together over the complete family opened by
 #'   all flagged, non-superseded uniform terms.
+#' @param bundles Optional named list of item-name vectors. Each bundle is
+#'   tested as one further row, named by the list name, on the standardised
+#'   sum of its members' residuals. A bundle needs at least two items and
+#'   cannot contain every item.
 #' @return A list with:
 #' \describe{
 #'   \item{\code{summary}}{One row per item and group term, containing the
@@ -654,8 +711,14 @@
 #'   uniform between-person terms.}
 #' }
 #' The remaining components record the factors, class intervals, adjustment,
-#' significance level, and design settings.
+#' significance level, design settings and, when supplied, the
+#' \code{bundles}.
 #' @references
+#' Douglas, J. A., Roussos, L. A. and Stout, W. (1996). Item-bundle DIF
+#' hypothesis testing: Identifying suspect bundles and assessing their
+#' differential functioning. Journal of Educational Measurement, 33(4),
+#' 465--484.
+#'
 #' Holm, S. (1979). A simple sequentially rejective multiple test procedure.
 #' Scandinavian Journal of Statistics, 6(2), 65--70.
 #'
@@ -670,8 +733,10 @@
 #' Maxwell, S. E. and Delaney, H. D. (2004). Designing Experiments and
 #' Analyzing Data: A Model Comparison Perspective (2nd ed.). Lawrence Erlbaum.
 #' @seealso \code{\link{dif_size}}, \code{\link{dif_contrasts}}, and
-#'   \code{\link{resolve_dif}}; and \code{\link{frame_invariance}} for the
-#'   frame-defining factor this function excludes.
+#'   \code{\link{resolve_dif}}; \code{\link{dtf}} for the size of bundle
+#'   and test-level differences on a resolved calibration; and
+#'   \code{\link{frame_invariance}} for the frame-defining factor this
+#'   function excludes.
 #' @examples
 #' set.seed(1); n <- 800
 #' d <- seq(-1.5, 1.5, length.out = 6)
@@ -707,7 +772,7 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
                                 p_adjust = "holm", alpha = 0.05,
                                 effects = c("main", "factorial"),
                                 sizes = FALSE, id = NULL, within = NULL,
-                                pool_facets = TRUE) {
+                                pool_facets = TRUE, bundles = NULL) {
   .check_dif_args(alpha, p_adjust, n_groups = n_groups)
   if (!inherits(fit, "rasch"))
     stop("dif_anova needs a rasch fit")
@@ -751,6 +816,31 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
       "coverage are normalised by the square root of that count);",
       "pool_facets = FALSE tests",
       "each item-by-facet cell as its own item")
+  }
+  # A bundle is tested as one more column: the standardised sum of its
+  # members' residuals, the same pooling an MFRM item receives over its
+  # facet cells. Under the conditional calibration the bundle's shift is
+  # identified against the items outside it, so a bundle that is the whole
+  # test would sum to zero at every person and cannot be tested here.
+  bundle_note <- NULL
+  bundles <- .dif_bundles(bundles, colnames(Z))
+  if (length(bundles)) {
+    Zb <- vapply(bundles, function(members) {
+      zz <- Z[, members, drop = FALSE]
+      nn <- rowSums(is.finite(zz))
+      out <- rowSums(zz, na.rm = TRUE) / sqrt(pmax(nn, 1L))
+      out[nn == 0L] <- NA_real_
+      out
+    }, numeric(nrow(Z)))
+    Zb <- matrix(Zb, nrow(Z), length(bundles),
+                 dimnames = list(NULL, names(bundles)))
+    Z <- cbind(Z, Zb); L <- ncol(Z)
+    bundle_note <- paste0(
+      "bundle(s) tested as the standardised sum of their members' ",
+      "residuals, in the same adjustment family as the items: ",
+      paste(vapply(names(bundles), function(b) sprintf(
+        "%s = {%s}", b, paste(bundles[[b]], collapse = ", ")), ""),
+        collapse = "; "))
   }
   usable_id_rows <- .dif_residual_support(Z)
   factors <- .dif_factors(fit, factors)
@@ -1050,6 +1140,10 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     cand <- terms[terms$significant & !terms$superseded &
                   !vapply(terms$term, function(tt)
                     "ci" %in% .term_vars(tt), TRUE), , drop = FALSE]
+    # a bundle has no single location to resolve: its magnitude is the mean
+    # shift of its members, which dtf() reports from the resolved fit
+    bundle_cand <- cand$item %in% names(bundles)
+    cand <- cand[!bundle_cand, , drop = FALSE]
     for (r in seq_len(nrow(cand))) {
       it <- cand$item[r]; tt <- cand$term[r]
       by_user <- fnames[match(.term_vars(tt), safe)]
@@ -1096,6 +1190,9 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     posthoc_note <- if (length(posthoc_fail)) paste0(
       "DIF post-hoc comparisons unavailable for some flagged term(s): ",
       paste(unique(posthoc_fail), collapse = "; ")) else NULL
+    if (any(bundle_cand)) posthoc_note <- c(posthoc_note, paste(
+      "flagged bundle term(s) have no post-hoc comparison; dtf() reports a",
+      "bundle's shift from the resolved calibration"))
   } else size_note <- posthoc_note <- NULL
 
   # compact reading: one row per item and group term, its own effect being
@@ -1159,6 +1256,7 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
 
   notes <- character(0)
   if (!is.null(pooled_note)) notes <- c(notes, pooled_note)
+  if (!is.null(bundle_note)) notes <- c(notes, bundle_note)
   if (!is.null(drop_frame_note)) notes <- c(notes, drop_frame_note)
   if (!is.null(size_note)) notes <- c(notes, size_note)
   if (!is.null(posthoc_note)) notes <- c(notes, posthoc_note)
@@ -1227,6 +1325,7 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
                 "HC3 for uniform factor terms; CR3 for incomplete panels" else
                 "HC3 for uniform factor terms",
               effects = effects, alpha = alpha, p_adjust = p_adjust,
+              bundles = if (length(bundles)) bundles else NULL,
               notes = notes,
               fit_signature = .fit_boot_signature(fit),
               bootstrap_design = list(
@@ -1235,7 +1334,8 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
                 within = if (length(within)) within else NULL,
                 n_groups = nlevels(as.factor(ci)), effects = effects,
                 pool_facets = pool_facets, p_adjust = p_adjust,
-                alpha = alpha))
+                alpha = alpha,
+                bundles = if (length(bundles)) bundles else NULL))
   if (isTRUE(sizes)) {
     out$sizes <- size_tab
     out$posthoc <- posthoc_tab
@@ -1438,6 +1538,10 @@ print.rasch_dif <- function(x, ...) {
   cat(sprintf("%d uniform, %d non-uniform DIF flag(s) after %s adjustment.\n",
               sum(s$uniform_DIF, na.rm = TRUE),
               sum(s$nonuniform_DIF, na.rm = TRUE), x$p_adjust))
+  if (length(x$bundles))
+    cat("Bundles:", paste(vapply(names(x$bundles), function(b) sprintf(
+      "%s = {%s}", b, paste(x$bundles[[b]], collapse = ", ")), ""),
+      collapse = "; "), "\n")
   # a blank row is a test the design could not estimate, not an absence of
   # DIF, and it still counts in the adjusted family: the count line above is
   # unreadable without the notes that say so

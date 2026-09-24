@@ -117,6 +117,7 @@ reference:
   - resolve_frames
   - frame_invariance
   - resolve_dif
+  - dtf
   - equate_tests
   - tailored_analysis
 

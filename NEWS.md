@@ -54,6 +54,21 @@
   further test also carries an origin shift, both identified by the
   judgements and reported in a `tests` table, and every person is measured
   on the reference scale. No existing estimator is changed.
+* `dif_anova(bundles = )` tests differential bundle functioning: each named
+  bundle of items is tested on the standardised sum of its members'
+  residuals, in the same adjustment family as the items, so a shift too
+  small to flag any one item can flag the bundle. `dtf()` sizes
+  differential test and bundle functioning from a resolved calibration,
+  the unsplit items anchoring the groups on one scale: the shift of each
+  split item and their mean, the score-to-measure difference at every raw
+  score, expected-score and logit-shift curves, and signed and unsigned
+  summaries (sDTF and uDTF) in logits, score units and percent of the score
+  range averaged over the focal group's measures, all with delta-method
+  standard errors from the threshold covariance. A bundle gets its mean
+  shift, a homogeneity test of its members' shifts and its own sDBF and
+  uDBF. `dtf()` takes a `resolve_dif()` result directly, or an unsplit fit
+  with the items to split, and `plot_dtf()` draws the expected-score curves
+  and their difference. No existing estimator is changed.
 * CRAN checks use shorter workflow fixtures and recorded vignette bootstrap
   calculations. The full tests and scripts to regenerate those calculations
   remain in the repository; estimation and replication defaults are unchanged.

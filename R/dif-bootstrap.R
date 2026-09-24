@@ -258,7 +258,7 @@
       p_adjust = design$p_adjust, alpha = design$alpha,
       effects = design$effects,
       sizes = FALSE, id = design$id, within = design$within,
-      pool_facets = design$pool_facets),
+      pool_facets = design$pool_facets, bundles = design$bundles),
     error = function(e) .fit_boot_failure("error"))
   if (inherits(bd, "rasch_fit_boot_failure")) return(bd)
   list(dif = bd)
@@ -277,7 +277,8 @@
     bf, factors = design$factors, n_groups = design$n_groups,
     p_adjust = design$p_adjust, alpha = design$alpha,
     effects = design$effects, sizes = FALSE, id = design$id,
-    within = design$within, pool_facets = design$pool_facets),
+    within = design$within, pool_facets = design$pool_facets,
+    bundles = design$bundles),
     error = function(e) .fit_boot_failure("error"))
   if (inherits(bd, "rasch_fit_boot_failure")) return(bd)
   list(dif = bd)
@@ -321,7 +322,8 @@
     bf, factors = design$factors, n_groups = design$n_groups,
     p_adjust = design$p_adjust, alpha = design$alpha,
     effects = design$effects, sizes = FALSE, id = design$id,
-    within = design$within, pool_facets = design$pool_facets),
+    within = design$within, pool_facets = design$pool_facets,
+    bundles = design$bundles),
     error = function(e) .fit_boot_failure("error"))
   if (inherits(bd, "rasch_fit_boot_failure")) return(bd)
   list(dif = bd)
@@ -426,7 +428,8 @@
     bf, factors = design$factors, n_groups = design$n_groups,
     p_adjust = design$p_adjust, alpha = design$alpha,
     effects = design$effects, sizes = FALSE, id = design$id,
-    within = design$within, pool_facets = design$pool_facets),
+    within = design$within, pool_facets = design$pool_facets,
+    bundles = design$bundles),
     error = function(e) .fit_boot_failure("error"))
   if (inherits(bd, "rasch_fit_boot_failure")) return(bd)
   list(dif = bd)

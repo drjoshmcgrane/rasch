@@ -14,7 +14,8 @@ dif_anova(
   sizes = FALSE,
   id = NULL,
   within = NULL,
-  pool_facets = TRUE
+  pool_facets = TRUE,
+  bundles = NULL
 )
 }
 \arguments{
@@ -59,6 +60,11 @@ items (the default), so DIF is tested per item rather than per
 item-by-facet cell; \code{FALSE} tests each cell as its own item.
 EFRM response cells are always pooled by item, so this argument does not
 alter EFRM fits. Ignored for ordinary fits.}
+
+\item{bundles}{Optional named list of item-name vectors. Each bundle is
+tested as one further row, named by the list name, on the standardised
+sum of its members' residuals. A bundle needs at least two items and
+cannot contain every item.}
 }
 \value{
 A list with:
@@ -84,7 +90,8 @@ A list with:
   uniform between-person terms.}
 }
 The remaining components record the factors, class intervals, adjustment,
-significance level, and design settings.
+significance level, design settings and, when supplied, the
+\code{bundles}.
 }
 \description{
 Tests uniform and non-uniform DIF by analysing each item's standardised
@@ -150,6 +157,21 @@ factor means stepping outside the model, which is what
 underlying items unless \code{pool_facets = FALSE}. EFRM response cells
 are always pooled by item; the frame-defining factors remain excluded.
 Inference is available only from a converged calibration.
+
+\strong{Bundles.} A bundle names a set of items that might function
+differently as a group, such as the items sharing a passage or a
+response format, even when no one of them shows DIF on its own
+(differential bundle functioning, Douglas, Roussos and Stout 1996).
+Each bundle is tested as one more row of the table: its residual is the
+standardised sum \eqn{\sum_{i \in B} z_i / \sqrt{n_B}} of its members'
+residuals, exactly the pooling an MFRM item receives over its facet
+cells, so a common shift that is too small to flag item by item
+accumulates. Under the conditional calibration a bundle's shift is
+identified against the items outside it, so a bundle cannot be the whole
+test; differential test functioning is a question for \code{\link{dtf}},
+which measures it from a resolved calibration with named anchors. Bundle
+rows join the same adjustment family as the items and take no post-hoc
+follow-up; \code{\link{dtf}} reports a flagged bundle's shift.
 }
 \examples{
 set.seed(1); n <- 800
@@ -183,6 +205,11 @@ subset(mixed_dif$summary, uniform_DIF | nonuniform_DIF)
 }
 }
 \references{
+Douglas, J. A., Roussos, L. A. and Stout, W. (1996). Item-bundle DIF
+hypothesis testing: Identifying suspect bundles and assessing their
+differential functioning. Journal of Educational Measurement, 33(4),
+465--484.
+
 Holm, S. (1979). A simple sequentially rejective multiple test procedure.
 Scandinavian Journal of Statistics, 6(2), 65--70.
 
@@ -199,6 +226,8 @@ Analyzing Data: A Model Comparison Perspective (2nd ed.). Lawrence Erlbaum.
 }
 \seealso{
 \code{\link{dif_size}}, \code{\link{dif_contrasts}}, and
-  \code{\link{resolve_dif}}; and \code{\link{frame_invariance}} for the
-  frame-defining factor this function excludes.
+  \code{\link{resolve_dif}}; \code{\link{dtf}} for the size of bundle
+  and test-level differences on a resolved calibration; and
+  \code{\link{frame_invariance}} for the frame-defining factor this
+  function excludes.
 }
