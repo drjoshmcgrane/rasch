@@ -51,15 +51,20 @@
        ranking = unlist(cr), position = unlist(cp), n_stages = st)
 }
 
-.pl_prob <- function(beta, cells) {
-  e <- exp(beta[cells$obj])
+.pl_log_prob <- function(beta, cells) {
+  s <- beta[cells$obj]
+  mx <- as.numeric(tapply(s, cells$stage, max))
+  s <- s - mx[cells$stage]
+  e <- exp(s)
   den <- rowsum(e, cells$stage)[, 1L]
-  e / den[cells$stage]
+  s - log(den[cells$stage])
 }
 
+.pl_prob <- function(beta, cells) exp(.pl_log_prob(beta, cells))
+
 .pl_ll <- function(beta, cells) {
-  p <- .pl_prob(beta, cells)
-  sum(log(p[cells$y == 1L]))
+  lp <- .pl_log_prob(beta, cells)
+  sum(lp[cells$y == 1L])
 }
 
 .pl_grad <- function(beta, cells, K) {
@@ -98,9 +103,12 @@
     beta <- beta0 + drop(B %*% theta)
     g <- crossprod(B, .pl_grad(beta, cells, K))
     H <- crossprod(B, .pl_hess(beta, cells, K) %*% B)
+    if (any(!is.finite(g)) || any(!is.finite(H))) break
     if (max(abs(g)) < 1e-6 * n_units) { converged <- TRUE; break }
     step <- tryCatch(-solve(H, g), error = function(e) NULL)
-    if (is.null(step)) step <- -solve(H - diag(1e-6, nrow(H)), g)
+    if (is.null(step)) step <- tryCatch(-solve(H - diag(1e-6, nrow(H)), g),
+                                        error = function(e) NULL)
+    if (is.null(step) || any(!is.finite(step))) break
     step <- drop(step)
     lam <- 1
     repeat {
@@ -110,6 +118,7 @@
       lam <- lam / 2
       if (lam < 1e-8) break
     }
+    if (!is.finite(ll_new) || ll_new < ll - 1e-10) break
     theta <- cand; ll <- ll_new
     if (max(abs(lam * step)) < tol) {
       beta <- beta0 + drop(B %*% theta)
@@ -119,6 +128,8 @@
     }
   }
   beta <- beta0 + drop(B %*% theta)
+  converged <- isTRUE(converged) && .likelihood_curvature_ok(
+    crossprod(B, .pl_hess(beta, cells, K) %*% B))
   list(theta = theta, beta = beta, ll = ll, iterations = it,
        converged = converged)
 }
@@ -138,7 +149,7 @@
 # origin is the anchors present or a sum-zero constraint. NULL when the
 # subset cannot be fitted.
 .pl_group_fit <- function(cells, sel_stage, fk, anch, cl_ids, sandwich,
-                          maxit, tol) {
+                          maxit, tol, judge_clustered = FALSE) {
   sel <- sel_stage[cells$stage]
   kept <- unique(cells$stage[sel])
   g <- list(stage = match(cells$stage[sel], kept), obj = cells$obj[sel],
@@ -148,7 +159,8 @@
   repeat {
     present <- tabulate(g$obj, fk)
     chosen <- tabulate(g$obj[g$y == 1L], fk)
-    ext <- which(in_set & present > 0 & (chosen == 0 | chosen == present))
+    ext <- which(in_set & !seq_len(fk) %in% anch$idx &
+                   present > 0 & (chosen == 0 | chosen == present))
     if (!length(ext)) break
     in_set[ext] <- FALSE
     drop_stage <- unique(g$stage[g$y == 1L & g$obj %in% ext])
@@ -167,6 +179,7 @@
   adj <- matrix(FALSE, fk, fk)
   ch <- g$obj[g$y == 1L][g$stage]
   adj[cbind(ch[g$y == 0L], g$obj[g$y == 0L])] <- TRUE
+  if (length(anch$idx)) adj[anch$idx, anch$idx] <- TRUE
   if (!all(.pl_reach(adj[fit_idx, fit_idx, drop = FALSE]))) return(NULL)
   g$obj <- match(g$obj, fit_idx)
   a_idx <- which(fit_idx %in% anch$idx)
@@ -180,27 +193,45 @@
     B <- rbind(diag(m - 1L), -1)
   }
   np <- ncol(B)
-  fit <- .pl_newton(g, m, B, beta0, rep(0, np), maxit, tol)
+  start <- rep(if (length(a_idx)) mean(beta0[a_idx]) else 0, np)
+  fit <- .pl_newton(g, m, B, beta0, start, maxit, tol)
   if (!isTRUE(fit$converged)) return(NULL)
   H <- crossprod(B, .pl_hess(fit$beta, g, m) %*% B)
   bread <- tryCatch(solve(-H), error = function(e) NULL)
   if (is.null(bread)) return(NULL)
   cov_th <- bread
   se_type <- "model"
+  influence <- NULL
   if (sandwich) {
-    cl <- match(cl, unique(cl))
     G <- .pl_scores(fit$beta, g, m, cl) %*% B
-    M <- crossprod(G)
-    sv <- svd(M, nu = 0, nv = 0)$d
-    if (length(sv) && max(sv) > 0 &&
-        sum(sv > max(sv) * sqrt(.Machine$double.eps)) >= np) {
-      cov_th <- bread %*% M %*% bread
+    # Retain the original cluster indices so the two groups' influence
+    # functions can be differenced within the same ranking or judge.
+    influence <- matrix(0, max(cl_ids), m)
+    influence[seq_len(nrow(G)), ] <- G %*% bread %*% t(B)
+    if (.pl_cluster_support(G, cl, np, judge_clustered)) {
+      correction <- if (judge_clustered) max(cl_ids) / (max(cl_ids) - 1L) else 1
+      influence <- influence * sqrt(correction)
+      cov_th <- correction * bread %*% crossprod(G) %*% bread
       se_type <- "sandwich"
+    } else {
+      cov_th[] <- NA_real_; influence[] <- NA_real_
+      se_type <- "withheld"
     }
   }
   list(fit_idx = fit_idx, beta = fit$beta, cov = B %*% cov_th %*% t(B),
        ll = fit$ll, np = np, n_stages = g$n_stages, cells = g,
-       anchored = length(a_idx) > 0, se_type = se_type)
+       anchored = length(a_idx) > 0, se_type = se_type,
+       influence = influence, n_clusters = length(unique(cl)))
+}
+
+.pl_cluster_support <- function(G, cluster, np, judge_clustered) {
+  sv <- svd(crossprod(G), nu = 0, nv = 0)$d
+  rank <- if (!length(sv) || max(sv) <= 0) 0L else
+    sum(sv > max(sv) * sqrt(.Machine$double.eps))
+  shares <- as.numeric(table(cluster)) / length(cluster)
+  neff <- 1 / sum(shares^2)
+  rank >= np && (!judge_clustered ||
+    (length(shares) >= 10L && neff >= 8 && neff > np))
 }
 
 #' Rank analysis with the Plackett-Luce model
@@ -218,9 +249,11 @@
 #' or at the values in \code{anchors}. Standard errors are Godambe sandwich
 #' errors clustered by judge when a judge column is given and by ranking
 #' otherwise, subject to the same conditions as \code{btl()}: with fewer
-#' than ten judges, fewer judges than parameters, or fewer than eight
-#' effective judges, the clustered covariance is not calibrated and is
-#' withheld with a note. \code{se = "model"} instead reports the
+#' than ten judges, fewer than eight effective judges, no residual effective
+#' cluster degrees of freedom, or a rank-deficient score covariance, errors
+#' are withheld with a note. Judge-clustered errors include the
+#' \eqn{G/(G-1)} correction, where \eqn{G} is the judge count.
+#' \code{se = "model"} instead reports the
 #' information-based errors of the Plackett-Luce likelihood, which are
 #' valid when the model holds and the rankings are independent, and are
 #' available whatever the design.
@@ -233,7 +266,7 @@
 #' consensus makes very unlikely stands out.
 #'
 #' An object that is chosen at every stage it appears in, or never chosen
-#' at any stage with an alternative, has no finite location (the undefeated
+#' at any stage with an alternative, and is not anchored, has no finite location (the undefeated
 #' or winless case of a paired comparison). It is set aside and reported
 #' with \code{extreme = TRUE} at an extrapolated location, its score moved
 #' half a choice inside the boundary against the calibrated objects. A
@@ -256,6 +289,11 @@
 #' statistic for the two non-nested models (positive favours best-first)
 #' and the correlation and largest difference between the two sets of
 #' locations. It is a check on the ranking process, not on the objects.
+#' When judges are recorded, the likelihood differences are clustered by
+#' judge and referred to a t distribution on judges minus one degrees of
+#' freedom. Inference is withheld without sufficient cluster support. The
+#' reference is asymptotic and assumes the two readings are distinguishable;
+#' it does not test distinguishability at their common equal-worth model.
 #'
 #' \strong{Invariance check.} Luce's choice axiom, which the model rests
 #' on, says that once an object is chosen the remaining objects compete on
@@ -272,15 +310,21 @@
 #' calibrated in both groups also receives a Wald contrast of its two
 #' locations, the groups centred on the objects they share unless both are
 #' on the anchor scale, with Holm-adjusted p values. The contrasts use the
-#' same covariance as the main fit; the likelihood ratio treats the choices
-#' as independent, which holds within a ranking but not across the rankings
-#' of one judge, so with few judges read the Wald contrasts rather than the
-#' ratio. The check is withheld with a note when every ranking has a single
+#' requested covariance as the main fit, including the covariance between
+#' early and later estimates from the same ranking or judge. Each group
+#' must support that covariance; ordinary errors never replace withheld
+#' sandwich errors. Judge-clustered contrasts use a t reference, and the
+#' likelihood-ratio probability is withheld because it assumes independent
+#' rankings. With \code{se = "model"}, independence is assumed and the
+#' likelihood-ratio reference is chi-square. The check is withheld with a
+#' note when every ranking has a single
 #' informative choice (a design of pairs), when a group cannot calibrate
 #' the objects on its own, or when fewer than two objects are calibrated in
 #' both groups. It answers a different question from the reversal check: a
 #' set of rankings may fit better reversed and still be invariant across
 #' positions, or fail invariance in either direction.
+#' With few distinct rankings, the contrasts can be conservative or
+#' unavailable even when the main calibration has usable standard errors.
 #'
 #' @param data A data frame in long format: one row per object per ranking.
 #' @param ranking,object,rank Names of the columns holding the ranking
@@ -354,13 +398,15 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
   data <- as.data.frame(data)
   for (nm in c("ranking", "object", "rank", "judge")) {
     v <- get(nm, inherits = FALSE)
-    if (!is.null(v)) .check_reshape_column(data, v, nm)
+    if (nm != "judge" || !is.null(v)) .check_reshape_column(data, v, nm)
   }
   roles <- c(ranking, object, rank, judge)
   if (anyDuplicated(roles))
     stop("ranking role columns must be distinct; repeated: ",
          paste(unique(roles[duplicated(roles)]), collapse = ", "))
   rid <- .role_text_values(data[[ranking]])
+  if (any(!is.na(rid) & !nzchar(rid)))
+    stop("blank ranking identifier(s) in ", ranking)
   ob <- .role_text_values(data[[object]])
   if (any(!is.na(ob) & !nzchar(ob)))
     stop("blank object identifier(s) in ", object,
@@ -459,7 +505,8 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
   repeat {
     present <- tabulate(cells$obj, K)
     chosen <- tabulate(cells$obj[cells$y == 1L], K)
-    ext <- which(in_set & present > 0 & (chosen == 0 | chosen == present))
+    ext <- which(in_set & !objs %in% names(anchors) &
+                   present > 0 & (chosen == 0 | chosen == present))
     if (!length(ext)) break
     extreme <- c(extreme, objs[ext])
     in_set[ext] <- FALSE
@@ -494,6 +541,12 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
   adj <- matrix(FALSE, K, K)
   ch <- cells$obj[cells$y == 1L][cells$stage]
   adj[cbind(ch[cells$y == 0L], cells$obj[cells$y == 0L])] <- TRUE
+  # Fixed locations link the anchored objects even when their outcomes do
+  # not. Free objects must still be bounded in both directions.
+  if (length(anchors)) {
+    ai <- match(names(anchors), objs)
+    adj[ai, ai] <- TRUE
+  }
   adj <- adj[fit_idx, fit_idx, drop = FALSE]
   reach <- .pl_reach(adj)
   if (!all(reach)) {
@@ -527,7 +580,8 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
     B <- rbind(diag(fk - 1L), -1)
   }
   np <- ncol(B)
-  fit <- .pl_newton(cells, fk, B, beta0, rep(0, np), maxit, tol)
+  start <- rep(if (length(anch_idx)) mean(beta0[anch_idx]) else 0, np)
+  fit <- .pl_newton(cells, fk, B, beta0, start, maxit, tol)
   if (!fit$converged)
     warning("pl estimation did NOT converge in ", fit$iterations,
             " iterations; estimates and standard errors are unreliable",
@@ -552,10 +606,9 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
       shr <- tabulate(cl_ids, nc) / cells$n_stages
       1 / sum(shr^2)
     }
-    ok <- score_rank >= np && (is.null(jd) ||
-      (nc >= 10L && nc > np && nc_eff >= 8))
+    ok <- .pl_cluster_support(G, cl_ids, np, !is.null(jd))
     if (ok) {
-      cov_th <- bread %*% M %*% bread
+      cov_th <- bread %*% M %*% bread * if (is.null(jd)) 1 else nc / (nc - 1L)
     } else {
       se_available <- FALSE
       notes <- c(notes, if (is.null(jd)) sprintf(
@@ -566,6 +619,12 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
     }
   } else if (se_available) {
     cov_th <- bread
+  }
+  if (se_available && se == "sandwich" && !is.null(jd)) {
+    shares <- tabulate(cl_ids, nc) / cells$n_stages
+    if (1 / sum(shares^2) < 9.5 || max(shares) > .2)
+      notes <- c(notes, paste("ranking allocation is uneven across judges;",
+                              "clustered inference needs caution"))
   }
   cov_beta <- matrix(NA_real_, K, K, dimnames = list(objs, objs))
   se_b <- rep(NA_real_, K)
@@ -632,7 +691,7 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
     T_e <- sum(cells0$y[cells0$obj == e][st_ok])
     Tstar <- if (T_e <= 0) 0.5 else n_e - 0.5
     g <- function(th) sum(vapply(sets, function(o) {
-      d <- c(th, loc[o]); exp(th) / sum(exp(d))
+      d <- c(th, loc[o]); e <- exp(d - max(d)); e[1L] / sum(e)
     }, 0)) - Tstar
     lim <- range(beta) + c(-12, 12)
     root <- tryCatch(stats::uniroot(g, lim, tol = 1e-8)$root,
@@ -641,7 +700,7 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
   }
 
   # per-ranking surprise
-  lp <- log(p)
+  lp <- .pl_log_prob(beta, cells)
   E_s <- rowsum(p * lp, cells$stage)[, 1L]
   V_s <- rowsum(p * lp^2, cells$stage)[, 1L] - E_s^2
   ll_s <- lp[y == 1L]
@@ -698,9 +757,10 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
       ok_rev <- fwd$n_stages > 0 && rev$n_stages > 0 &&
         all(tabulate(fwd$obj, fk) > 0) && all(tabulate(rev$obj, fk) > 0)
       if (ok_rev) {
-        f_fwd <- if (length(complete) == R) fit else
-          .pl_newton(fwd, fk, B, beta0, rep(0, np), maxit, tol)
-        f_rev <- .pl_newton(rev, fk, B, beta0, rep(0, np), maxit, tol)
+        f_fwd <- .pl_newton(fwd, fk, B, beta0, start, maxit, tol)
+        # Worst-first locations have the opposite orientation, including
+        # every fixed anchor, before being mapped back for comparison.
+        f_rev <- .pl_newton(rev, fk, B, -beta0, -start, maxit, tol)
         if (isTRUE(f_fwd$converged) && isTRUE(f_rev$converged)) {
           p_f <- .pl_prob(f_fwd$beta, fwd); p_r <- .pl_prob(f_rev$beta, rev)
           rf <- fwd$ranking; rv <- rev$ranking
@@ -708,14 +768,32 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
           llr <- rowsum(log(p_r[rev$y == 1L]), rv)[, 1L]
           d <- llf - llr[names(llf)]
           n_d <- length(d)
-          zv <- if (n_d > 1 && stats::sd(d) > 0)
+          ref_df <- Inf
+          if (!is.null(jd)) {
+            clu <- judge_of[as.integer(names(d))]
+            # Cluster sums of the centred ranking likelihood differences.
+            influence <- rowsum(d - mean(d), clu)[, 1L]
+            Gd <- length(influence)
+            denom <- if (Gd > 1L)
+              sqrt(sum(influence^2) * Gd / (Gd - 1L)) else NA_real_
+            cf <- match(judge_of[fwd$ranking], unique(clu))
+            cr <- match(judge_of[rev$ranking], unique(clu))
+            supported <- .pl_cluster_support(
+              .pl_scores(f_fwd$beta, fwd, fk, cf) %*% B, cf, np, TRUE) &&
+              .pl_cluster_support(.pl_scores(f_rev$beta, rev, fk, cr) %*% B,
+                                   cr, np, TRUE)
+            zv <- if (se_available && supported && is.finite(denom) && denom > 0)
+              sum(d) / denom else NA_real_
+            ref_df <- Gd - 1L
+          } else zv <- if (n_d > 1 && stats::sd(d) > 0)
             mean(d) / (stats::sd(d) / sqrt(n_d)) else NA_real_
           loc_r <- -f_rev$beta
-          loc_r <- loc_r - mean(loc_r) + mean(f_fwd$beta)
+          if (!length(anch_idx)) loc_r <- loc_r - mean(loc_r) + mean(f_fwd$beta)
           reversal <- list(
             n_rankings = n_d,
             loglik_forward = sum(llf), loglik_reversed = sum(llr),
-            z = zv, p = if (is.finite(zv)) 2 * stats::pnorm(-abs(zv)) else NA_real_,
+            z = zv, ref_df = ref_df,
+            p = if (is.finite(zv)) 2 * stats::pt(-abs(zv), ref_df) else NA_real_,
             correlation = if (fk > 2) stats::cor(f_fwd$beta, loc_r) else NA_real_,
             max_abs_difference = max(abs(f_fwd$beta - loc_r)),
             objects = data.frame(object = objs[fit_idx],
@@ -741,7 +819,7 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
     anch <- list(idx = anch_idx, value = beta0[anch_idx])
     gf <- if (all(1:2 %in% grp)) lapply(1:2, function(g)
       .pl_group_fit(cells, grp == g, fk, anch, cl_ids,
-                    se_available && se == "sandwich", maxit, tol)) else
+                    se == "sandwich", maxit, tol, !is.null(jd))) else
       list(NULL, NULL)
     common <- if (any(vapply(gf, is.null, NA))) integer(0) else
       intersect(gf[[1]]$fit_idx, gf[[2]]$fit_idx)
@@ -756,6 +834,7 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
     } else {
       # the restricted model is fitted to the stages the groups kept
       same <- sum(vapply(gf, function(g) g$n_stages, 0L)) == cells$n_stages
+      pool_converged <- TRUE
       if (same) {
         ll_pool <- fit$ll; np_pool <- np
       } else {
@@ -769,10 +848,12 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
         a_idx <- which(pool_idx %in% anch_idx)
         b0 <- numeric(m)
         if (length(a_idx)) {
-          b0[a_idx] <- beta0[match(pool_idx[a_idx], anch_idx)]
+          b0[a_idx] <- beta0[pool_idx[a_idx]]
           Bp <- diag(m)[, setdiff(seq_len(m), a_idx), drop = FALSE]
         } else Bp <- rbind(diag(m - 1L), -1)
-        pf <- .pl_newton(uc, m, Bp, b0, rep(0, ncol(Bp)), maxit, tol)
+        ps <- rep(if (length(a_idx)) mean(b0[a_idx]) else 0, ncol(Bp))
+        pf <- .pl_newton(uc, m, Bp, b0, ps, maxit, tol)
+        pool_converged <- isTRUE(pf$converged)
         ll_pool <- pf$ll; np_pool <- ncol(Bp)
       }
       lr <- 2 * (gf[[1]]$ll + gf[[2]]$ll - ll_pool)
@@ -789,16 +870,22 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
           Cm <- Cm - matrix(cvec, length(cidx), m, byrow = TRUE)
         }
         list(loc = drop(Cm %*% g$beta),
-             var = pmax(diag(Cm %*% g$cov %*% t(Cm)), 0))
+             var = pmax(diag(Cm %*% g$cov %*% t(Cm)), 0),
+             influence = if (!is.null(g$influence)) g$influence %*% t(Cm))
       })
       d <- loc_g[[1]]$loc - loc_g[[2]]$loc
-      se_d <- sqrt(loc_g[[1]]$var + loc_g[[2]]$var)
+      se_d <- if (se == "sandwich") sqrt(colSums(
+        (loc_g[[1]]$influence - loc_g[[2]]$influence)^2)) else
+        sqrt(loc_g[[1]]$var + loc_g[[2]]$var)
+      if (!se_available || !pool_converged) se_d[] <- NA_real_
       zc <- ifelse(se_d > 0, d / se_d, NA_real_)
-      p_obj <- 2 * stats::pnorm(-abs(zc))
+      ref_df <- if (se == "sandwich" && !is.null(jd))
+        min(vapply(gf, `[[`, 0L, "n_clusters")) - 1L else Inf
+      p_obj <- 2 * stats::pt(-abs(zc), ref_df)
       inv_obj <- data.frame(object = objs[fit_idx][common],
                             group1 = loc_g[[1]]$loc, group2 = loc_g[[2]]$loc,
                             difference = d, se = se_d, z = zc, p = p_obj,
-                            p_adj = stats::p.adjust(p_obj, "holm"),
+                            p_adj = .p_adjust_family(p_obj, "holm"),
                             stringsAsFactors = FALSE)
       names(inv_obj)[2:3] <- if (split == "first") c("first", "later") else
         c("early", "late")
@@ -811,11 +898,19 @@ pl <- function(data, ranking = "ranking", object = "object", rank = "rank",
                             loglik = vapply(gf, function(g) g$ll, 0),
                             stringsAsFactors = FALSE),
         lr = lr, df = df_lr,
-        p = if (df_lr >= 1) stats::pchisq(lr, df_lr, lower.tail = FALSE) else NA_real_,
+        p = if (df_lr >= 1 && pool_converged && lr >= -1e-7 &&
+                  (is.null(jd) || se == "model"))
+          stats::pchisq(max(lr, 0), df_lr, lower.tail = FALSE) else NA_real_,
         loglik_pooled = ll_pool,
         objects = inv_obj,
-        se_type = if (all(vapply(gf, function(g) g$se_type, "") == "sandwich"))
-          "sandwich" else "model")
+        ref_df = ref_df,
+        se_type = if (all(is.na(se_d))) "withheld" else se)
+      if (se == "sandwich" && !is.null(jd)) notes <- c(notes, paste(
+        "the invariance likelihood-ratio p value is withheld for judge-clustered",
+        "rankings; the contrasts use the joint cluster sandwich"))
+      if (all(is.na(se_d))) notes <- c(notes, paste(
+        "invariance contrast standard errors and tests are withheld:",
+        "the fitted groups do not support the requested covariance"))
     }
   }
 

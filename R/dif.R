@@ -595,6 +595,13 @@
 # algorithm stamp: a result may have the current omnibus adjustment while its
 # stored post-hoc estimates still come from the older name-only hand-off.
 .dif_followup_algorithm <- "normalized-design-1"
+.dif_interval_algorithm <- "common-split-1"
+
+.dif_intervals_current <- function(result, fit) {
+  if (!is.list(fit) || !length(fit$split_map) ||
+      !anyDuplicated(unname(fit$split_map))) return(TRUE)
+  is.list(result) && identical(result$interval_algorithm, .dif_interval_algorithm)
+}
 
 .dif_followups_current <- function(dif) {
   if (!is.list(dif)) return(FALSE)
@@ -1381,6 +1388,7 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
               summary_term_ids = summary_term_ids,
               n_groups = nlevels(as.factor(ci)), within = within,
               algorithm = "joint-between-1",
+              interval_algorithm = .dif_interval_algorithm,
               factor_names = fnames,
               between_covariance = if (length(joint_between_items))
                 "HC3 for uniform factor terms; CR3 for incomplete panels" else
@@ -1568,6 +1576,9 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
     stop("`dif` predates fitted-model provenance; recompute it from this fit")
   if (!.fit_boot_signature_matches(dif$fit_signature, fit))
     stop("`dif` was computed from a different fitted model")
+  if (!.dif_intervals_current(dif, fit))
+    stop("`dif` predates the common split-item class intervals; recompute it",
+         call. = FALSE)
   .validate_primary_dif_tables(dif, "item", c("Residuals", "ci"), ":ci")
   if (length(dif$within) && !identical(dif$algorithm, "joint-between-1"))
     stop("`dif` predates joint adjustment for incomplete panels; recompute it",

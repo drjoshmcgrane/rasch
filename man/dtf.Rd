@@ -34,9 +34,10 @@ least two items.}
 \item{reference}{The level of \code{by} the other groups are compared
 with; the first level by default.}
 
-\item{p_adjust}{Multiplicity adjustment over the item shifts and,
-separately, the bundle shifts; a method of
-\code{\link[stats]{p.adjust}}.}
+\item{p_adjust}{A method of \code{\link[stats]{p.adjust}}. Adjustment
+covers the split-item contrasts and, separately, each test- or
+bundle-summary measure across its reported groups and bundles.
+Unavailable tests remain in their families.}
 
 \item{alpha}{Significance level for the adjusted probabilities.}
 
@@ -49,7 +50,9 @@ A list of class \code{"rasch_dtf"} with tables \code{test} (one
   \code{bundles} (\code{NULL} unless requested), \code{scores} (the
   score-to-measure differences) and \code{curves}; \code{anchors}, the
   unsplit items; \code{groups}, \code{reference}, \code{by} and
-  \code{notes}.
+  \code{notes}. Probabilities ending in \code{_adj} are adjusted;
+  flags and printed tables use these probabilities. \code{ref_df} gives
+  the reference degrees of freedom (infinite for independent persons).
 }
 \description{
 Measures how much a test, or a bundle of its items, functions differently
@@ -96,15 +99,21 @@ quantities \eqn{\partial E_i/\partial\tau_{ik}=-\mathrm{Cov}(X_i,
 1[X_i\ge k])} and \eqn{\partial E_i/\partial\theta=\mathrm{Var}(X_i)}.
 The unsigned summaries carry a delta-method standard error but no test:
 a folded difference has no null distribution at zero.
+These errors treat the selected splits, anchors and person locations used
+as averaging points as fixed. They do not include selection uncertainty
+or uncertainty in the population distribution of persons. Repeated-person
+calibrations use their supported cluster degrees of freedom for t and F
+references; otherwise the references are normal and chi-square.
 
 A bundle (Douglas, Roussos and Stout 1996) is a named set of source
 items. Its table gives the mean of its members' shifts with a Wald test,
-a homogeneity chi-square on one fewer degree of freedom than the bundle
-has members (do the members shift by the same amount?), and the signed
+a homogeneity test (do the members shift by the same amount?), and the signed
 and unsigned expected-score differences over the bundle alone, as a
 percentage of the bundle's score range. \code{\link{dif_anova}} tests
 whether a bundle functions differently; this function sizes the
 difference.
+The homogeneity degrees of freedom are the rank of the shift-contrast
+covariance; several unsplit members repeat the same fixed-zero shift.
 }
 \examples{
 set.seed(1); n <- 600

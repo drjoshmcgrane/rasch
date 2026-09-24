@@ -747,6 +747,7 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
     sprintf("%d externally anchored item-factor(s) not split (%s)",
             length(skipped_anchor), paste(skipped_anchor, collapse = "; ")))
   out <- list(algorithm = "factor-design-resolution-3",
+              interval_algorithm = .dif_interval_algorithm,
               fit = cur, splits = split_df, n_splits = nrow(split_df),
               stopped = stopped, dif = final_dif, notes = notes,
               effects = effects, criterion = criterion,

@@ -124,7 +124,8 @@ agree about the items.
 \details{
 The response frame contributes the conditional likelihood of each
 person's pattern given the raw score under the partial credit model, so
-persons are eliminated exactly as in \code{\link{rasch}}; a dichotomous
+person parameters are eliminated. Unlike the pairwise likelihood in
+\code{\link{rasch}}, this conditions on the whole response score. A dichotomous
 item has one threshold, its location. Comparisons contribute the
 Bradley-Terry likelihood \eqn{P(a \succ b) = \mathrm{logistic}\{\alpha
 (\lambda_a - \lambda_b)\}}, in which a judge's own location cancels.
@@ -134,7 +135,9 @@ objects being \eqn{n - 1} sequential choices with \eqn{P(\text{next} = a)
 \eqn{n = 2} it is Bradley-Terry. The three blocks share the thresholds
 and are summed, so the estimator is a full likelihood: standard errors
 are from the inverse observed information and no weighting of the sources
-is required.
+is required. This assumes independent response rows, independent
+comparisons or rankings within each source, and independent sources.
+Repeated judgements from the same judge are not cluster-adjusted here.
 
 What a judge compares is an object. By default an object is an item and
 its location \eqn{\lambda} is the mean of the item's thresholds, so
@@ -156,15 +159,17 @@ The model assumes each object has one location across the frames it
 appears in. \code{invariance} tests that assumption in two ways. The
 likelihood ratio compares the fitted model with separate locations per
 frame (under which the units are absorbed into the locations and drop
-out); each judgement frame then has one free location per object it
-judges, less one per connected block of its own design, and the degrees
-of freedom are the total of those less the number of free units. The
+out). Each separate calibration has one origin constraint per connected
+block. The degrees of freedom are the sum of their free parameter counts
+minus the joint model's count, including its estimated units. The
 object table places each frame's separate calibration on the reference
 scale by dividing by the fitted unit, centres it within each block, and
 tests each object's difference from the reference calibration by a Wald
-statistic that conditions on the fitted unit; probabilities are
-Holm-adjusted across objects. An object that fails is one the judges and
-the test-takers disagree about, and combining the sources moves its
+statistic. Its covariance includes uncertainty in the fitted units and
+their shared-data covariance with the separate calibrations, using the
+joint information and the delta method. Probabilities are Holm-adjusted
+across objects within each frame comparison. An object that fails is one
+the judges and the test-takers disagree about, and combining the sources moves its
 estimate toward whichever source has the more information.
 
 Items are calibrated when at least one frame reaches them, and a
@@ -219,7 +224,7 @@ The judgement tables name persons by the row names of \code{data}, by
 the \code{id} column or vector, or by \code{"P1"}, \code{"P2"}, ...
 when there are none; a person judged but absent from \code{data} has no
 responses and is placed by the judgements. Threshold columns have no
-meaning here and are ignored.
+meaning here and must be omitted or missing.
 
 A person has a finite location when the evidence points both ways: a
 score inside its range, or at least one win and one loss (a rank above
@@ -231,7 +236,9 @@ whose members has responses is not on the test scale and is refused. The
 invariance table compares each frame's separate placement of every
 person, divided by the fitted unit and centred within each connected
 block of the design over the persons both frames locate, with the
-response placement, by a Wald contrast with Holm adjustment. There is no
+response placement, by a Wald contrast with Holm adjustment. The contrast
+covariance includes estimation of the test shifts and all linking units.
+The anchored item calibration is treated as fixed. There is no
 likelihood ratio test in this mode: the separate model has a location
 per person per frame, so its parameters grow with the persons and the
 ratio is not chi-square. A person who fails is one whose judged work
@@ -289,7 +296,8 @@ head(pfit$persons)
 
 # two tests with no item in common, linked by comparisons of their items
 delta2 <- 1.5 * delta; names(delta2) <- sprintf("J\%02d", 1:8)
-X2 <- sapply(delta2, function(d) as.integer(runif(300) < plogis(rnorm(300) - d)))
+theta2 <- 1.5 * rnorm(300)
+X2 <- sapply(delta2, function(d) as.integer(runif(300) < plogis(theta2 - d)))
 both <- c(delta, delta / 1)
 names(both) <- c(names(delta), names(delta2))
 pairs <- t(combn(names(both), 2))[sample(120, 400, replace = TRUE), ]

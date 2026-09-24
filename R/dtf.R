@@ -132,15 +132,21 @@
 #' 1[X_i\ge k])} and \eqn{\partial E_i/\partial\theta=\mathrm{Var}(X_i)}.
 #' The unsigned summaries carry a delta-method standard error but no test:
 #' a folded difference has no null distribution at zero.
+#' These errors treat the selected splits, anchors and person locations used
+#' as averaging points as fixed. They do not include selection uncertainty
+#' or uncertainty in the population distribution of persons. Repeated-person
+#' calibrations use their supported cluster degrees of freedom for t and F
+#' references; otherwise the references are normal and chi-square.
 #'
 #' A bundle (Douglas, Roussos and Stout 1996) is a named set of source
 #' items. Its table gives the mean of its members' shifts with a Wald test,
-#' a homogeneity chi-square on one fewer degree of freedom than the bundle
-#' has members (do the members shift by the same amount?), and the signed
+#' a homogeneity test (do the members shift by the same amount?), and the signed
 #' and unsigned expected-score differences over the bundle alone, as a
 #' percentage of the bundle's score range. \code{\link{dif_anova}} tests
 #' whether a bundle functions differently; this function sizes the
 #' difference.
+#' The homogeneity degrees of freedom are the rank of the shift-contrast
+#' covariance; several unsplit members repeat the same fixed-zero shift.
 #'
 #' @param fit A \code{\link{resolve_dif}} result, a \code{\link{rasch}} fit
 #'   whose items were split with \code{\link{split_items}}, or an ordinary
@@ -155,9 +161,10 @@
 #'   least two items.
 #' @param reference The level of \code{by} the other groups are compared
 #'   with; the first level by default.
-#' @param p_adjust Multiplicity adjustment over the item shifts and,
-#'   separately, the bundle shifts; a method of
-#'   \code{\link[stats]{p.adjust}}.
+#' @param p_adjust A method of \code{\link[stats]{p.adjust}}. Adjustment
+#'   covers the split-item contrasts and, separately, each test- or
+#'   bundle-summary measure across its reported groups and bundles.
+#'   Unavailable tests remain in their families.
 #' @param alpha Significance level for the adjusted probabilities.
 #' @param grid Number of locations on which the curves are evaluated,
 #'   spanning the fitted persons' locations.
@@ -166,7 +173,9 @@
 #'   \code{bundles} (\code{NULL} unless requested), \code{scores} (the
 #'   score-to-measure differences) and \code{curves}; \code{anchors}, the
 #'   unsplit items; \code{groups}, \code{reference}, \code{by} and
-#'   \code{notes}.
+#'   \code{notes}. Probabilities ending in \code{_adj} are adjusted;
+#'   flags and printed tables use these probabilities. \code{ref_df} gives
+#'   the reference degrees of freedom (infinite for independent persons).
 #' @references
 #' Chalmers, R. P. (2018). Model-based measures for detecting and
 #' quantifying response bias. Psychometrika, 83(3), 696--732.
@@ -225,8 +234,8 @@ dtf <- function(fit, by = NULL, items = NULL, bundles = NULL,
   if (!isTRUE(fit$est$converged))
     stop("the fitted calibration did not converge; DTF is unavailable",
          call. = FALSE)
-  if (!is.null(fit$disc) && length(unique(fit$disc)) > 1L)
-    stop("DTF needs items sharing one discrimination", call. = FALSE)
+  if (!is.null(fit$disc) && any(fit$disc != 1))
+    stop("DTF needs an ordinary calibration with discrimination one", call. = FALSE)
   if (is.null(by) && !is.null(fit$factors) && ncol(fit$factors) == 1L)
     by <- names(fit$factors)
   g <- .dtf_groups(fit, by)
@@ -287,12 +296,15 @@ dtf <- function(fit, by = NULL, items = NULL, bundles = NULL,
   thr <- fit$thresholds
   n_par <- nrow(thr)
   cv <- fit$est$cov_tau
-  cov_ok <- is.matrix(cv) && identical(dim(cv), c(n_par, n_par)) &&
-    all(is.finite(cv))
+  ref_df <- .dif_refit_df(fit)
+  used_items <- unique(unlist(copies, use.names = FALSE))
+  weak <- .dif_weak_levels(fit, as.list(match(used_items, fit$items$item)))
+  cov_ok <- .covariance_supports_wald(cv, n_par) && !any(weak) &&
+    !is.na(ref_df) && ref_df > 0
   if (!cov_ok) {
     cv <- NULL
     notes <- c(notes, paste(
-      "the threshold covariance is unavailable, so standard errors and",
+      "the threshold covariance, category support or independent-person support is unavailable, so standard errors and",
       "tests are withheld"))
   }
   item_index <- function(name) match(name, fit$items$item)
@@ -333,7 +345,7 @@ dtf <- function(fit, by = NULL, items = NULL, bundles = NULL,
     ses <- vapply(vecs, .dtf_se, 0, cv = cv)
     ses[!split] <- if (cov_ok) 0 else NA_real_
     z <- ifelse(split, .wald_ratio(shifts, ses), NA_real_)
-    p <- 2 * stats::pnorm(-abs(z))
+    p <- 2 * stats::pt(-abs(z), ref_df)
     item_rows[[lv]] <- data.frame(
       group = lv, item = sources, item_group = unname(cp),
       item_reference = unname(cr),
@@ -410,10 +422,20 @@ dtf <- function(fit, by = NULL, items = NULL, bundles = NULL,
         S <- t(Vb) %*% cv %*% Vb
         C <- cbind(-1, diag(k - 1L))
         d <- C %*% shifts[idx]; W <- C %*% S %*% t(C)
-        q <- tryCatch(drop(t(d) %*% solve(W, d)), error = function(e) NA_real_)
-        if (is.finite(q))
-          hom <- c(chisq = q, df = k - 1, p = stats::pchisq(q, k - 1,
-                                                          lower.tail = FALSE))
+        # Several invariant members repeat the same fixed-zero shift.
+        # Count the independent contrast directions, not the number of rows.
+        ee <- eigen((W + t(W)) / 2, symmetric = TRUE)
+        pos <- ee$values > max(abs(ee$values)) * 1e-8
+        qdf <- sum(pos)
+        if (qdf > 0L && .covariance_supports_wald(W)) {
+          dd <- drop(crossprod(ee$vectors, d))
+          null_ok <- all(abs(dd[!pos]) <= 1e-7 * max(1, abs(d)))
+          if (null_ok) {
+            q <- sum(dd[pos]^2 / ee$values[pos])
+            hom <- c(chisq = q, df = qdf,
+                     p = stats::pf(q / qdf, qdf, ref_df, lower.tail = FALSE))
+          }
+        }
       }
       bset <- list(tau = fs$tau[idx], ids = fs$ids[idx], n_par = n_par)
       rset <- list(tau = ref_set$tau[idx], ids = ref_set$ids[idx],
@@ -431,41 +453,40 @@ dtf <- function(fit, by = NULL, items = NULL, bundles = NULL,
   }
   items_tab <- do.call(rbind, item_rows); rownames(items_tab) <- NULL
   items_tab$p_adj <- NA_real_
-  tested <- is.finite(items_tab$p)
+  tested <- items_tab$split
   if (any(tested))
     items_tab$p_adj[tested] <- .p_adjust_family(items_tab$p[tested],
                                                 method = p_adjust)
-  items_tab$significant <- is.finite(items_tab$p_adj) & items_tab$p_adj < alpha
+  items_tab$significant <- items_tab$p_adj < alpha
   test_tab <- do.call(rbind, test_rows); rownames(test_tab) <- NULL
-  test_tab$p <- 2 * stats::pnorm(-abs(test_tab$z))
-  test_tab$p_sDTF_logit <- 2 * stats::pnorm(-abs(
-    .wald_ratio(test_tab$sDTF_logit, test_tab$se_sDTF_logit)))
-  test_tab$p_sDTF_score <- 2 * stats::pnorm(-abs(
-    .wald_ratio(test_tab$sDTF_score, test_tab$se_sDTF_score)))
+  test_tab$p <- 2 * stats::pt(-abs(test_tab$z), ref_df)
+  test_tab$p_sDTF_logit <- 2 * stats::pt(-abs(
+    .wald_ratio(test_tab$sDTF_logit, test_tab$se_sDTF_logit)), ref_df)
+  test_tab$p_sDTF_score <- 2 * stats::pt(-abs(
+    .wald_ratio(test_tab$sDTF_score, test_tab$se_sDTF_score)), ref_df)
   test_tab <- test_tab[, c("group", "n", "shift_mean", "se", "z", "p",
                            "sDTF_logit", "se_sDTF_logit", "p_sDTF_logit",
                            "uDTF_logit", "se_uDTF_logit",
                            "sDTF_score", "se_sDTF_score", "p_sDTF_score",
                            "uDTF_score", "se_uDTF_score",
                            "sDTF_pct", "uDTF_pct", "max_score")]
+  for (pname in c("p", "p_sDTF_logit", "p_sDTF_score"))
+    test_tab[[paste0(pname, "_adj")]] <- .p_adjust_family(test_tab[[pname]], p_adjust)
   bundles_tab <- NULL
   if (length(bundle_rows)) {
     bundles_tab <- do.call(rbind, bundle_rows); rownames(bundles_tab) <- NULL
-    bundles_tab$p <- 2 * stats::pnorm(-abs(bundles_tab$z))
-    bundles_tab$p_adj <- NA_real_
-    tested <- is.finite(bundles_tab$p)
-    if (any(tested))
-      bundles_tab$p_adj[tested] <- .p_adjust_family(bundles_tab$p[tested],
-                                                    method = p_adjust)
-    bundles_tab$significant <- is.finite(bundles_tab$p_adj) &
-      bundles_tab$p_adj < alpha
-    bundles_tab$p_sDBF_score <- 2 * stats::pnorm(-abs(
-      .wald_ratio(bundles_tab$sDBF_score, bundles_tab$se_sDBF_score)))
+    bundles_tab$p <- 2 * stats::pt(-abs(bundles_tab$z), ref_df)
+    bundles_tab$p_adj <- .p_adjust_family(bundles_tab$p, p_adjust)
+    bundles_tab$significant <- bundles_tab$p_adj < alpha
+    bundles_tab$p_sDBF_score <- 2 * stats::pt(-abs(
+      .wald_ratio(bundles_tab$sDBF_score, bundles_tab$se_sDBF_score)), ref_df)
     bundles_tab <- bundles_tab[, c(
       "group", "bundle", "n_items", "shift_mean", "se", "z", "p", "p_adj",
       "significant", "chisq_hom", "df_hom", "p_hom",
       "sDBF_score", "se_sDBF_score", "p_sDBF_score", "uDBF_score",
       "se_uDBF_score", "sDBF_pct", "uDBF_pct")]
+    for (pname in c("p_hom", "p_sDBF_score"))
+      bundles_tab[[paste0(pname, "_adj")]] <- .p_adjust_family(bundles_tab[[pname]], p_adjust)
   }
   scores_tab <- do.call(rbind, score_rows); rownames(scores_tab) <- NULL
   curves_tab <- do.call(rbind, curve_rows); rownames(curves_tab) <- NULL
@@ -474,7 +495,7 @@ dtf <- function(fit, by = NULL, items = NULL, bundles = NULL,
               anchors = anchors, dropped = dropped,
               by = g$label, reference = reference, groups = focal,
               max_score = M, n_items = length(sources),
-              alpha = alpha, p_adjust = p_adjust, notes = notes)
+              alpha = alpha, p_adjust = p_adjust, ref_df = ref_df, notes = notes)
   out <- .tag_tables(out)
   class(out) <- "rasch_dtf"
   out
@@ -563,14 +584,14 @@ print.rasch_dtf <- function(x, ...) {
                      "%d of %d items anchor the groups)\n"),
               x$by, x$reference, length(x$anchors), x$n_items))
   cat("Positive values: harder for the group than for the reference.\n")
-  show <- x$test[, c("group", "n", "shift_mean", "se", "p",
+  show <- x$test[, c("group", "n", "shift_mean", "se", "p_adj",
                      "sDTF_logit", "uDTF_logit", "sDTF_score", "uDTF_score",
                      "sDTF_pct", "uDTF_pct")]
   print(.fmt_df(show), row.names = FALSE)
   if (!is.null(x$bundles)) {
     cat("Bundles:\n")
     showb <- x$bundles[, c("group", "bundle", "n_items", "shift_mean", "se",
-                           "p_adj", "significant", "chisq_hom", "p_hom",
+                           "p_adj", "significant", "chisq_hom", "p_hom_adj",
                            "sDBF_score", "uDBF_score", "sDBF_pct")]
     print(.fmt_df(showb), row.names = FALSE)
   }
@@ -591,7 +612,8 @@ print.rasch_dtf <- function(x, ...) {
 #'
 #' @param x A \code{\link{dtf}} result.
 #' @param group The group to draw; the first compared group by default.
-#' @param ... Further arguments passed to \code{\link{plot}}.
+#' @param ... Further arguments passed to \code{\link{plot}} for the
+#'   expected-score panel, overriding its defaults.
 #' @return \code{x}, invisibly.
 #' @examples
 #' set.seed(2)
@@ -605,6 +627,8 @@ print.rasch_dtf <- function(x, ...) {
 #' plot_dtf(dtf(fit, by = "grp", items = c("I2", "I3")))
 #' @export
 plot_dtf <- function(x, group = NULL, ...) {
+  if (!inherits(x, "rasch_dtf"))
+    stop("`x` must be a dtf() result", call. = FALSE)
   if (is.null(group)) group <- x$groups[1L]
   if (length(group) != 1L || !group %in% x$groups)
     stop("`group` must be one of: ", paste(x$groups, collapse = ", "),
@@ -612,16 +636,16 @@ plot_dtf <- function(x, group = NULL, ...) {
   cu <- x$curves[x$curves$group == group, , drop = FALSE]
   op <- graphics::par(mfrow = c(2, 1), mar = c(4, 4, 2, 1))
   on.exit(graphics::par(op))
-  graphics::plot(cu$theta, cu$expected_reference, type = "l",
-                 xlab = "Location (logits)", ylab = "Expected score",
-                 ylim = c(0, x$max_score),
-                 main = sprintf("Expected test score: %s and %s",
-                                x$reference, group), ...)
+  args <- utils::modifyList(list(x = cu$theta, y = cu$expected_reference,
+    type = "l", xlab = "Location (logits)", ylab = "Expected score",
+    ylim = c(0, x$max_score), main = sprintf("Expected test score: %s and %s",
+                                           x$reference, group)), list(...))
+  do.call(graphics::plot, args)
   graphics::lines(cu$theta, cu$expected_group, lty = 2)
   graphics::legend("topleft", legend = c(x$reference, group), lty = 1:2,
                    bty = "n")
-  band <- 1.96 * cu$se_score
-  ylim <- range(c(cu$shift_score - band, cu$shift_score + band, 0),
+  band <- stats::qt(.975, if (is.null(x$ref_df)) Inf else x$ref_df) * cu$se_score
+  ylim <- range(c(cu$shift_score, cu$shift_score - band, cu$shift_score + band, 0),
                 na.rm = TRUE)
   graphics::plot(cu$theta, cu$shift_score, type = "n",
                  xlab = "Location (logits)",

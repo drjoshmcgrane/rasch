@@ -47,9 +47,12 @@ A list of class \code{"rasch_dif_wald"}. \code{summary} has one
 Tests each item for uniform DIF by splitting it by a person factor,
 recalibrating with the unsplit items as the anchor, and comparing the
 locations of the split copies with a Wald test. The comparison conditions
-on the raw score through the conditional likelihood, so no class
-intervals are formed and no person location is estimated; it is the
-item-level analogue of Andersen's (1973) likelihood-ratio test.
+on item-pair totals through the pairwise conditional likelihood used by
+\code{\link{rasch}}, with its Godambe sandwich covariance. No class
+intervals or person estimates are needed. It addresses item-location
+invariance, as Andersen's (1973) test does at the test level, but is not
+a full-score conditional likelihood-ratio test. For polytomous items it
+compares mean threshold locations, not every threshold separately.
 }
 \details{
 A split copy of an item that persons in one level of the factor only

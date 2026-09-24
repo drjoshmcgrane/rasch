@@ -11,7 +11,8 @@ plot_dtf(x, group = NULL, ...)
 
 \item{group}{The group to draw; the first compared group by default.}
 
-\item{...}{Further arguments passed to \code{\link{plot}}.}
+\item{...}{Further arguments passed to \code{\link{plot}} for the
+expected-score panel, overriding its defaults.}
 }
 \value{
 \code{x}, invisibly.

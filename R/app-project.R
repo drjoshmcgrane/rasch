@@ -568,6 +568,7 @@
   if (!is.null(resolution) &&
       (is_btl || !inherits(resolution, "rasch_resolve_dif") ||
        !identical(resolution$algorithm, "factor-design-resolution-3") ||
+       !.dif_intervals_current(resolution, resolution$fit) ||
        !.app_scalar_text(resolution$effects) ||
        !resolution$effects %in% c("main", "factorial")))
     fail(paste("the saved automatic DIF resolution uses a superseded",
@@ -658,6 +659,8 @@
     (!is.list(project$results[["resolve"]]) ||
      !identical(project$results[["resolve"]]$algorithm,
                 "factor-design-resolution-3") ||
+     !.dif_intervals_current(project$results[["resolve"]],
+                             project$results[["resolve"]]$fit) ||
      !is.character(project$results[["resolve"]]$effects) ||
      length(project$results[["resolve"]]$effects) != 1L ||
      anyNA(project$results[["resolve"]]$effects) ||
@@ -717,13 +720,21 @@
     is.list(project$results$bootstrap) &&
     is.list(project$results$bootstrap$bs) &&
     (is.null(project$results$bootstrap$bs$algorithm) || old_interval_bootstrap)
+  history <- if (is.list(project)) project$rasch_steps else NULL
+  interval_fit <- if (length(history)) history[[length(history)]]$fit else
+    if (is.list(project)) project$base_fit else NULL
+  old_dif_bootstrap_intervals <- is.list(project) && is.list(project$results) &&
+    is.list(project$results$dif_bootstrap) &&
+    is.list(project$results$dif_bootstrap$db) &&
+    !.dif_intervals_current(project$results$dif_bootstrap$db, interval_fit)
   old_dif_bootstrap <- !legacy && is.list(project) &&
     length(project$schema) == 1L && is.numeric(project$schema) &&
     !is.na(project$schema) && project$schema == 2L &&
     is.list(project$results) &&
     is.list(project$results$dif_bootstrap) &&
     is.list(project$results$dif_bootstrap$db) &&
-    is.null(project$results$dif_bootstrap$db$algorithm)
+    (is.null(project$results$dif_bootstrap$db$algorithm) ||
+     old_dif_bootstrap_intervals)
   # Mixed-panel DIF results from before the joint between-person adjustment
   # carry a finite-looking table but are rejected by the current validator.
   # They must be authenticated against the active fit before being omitted;
@@ -732,9 +743,12 @@
     inherits(project$results[["dif"]], "rasch_dif") &&
     length(project$results[["dif"]]$within) > 0L &&
     !identical(project$results[["dif"]]$algorithm, "joint-between-1")
+  old_split_dif <- is.list(project) && is.list(project$results) &&
+    inherits(project$results[["dif"]], "rasch_dif") &&
+    !.dif_intervals_current(project$results[["dif"]], interval_fit)
   old_dif_followups <- is.list(project) && is.list(project$results) &&
     inherits(project$results[["dif"]], "rasch_dif") &&
-    !.dif_followups_current(project$results[["dif"]])
+    (!.dif_followups_current(project$results[["dif"]]) || old_split_dif)
   # Judge-group DIF became tied to the fitted judge role after older app
   # sessions could build maps from a changed sidebar column. A signed result
   # remains structurally valid in that case, so require the source metadata
@@ -893,7 +907,8 @@
     project$results$resolve <- NULL
     project <- .seal_app_project(project)
     dropped <- c(dropped,
-                 "DIF (superseded normalized-factor follow-ups)",
+                 if (old_split_dif) "DIF (superseded split-item class intervals)" else
+                   "DIF (superseded normalized-factor follow-ups)",
                  if (has_bootstrap)
                    "DIF bootstrap (dependent on superseded DIF)",
                  if (has_resolution)
@@ -992,8 +1007,9 @@
                  "changed since they were saved"), call. = FALSE)
     project$results$dif_bootstrap <- NULL
     project <- .seal_app_project(project)
-    dropped <- c(dropped,
-                 "DIF bootstrap (superseded raw-F marginal reference)")
+    dropped <- c(dropped, if (old_dif_bootstrap_intervals)
+      "DIF bootstrap (superseded split-item class intervals)" else
+        "DIF bootstrap (superseded raw-F marginal reference)")
   }
   # Omit unverifiable or superseded tailored results, retaining their source
   # data and fits after checking the complete project seal.
@@ -1209,7 +1225,8 @@
         results$dif_bootstrap <- NULL
         results$resolve <- NULL
         dropped <- c(dropped,
-                     "DIF (superseded normalized-factor follow-ups)",
+                     if (old_split_dif) "DIF (superseded split-item class intervals)" else
+                       "DIF (superseded normalized-factor follow-ups)",
                      if (has_bootstrap)
                        "DIF bootstrap (dependent on superseded DIF)",
                      if (has_resolution)
@@ -1292,8 +1309,10 @@
   if (isTRUE(old_dif_bootstrap) && !isTRUE(old_mixed_dif) &&
       !isTRUE(old_dif_followups) && !isTRUE(old_btl_dif_role)) {
     attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
-    warning(paste("the saved DIF bootstrap used the earlier raw-F marginal",
-                  "reference and was omitted; recompute it before reporting",
+    warning(paste("the saved DIF bootstrap used the earlier",
+                  if (old_dif_bootstrap_intervals) "split-item class intervals" else
+                    "raw-F marginal reference",
+                  "and was omitted; recompute it before reporting",
                   "bootstrap DIF probabilities"), call. = FALSE)
   }
   if (isTRUE(old_tailored)) {
@@ -1345,7 +1364,9 @@
   }
   if (!legacy && isTRUE(old_dif_followups) && !isTRUE(old_mixed_dif)) {
     attr(project, "rasch_project_legacy_dropped") <- unique(dropped)
-    warning(paste("the saved DIF follow-ups may use earlier factor values;",
+    warning(paste(if (old_split_dif)
+                    "the saved DIF used superseded split-item class intervals;" else
+                    "the saved DIF follow-ups may use earlier factor values;",
                   "recompute the DIF analysis before reporting inference"),
             call. = FALSE)
   }

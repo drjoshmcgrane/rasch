@@ -92,8 +92,18 @@
 
 # Resolve the anchors argument to a threshold list named by item.
 .cj_anchor_list <- function(anchors) {
-  if (inherits(anchors, "rasch_cj")) anchors <- anchors$anchors
+  if (inherits(anchors, "rasch_cj")) {
+    if (!isTRUE(anchors$converged) || identical(anchors$mode, "persons"))
+      stop("`anchors` must be a converged item-mode rasch_cj calibration",
+           call. = FALSE)
+    anchors <- anchors$anchors
+  }
   else if (inherits(anchors, "rasch")) {
+    if (!isTRUE(anchors$est$converged) ||
+        inherits(anchors, c("rasch_efrm", "rasch_mfrm")) ||
+        (!is.null(anchors$disc) && any(anchors$disc != 1)))
+      stop("`anchors` must be a converged ordinary Rasch calibration in a common unit",
+           call. = FALSE)
     if (is.null(anchors$tau_list))
       stop("`anchors` is a fit without item thresholds", call. = FALSE)
     return(anchors$tau_list)
@@ -101,9 +111,12 @@
   if (!is.data.frame(anchors) || !all(c("item", "k", "tau") %in% names(anchors)))
     stop("`anchors` must be a rasch() or rasch_cj() fit, or a data frame with ",
          "columns item, k and tau", call. = FALSE)
+  .check_column_names(anchors)
   item <- .role_text_values(anchors$item)
-  k <- suppressWarnings(as.integer(anchors$k)); tau <- as.numeric(anchors$tau)
-  if (anyNA(item) || anyNA(k) || any(!is.finite(tau)))
+  k <- .cj_numeric(anchors$k, "anchor threshold numbers", whole = TRUE,
+                   missing = FALSE)
+  tau <- .cj_numeric(anchors$tau, "anchor thresholds", missing = FALSE)
+  if (anyNA(item) || any(!nzchar(item)) || anyNA(k) || any(!is.finite(tau)))
     stop("`anchors` has missing items, threshold numbers or values", call. = FALSE)
   out <- lapply(split(seq_along(item), factor(item, unique(item))), function(r) {
     kk <- k[r]
@@ -149,7 +162,9 @@
   m <- vapply(tau_list, length, 1L)
   X <- as.matrix(D); N <- nrow(X)
   code <- matrix(.missing_code_mask(as.vector(X), na_codes), N, ncol(X))
-  Xi <- suppressWarnings(apply(X, 2, function(col) as.integer(as.character(col))))
+  values <- as.vector(X)
+  values[as.vector(code)] <- NA
+  Xi <- .cj_numeric(values, paste0("response scores", where), whole = TRUE)
   dim(Xi) <- dim(X); dimnames(Xi) <- list(NULL, item_names)
   Xi[code | (!is.na(Xi) & Xi < 0)] <- NA_integer_
   over <- sweep(Xi, 2, m, ">")
@@ -466,6 +481,25 @@
   covth <- tryCatch(solve(-fit$H), error = function(e) matrix(NA_real_, np, np))
   cov_t <- covth[seq_len(fk), seq_len(fk), drop = FALSE]
   se_t <- sqrt(pmax(diag(cov_t), 0))
+  information <- list()
+  for (t in test_names) {
+    rows <- rows_of[[t]]; rho <- unit_of(th, t)
+    J <- matrix(0, length(rows), np)
+    if (length(rows)) J[cbind(seq_along(rows), rows)] <- rho
+    if (isTRUE(free[t])) J[, u_pos[[t]]] <- rho * theta[rows]
+    if (t %in% names(c_pos)) J[, c_pos[[t]]] <- -1
+    p <- .cj_person_parts(rho * theta[rows] - shift_of(th, t),
+                          X_of[[t]], tests[[t]]$tau_list)
+    information[[t]] <- list(I = diag(-p$h, length(rows)), J = J)
+  }
+  for (f in intersect(c("comparisons", "rankings"), frames)) {
+    u <- unit_of(th, f)
+    J <- matrix(0, fk, np); J[, seq_len(fk)] <- diag(u, fk)
+    if (isTRUE(free[f])) J[, u_pos[[f]]] <- u * theta
+    p <- if (f == "comparisons") .cj_bt_parts(u * theta, 1, W) else
+      .cj_pl_parts(u * theta, 1, rk_f)
+    information[[f]] <- list(I = -p$H[seq_len(fk), seq_len(fk), drop = FALSE], J = J)
+  }
   if (!fit$converged) {
     notes <- c(notes, "estimation did not converge; standard errors and tests withheld")
     se_t[] <- NA_real_; cov_t[] <- NA_real_
@@ -540,11 +574,30 @@
     l_f <- as.vector(C %*% (s$par / u))
     col <- rep(NA_real_, N); col[fit_idx[jo]] <- l_f
     persons[[paste0("location_", f)]] <- col
-    if (fit$converged) {
+    if (fit$converged && isTRUE(s$converged)) {
       r_t <- ref_theta[jo]; r_t[!both] <- 0
       l_r <- as.vector(C %*% r_t)
       diff <- l_f - l_r
-      V <- C %*% (diag(ifelse(both, ref_se[jo]^2, 0), nj) + s$cov / u^2) %*% t(C)
+      direct <- list()
+      direct[[f]] <- matrix(0, nj, fk)
+      direct[[f]][, jo] <- C %*% s$cov / u
+      Glink <- matrix(0, nj, np)
+      if (isTRUE(free[f])) Glink[, u_pos[[f]]] <- -l_f
+      for (t in test_names) {
+        rows <- rows_of[[t]]; rho <- unit_of(th, t)
+        D <- matrix(0, nj, length(rows))
+        at <- match(rows, jo)
+        use <- !is.na(at) & finite_resp[fit_idx[rows]]
+        if (any(use)) D[, use] <- -sweep(C[, at[use], drop = FALSE], 2,
+          ml_se[fit_idx[rows[use]]]^2 / rho, "*")
+        direct[[t]] <- D
+        relevant <- test[fit_idx[jo]] %in% t & both
+        if (isTRUE(free[t])) Glink[, u_pos[[t]]] <-
+          drop(C %*% ifelse(relevant, r_t, 0))
+        if (t %in% names(c_pos)) Glink[, c_pos[[t]]] <-
+          -drop(C %*% (as.numeric(relevant) / rho))
+      }
+      V <- .cj_linked_cov(direct, Glink, covth, information)
       se_d <- sqrt(pmax(diag(V), 0))
       z <- diff / se_d
       # a contrast needs a response location and at least one other such
@@ -556,7 +609,7 @@
       inv_tab <- rbind(inv_tab, data.frame(
         frame = f, person = ids[fit_idx][jo], reference = l_r, judgements = l_f,
         difference = diff, se = se_d, z = z, p = p,
-        p_adj = stats::p.adjust(p, "holm"), stringsAsFactors = FALSE,
+        p_adj = .p_adjust_family(p, "holm"), stringsAsFactors = FALSE,
         row.names = NULL))
     }
   }

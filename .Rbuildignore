@@ -25,4 +25,5 @@
 ^output$
 ^tools/simval$
 ^tools/vignettes$
+^tools/audit-september-additions\.(R|md)$
 ^vignettes/articles$

@@ -218,7 +218,7 @@ test_that("input errors are specific", {
   expect_error(rasch_cj(s$X, comparisons = bad, object_a = "a", object_b = "b",
                         winner = "winner"), "neither compared object")
   expect_error(rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
-                        winner = "result"), "lacks column")
+                        winner = "result"), "column not found: result")
   expect_error(rasch_cj(s$X, comparisons = s$cj, object_a = "a", object_b = "b",
                         winner = "winner", units = c(comparisons = 2)),
                "fixed unit must be 1")
@@ -584,7 +584,11 @@ test_that("the person mode takes anchors from a data frame, rasch() or rasch_cj(
   expect_true(all(fit$persons$max_raw == 24))
   # from a rasch_cj() item fit, an id column and an item subset
   cj_items <- rasch_cj(s$X, comparisons = data.frame(a = "I01", b = "I05", winner = "I05")[rep(1, 20), ],
-                       object_a = "a", object_b = "b", winner = "winner")
+                       object_a = "a", object_b = "b", winner = "winner",
+                       units = c(comparisons = 1))
+  # One-sided judgements do not identify a free unit. This anchor fixture
+  # fixes that unit, so it supplies a genuinely converged item calibration.
+  expect_true(cj_items$converged)
   D <- data.frame(id = s$ids, s$X, check.names = FALSE)
   f2 <- rasch_cj(D, comparisons = s$cj, object_a = "a", object_b = "b",
                  winner = "winner", objects = "persons", anchors = cj_items,

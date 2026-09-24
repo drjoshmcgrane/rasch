@@ -65,6 +65,9 @@
       is.na(bootstrap$result_signature))
     fail()
   if (!identical(bootstrap$algorithm, "reference-minp-1")) fail()
+  if (!.dif_intervals_current(bootstrap, fit))
+    stop("`dif_bootstrap` predates the common split-item class intervals; recompute it",
+         call. = FALSE)
   unsigned <- unclass(bootstrap)
   unsigned$result_signature <- NULL
   if (!.fit_boot_hash_matches(bootstrap$result_signature, unsigned)) fail()
@@ -782,6 +785,7 @@ dif_bootstrap <- function(fit, dif = NULL, B = 999, workers = 4L,
     summary = sm, terms = terms,
     replicates = list(F = Fmat, p = Pmat, min_p = min_p),
     algorithm = "reference-minp-1",
+    interval_algorithm = if (is_btl) NULL else dif$interval_algorithm,
     adjustment = paste("single-step minimum reference-p over the complete",
                        paste0(unit_label, "-by-DIF-term family")),
     family_n = K, B = B, B_used = B_used, B_failed = B - B_used,

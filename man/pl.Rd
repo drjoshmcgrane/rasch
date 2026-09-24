@@ -73,9 +73,11 @@ The locations are maximum likelihood estimates with a sum-zero origin,
 or at the values in \code{anchors}. Standard errors are Godambe sandwich
 errors clustered by judge when a judge column is given and by ranking
 otherwise, subject to the same conditions as \code{btl()}: with fewer
-than ten judges, fewer judges than parameters, or fewer than eight
-effective judges, the clustered covariance is not calibrated and is
-withheld with a note. \code{se = "model"} instead reports the
+than ten judges, fewer than eight effective judges, no residual effective
+cluster degrees of freedom, or a rank-deficient score covariance, errors
+are withheld with a note. Judge-clustered errors include the
+\eqn{G/(G-1)} correction, where \eqn{G} is the judge count.
+\code{se = "model"} instead reports the
 information-based errors of the Plackett-Luce likelihood, which are
 valid when the model holds and the rankings are independent, and are
 available whatever the design.
@@ -88,7 +90,7 @@ the mean and variance the fitted model implies for it, so a ranking the
 consensus makes very unlikely stands out.
 
 An object that is chosen at every stage it appears in, or never chosen
-at any stage with an alternative, has no finite location (the undefeated
+at any stage with an alternative, and is not anchored, has no finite location (the undefeated
 or winless case of a paired comparison). It is set aside and reported
 with \code{extreme = TRUE} at an extrapolated location, its score moved
 half a choice inside the boundary against the calibrated objects. A
@@ -111,6 +113,11 @@ are complete and hold at least three objects, reports the Vuong (1989)
 statistic for the two non-nested models (positive favours best-first)
 and the correlation and largest difference between the two sets of
 locations. It is a check on the ranking process, not on the objects.
+When judges are recorded, the likelihood differences are clustered by
+judge and referred to a t distribution on judges minus one degrees of
+freedom. Inference is withheld without sufficient cluster support. The
+reference is asymptotic and assumes the two readings are distinguishable;
+it does not test distinguishability at their common equal-worth model.
 
 \strong{Invariance check.} Luce's choice axiom, which the model rests
 on, says that once an object is chosen the remaining objects compete on
@@ -127,15 +134,21 @@ free parameters of the groups less those of the pooled fit. Each object
 calibrated in both groups also receives a Wald contrast of its two
 locations, the groups centred on the objects they share unless both are
 on the anchor scale, with Holm-adjusted p values. The contrasts use the
-same covariance as the main fit; the likelihood ratio treats the choices
-as independent, which holds within a ranking but not across the rankings
-of one judge, so with few judges read the Wald contrasts rather than the
-ratio. The check is withheld with a note when every ranking has a single
+requested covariance as the main fit, including the covariance between
+early and later estimates from the same ranking or judge. Each group
+must support that covariance; ordinary errors never replace withheld
+sandwich errors. Judge-clustered contrasts use a t reference, and the
+likelihood-ratio probability is withheld because it assumes independent
+rankings. With \code{se = "model"}, independence is assumed and the
+likelihood-ratio reference is chi-square. The check is withheld with a
+note when every ranking has a single
 informative choice (a design of pairs), when a group cannot calibrate
 the objects on its own, or when fewer than two objects are calibrated in
 both groups. It answers a different question from the reversal check: a
 set of rankings may fit better reversed and still be invariant across
 positions, or fail invariance in either direction.
+With few distinct rankings, the contrasts can be conservative or
+unavailable even when the main calibration has usable standard errors.
 }
 \examples{
 set.seed(1)

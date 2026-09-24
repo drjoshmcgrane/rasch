@@ -432,7 +432,7 @@ test_that("DIF resolution returns its final residual-DIF table", {
   d <- simulate_rasch(500, 8, n_groups = 2, seed = 41)
   f <- rasch(d, id = "id", factors = "group")
   rr <- resolve_dif(f, max_splits = 0)
-  expect_named(rr, c("algorithm", "fit", "splits", "n_splits", "stopped",
+  expect_named(rr, c("algorithm", "interval_algorithm", "fit", "splits", "n_splits", "stopped",
                      "dif", "notes", "effects", "criterion",
                      "n_remaining_dif", "n_untested", "n_nonuniform"))
   expect_equal(rr$n_remaining_dif, if (is.null(rr$dif)) 0L else

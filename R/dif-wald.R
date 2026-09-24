@@ -4,9 +4,8 @@
 # together with the unsplit items, which anchor the groups on one scale. A
 # Wald test of the copies' locations against one another is the conditional
 # analogue of Andersen's likelihood-ratio test for that item: no class
-# intervals are formed, the raw score conditions the comparison exactly, and
-# the test keeps its power after earlier splits, where a residual analysis
-# by class interval loses it.
+# intervals or person estimates are needed. Calibration conditions on item-
+# pair totals and uses the Godambe covariance of that composite likelihood.
 # ===========================================================================
 
 #' Conditional Wald test of DIF on the resolved calibration
@@ -14,9 +13,12 @@
 #' Tests each item for uniform DIF by splitting it by a person factor,
 #' recalibrating with the unsplit items as the anchor, and comparing the
 #' locations of the split copies with a Wald test. The comparison conditions
-#' on the raw score through the conditional likelihood, so no class
-#' intervals are formed and no person location is estimated; it is the
-#' item-level analogue of Andersen's (1973) likelihood-ratio test.
+#' on item-pair totals through the pairwise conditional likelihood used by
+#' \code{\link{rasch}}, with its Godambe sandwich covariance. No class
+#' intervals or person estimates are needed. It addresses item-location
+#' invariance, as Andersen's (1973) test does at the test level, but is not
+#' a full-score conditional likelihood-ratio test. For polytomous items it
+#' compares mean threshold locations, not every threshold separately.
 #'
 #' A split copy of an item that persons in one level of the factor only
 #' answered has no group contrast and is left out with a note. Levels with
@@ -121,7 +123,7 @@ dif_wald <- function(fit, factors = NULL, items = NULL, p_adjust = "holm",
           "Wald test is withheld"))
       }
       shift <- se <- W <- p <- NA_real_
-      q <- k - 1L
+      q <- max(k - 1L, 0L)
       if (usable) {
         C <- cbind(-1, diag(q))
         d <- drop(C %*% rs$loc)
@@ -144,7 +146,7 @@ dif_wald <- function(fit, factors = NULL, items = NULL, p_adjust = "holm",
       lev_se <- if (usable) sqrt(pmax(diag(rs$vloc), 0)) else
         rep(NA_real_, k)
       lev_rows[[length(lev_rows) + 1L]] <- data.frame(
-        item = it, factor = f, level = rs$levs, location = rs$loc,
+        item = rep(it, k), factor = rep(f, k), level = rs$levs, location = rs$loc,
         se = lev_se, n = as.integer(n_lev[rs$levs]),
         stringsAsFactors = FALSE)
     }

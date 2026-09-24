@@ -261,6 +261,7 @@
   for (it in seq_len(maxit)) {
     iterations <- it
     g <- gr(par); H <- he(par)
+    if (any(!is.finite(g)) || any(!is.finite(H))) break
     step <- ascent_step(H, g)
     if (any(!is.finite(step))) step <- g / max(1, max(abs(g)))
     if (max(abs(step)) < tol) { converged <- TRUE; break }
@@ -274,6 +275,9 @@
     par <- cand; f <- f_new
   }
   H <- he(par)
+  # A zero score can also describe a saddle or an unidentified unit. Only
+  # an identified local maximum supports inverse-information inference.
+  converged <- isTRUE(converged) && .likelihood_curvature_ok(H)
   list(par = par, ll = f, H = H, converged = converged, iterations = iterations)
 }
 
@@ -286,10 +290,10 @@
 
 # Basis with one sum-zero constraint per group, for a frame whose objects
 # fall into disconnected blocks: block-diagonal in the group bases.
-.cj_basis_groups <- function(group) {
+.cj_basis_groups <- function(group, weights = rep(1, length(group))) {
   n <- length(group); B <- matrix(0, n, 0L)
   for (g in unique(group)) {
-    rows <- which(group == g); Bg <- .cj_basis(length(rows))
+    rows <- which(group == g); Bg <- .cj_basis(length(rows), weights[rows])
     if (!ncol(Bg)) next
     add <- matrix(0, n, ncol(Bg)); add[rows, ] <- Bg
     B <- cbind(B, add)
@@ -325,7 +329,8 @@
   gr <- function(b) as.vector(crossprod(B, parts(as.vector(B %*% b))$g))
   he <- function(b) crossprod(B, parts(as.vector(B %*% b))$H %*% B)
   fit <- .cj_newton(b0, fn, gr, he, maxit, tol)
-  covb <- if (nb) tryCatch(solve(-fit$H), error = function(e) matrix(NA_real_, nb, nb))
+  covb <- if (!fit$converged) matrix(NA_real_, nb, nb) else if (nb)
+    tryCatch(solve(-fit$H), error = function(e) matrix(NA_real_, nb, nb))
     else matrix(0, 0L, 0L)
   cov <- B %*% covb %*% t(B)
   list(par = as.vector(B %*% fit$par), cov = cov,
@@ -333,15 +338,50 @@
        iterations = fit$iterations, n_free = nb)
 }
 
+# Delta covariance for a contrast that uses separate-frame estimates and
+# linking parameters estimated from the same data. Each independent frame
+# supplies natural-parameter information I and a Jacobian J into the joint
+# fit. The direct influence and the influence through the fitted link must
+# be added BEFORE forming their cross-product: they are not independent.
+.cj_linked_cov <- function(direct, link_gradient, joint_cov, information) {
+  q <- nrow(link_gradient)
+  unavailable <- matrix(NA_real_, q, q)
+  if (!.covariance_supports_wald(joint_cov)) return(unavailable)
+  V <- matrix(0, q, q)
+  for (f in names(information)) {
+    a <- information[[f]]
+    if (!.covariance_supports_wald(a$I)) return(unavailable)
+    D <- link_gradient %*% joint_cov %*% t(a$J)
+    if (!is.null(direct[[f]])) D <- D + direct[[f]]
+    if (any(!is.finite(D))) return(unavailable)
+    V <- V + D %*% a$I %*% t(D)
+  }
+  (V + t(V)) / 2
+}
+
 # Resolve item and threshold columns from a judgement source to object keys:
 # the item name for an item location, "item:k" for its k-th threshold.
+.cj_numeric <- function(x, what, whole = FALSE, missing = TRUE) {
+  if (!is.atomic(x) || is.complex(x) || !is.null(dim(x)))
+    stop(what, " must contain real numeric values", call. = FALSE)
+  z <- suppressWarnings(as.numeric(if (is.factor(x)) as.character(x) else x))
+  bad <- (!is.na(x) & is.na(z)) | is.infinite(z) | is.nan(z)
+  if (!missing) bad <- bad | is.na(z)
+  if (whole) bad <- bad | (!is.na(z) & (z != floor(z) |
+                                         abs(z) > .Machine$integer.max))
+  if (any(bad)) stop(what, " must contain ",
+    if (whole) "finite integer values" else "finite numeric values",
+    if (missing) " or NA" else "", call. = FALSE)
+  z
+}
+
 .cj_object_keys <- function(it, thr, items, m, what, noun = "items") {
   unknown <- setdiff(unique(it), items)
   if (length(unknown))
     stop("`", what, "` names objects that are not ", noun, ": ",
          paste(sQuote(unknown, FALSE), collapse = ", "), call. = FALSE)
   if (is.null(thr)) return(it)
-  thr <- suppressWarnings(as.numeric(thr))
+  thr <- .cj_numeric(thr, paste0("`", what, "` thresholds"), whole = TRUE)
   has <- !is.na(thr)
   if (!any(has)) return(it)
   if (is.null(m))
@@ -353,7 +393,12 @@
     stop("`", what, "` names thresholds an item does not have: ",
          paste(unique(paste0(it[bad], ":", thr[bad])), collapse = ", "),
          call. = FALSE)
-  ifelse(has, paste0(it, ":", thr), it)
+  key <- ifelse(has, paste0(it, ":", thr), it)
+  if (any(has & key %in% items))
+    stop("threshold identifiers collide with item names: ",
+         paste(unique(key[has & key %in% items]), collapse = ", "),
+         "; rename those items before combining judgements", call. = FALSE)
+  key
 }
 
 # Resolve comparison rows to (winner key, loser key).
@@ -368,7 +413,8 @@
   a <- .role_text_values(comparisons[[object_a]])
   b <- .role_text_values(comparisons[[object_b]])
   w <- .role_text_values(comparisons[[winner]])
-  if (anyNA(a) || anyNA(b) || anyNA(w))
+  if (anyNA(a) || anyNA(b) || anyNA(w) ||
+      any(!nzchar(a)) || any(!nzchar(b)) || any(!nzchar(w)))
     stop("`comparisons` has missing objects or winners", call. = FALSE)
   ka <- .cj_object_keys(a, comparisons[[threshold_a]], items, m, "comparisons", noun)
   kb <- .cj_object_keys(b, comparisons[[threshold_b]], items, m, "comparisons", noun)
@@ -400,10 +446,12 @@
          call. = FALSE)
   id <- .role_text_values(rankings[[ranking]])
   it <- .role_text_values(rankings[[item]])
-  rk <- suppressWarnings(as.numeric(rankings[[rank]]))
+  rk <- .cj_numeric(rankings[[rank]], "`rankings` ranks", missing = FALSE)
   if (anyNA(id) || anyNA(it) || anyNA(rk))
     stop("`rankings` has missing ranking identifiers, items or ranks",
          call. = FALSE)
+  if (any(!nzchar(id)) || any(!nzchar(it)))
+    stop("`rankings` has blank ranking identifiers or items", call. = FALSE)
   key <- .cj_object_keys(it, rankings[[threshold]], items, m, "rankings", noun)
   out <- vector("list", 0L); dropped <- 0L
   for (g in split(seq_along(id), id)) {
@@ -432,7 +480,8 @@
 #' @details
 #' The response frame contributes the conditional likelihood of each
 #' person's pattern given the raw score under the partial credit model, so
-#' persons are eliminated exactly as in \code{\link{rasch}}; a dichotomous
+#' person parameters are eliminated. Unlike the pairwise likelihood in
+#' \code{\link{rasch}}, this conditions on the whole response score. A dichotomous
 #' item has one threshold, its location. Comparisons contribute the
 #' Bradley-Terry likelihood \eqn{P(a \succ b) = \mathrm{logistic}\{\alpha
 #' (\lambda_a - \lambda_b)\}}, in which a judge's own location cancels.
@@ -442,7 +491,9 @@
 #' \eqn{n = 2} it is Bradley-Terry. The three blocks share the thresholds
 #' and are summed, so the estimator is a full likelihood: standard errors
 #' are from the inverse observed information and no weighting of the sources
-#' is required.
+#' is required. This assumes independent response rows, independent
+#' comparisons or rankings within each source, and independent sources.
+#' Repeated judgements from the same judge are not cluster-adjusted here.
 #'
 #' What a judge compares is an object. By default an object is an item and
 #' its location \eqn{\lambda} is the mean of the item's thresholds, so
@@ -464,15 +515,17 @@
 #' appears in. \code{invariance} tests that assumption in two ways. The
 #' likelihood ratio compares the fitted model with separate locations per
 #' frame (under which the units are absorbed into the locations and drop
-#' out); each judgement frame then has one free location per object it
-#' judges, less one per connected block of its own design, and the degrees
-#' of freedom are the total of those less the number of free units. The
+#' out). Each separate calibration has one origin constraint per connected
+#' block. The degrees of freedom are the sum of their free parameter counts
+#' minus the joint model's count, including its estimated units. The
 #' object table places each frame's separate calibration on the reference
 #' scale by dividing by the fitted unit, centres it within each block, and
 #' tests each object's difference from the reference calibration by a Wald
-#' statistic that conditions on the fitted unit; probabilities are
-#' Holm-adjusted across objects. An object that fails is one the judges and
-#' the test-takers disagree about, and combining the sources moves its
+#' statistic. Its covariance includes uncertainty in the fitted units and
+#' their shared-data covariance with the separate calibrations, using the
+#' joint information and the delta method. Probabilities are Holm-adjusted
+#' across objects within each frame comparison. An object that fails is one
+#' the judges and the test-takers disagree about, and combining the sources moves its
 #' estimate toward whichever source has the more information.
 #'
 #' Items are calibrated when at least one frame reaches them, and a
@@ -527,7 +580,7 @@
 #' the \code{id} column or vector, or by \code{"P1"}, \code{"P2"}, ...
 #' when there are none; a person judged but absent from \code{data} has no
 #' responses and is placed by the judgements. Threshold columns have no
-#' meaning here and are ignored.
+#' meaning here and must be omitted or missing.
 #'
 #' A person has a finite location when the evidence points both ways: a
 #' score inside its range, or at least one win and one loss (a rank above
@@ -539,7 +592,9 @@
 #' invariance table compares each frame's separate placement of every
 #' person, divided by the fitted unit and centred within each connected
 #' block of the design over the persons both frames locate, with the
-#' response placement, by a Wald contrast with Holm adjustment. There is no
+#' response placement, by a Wald contrast with Holm adjustment. The contrast
+#' covariance includes estimation of the test shifts and all linking units.
+#' The anchored item calibration is treated as fixed. There is no
 #' likelihood ratio test in this mode: the separate model has a location
 #' per person per frame, so its parameters grow with the persons and the
 #' ratio is not chi-square. A person who fails is one whose judged work
@@ -679,7 +734,8 @@
 #'
 #' # two tests with no item in common, linked by comparisons of their items
 #' delta2 <- 1.5 * delta; names(delta2) <- sprintf("J%02d", 1:8)
-#' X2 <- sapply(delta2, function(d) as.integer(runif(300) < plogis(rnorm(300) - d)))
+#' theta2 <- 1.5 * rnorm(300)
+#' X2 <- sapply(delta2, function(d) as.integer(runif(300) < plogis(theta2 - d)))
 #' both <- c(delta, delta / 1)
 #' names(both) <- c(names(delta), names(delta2))
 #' pairs <- t(combn(names(both), 2))[sample(120, 400, replace = TRUE), ]
@@ -732,6 +788,9 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
          call. = FALSE)
   if (objects == "items" && !is.null(id))
     stop("`id` is for the person mode: set `objects = \"persons\"`", call. = FALSE)
+  if (objects == "persons" && !has_resp)
+    stop("the person mode needs response data; a judgement of persons alone ",
+         "can be fitted with btl() or pl()", call. = FALSE)
   if (!has_resp && (is.null(comparisons) || is.null(rankings)))
     stop("without responses, supply both `comparisons` and `rankings`; ",
          "for one judgement source alone use btl()", call. = FALSE)
@@ -739,7 +798,28 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
     stop("`comparisons` must be a data frame", call. = FALSE)
   if (!is.null(rankings) && !is.data.frame(rankings))
     stop("`rankings` must be a data frame", call. = FALSE)
-  if (!is.numeric(units) && !is.logical(units))
+  if (!is.null(comparisons)) {
+    .check_column_names(comparisons)
+    for (nm in c("object_a", "object_b", "winner"))
+      .check_reshape_column(comparisons, get(nm, inherits = FALSE), nm)
+  }
+  if (!is.null(rankings)) {
+    .check_column_names(rankings)
+    for (nm in c("ranking", "item", "rank"))
+      .check_reshape_column(rankings, get(nm, inherits = FALSE), nm)
+  }
+  for (nm in c("threshold_a", "threshold_b", "threshold")) {
+    col <- get(nm, inherits = FALSE)
+    if (!is.null(col) && (!is.character(col) || length(col) != 1L ||
+        is.na(col) || !nzchar(col) || !is.null(dim(col))))
+      stop("`", nm, "` must be one column name or NULL", call. = FALSE)
+  }
+  if (!is.null(items) && (!is.character(items) || !length(items) ||
+      anyNA(items) || any(!nzchar(items)) || anyDuplicated(items)))
+    stop("`items` must name distinct item columns", call. = FALSE)
+  if ((!is.numeric(units) && !is.logical(units)) || is.complex(units) ||
+      !is.null(dim(units)) || anyDuplicated(names(units)) ||
+      anyNA(names(units)))
     stop("`units` must be a named vector of NA or 1", call. = FALSE)
   # every frame but the reference has a unit: the tests after the first,
   # and the judgement frames
@@ -786,6 +866,16 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
       }
       if (!ncol(X)) stop("test ", t, " has no items", call. = FALSE)
       prep <- .prepare_X(X, na_codes = na_codes)
+      # Record the actual recoding, not only its resulting category count.
+      # Two tests observing {0,1} and {1,2} must not silently share the same
+      # 0/1 threshold for an item that has a different meaning in each test.
+      score_map <- lapply(colnames(prep$X), function(nm) {
+        raw <- X[[nm]]
+        raw <- suppressWarnings(as.numeric(if (is.factor(raw)) as.character(raw) else raw))
+        ok <- !is.na(prep$X[, nm])
+        paste(sort(unique(paste(raw[ok], prep$X[ok, nm], sep = ":"))), collapse = ";")
+      })
+      names(score_map) <- colnames(prep$X)
       # rasch() drops an item every person answered the same way, because
       # the conditional likelihood cannot place it. Here the judgements or
       # another test can, so such items are kept with their responses set
@@ -807,7 +897,7 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
         z <- Xp[!is.na(Xp[, i]), i]
         if (!length(z)) NA_integer_ else as.integer(max(z))
       }, 1L)
-      tests[[t]] <- list(X = Xp, m = m_t, constant = constant_t)
+      tests[[t]] <- list(X = Xp, m = m_t, constant = constant_t, score_map = score_map)
     }
     if (!is.null(items)) {
       absent <- setdiff(items, unlist(lapply(tests, function(z) colnames(z$X))))
@@ -824,6 +914,11 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
       if (!length(ms)) return(1L)
       if (length(unique(ms)) > 1L)
         stop("item ", nm, " has different categories across tests", call. = FALSE)
+      maps <- unique(unlist(lapply(tests, function(z) z$score_map[[nm]])))
+      if (length(maps) > 1L)
+        stop("item ", nm, " has different response-category mappings across tests; ",
+             "use a common scoring scheme with the same category support",
+             call. = FALSE)
       ms[1]
     }, 1L)
     names(m) <- NULL
@@ -865,7 +960,7 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
     stop("`rankings` has no usable rows", call. = FALSE)
 
   keys <- unique(c(cmp$win, cmp$lose, unlist(rkl$rk, use.names = FALSE)))
-  is_thr <- grepl(":[0-9]+$", keys)
+  is_thr <- !keys %in% item_names & grepl(":[0-9]+$", keys)
   obj_item <- ifelse(is_thr, sub(":[0-9]+$", "", keys), keys)
   obj_thr <- rep(NA_integer_, length(keys))
   obj_thr[is_thr] <- as.integer(sub("^.*:", "", keys[is_thr]))
@@ -1011,8 +1106,11 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
     # a test alone cannot place an item constant in it, so its thresholds
     # are held at zero there and its objects sit out the contrasts
     inf_thr <- which(rep(inf, m[cols]))
-    B_r <- matrix(0, P_t, max(length(inf_thr) - 1L, 0L))
-    B_r[inf_thr, ] <- .cj_basis(length(inf_thr), cw[pidx[[t]]][inf_thr])
+    components <- .cj_components((crossprod(o$A * 1) > 0)[inf, inf, drop = FALSE])
+    basis <- .cj_basis_groups(rep(components, m[cols][inf]),
+                              cw[pidx[[t]]][inf_thr])
+    B_r <- matrix(0, P_t, ncol(basis))
+    B_r[inf_thr, ] <- basis
     fit_t <- .cj_fit_alone(function(p) .cj_cml_ll(p, o),
                            function(p) { pp <- .cj_cml_p(p, o)
                              list(g = .cj_cml_grad(p, o, pp), H = .cj_cml_hess(p, o, pp)) },
@@ -1024,7 +1122,8 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
     cov_t <- O %*% cov_g %*% t(O)
     sep[[t]] <- list(par = par_g, cov_par = cov_g, lam = lam_t, cov = cov_t,
                      ll = fit_t$ll, n_free = fit_t$n_free, converged = fit_t$converged)
-    judged[[t]] <- jo; blocks[[t]] <- rep(1L, length(jo))
+    judged[[t]] <- jo
+    blocks[[t]] <- components[match(obj_of_item[jo], cols[inf])]
   }
   frame_alone <- function(ll, parts, adj_f) {
     jo <- which(rowSums(adj_f) > 0)
@@ -1076,6 +1175,22 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
   for (i in seq_len(I)) L[i, idx[[i]]] <- 1 / m[i]
   delta <- as.vector(L %*% psi); names(delta) <- item_names
   cov_d <- L %*% cov_p %*% t(L)
+  # Information for the sampling variation shared by the joint fit and
+  # the separate fits. Responses, comparisons and rankings are independent
+  # sources under this likelihood; their fitted link is not independent.
+  information <- list()
+  for (f in frames) {
+    u <- unit_of(th, f)
+    A <- if (f %in% test_names) diag(P)[pidx[[f]], , drop = FALSE] else O
+    J <- matrix(0, nrow(A), length(th))
+    J[, seq_len(nb)] <- u * A %*% B
+    if (isTRUE(free[f])) J[, u_pos[[f]]] <- u * drop(A %*% psi)
+    I_f <- if (f %in% test_names)
+      -.cj_cml_hess(u * psi[pidx[[f]]], o_list[[f]]) else if (f == "comparisons")
+        -.cj_bt_parts(u * drop(O %*% psi), 1, W)$H[seq_len(n_obj), seq_len(n_obj), drop = FALSE] else
+        -.cj_pl_parts(u * drop(O %*% psi), 1, rk)$H[seq_len(n_obj), seq_len(n_obj), drop = FALSE]
+    information[[f]] <- list(I = I_f, J = J)
+  }
   dimnames(cov_d) <- list(item_names, item_names)
   thr_names <- unlist(lapply(seq_len(I), function(i)
     paste0(item_names[i], ":", seq_len(m[i]))), use.names = FALSE)
@@ -1115,7 +1230,12 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
   ll_sep <- sum(vapply(sep, function(s) s$ll, 0))
   df <- sum(vapply(sep, function(s) s$n_free, 0)) - nb - nu
   lr <- data.frame(statistic = 2 * (ll_sep - fit$ll), df = as.integer(df))
-  lr$p <- if (fit$converged && lr$df > 0 && is.finite(lr$statistic))
+  sep_ok <- all(vapply(sep, function(s) isTRUE(s$converged), TRUE))
+  if (!sep_ok) notes <- c(notes, paste(
+    "a separate-frame calibration did not converge to an identified maximum;",
+    "its contrasts and the likelihood-ratio test are withheld"))
+  lr$p <- if (fit$converged && sep_ok && lr$df > 0 &&
+               is.finite(lr$statistic) && lr$statistic >= -1e-7)
     stats::pchisq(max(lr$statistic, 0), lr$df, lower.tail = FALSE) else NA_real_
 
   item_tab <- data.frame(item = item_names, location = delta, se = se_d,
@@ -1155,6 +1275,8 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
   # objects both reach, and every test after the first against every
   # judgement frame, centred within the blocks the two designs share
   contrast <- function(f, g) {
+    if (!isTRUE(sep[[f]]$converged) || !isTRUE(sep[[g]]$converged))
+      return(NULL)
     a <- scaled[[f]]; b <- scaled[[g]]
     common <- intersect(a$jo, b$jo)
     if (length(common) < 2L) return(NULL)
@@ -1163,7 +1285,21 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
     for (k in unique(blk)) { rows <- blk == k; C[rows, rows] <- -1 / sum(rows) }
     diag(C) <- diag(C) + 1
     l_f <- as.vector(C %*% a$lam[common]); l_g <- as.vector(C %*% b$lam[common])
-    V <- C %*% (a$cov[common, common] + b$cov[common, common]) %*% t(C)
+    direct <- list()
+    Glink <- matrix(0, nc, length(th))
+    for (ff in c(f, g)) {
+      sign <- if (ff == f) 1 else -1
+      u <- unit_of(th, ff)
+      if (ff %in% test_names) {
+        j <- pidx[[ff]]
+        D <- C %*% O[common, j, drop = FALSE] %*%
+          sep[[ff]]$cov_par[j, j, drop = FALSE] / u
+      } else D <- C %*% sep[[ff]]$cov[common, , drop = FALSE] / u
+      direct[[ff]] <- sign * D
+      if (isTRUE(free[ff]))
+        Glink[, u_pos[[ff]]] <- -sign * drop(C %*% scaled[[ff]]$lam[common])
+    }
+    V <- .cj_linked_cov(direct, Glink, covth, information)
     se <- sqrt(pmax(diag(V), 0))
     z <- (l_f - l_g) / se
     alone <- blk %in% names(which(table(blk) == 1L))
@@ -1172,7 +1308,7 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
     data.frame(frame = f, against = g, item = obj_item[common],
                threshold = obj_thr[common], reference = l_g, judgements = l_f,
                difference = l_f - l_g, se = se, z = z, p = p,
-               p_adj = stats::p.adjust(p, "holm"), stringsAsFactors = FALSE,
+               p_adj = .p_adjust_family(p, "holm"), stringsAsFactors = FALSE,
                row.names = NULL)
   }
   inv_tab <- NULL
