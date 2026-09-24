@@ -12,7 +12,8 @@ resolve_dif(
   min_n = 20L,
   min_anchors = NULL,
   max_splits = NULL,
-  effects = c("main", "factorial")
+  effects = c("main", "factorial"),
+  criterion = c("anova", "wald")
 )
 }
 \arguments{
@@ -42,6 +43,14 @@ of items.}
 \item{effects}{\code{"main"} fits the factors additively;
 \code{"factorial"} also tests their interactions. The same model is
 used at every round and in the final DIF assessment.}
+
+\item{criterion}{\code{"anova"} flags and ranks items by the residual
+analysis of \code{\link{dif_anova}} (uniform DIF only is split; a
+significant non-uniform term leaves the item for review).
+\code{"wald"} flags items by the conditional Wald test of
+\code{\link{dif_wald}} on each factor's main effect and ranks them by
+the resolved location shift; it requires \code{effects = "main"} and
+does not test non-uniform DIF.}
 }
 \value{
 A list of class \code{"rasch_resolve_dif"}: the final resolved
@@ -63,14 +72,24 @@ A list of class \code{"rasch_resolve_dif"}: the final resolved
   significant non-uniform item-factor findings and is \code{NA} if any
   answerable non-uniform hypothesis is unavailable, or no hypothesis was
   estimable. \code{n_untested} is always a count. \code{effects} records
-  the factor model used.
+  the factor model used and \code{criterion} the test. With the Wald
+  criterion \code{eta2} is \code{NA}, \code{magnitude} is the absolute
+  resolved shift the test compared (the range of the locations for more
+  than two levels), the \code{dif} table carries the \code{shift} and
+  \code{p_adj} of each item still flagged, and \code{n_nonuniform} is
+  \code{NA} because non-uniform DIF is not tested.
 }
 \description{
 Splits items with uniform DIF one at a time, beginning with the largest
 estimated effect,
 and refits after each split. This order addresses the artificial DIF that a
 large departure can induce in otherwise invariant items (Andrich and
-Hagquist 2012, 2015). Each split gives the item a separate location in every
+Hagquist 2012, 2015). The DIF in each round is judged by the residual
+analysis of \code{\link{dif_anova}} or, with \code{criterion = "wald"},
+by the conditional Wald test of \code{\link{dif_wald}}, which compares
+each item's split locations on the calibration anchored by the unsplit
+items and so needs no class intervals. Each split gives the item a
+separate location in every
 factor cell. A PCM also estimates the split copies' thresholds separately;
 an RSM retains its common rating-scale threshold structure. A location split does not model a
 group-specific discrimination, so items with non-uniform DIF are left for
@@ -87,6 +106,7 @@ X <- matrix(rbinom(n * 8, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 8)
 colnames(X) <- paste0("I", 1:8)
 fit <- rasch(data.frame(X, grp = g), factors = "grp")
 resolve_dif(fit)$splits
+resolve_dif(fit, criterion = "wald")$splits
 }
 \references{
 Andrich, D., & Hagquist, C. (2012). Real and artificial
@@ -95,6 +115,7 @@ Andrich, D., & Hagquist, C. (2012). Real and artificial
 }
 \seealso{
 \code{\link{split_items}} for a single split,
-  \code{\link{drop_items}} to remove an item instead, and
-  \code{\link{dif_anova}} for the test it resolves.
+  \code{\link{drop_items}} to remove an item instead,
+  \code{\link{dif_anova}} and \code{\link{dif_wald}} for the tests it
+  resolves.
 }

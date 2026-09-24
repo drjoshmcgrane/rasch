@@ -210,10 +210,47 @@
   max(2L, min(10L, as.integer(n_min) %/% as.integer(cell_min)))
 }
 
+# The person locations the class intervals are formed on. After a split
+# each group answers its own copy of the split item, so a raw score maps to
+# a group-specific location and intervals formed on the fitted locations
+# separate the groups: an interval holding one group only contributes
+# nothing to the group contrast, and the test of the remaining items loses
+# power. The intervals are formed instead on the location each person would
+# have under one common copy of every split item (its first copy, the
+# reference group's), the same score-to-measure mapping for every group.
+# With complete data this orders the persons by their raw score, so the
+# intervals are the ones the unsplit calibration would form. The residuals
+# themselves keep each person's own location from the resolved calibration.
+.dif_interval_theta <- function(fit) {
+  theta <- fit$person$theta
+  if (is.null(fit$split_map) ||
+      (!is.null(fit$disc) && length(unique(fit$disc)) > 1L))
+    return(list(theta = theta, common = FALSE))
+  map <- .split_source_map(fit)
+  by_source <- split(names(map), unname(map))
+  multi <- by_source[lengths(by_source) > 1L]
+  if (!length(multi)) return(list(theta = theta, common = FALSE))
+  X <- fit$X
+  keep <- names(map)[!map %in% names(multi)]
+  Xc <- X[, keep, drop = FALSE]
+  tau <- fit$tau_list[match(keep, fit$items$item)]
+  for (s in names(multi)) {
+    copies <- multi[[s]]
+    resp <- X[, copies, drop = FALSE]
+    merged <- rowSums(resp, na.rm = TRUE)
+    merged[rowSums(!is.na(resp)) == 0L] <- NA
+    Xc <- cbind(Xc, merged)
+    tau <- c(tau, fit$tau_list[match(copies[1L], fit$items$item)])
+  }
+  disc <- if (is.null(fit$disc)) 1 else fit$disc[1L]
+  list(theta = .person_estimates(Xc, tau, disc = disc)$theta, common = TRUE)
+}
+
 .dif_class_intervals <- function(fit, n_groups) {
-  ci <- fit$person$class_interval
+  it <- .dif_interval_theta(fit)
+  ci <- if (it$common) NULL else fit$person$class_interval
   if (is.null(ci) || !identical(n_groups, fit$n_groups))
-    ci <- .class_intervals(fit$person$theta, fit$person$extreme, n_groups)
+    ci <- .class_intervals(it$theta, fit$person$extreme, n_groups)
   factor(ci)
 }
 
@@ -222,7 +259,7 @@
 # whole-plot factor. Returned aligned to the rows of the fit.
 .dif_person_ci <- function(fit, id, n_groups) {
   id <- .dif_ids(id)
-  th <- fit$person$theta; ex <- fit$person$extreme
+  th <- .dif_interval_theta(fit)$theta; ex <- fit$person$extreme
   pth <- tapply(th, id, mean, na.rm = TRUE)
   pex <- tapply(ex, id, function(v) all(v, na.rm = TRUE))
   pci <- .class_intervals(as.numeric(pth), as.logical(pex), n_groups)
@@ -652,6 +689,19 @@
 #' rows join the same adjustment family as the items and take no post-hoc
 #' follow-up; \code{\link{dtf}} reports a flagged bundle's shift.
 #'
+#' \strong{Split fits.} After \code{\link{split_items}} each group answers
+#' its own copy of a split item, so a raw score maps to a different person
+#' location in each group and class intervals formed on those locations
+#' place one group only in some intervals; the DIF tests on the remaining
+#' items lose their power, and the fit's own \code{class_interval} is not
+#' used. The intervals are instead formed on the location every person
+#' would have under the first copy of each split item, the same
+#' score-to-measure mapping for every group, so persons with the same
+#' responses share an interval (with complete data, the merged raw score
+#' defines the intervals). The residuals keep each person's own location.
+#' A note records this. \code{\link{dif_wald}} tests DIF without class
+#' intervals at all.
+#'
 #' @param fit A fitted object from \code{\link{rasch}},
 #'   \code{\link{rasch_mfrm}}, or \code{\link{rasch_efrm}}.
 #' @param factors A vector (one factor), a data frame of person factors, or a
@@ -732,7 +782,8 @@
 #'
 #' Maxwell, S. E. and Delaney, H. D. (2004). Designing Experiments and
 #' Analyzing Data: A Model Comparison Perspective (2nd ed.). Lawrence Erlbaum.
-#' @seealso \code{\link{dif_size}}, \code{\link{dif_contrasts}}, and
+#' @seealso \code{\link{dif_size}}, \code{\link{dif_contrasts}},
+#'   \code{\link{dif_wald}} and
 #'   \code{\link{resolve_dif}}; \code{\link{dtf}} for the size of bundle
 #'   and test-level differences on a resolved calibration; and
 #'   \code{\link{frame_invariance}} for the frame-defining factor this
@@ -935,6 +986,15 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
   # clean whole-plot covariate.
   ci <- if (repeated) .dif_person_ci(fit, id, n_groups) else
     .dif_class_intervals(fit, n_groups)
+  interval_note <- if (.dif_interval_theta(fit)$common) {
+    map <- .split_source_map(fit)
+    split_sources <- unique(unname(map)[duplicated(unname(map))])
+    sprintf(paste(
+      "class intervals formed on the locations under the first copy of",
+      "each split item (%s), the same score-to-measure mapping for every",
+      "group, so persons with the same responses share an interval"),
+      paste(split_sources, collapse = ", "))
+  } else NULL
 
   fnames <- names(factors)
   safe <- paste0("f", seq_along(fnames))           # syntactic stand-ins
@@ -1256,6 +1316,7 @@ dif_anova <- function(fit, factors = NULL, n_groups = NULL,
 
   notes <- character(0)
   if (!is.null(pooled_note)) notes <- c(notes, pooled_note)
+  if (!is.null(interval_note)) notes <- c(notes, interval_note)
   if (!is.null(bundle_note)) notes <- c(notes, bundle_note)
   if (!is.null(drop_frame_note)) notes <- c(notes, drop_frame_note)
   if (!is.null(size_note)) notes <- c(notes, size_note)

@@ -172,6 +172,19 @@ test; differential test functioning is a question for \code{\link{dtf}},
 which measures it from a resolved calibration with named anchors. Bundle
 rows join the same adjustment family as the items and take no post-hoc
 follow-up; \code{\link{dtf}} reports a flagged bundle's shift.
+
+\strong{Split fits.} After \code{\link{split_items}} each group answers
+its own copy of a split item, so a raw score maps to a different person
+location in each group and class intervals formed on those locations
+place one group only in some intervals; the DIF tests on the remaining
+items lose their power, and the fit's own \code{class_interval} is not
+used. The intervals are instead formed on the location every person
+would have under the first copy of each split item, the same
+score-to-measure mapping for every group, so persons with the same
+responses share an interval (with complete data, the merged raw score
+defines the intervals). The residuals keep each person's own location.
+A note records this. \code{\link{dif_wald}} tests DIF without class
+intervals at all.
 }
 \examples{
 set.seed(1); n <- 800
@@ -225,7 +238,8 @@ Maxwell, S. E. and Delaney, H. D. (2004). Designing Experiments and
 Analyzing Data: A Model Comparison Perspective (2nd ed.). Lawrence Erlbaum.
 }
 \seealso{
-\code{\link{dif_size}}, \code{\link{dif_contrasts}}, and
+\code{\link{dif_size}}, \code{\link{dif_contrasts}},
+  \code{\link{dif_wald}} and
   \code{\link{resolve_dif}}; \code{\link{dtf}} for the size of bundle
   and test-level differences on a resolved calibration; and
   \code{\link{frame_invariance}} for the frame-defining factor this

@@ -112,6 +112,7 @@ reference:
   - dif_contrasts
   - dif_posthoc
   - dif_size
+  - dif_wald
   - split_items
   - drop_items
   - resolve_frames

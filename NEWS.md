@@ -69,6 +69,24 @@
   uDBF. `dtf()` takes a `resolve_dif()` result directly, or an unsplit fit
   with the items to split, and `plot_dtf()` draws the expected-score curves
   and their difference. No existing estimator is changed.
+* `dif_anova()` on a split fit forms its class intervals on the location
+  every person would have under the first copy of each split item, the same
+  score-to-measure mapping for every group. After a split each group
+  answered its own copy, so a raw score mapped to a group-specific location
+  and intervals formed on those locations held one group only in some of
+  them; the tests on the remaining items lost their power and
+  `resolve_dif()` stopped after the first split with a second planted item
+  still in the test. The residuals keep each person's own location, and a
+  note records the mapping. Unsplit fits are unchanged.
+* `dif_wald()` tests each item for uniform DIF by splitting it by a person
+  factor, recalibrating with the unsplit items as the anchor and comparing
+  the locations of the copies with a Wald test: the conditional analogue of
+  Andersen's test for one item, with no class intervals and no person
+  estimates. Two levels report the signed shift and its standard error;
+  more levels report the range and an omnibus statistic on levels minus one
+  degrees of freedom, and Holm adjustment covers every item-by-factor test.
+  `resolve_dif(criterion = "wald")` uses it to flag and rank the items to
+  split; the default `criterion = "anova"` is unchanged.
 * CRAN checks use shorter workflow fixtures and recorded vignette bootstrap
   calculations. The full tests and scripts to regenerate those calculations
   remain in the repository; estimation and replication defaults are unchanged.

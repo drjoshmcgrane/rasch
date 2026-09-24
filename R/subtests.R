@@ -375,7 +375,12 @@ split_items <- function(fit, items, by) {
 #' estimated effect,
 #' and refits after each split. This order addresses the artificial DIF that a
 #' large departure can induce in otherwise invariant items (Andrich and
-#' Hagquist 2012, 2015). Each split gives the item a separate location in every
+#' Hagquist 2012, 2015). The DIF in each round is judged by the residual
+#' analysis of \code{\link{dif_anova}} or, with \code{criterion = "wald"},
+#' by the conditional Wald test of \code{\link{dif_wald}}, which compares
+#' each item's split locations on the calibration anchored by the unsplit
+#' items and so needs no class intervals. Each split gives the item a
+#' separate location in every
 #' factor cell. A PCM also estimates the split copies' thresholds separately;
 #' an RSM retains its common rating-scale threshold structure. A location split does not model a
 #' group-specific discrimination, so items with non-uniform DIF are left for
@@ -403,6 +408,13 @@ split_items <- function(fit, items, by) {
 #' @param effects \code{"main"} fits the factors additively;
 #'   \code{"factorial"} also tests their interactions. The same model is
 #'   used at every round and in the final DIF assessment.
+#' @param criterion \code{"anova"} flags and ranks items by the residual
+#'   analysis of \code{\link{dif_anova}} (uniform DIF only is split; a
+#'   significant non-uniform term leaves the item for review).
+#'   \code{"wald"} flags items by the conditional Wald test of
+#'   \code{\link{dif_wald}} on each factor's main effect and ranks them by
+#'   the resolved location shift; it requires \code{effects = "main"} and
+#'   does not test non-uniform DIF.
 #' @return A list of class \code{"rasch_resolve_dif"}: the final resolved
 #'   \code{fit}, the \code{splits} performed (\code{order}, \code{item},
 #'   \code{factor}, \code{base_item}, \code{eta2}, \code{magnitude} in logits), the \code{stopped}
@@ -422,7 +434,12 @@ split_items <- function(fit, items, by) {
 #'   significant non-uniform item-factor findings and is \code{NA} if any
 #'   answerable non-uniform hypothesis is unavailable, or no hypothesis was
 #'   estimable. \code{n_untested} is always a count. \code{effects} records
-#'   the factor model used.
+#'   the factor model used and \code{criterion} the test. With the Wald
+#'   criterion \code{eta2} is \code{NA}, \code{magnitude} is the absolute
+#'   resolved shift the test compared (the range of the locations for more
+#'   than two levels), the \code{dif} table carries the \code{shift} and
+#'   \code{p_adj} of each item still flagged, and \code{n_nonuniform} is
+#'   \code{NA} because non-uniform DIF is not tested.
 #' @references Andrich, D., & Hagquist, C. (2012). Real and artificial
 #'   differential item functioning. \emph{Journal of Educational and
 #'   Behavioral Statistics}, 37(3), 387-416.
@@ -434,14 +451,21 @@ split_items <- function(fit, items, by) {
 #' colnames(X) <- paste0("I", 1:8)
 #' fit <- rasch(data.frame(X, grp = g), factors = "grp")
 #' resolve_dif(fit)$splits
+#' resolve_dif(fit, criterion = "wald")$splits
 #' @seealso \code{\link{split_items}} for a single split,
-#'   \code{\link{drop_items}} to remove an item instead, and
-#'   \code{\link{dif_anova}} for the test it resolves.
+#'   \code{\link{drop_items}} to remove an item instead,
+#'   \code{\link{dif_anova}} and \code{\link{dif_wald}} for the tests it
+#'   resolves.
 #' @export
 resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
                         min_n = 20L, min_anchors = NULL, max_splits = NULL,
-                        effects = c("main", "factorial")) {
+                        effects = c("main", "factorial"),
+                        criterion = c("anova", "wald")) {
   effects <- match.arg(effects)
+  criterion <- match.arg(criterion)
+  if (criterion == "wald" && effects != "main")
+    stop("the Wald criterion tests each factor on its own; use ",
+         "effects = \"main\" or criterion = \"anova\"")
   .check_dif_args(alpha, p_adjust, min_n = min_n)
   if (!inherits(fit, "rasch") || inherits(fit, c("rasch_mfrm", "rasch_efrm")))
     stop("resolve_dif needs an ordinary rasch fit with person factors")
@@ -469,9 +493,27 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
     stop("max_splits must be a non-negative whole number")
 
   # significant, non-superseded group terms of the current fit, with the
-  # factors to split by and the partial eta-squared to rank on
+  # factors to split by and the effect to rank on: the partial eta-squared
+  # of the residual analysis, or the resolved location shift of the Wald
+  # test, which conditions on the raw score and needs no class intervals
   last_da <- NULL
   flagged <- function(cur, resolvable_only = TRUE) {
+    if (criterion == "wald") {
+      dw <- dif_wald(cur, factors = fac0, p_adjust = p_adjust,
+                     alpha = alpha, min_n = min_n)
+      last_da <<- dw
+      s <- dw$summary
+      take <- s$significant %in% TRUE
+      s <- s[take, , drop = FALSE]
+      if (!nrow(s)) return(NULL)
+      out <- data.frame(
+        item = s$item, factor = s$factor, eta2 = NA_real_,
+        shift = s$shift, p_adj = s$p_adj,
+        uniform = TRUE, nonuniform = FALSE, stringsAsFactors = FALSE)
+      attr(out, "term_factors") <- as.list(s$factor)
+      attr(out, "rank") <- abs(s$shift)
+      return(out)
+    }
     # Splitting preserves response rows. Retain the supplied factor values,
     # including external metadata and replacements for a stored factor,
     # instead of silently reselecting columns from the original fit.
@@ -500,6 +542,7 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
       uniform = s$uniform_DIF, nonuniform = s$nonuniform_DIF,
       stringsAsFactors = FALSE)
     attr(out, "term_factors") <- vars
+    attr(out, "rank") <- out$eta2
     out
   }
   cur <- fit
@@ -511,17 +554,24 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
   # final assessment can contradict; FALSE once the loop stops for a reason
   # of its own that stays true whatever that assessment shows.
   stopped_is_verdict <- TRUE
+  # The Wald criterion flags the same rows whether or not the split is
+  # resolvable, so its assessment of the final fit is already in hand when
+  # the loop ends with nothing flagged; the residual analysis is repeated
+  # with non-uniform terms included.
+  final_ready <- FALSE
   repeat {
     fl <- flagged(cur)
     if (is.null(fl) || !nrow(fl)) {
-      remaining <- flagged(cur, resolvable_only = FALSE)
+      if (criterion == "wald") {
+        remaining <- fl; final_ready <- TRUE
+      } else remaining <- flagged(cur, resolvable_only = FALSE)
       if (!is.null(remaining) && any(remaining$nonuniform))
         stopped <- paste("no resolvable uniform DIF remains;",
                          "non-uniform DIF requires item review")
       break
     }
     vars <- attr(fl, "term_factors")
-    ord <- order(-fl$eta2)
+    ord <- order(-attr(fl, "rank"))
     fl <- fl[ord, , drop = FALSE]
     vars <- vars[ord]
     # first flagged item-factor not already split, ranked by effect size
@@ -579,13 +629,15 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
     }
     # Use the complete-design marginal follow-up for the reported logit
     # magnitude. Its significance does not decide whether the split proceeds.
-    dp <- tryCatch(dif_posthoc(
+    # The Wald criterion already carries the resolved shift it tested.
+    dp <- if (criterion == "wald") NULL else tryCatch(dif_posthoc(
       cur, pick$item, term = by_vars,
       factors = fac0,
       p_adjust = p_adjust, alpha = alpha, min_n = min_n),
       error = function(e) e)
     # DIF magnitude in logits, over the trustworthy (non-weak) pairs only
-    mag <- if (!inherits(dp, "error")) {
+    mag <- if (criterion == "wald") abs(pick$shift) else
+      if (!inherits(dp, "error")) {
       d <- abs(dp$table$estimate[is.finite(dp$table$estimate) &
                                    (is.finite(dp$table$se) |
                                       is.finite(dp$table$statistic))])
@@ -620,9 +672,10 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
     data.frame(order = integer(), item = character(), factor = character(),
                base_item = character(), eta2 = numeric(), magnitude = numeric())
   rownames(split_df) <- NULL
-  final_dif <- tryCatch(flagged(cur, resolvable_only = FALSE),
-    error = function(e) stop("the final DIF assessment failed: ",
-                             conditionMessage(e), call. = FALSE))
+  final_dif <- if (final_ready) remaining else
+    tryCatch(flagged(cur, resolvable_only = FALSE),
+      error = function(e) stop("the final DIF assessment failed: ",
+                               conditionMessage(e), call. = FALSE))
   remaining_items <- if (is.null(final_dif) || !nrow(final_dif)) {
     character(0)
   } else {
@@ -638,7 +691,10 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
   # the counts outright when none of them was estimable.
   s_fin <- last_da$summary
   icol <- match(s_fin$item, colnames(cur$X))
-  answerable <- vapply(seq_len(nrow(s_fin)), function(r) {
+  # The Wald table lists only items answered in two or more levels of the
+  # factor, so each of its rows is one answerable hypothesis.
+  answerable <- if (criterion == "wald") rep(TRUE, nrow(s_fin)) else
+    vapply(seq_len(nrow(s_fin)), function(r) {
     if (is.na(icol[r])) return(TRUE)
     seen <- !is.na(cur$X[, icol[r]])
     vars <- last_da$summary_factors[[r]]
@@ -655,10 +711,18 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
       paste(names(cells), collapse = "*")), cells)
     qr(mm)$rank == ncol(mm)
   }, TRUE)
-  uniform_tested <- is.finite(s_fin$p_uniform_adj)
-  nonuniform_tested <- is.finite(s_fin$p_nonuniform_adj)
-  n_untested <- sum(answerable & !uniform_tested) +
-    sum(answerable & !nonuniform_tested)
+  if (criterion == "wald") {
+    uniform_tested <- is.finite(s_fin$p_adj)
+    nonuniform_tested <- rep(FALSE, nrow(s_fin))
+    n_untested <- sum(!uniform_tested)
+    n_hypotheses <- nrow(s_fin)
+  } else {
+    uniform_tested <- is.finite(s_fin$p_uniform_adj)
+    nonuniform_tested <- is.finite(s_fin$p_nonuniform_adj)
+    n_untested <- sum(answerable & !uniform_tested) +
+      sum(answerable & !nonuniform_tested)
+    n_hypotheses <- 2L * sum(answerable)
+  }
   no_test <- !any(uniform_tested | nonuniform_tested)
   if (no_test) {
     unknown <- paste("no DIF hypothesis in the final DIF assessment was",
@@ -668,7 +732,7 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
     stopped <- paste0(stopped, sprintf(
       paste("; %d of %d DIF hypotheses in the final assessment were not",
             "estimable, so remaining DIF may be understated"),
-      n_untested, 2L * sum(answerable)))
+      n_untested, n_hypotheses))
   notes <- unique(refusal_notes)
   # The assessment's own notes are kept verbatim, its count of terms it could
   # not estimate included: those terms stay in its adjusted-probability
@@ -685,7 +749,7 @@ resolve_dif <- function(fit, factors = NULL, alpha = 0.05, p_adjust = "holm",
   out <- list(algorithm = "factor-design-resolution-3",
               fit = cur, splits = split_df, n_splits = nrow(split_df),
               stopped = stopped, dif = final_dif, notes = notes,
-              effects = effects,
+              effects = effects, criterion = criterion,
               n_remaining_dif = if (no_test) NA_integer_ else
                 length(remaining_items),
               n_untested = as.integer(n_untested),
@@ -709,7 +773,9 @@ print.rasch_resolve_dif <- function(x, ...) {
   cat(sprintf("Remaining items with significant DIF: %d\n", x$n_remaining_dif))
   if (isTRUE(x$n_untested > 0))
     cat(sprintf("DIF hypotheses not estimable: %d\n", x$n_untested))
-  if (is.na(x$n_nonuniform))
+  if (identical(x$criterion, "wald"))
+    cat("Non-uniform DIF is not tested by the Wald criterion.\n")
+  else if (is.na(x$n_nonuniform))
     cat("Non-uniform DIF count unavailable: one or more required tests were not estimable.\n")
   if (isTRUE(x$n_nonuniform > 0))
     cat(sprintf("Non-uniform item-factor findings requiring review: %d\n",
