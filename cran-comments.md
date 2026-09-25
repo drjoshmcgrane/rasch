@@ -41,9 +41,9 @@ The installed size is 8.1 MB, as the accepted 1.12.1 was 8.0 MB; the
 ## Local checks
 
 `R CMD check --as-cran --timings` on macOS Sequoia 15.6, R 4.6.1
-(aarch64-apple-darwin23): 0 errors, 0 warnings, 0 notes, in 325 seconds
+(aarch64-apple-darwin23): 0 errors, 0 warnings, 0 notes, in 341 seconds
 including network checks. The five-second example threshold was set
-explicitly; the slowest example was `resolve_dif` at 3.477 s, and the
+explicitly; the slowest example was `simulate_mfrm` at 2.125 s, and the
 `--run-donttest` pass was also OK. The CRAN test selection passed 743
 expectations, with 28 longer tests skipped on CRAN. All eight vignettes and
 the PDF and HTML manuals passed.
@@ -51,3 +51,18 @@ the PDF and HTML manuals passed.
 The complete test suite ran with `NOT_CRAN=true` on the same machine with
 no failures; its five skips are parallel-worker integration tests that
 need an installed package namespace.
+
+## win-builder
+
+The submitted tarball was uploaded to win-builder for R-release and
+R-devel on 25 September 2026. Both returned 0 errors, 0 warnings and
+0 notes on Windows Server 2022:
+
+* R-release (R 4.6.1): installation 66 seconds; check 626 seconds.
+* R-devel (2026-09-21 r90579): installation 66 seconds; check 683 seconds.
+
+An earlier upload of this version drew a NOTE on both platforms for the
+`resolve_dif` example, at 15 seconds against the ten-second Windows
+threshold. The example now uses 300 persons and six items; it runs in
+1.7 seconds locally and 7.3 seconds on win-builder, and both criteria
+still find the planted item.

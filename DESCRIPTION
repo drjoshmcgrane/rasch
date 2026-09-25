@@ -10,12 +10,14 @@ Description: Fits models for Rasch Measurement Theory, whose defining
     many-facet, extended frame of reference and explanatory models.
     Explanatory modelling supports predictors at the item and threshold
     levels. Comparative judgement models are available for dichotomous and
-    ordered pairwise responses, with support for extended frames of reference
-    and explanatory predictors. Functions support estimation and examination
-    of model fit, targeting, reliability, dimensionality, local dependence,
-    differential item functioning, equating and simulation. A graphical
-    interface for fitting models and examining results is provided through an
-    interactive 'shiny' application.
+    ordered pairwise responses and for rankings, with support for extended
+    frames of reference and explanatory predictors, and items or persons can
+    be calibrated jointly from responses and judgements. Functions support
+    estimation and examination of model fit, targeting, reliability,
+    dimensionality, local dependence, differential item, bundle and test
+    functioning, equating and simulation. A graphical interface for fitting
+    models and examining results is provided through an interactive 'shiny'
+    application.
 URL: https://drjoshmcgrane.github.io/rasch/, https://github.com/drjoshmcgrane/rasch
 BugReports: https://github.com/drjoshmcgrane/rasch/issues
 License: MIT + file LICENSE

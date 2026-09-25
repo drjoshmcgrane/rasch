@@ -99,11 +99,11 @@ set reaches \code{min_anchors}. Items fixed by external anchors are not
 split.
 }
 \examples{
-set.seed(1); n <- 600
-d <- seq(-2, 2, length.out = 8); g <- rep(c("a", "b"), each = n / 2)
-sh <- matrix(0, n, 8); sh[g == "b", 3] <- 1.2      # one strong DIF item
-X <- matrix(rbinom(n * 8, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 8)
-colnames(X) <- paste0("I", 1:8)
+set.seed(1); n <- 300
+d <- seq(-2, 2, length.out = 6); g <- rep(c("a", "b"), each = n / 2)
+sh <- matrix(0, n, 6); sh[g == "b", 3] <- 1.5      # one strong DIF item
+X <- matrix(rbinom(n * 6, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 6)
+colnames(X) <- paste0("I", 1:6)
 fit <- rasch(data.frame(X, grp = g), factors = "grp")
 resolve_dif(fit)$splits
 resolve_dif(fit, criterion = "wald")$splits
