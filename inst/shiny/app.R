@@ -223,6 +223,9 @@ NONE_CH <- c(None = "(none)")
   .rasch_internal(".sim_explanatory_departure")
 .has_repeated_residual_units <-
   .rasch_internal(".has_repeated_residual_units")
+.parse_dif_bundles <- .rasch_internal(".parse_dif_bundles")
+.app_dif_bundles <- .rasch_internal(".app_dif_bundles")
+.dif_bundles <- .rasch_internal(".dif_bundles")
 .fit_boot_signature <- .rasch_internal(".fit_boot_signature")
 .fit_boot_signature_matches <-
   .rasch_internal(".fit_boot_signature_matches")
@@ -266,11 +269,13 @@ NONE_CH <- c(None = "(none)")
 .project_radio_inputs <- c(
   "model_type", "lp_layout", "lp_structure", "rasch_calibration",
   "thr_structure", "thr_mode", "exp_level", "bt_thr", "bt_ties",
-  "anchor_type", "btlef_se", "dif_effects", "bdif_effects", "inv_se",
-  "eq_source", "eq_shift")
+  "anchor_type", "btlef_se", "dif_effects", "dif_criterion", "bdif_effects",
+  "inv_se", "eq_source", "eq_shift", "bt_layout", "pl_se", "pl_split",
+  "pl_ties")
 .project_select_inputs <- c(
   "id_col", "ef_id", "ef_group", "lp_person", "lp_item", "lp_score",
   "lp_interaction", "bt_a", "bt_b", "bt_win", "bt_judge", "bt_count",
+  "pl_ranking", "pl_object", "pl_rank", "pl_judge",
   "pc_rank", "ng", "ef_se", "ef_workers", "btlef_panel",
   "btlef_workers", "pca_component", "dim_workers", "wright_renderer",
   "wright_type", "wright_person_panels", "wright_item_panels",
@@ -281,12 +286,16 @@ NONE_CH <- c(None = "(none)")
   "exp_interactions", "bdif_factors", "dim_pos", "dim_neg", "eq_kept")
 .project_checkbox_inputs <- c(
   "ef_prefix", "bt_position", "ng_auto", "eq_csv_independent",
-  "eq_kept_independent", "bt_eq_independent")
+  "eq_kept_independent", "bt_eq_independent", "cj_fix_comp", "cj_fix_rank")
 .project_numeric_inputs <- c(
   "maxit", "tol", "ef_reps", "ef_seed", "btlef_boot",
   "btlef_seed", "dif_alpha", "dif_boot_B", "dif_boot_seed",
   "bdif_alpha", "bdif_boot_B", "bdif_boot_seed", "inv_boot", "inv_seed",
   "dim_boot_B", "dim_boot_seed")
+# Typed text the analysis reads (the DIF item bundles). A saved primary DIF
+# result is pinned to the parse of this text, so a project saved before the
+# control existed restores it empty rather than leaving stale text behind.
+.project_text_inputs <- c("dif_bundles")
 
 # Inputs that define the base calibration. A saved analysis may also retain
 # later display and diagnostic choices, but these values must continue to
@@ -300,12 +309,14 @@ NONE_CH <- c(None = "(none)")
   "factor_cols", "item_cols", "ef_items", "lp_facets", "lp_items_wide",
   "bt_margin", "bt_response", "bt_order", "exp_main",
   "exp_interactions", "ef_prefix", "bt_position", "ng_auto", "maxit",
-  "tol", "ef_reps", "ef_seed")
+  "tol", "ef_reps", "ef_seed", "bt_layout", "pl_ranking", "pl_object",
+  "pl_rank", "pl_judge", "pl_se", "pl_split", "pl_ties", "cj_fix_comp",
+  "cj_fix_rank")
 
 .collect_app_settings <- function(input) {
   ids <- unique(c(.project_radio_inputs, .project_select_inputs,
                   .project_selectize_inputs, .project_checkbox_inputs,
-                  .project_numeric_inputs))
+                  .project_numeric_inputs, .project_text_inputs))
   current <- shiny::reactiveValuesToList(input, all.names = TRUE)
   # Predictor-type controls are generated from the uploaded metadata and do
   # not have fixed IDs. Retain their type, reference and ordinal-order values.
@@ -327,6 +338,55 @@ NONE_CH <- c(None = "(none)")
   if (is.list(source) && is.data.frame(source$data) &&
       is.list(source$settings) && is.list(source$resources) &&
       is.list(source$simulation)) source else NULL
+}
+
+# Judgements of the items (paired comparisons, rankings, or both) are
+# calibrated jointly with the responses by rasch_cj(), and the joint
+# calibration anchors the response analysis. These helpers give both the
+# run and the reopening of a saved analysis the same reading of the run.
+# The item columns of the joint calibration: the sidebar selection, or every
+# column that is not an id or a factor when nothing is selected.
+.app_joint_items <- function(data, items, id, factors) {
+  if (!is.null(items)) return(items)
+  if (is.null(id) && is.null(factors)) return(NULL)
+  setdiff(names(data), c(id, factors))
+}
+# The unit of each judgement frame: 1 when the frame is present and its
+# checkbox fixes it to the unit of the responses, otherwise estimated.
+.app_joint_units <- function(fix_comp, fix_rank, comparisons, rankings) {
+  c(comparisons = if (isTRUE(fix_comp) && !is.null(comparisons)) 1 else NA_real_,
+    rankings = if (isTRUE(fix_rank) && !is.null(rankings)) 1 else NA_real_)
+}
+# rasch() needs a parameter to estimate, so the last item of the joint
+# calibration is left free and the others are anchored at their joint
+# thresholds; the persons are then measured on the joint scale.
+.app_joint_free_item <- function(cj) cj$items$item[nrow(cj$items)]
+.app_joint_anchors <- function(cj)
+  cj$anchors[cj$anchors$item != .app_joint_free_item(cj), , drop = FALSE]
+# A saved analysis stores the judgements and the run settings of the
+# calibration they anchored, not the joint calibration itself; refitting
+# them on reopening gives the Joint calibration page back. NULL when the
+# saved fit was not anchored on judgements, or the refit fails.
+.app_joint_refit <- function(fit) {
+  src <- .app_fit_source(fit)
+  if (is.null(src) || !identical(src$settings$model_type, "rasch")) return(NULL)
+  res <- src$resources
+  if (is.null(res$cj_comparisons) && is.null(res$cj_rankings)) return(NULL)
+  s <- src$settings
+  idc <- if (!is.null(s$id_col) && !identical(s$id_col, NONE)) s$id_col
+  fac <- if (length(s$factor_cols)) s$factor_cols
+  its <- if (length(s$item_cols)) s$item_cols
+  cj <- tryCatch(
+    rasch_cj(src$data, comparisons = res$cj_comparisons,
+             rankings = res$cj_rankings,
+             items = .app_joint_items(src$data, its, idc, fac),
+             units = .app_joint_units(s$cj_fix_comp, s$cj_fix_rank,
+                                      res$cj_comparisons, res$cj_rankings),
+             maxit = s$maxit %||% 200, tol = s$tol %||% 1e-8),
+    error = function(e) NULL)
+  if (is.null(cj) || !isTRUE(cj$converged) ||
+      !identical(.app_joint_anchors(cj), res$anchors)) return(NULL)
+  cj
 }
 
 # Frame estimation is a downstream extension of the fitted CJ calibration.
@@ -425,6 +485,13 @@ NONE_CH <- c(None = "(none)")
             argument = "value")
   apply_ids(.project_numeric_inputs, shiny::updateNumericInput,
             argument = "value")
+  for (id in .project_text_inputs)
+    shiny::updateTextAreaInput(session, id, value = settings[[id]] %||% "")
+  # a saved analysis is a person-by-item or paired-comparison calibration
+  # (rank analyses are not stored), so a file that predates the comparison
+  # layout control returns it to pairs rather than leaving ranks selected
+  if (!"bt_layout" %in% names(settings))
+    shiny::updateRadioButtons(session, "bt_layout", selected = "pairs")
   dynamic <- grep("^exp_(type|ref)_[0-9]+$", names(settings), value = TRUE)
   apply_ids(dynamic, shiny::updateSelectInput)
   orders <- grep("^exp_order_[0-9]+$", names(settings), value = TRUE)
@@ -443,8 +510,11 @@ NONE_CH <- c(None = "(none)")
                   value = TRUE)
   ids <- unique(c(.project_radio_inputs, .project_select_inputs,
                   .project_selectize_inputs, .project_checkbox_inputs,
-                  .project_numeric_inputs, dynamic))
-  settings[intersect(ids, names(settings))]
+                  .project_numeric_inputs, .project_text_inputs, dynamic))
+  out <- settings[intersect(ids, names(settings))]
+  for (id in setdiff(.project_text_inputs, names(out))) out[[id]] <- ""
+  if (!"bt_layout" %in% names(out)) out$bt_layout <- "pairs"
+  out
 }
 
 # An echoed control reports the value the restore sent; the same control
@@ -1070,7 +1140,9 @@ panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
                       "Rating scale (RSM)" = "rsm",
                       "Multiple Ratings (MFRM)" = "mfrm",
                       "Extended Frames (EFRM)" = "efrm",
-                      "Comparative Judgement" = "btl")),
+                      "Comparative Judgement" = "btl",
+                      "Rankings" = "pl",
+                      "Joint calibration" = "cj")),
         accordion(
           id = "run_settings", multiple = TRUE,
           open = c("Data roles", "Model"),
@@ -1132,57 +1204,100 @@ panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
                 selectInput("lp_interaction", "Interacting facet", NULL))
             ),
             conditionalPanel("input.model_type == 'btl'",
-              h6("One comparison per row"),
-              selectInput("bt_a", "Object A column", NONE_CH),
-              selectInput("bt_b", "Object B column", NONE_CH),
-              conditionalPanel("!input.bt_response",
-                selectInput("bt_win", "Winner column", NONE_CH),
-                selectizeInput("bt_margin",
-                               span("Margin of win (optional)",
-                                    info_icon("Extent of the win (a little / much) as an ordered factor or increasing values. \"tie\"/\"draw\" in the winner column marks a tie; other unmatched values drop the row.")),
-                               NULL,
-                               options = list(placeholder = "none — dichotomous"))),
-              selectizeInput("bt_response",
-                             span("Polytomous response (optional)",
-                                  info_icon(paste("Ordered preference for object A",
-                                    "(worst to best, or scores 0..m); overrides the winner column.",
-                                    "Ties belong in a middle category. A winner column fits",
-                                    "the Bradley-Terry-Luce model; this fits its adjacent-categories extension."))),
-                             NULL,
-                             options = list(placeholder = "none — use winner")),
-              selectInput("bt_judge",
-                          span("Judge column (optional)",
-                               info_icon("Enables the judge fit table and clusters standard errors by judge.")),
-                          NONE_CH),
-              conditionalPanel("input.bt_judge && input.bt_judge != '(none)'",
-                selectizeInput("bt_order",
-                               span("Judgment order (optional)",
-                                    info_icon("Each judge's judgment sequence (timestamps or ranks); enables the exposure and carry-over dependence analysis.")),
-                               NULL,
-                               options = list(placeholder = "none")),
-                selectizeInput("bt_jfactors",
-                               span("Judge factors (optional)",
-                                    info_icon("Judge groupings (constant within judge) for DIF by judge group.")),
-                               NULL, multiple = TRUE,
-                               options = list(placeholder = "none"))),
-              checkboxInput("bt_position",
-                            span("First-position advantage",
-                                 info_icon("Object A is the first-presented of each pair; estimates the positional advantage (Davidson and Beaver 1977).")),
-                            FALSE),
-              conditionalPanel("input.rasch_calibration != 'explanatory'",
-                fileInput("bt_anchor_file",
+              radioButtons("bt_layout", info_label("Data layout",
+                           paste("Paired comparisons list one comparison per row",
+                                 "and fit the Bradley-Terry-Luce model. Rankings",
+                                 "list one ranked object per row and fit the",
+                                 "Plackett-Luce model of successive choices.")),
+                           c("One comparison per row" = "pairs",
+                             "One ranked object per row" = "ranks")),
+              conditionalPanel("input.bt_layout == 'ranks'",
+                selectInput("pl_ranking", "Ranking column", NONE_CH),
+                selectInput("pl_object", "Object column", NONE_CH),
+                selectInput("pl_rank",
+                            span("Rank column",
+                                 info_icon("1 is the highest rank. A missing rank marks an object present in the ranking but left unranked.")),
+                            NONE_CH),
+                selectInput("pl_judge",
+                            span("Judge column (optional)",
+                                 info_icon("Clusters the sandwich standard errors by judge and enables the judge fit table.")),
+                            NONE_CH),
+                fileInput("pl_anchor_file",
                           span("Anchor objects (CSV: object, location)",
                                info_icon(paste("Holds the named objects at their given locations",
                                  "and estimates the rest around them. Values are treated as",
                                  "fixed, so uncertainty from the earlier calibration is not",
                                  "included."))),
-                          accept = ".csv", placeholder = "optional")),
-              conditionalPanel("!input.bt_response && !input.bt_margin",
-                radioButtons("bt_ties", "Ties",
-                             c("Drop" = "drop", "Half a win each" = "half")))
+                          accept = ".csv", placeholder = "optional"),
+                radioButtons("pl_se", info_label("Standard errors",
+                             paste("Sandwich errors are clustered by judge, or by ranking",
+                                   "without a judge column, and are withheld when the",
+                                   "cluster design cannot support them. Model-based errors",
+                                   "use the observed information and assume independent",
+                                   "rankings.")),
+                             c("Sandwich (clustered)" = "sandwich",
+                               "Model based" = "model")),
+                radioButtons("pl_split", info_label("Invariance split",
+                             paste("The invariance check compares the object locations",
+                                   "estimated from the first choice of each ranking with",
+                                   "those from the later choices, or the early half of",
+                                   "each ranking with the late half.")),
+                             c("First choice against later choices" = "first",
+                               "Early half against late half" = "half")),
+                radioButtons("pl_ties", "Tied ranks",
+                             c("Drop the ranking" = "drop",
+                               "Stop the analysis" = "error"))),
+              conditionalPanel("input.bt_layout != 'ranks'",
+                selectInput("bt_a", "Object A column", NONE_CH),
+                selectInput("bt_b", "Object B column", NONE_CH),
+                conditionalPanel("!input.bt_response",
+                  selectInput("bt_win", "Winner column", NONE_CH),
+                  selectizeInput("bt_margin",
+                                 span("Margin of win (optional)",
+                                      info_icon("Extent of the win (a little / much) as an ordered factor or increasing values. \"tie\"/\"draw\" in the winner column marks a tie; other unmatched values drop the row.")),
+                                 NULL,
+                                 options = list(placeholder = "none — dichotomous"))),
+                selectizeInput("bt_response",
+                               span("Polytomous response (optional)",
+                                    info_icon(paste("Ordered preference for object A",
+                                      "(worst to best, or scores 0..m); overrides the winner column.",
+                                      "Ties belong in a middle category. A winner column fits",
+                                      "the Bradley-Terry-Luce model; this fits its adjacent-categories extension."))),
+                               NULL,
+                               options = list(placeholder = "none — use winner")),
+                selectInput("bt_judge",
+                            span("Judge column (optional)",
+                                 info_icon("Enables the judge fit table and clusters standard errors by judge.")),
+                            NONE_CH),
+                conditionalPanel("input.bt_judge && input.bt_judge != '(none)'",
+                  selectizeInput("bt_order",
+                                 span("Judgment order (optional)",
+                                      info_icon("Each judge's judgment sequence (timestamps or ranks); enables the exposure and carry-over dependence analysis.")),
+                                 NULL,
+                                 options = list(placeholder = "none")),
+                  selectizeInput("bt_jfactors",
+                                 span("Judge factors (optional)",
+                                      info_icon("Judge groupings (constant within judge) for DIF by judge group.")),
+                                 NULL, multiple = TRUE,
+                                 options = list(placeholder = "none"))),
+                checkboxInput("bt_position",
+                              span("First-position advantage",
+                                   info_icon("Object A is the first-presented of each pair; estimates the positional advantage (Davidson and Beaver 1977).")),
+                              FALSE),
+                conditionalPanel("input.rasch_calibration != 'explanatory'",
+                  fileInput("bt_anchor_file",
+                            span("Anchor objects (CSV: object, location)",
+                                 info_icon(paste("Holds the named objects at their given locations",
+                                   "and estimates the rest around them. Values are treated as",
+                                   "fixed, so uncertainty from the earlier calibration is not",
+                                   "included."))),
+                            accept = ".csv", placeholder = "optional")),
+                conditionalPanel("!input.bt_response && !input.bt_margin",
+                  radioButtons("bt_ties", "Ties",
+                               c("Drop" = "drop", "Half a win each" = "half"))))
             )),
           accordion_panel("Estimation options", icon = bs_icon("gear"),
-            conditionalPanel("input.model_type == 'rasch' || input.model_type == 'btl'",
+            conditionalPanel("input.model_type == 'rasch' || (input.model_type == 'btl' && input.bt_layout != 'ranks')",
               radioButtons("rasch_calibration", info_label("Calibration",
                            paste("Free calibration estimates item thresholds or object locations directly.",
                                  "Explanatory calibration expresses them as functions",
@@ -1223,7 +1338,7 @@ panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
                 uiOutput("exp_predictor_types"),
                 uiOutput("exp_formula_controls"))),
             conditionalPanel(
-              "input.model_type == 'btl' && (input.bt_response || input.bt_margin)",
+              "input.model_type == 'btl' && input.bt_layout != 'ranks' && (input.bt_response || input.bt_margin)",
               radioButtons("bt_thr", info_label("Threshold structure",
                            paste("Principal components pool the symmetric thresholds",
                                  "to a spread component so sparse categories borrow",
@@ -1256,7 +1371,7 @@ panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
               numericInput("maxit", "Maximum iterations", value = 60, min = 5, step = 5),
               numericInput("tol", "Convergence criterion", value = 1e-8,
                            min = 1e-12, step = 1e-8),
-              conditionalPanel("input.model_type == 'btl'",
+              conditionalPanel("input.model_type == 'btl' && input.bt_layout != 'ranks'",
                 selectInput("bt_count", info_label("Count column (optional)",
                             paste("A row may represent several identical comparisons.",
                                   "Counts greater than one cannot be used with judgment order,",
@@ -1281,7 +1396,37 @@ panel_data <- nav_panel("Data", value = "p_data", icon = bs_icon("database"),
                              c("Individual thresholds" = "individual",
                                "Item locations" = "average",
                                "Average of the anchor set" = "set_average"),
-                             inline = TRUE))))
+                             inline = TRUE),
+                tags$hr(class = "my-2"),
+                fileInput("cj_comp_file",
+                          info_label("Paired comparisons of the items (CSV)",
+                          paste("Columns object_a, object_b and winner name the two",
+                                "items compared and the one judged harder; optional",
+                                "threshold_a and threshold_b name the thresholds of",
+                                "polytomous items. The judgements are calibrated",
+                                "jointly with the responses by rasch_cj(), and the",
+                                "joint calibration anchors the response analysis on",
+                                "every item but the last. Judgements cannot be",
+                                "combined with anchors for equating.")),
+                          accept = ".csv", placeholder = "optional"),
+                fileInput("cj_rank_file",
+                          info_label("Rankings of the items (CSV)",
+                          paste("One ranked item per row: columns ranking, item and",
+                                "rank, rank 1 the item judged hardest; an optional",
+                                "threshold column names the threshold of a",
+                                "polytomous item. Rankings may accompany paired",
+                                "comparisons or stand alone; either way the joint",
+                                "calibration anchors the response analysis.")),
+                          accept = ".csv", placeholder = "optional"),
+                uiOutput("cj_sources_note"),
+                conditionalPanel("output.has_cj_comparisons == true",
+                  checkboxInput("cj_fix_comp",
+                                "Comparisons share the unit of the responses",
+                                FALSE)),
+                conditionalPanel("output.has_cj_rankings == true",
+                  checkboxInput("cj_fix_rank",
+                                "Rankings share the unit of the responses",
+                                FALSE)))))
         ),
         input_task_button("run", "Estimate", icon = bs_icon("play-fill"),
                           type = "primary", class = "w-100 btn-lg mt-2"),
@@ -1860,6 +2005,32 @@ panel_targeting <- nav_panel("Targeting", value = "p_targeting", icon = bs_icon(
                      label = "Plot axes")))
   )
 
+# ------------------------------------------------------------- RANKINGS --
+# A rank analysis (Plackett-Luce) has neither a person-by-item matrix nor
+# paired comparisons behind it, so none of the ordinary pages apply; every
+# display of the rank fit lives on this one page, and the ordinary pages
+# hide while it is the active analysis.
+panel_pl <- nav_panel("Rankings", value = "p_pl", icon = bs_icon("list-ol"),
+    uiOutput("pl_boxes"),
+    rcode_details("pl_boxes"),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+      div(statCard("pl_fitsum_tbl", "Rank analysis",
+        footer = uiOutput("pl_fitsum_notes"))),
+      div(statCard("pl_reversal_tbl", "Reversal check"))),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(5, 7)),
+      plotCard("pl_map", "Object map", height = "520px"),
+      tableCard("pl_objects_tbl", "Objects",
+                controls = cols_switch("pl_objects_full"))),
+    conditionalPanel("output.pl_has_judges == true",
+      tableCard("pl_judges_tbl", "Judges",
+        note = "One row per judge. Fit statistics pool the residuals of the judge's rankings; a large mean surprise marks a judge whose rankings the model finds unlikely.")),
+    tableCard("pl_rankings_tbl", "Rankings",
+      note = "One row per ranking. The surprise z compares the ranking's log-likelihood with its expectation under the fitted model; large positive values mark unlikely rankings."),
+    conditionalPanel("output.pl_has_invariance == true",
+      tableCard("pl_invariance_tbl", "Invariance across choice positions",
+                footer = uiOutput("pl_invariance_note")))
+  )
+
 # ------------------------------------------------------------------ DIF --
 panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
     # Rasch fits: person-factor DIF (hidden while a BTL fit is active)
@@ -1879,6 +2050,20 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
                        "Applied to Holm-adjusted probabilities across the DIF family."),
                      value = 0.05,
                      min = 0.001, max = 0.5, step = 0.01),
+        # bundles are typed rather than uploaded: one line per bundle, read
+        # by the same parser the project validator applies to the saved
+        # text, so a reopened analysis is pinned to exactly these bundles
+        textAreaInput("dif_bundles",
+                      info_label("Item bundles",
+                        paste("Optional. One bundle per line as",
+                              "name: item, item, ... Each bundle is tested",
+                              "as one unit in the analysis of variance and",
+                              "in differential test functioning; it needs",
+                              "at least two items and cannot be the whole",
+                              "test.")),
+                      value = "", rows = 3,
+                      placeholder = "reading: i1, i2, i3"),
+        uiOutput("dif_bundles_note"),
         conditionalPanel("output.dif_refit_available == true",
           hr(),
           h6(span("Resolve DIF",
@@ -1892,8 +2077,17 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
                             "About DIF resolution"))),
           input_task_button("make_split", "Resolve the selected item",
                             type = "primary", class = "w-100"),
+          div(class = "mt-3",
+            radioButtons("dif_criterion", info_label("Automatic criterion",
+                         paste("Residual ANOVA flags items from the analysis",
+                               "of variance above. Conditional Wald flags",
+                               "them from the conditional Wald tests, one",
+                               "factor at a time, so the factor model is",
+                               "main effects.")),
+                         c("Residual ANOVA" = "anova",
+                           "Conditional Wald" = "wald"))),
           input_task_button("resolve_all", "Resolve all DIF automatically",
-                            type = "primary", class = "w-100 mt-2"),
+                            type = "primary", class = "w-100"),
           conditionalPanel("output.has_override_dif",
             actionButton("reset_split", "Undo this change",
                          class = "btn-outline-warning w-100 mt-2"))),
@@ -1917,6 +2111,20 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
         accordion_panel("Full ANOVA table", value = "dif_full_panel",
           tableCard("dif_full_tbl",
                     note = "The complete per-item ANOVA: every model term with its df, sums of squares, mean squares, F, and adjusted probability.")),
+        # refit-based tests for ordinary Rasch fits, computed when the panel
+        # is first opened; the selected row shows its level locations
+        accordion_panel("Conditional Wald tests", value = "dif_wald_panel",
+          conditionalPanel("output.dif_refit_available != true",
+            accordion_info(paste(
+              "Conditional Wald tests need an ordinary Rasch calibration;",
+              "they are unavailable for Multiple Ratings and Extended",
+              "Frames."))),
+          conditionalPanel("output.dif_refit_available == true",
+            layout_columns(col_widths = breakpoints(sm = 12, xl = c(7, 5)),
+              tableCard("dif_wald_tbl",
+                controls = cols_switch("dif_wald_full"),
+                footer = uiOutput("dif_wald_note")),
+              tableCard("dif_wald_levels_tbl", "Locations by level")))),
         accordion_panel("Bootstrap sensitivity", value = "dif_boot_panel",
           conditionalPanel("output.can_dif_boot != true",
             accordion_info(paste(
@@ -1978,6 +2186,43 @@ panel_dif <- nav_panel("DIF", value = "p_dif", icon = bs_icon("sliders"),
                 uiOutput("resolve_notes"),
                 DT::DTOutput("resolve_tbl"),
                 rcode_details("resolve_tbl"))))),
+        # shown once the active fit carries split items (a manual split or an
+        # automatic resolution): the groups' expected test scores compared
+        # over the items that have a calibrated copy for every group
+        accordion_panel("Differential test functioning", value = "dif_dtf",
+          conditionalPanel("output.dif_has_split != true",
+            accordion_info(paste(
+              "Differential test functioning compares the groups' expected",
+              "test scores once items are split by group. Resolve the",
+              "selected item, or resolve all DIF automatically, to see it."))),
+          conditionalPanel("output.dif_has_split == true",
+            card(card_body(fillable = FALSE,
+              layout_columns(col_widths = c(4, 4, 4),
+                selectInput("dtf_by", info_label("Compare by",
+                              paste("The person factor, or factor combination,",
+                                    "whose levels the items were split by.")),
+                            NULL),
+                selectInput("dtf_reference", info_label("Reference group",
+                              paste("The level whose calibration defines the",
+                                    "reference scale; every other level is",
+                                    "compared with it.")),
+                            NULL),
+                selectInput("dtf_group", info_label("Plotted group",
+                              paste("The compared level whose expected-score",
+                                    "curve and score shifts are drawn.")),
+                            NULL)),
+              uiOutput("dtf_note"))),
+            layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+              tableCard("dtf_test_tbl", "Test functioning",
+                        controls = cols_switch("dtf_test_full")),
+              plotCard("dtf_plot", "Expected test scores")),
+            layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
+              tableCard("dtf_items_tbl", "Item shifts",
+                        controls = cols_switch("dtf_items_full")),
+              tableCard("dtf_scores_tbl", "Score-to-measure shifts")),
+            conditionalPanel("output.dif_has_bundles == true",
+              tableCard("dtf_bundles_tbl", "Bundle functioning",
+                        controls = cols_switch("dtf_bundles_full"))))),
         accordion_panel(
           title = "Planned contrasts",
           value = "dif_contrasts",
@@ -2589,8 +2834,40 @@ panel_compare <- nav_panel("Compare", value = "p_compare", icon = bs_icon("colum
     )
   )
 
+# ---------------------------------------------------- JOINT CALIBRATION --
+# A response analysis anchored on judgements of the items carries the joint
+# calibration that supplied its anchors. This page shows that calibration
+# frame by frame; the ordinary pages show the anchored response analysis.
+panel_joint <- nav_panel("Joint calibration", value = "p_joint",
+                         icon = bs_icon("intersect"),
+    uiOutput("joint_boxes"),
+    rcode_details("joint_boxes"),
+    layout_columns(col_widths = breakpoints(sm = 12, xl = c(5, 7)),
+      div(statCard("joint_fitsum_tbl", "Joint calibration",
+        footer = uiOutput("joint_fitsum_notes"))),
+      plotCard("joint_map", "Calibration map", height = "520px")),
+    tableCard("joint_items_tbl", "Items",
+      note = "One row per item: the combined location with its standard error, then the location each frame gives the item on its own, expressed on the scale of the responses."),
+    conditionalPanel("output.joint_has_thresholds == true",
+      tableCard("joint_thresholds_tbl", "Thresholds",
+        note = "One row per threshold of a polytomous item: the combined estimate and its standard error.")),
+    tableCard("joint_invariance_tbl", "Invariance across frames",
+              footer = uiOutput("joint_invariance_note")),
+    tableCard("joint_anchors_tbl", "Anchors",
+              footer = uiOutput("joint_anchors_note"))
+  )
+
 # --------------------------------------------------------------- EXPORT --
 panel_export <- nav_panel("Export", value = "p_export", icon = bs_icon("download"),
+    conditionalPanel("output.is_pl == true || output.is_joint == true",
+      div(class = "alert alert-info",
+          paste("The saved analysis, the report and the results archive cover",
+                "person-by-item and paired-comparison analyses. A rank analysis",
+                "or a joint calibration is reproduced by the R code on the Data",
+                "page, and each of their tables has a CSV download on the",
+                "Rankings or Joint calibration page; a saved analysis anchored",
+                "on judgements keeps them and refits the joint calibration when",
+                "it is reopened."))),
     layout_columns(col_widths = breakpoints(sm = 12, xl = c(6, 6)),
       card(info_header("Save or reopen the analysis",
         "The .rasch file stores the source data, fitted model, downstream transformations, comparison fits and reproducible R call. Reopen it in this app to continue the analysis."),
@@ -2832,9 +3109,11 @@ ui <- page_navbar(
   panel_data,
   panel_summary,
   panel_items,
+  panel_joint,
   panel_explanatory,
   panel_persons,
   panel_targeting,
+  panel_pl,
   nav_menu("Independence", value = "menu_independence",
     panel_ld,
     panel_dim),
@@ -2906,9 +3185,12 @@ server <- function(input, output, session) {
       restored_project_name(NULL)
       restored_project_settings(list()); restored_project_resources(list())
       updateRadioButtons(session, "model_type",
-                         selected = if (dc %in% c("dich", "pcm", "rsm"))
-                           "rasch" else dc)
-      if (dc %in% c("dich", "pcm", "rsm"))
+                         selected = if (dc %in% c("dich", "pcm", "rsm", "cj"))
+                           "rasch" else if (identical(dc, "pl")) "btl" else dc)
+      if (dc %in% c("btl", "pl"))
+        updateRadioButtons(session, "bt_layout",
+                           selected = if (identical(dc, "pl")) "ranks" else "pairs")
+      if (dc %in% c("dich", "pcm", "rsm", "cj"))
         updateRadioButtons(session, "thr_structure",
                            selected = if (identical(dc, "rsm")) "rsm" else "pcm")
     }
@@ -2943,7 +3225,8 @@ server <- function(input, output, session) {
       return(switch(input$demo_choice,
                     dich = .demo_dich(), rsm = .demo_rsm(),
                     mfrm = .demo_mfrm(), efrm = .demo_efrm(),
-                    btl = .demo_btl(), .demo_data()))
+                    btl = .demo_btl(), pl = .demo_pl(), cj = .demo_cj(),
+                    .demo_data()))
     req(input$file)
     ext <- tolower(tools::file_ext(input$file$name))
     sep <- if (ext %in% c("tsv", "txt")) "\t" else ","
@@ -3266,6 +3549,8 @@ server <- function(input, output, session) {
     model_selected <- if (lay %in% c("rasch", "rasch_exp")) "rasch" else
       if (lay %in% c("btl", "btl_exp", "btl_efrm")) "btl" else lay
     updateRadioButtons(session, "model_type", selected = model_selected)
+    if (identical(model_selected, "btl"))
+      updateRadioButtons(session, "bt_layout", selected = "pairs")
     if (lay %in% c("rasch", "rasch_exp"))
       updateRadioButtons(session, "thr_structure",
         selected = if (input$sr_model == "RSM") "rsm" else "pcm")
@@ -3397,6 +3682,72 @@ server <- function(input, output, session) {
     if (anyNA(a$item) || any(!nzchar(a$item)))
       stop("every anchor row needs a non-blank item name", call. = FALSE)
     a
+  })
+
+  # Judgements of the items reach the analysis three ways: as CSV uploads,
+  # as attributes of the joint calibration example, or inside a reopened
+  # analysis. An upload wins over the example and the example over the
+  # reopened analysis, the precedence the anchors and the scoring key follow.
+  cj_sources <- reactive({
+    read_cj <- function(f, what, cols) {
+      d <- tryCatch(read.csv(f$datapath, check.names = FALSE,
+                             stringsAsFactors = FALSE),
+                    error = function(e)
+                      stop("could not read the ", what, " CSV: ",
+                           conditionMessage(e), call. = FALSE))
+      if (anyDuplicated(names(d)))
+        stop("the ", what, " CSV has duplicate column names", call. = FALSE)
+      if (!all(cols %in% names(d)))
+        stop("the ", what, " CSV needs columns ",
+             paste(cols, collapse = ", "), call. = FALSE)
+      if (!nrow(d)) stop("the ", what, " CSV contains no rows", call. = FALSE)
+      d
+    }
+    comp <- if (!is.null(input$cj_comp_file))
+      read_cj(input$cj_comp_file, "paired-comparison",
+              c("object_a", "object_b", "winner"))
+    rank <- if (!is.null(input$cj_rank_file))
+      read_cj(input$cj_rank_file, "ranking", c("ranking", "item", "rank"))
+    origin <- if (!is.null(comp) || !is.null(rank)) "upload"
+      else if (identical(input$demo_choice %||% "none", "cj")) "example"
+      else "project"
+    if (identical(origin, "example")) {
+      d <- raw_data()
+      comp <- attr(d, "comparisons", exact = TRUE)
+      rank <- attr(d, "rankings", exact = TRUE)
+    } else if (identical(origin, "project")) {
+      res <- restored_project_resources()
+      comp <- res$cj_comparisons
+      rank <- res$cj_rankings
+    }
+    if (is.null(comp) && is.null(rank)) return(NULL)
+    list(comparisons = comp, rankings = rank, origin = origin)
+  })
+  cj_sources_quiet <- reactive(
+    tryCatch(cj_sources(), error = function(e) NULL))
+  output$has_cj_comparisons <- reactive(
+    !is.null(cj_sources_quiet()$comparisons))
+  outputOptions(output, "has_cj_comparisons", suspendWhenHidden = FALSE)
+  output$has_cj_rankings <- reactive(!is.null(cj_sources_quiet()$rankings))
+  outputOptions(output, "has_cj_rankings", suspendWhenHidden = FALSE)
+  cj_sources_label <- function(s)
+    paste(c(if (!is.null(s$comparisons))
+              sprintf("%d paired comparisons", nrow(s$comparisons)),
+            if (!is.null(s$rankings))
+              sprintf("%d rankings", length(unique(s$rankings$ranking)))),
+          collapse = " and ")
+  output$cj_sources_note <- renderUI({
+    s <- tryCatch(cj_sources(), error = function(e) e)
+    if (is.null(s)) return(NULL)
+    if (inherits(s, "condition"))
+      return(div(class = "text-danger small", conditionMessage(s)))
+    div(class = "text-muted small mb-2",
+        sprintf(paste("Judgements of the items %s: %s. The joint calibration",
+                      "anchors the response analysis."),
+                switch(s$origin, upload = "uploaded",
+                       example = "from the example dataset",
+                       project = "from the reopened analysis"),
+                cj_sources_label(s)))
   })
 
   key_in <- reactive({
@@ -3649,6 +4000,32 @@ server <- function(input, output, session) {
     a
   })
 
+  # rank-analysis anchors: the same two-column CSV (object, location),
+  # read into the named vector pl() takes
+  pl_anchors_in <- reactive({
+    if (is.null(input$pl_anchor_file)) return(NULL)
+    a <- tryCatch(read.csv(input$pl_anchor_file$datapath,
+                           check.names = FALSE, stringsAsFactors = FALSE),
+                  error = function(e)
+                    stop("could not read the ranking anchor CSV: ",
+                         conditionMessage(e), call. = FALSE))
+    if (anyDuplicated(names(a)))
+      stop("the ranking anchor CSV has duplicate column names", call. = FALSE)
+    if (!all(c("object", "location") %in% names(a)))
+      stop("the ranking anchor CSV needs columns object, location",
+           call. = FALSE)
+    if (!nrow(a))
+      stop("the ranking anchor CSV contains no anchor rows", call. = FALSE)
+    obj <- trimws(as.character(a$object))
+    if (anyNA(obj) || any(!nzchar(obj)))
+      stop("every ranking anchor row needs a non-blank object name",
+           call. = FALSE)
+    loc <- suppressWarnings(as.numeric(a$location))
+    if (any(!is.finite(loc)))
+      stop("every ranking anchor row needs a finite location", call. = FALSE)
+    stats::setNames(loc, obj)
+  })
+
   observeEvent(raw_data(), {
     df <- raw_data(); nm <- names(df)
     guess_id <- nm[grepl("^id$|_id$|^person", tolower(nm))][1]
@@ -3728,6 +4105,19 @@ server <- function(input, output, session) {
                       selected = if (length(g_f)) g_f[1] else character(0))
     updateSelectInput(session, "bt_count", choices = c(NONE_CH, nm),
                       selected = if (!is.na(g_c)) g_c else NONE)
+    # rankings layout guesses (one ranked object per row); the judge guess
+    # is the paired-comparison one
+    g_rk <- nm[grepl("^ranking|^set$|^task$|^round$", tolower(nm))][1]
+    g_ob <- nm[grepl("^object|^script|^essay|^candidate|^item$", tolower(nm))][1]
+    g_rn <- nm[grepl("^rank$|^position$|^place$", tolower(nm))][1]
+    updateSelectInput(session, "pl_ranking", choices = c(NONE_CH, nm),
+                      selected = if (!is.na(g_rk)) g_rk else NONE)
+    updateSelectInput(session, "pl_object", choices = c(NONE_CH, nm),
+                      selected = if (!is.na(g_ob)) g_ob else NONE)
+    updateSelectInput(session, "pl_rank", choices = c(NONE_CH, nm),
+                      selected = if (!is.na(g_rn)) g_rn else NONE)
+    updateSelectInput(session, "pl_judge", choices = c(NONE_CH, nm),
+                      selected = if (!is.na(g_j)) g_j else NONE)
   })
 
   read_frame_map <- function(upload, id_col, units, label) {
@@ -3839,10 +4229,12 @@ server <- function(input, output, session) {
                     rsm = "Rating scale (RSM)",
                     mfrm = "Multiple Ratings (MFRM)",
                     efrm = "Extended Frames (EFRM)",
-                    btl = "Comparative Judgement")
+                    btl = "Comparative Judgement", pl = "Rankings",
+                    cj = "Joint calibration")
   .demo_chip_labels <- c(dich = "Multiple choice", pcm = "Polytomous (PCM)",
                          rsm = "Rating scale", mfrm = "Multiple Ratings",
-                         efrm = "Extended Frames", btl = "Comparative Judgement")
+                         efrm = "Extended Frames", btl = "Comparative Judgement",
+                         pl = "Rankings", cj = "Joint calibration")
   output$data_main <- renderUI({
     if (is.null(sim_data()) &&
         identical(input$demo_choice %||% "none", "none") &&
@@ -3887,7 +4279,7 @@ server <- function(input, output, session) {
             verbatimTextOutput("rcode_fit"))))
     }
   })
-  lapply(c("dich", "pcm", "rsm", "mfrm", "efrm", "btl"), function(k)
+  lapply(c("dich", "pcm", "rsm", "mfrm", "efrm", "btl", "pl", "cj"), function(k)
     observeEvent(input[[paste0("demo_chip_", k)]],
       updateSelectInput(session, "demo_choice", selected = k)))
   output$data_strip <- renderUI({
@@ -3907,10 +4299,16 @@ server <- function(input, output, session) {
   })
   output$data_info <- renderUI({
     df <- raw_data()
+    cjs <- cj_sources_quiet()
     p(class = "text-muted",
-      sprintf("%d rows x %d columns.%s Nominate the column roles in the sidebar, then press Estimate. Missing responses may be left blank or coded as -1; any negative score is read as missing.",
+      sprintf("%d rows x %d columns.%s Nominate the column roles in the sidebar, then press Estimate. Missing responses may be left blank or coded as -1; any negative score is read as missing.%s",
               nrow(df), ncol(df),
-              if (nrow(df) > 200) " First 200 rows shown in the preview." else ""))
+              if (nrow(df) > 200) " First 200 rows shown in the preview." else "",
+              if (is.null(cjs)) "" else
+                sprintf(paste(" Judgements of the items are loaded as well",
+                              "(%s); they are calibrated jointly with the",
+                              "responses and anchor the analysis."),
+                        cj_sources_label(cjs))))
   })
   output$preview <- renderDT({
     d <- head(raw_data(), 200)
@@ -4082,6 +4480,11 @@ server <- function(input, output, session) {
   fit_val <- reactiveVal(NULL)
   analysis <- reactive(fit_val())
   btl_fit <- reactiveVal(NULL)
+  # the active rank analysis (Plackett-Luce); it has no downstream steps
+  pl_fit <- reactiveVal(NULL)
+  # the joint calibration of responses and judgements that anchored the
+  # current Rasch fit; NULL when the fit was not anchored on judgements
+  cj_fit <- reactiveVal(NULL)
   clear_btl_fit_results <- function() {
     bdif_res(NULL)
     bdif_meta(NULL)
@@ -4163,7 +4566,8 @@ server <- function(input, output, session) {
   # execution routes from diverging in navigation, notes, reproducible code,
   # convergence handling, and downstream active-state propagation.
   complete_fit <- function(fit, code_call, code_notes, src_line,
-                           simulation_stamp = NULL, source_state = NULL) {
+                           simulation_stamp = NULL, source_state = NULL,
+                           joint = NULL) {
     if (inherits(fit, "error")) {
       showNotification(paste("Analysis failed:", conditionMessage(fit)),
                        type = "error", duration = 10)
@@ -4203,18 +4607,32 @@ server <- function(input, output, session) {
     clear_btl_analysis_steps()
     clear_btl_fit_results()
     fitted_sim_gen(simulation_stamp)
+    if (inherits(fit, "rasch_pl")) {
+      # a rank analysis has its own page; the ordinary and
+      # paired-comparison results go with the fits they belonged to
+      clear_calibration_results()
+      btl_fit(NULL); fit_val(NULL); cj_fit(NULL)
+      pl_fit(fit)
+      try(nav_select("nav", "p_pl", session = session), silent = TRUE)
+      return(invisible(NULL))
+    }
+    pl_fit(NULL)
     if (inherits(fit, "rasch_btl")) {
       # A Rasch analysis replaced by Comparative Judgement takes its results
       # with it: fit() is about to become unavailable, so the ordinary-fit
       # observer cannot do this.
       clear_calibration_results()
-      btl_fit(fit); fit_val(NULL)
+      btl_fit(fit); fit_val(NULL); cj_fit(NULL)
       try(nav_select("nav", "p_summary", session = session), silent = TRUE)
       return(invisible(NULL))
     }
     btl_fit(NULL)
-    try(nav_select("nav", "p_summary", session = session), silent = TRUE)
+    # a fit anchored on judgements of the items opens on the joint
+    # calibration that supplied the anchors
+    try(nav_select("nav", if (is.null(joint)) "p_summary" else "p_joint",
+                   session = session), silent = TRUE)
     fit_val(NULL)
+    cj_fit(joint)
     fit_val(fit)
     invisible(fit)
   }
@@ -4353,7 +4771,8 @@ server <- function(input, output, session) {
       data = as.data.frame(df, check.names = FALSE),
       settings = .collect_fit_settings(input),
       resources = list(anchors = NULL, bt_anchors = NULL, key = NULL,
-                       predictors = NULL, ef_setmap = NULL),
+                       predictors = NULL, ef_setmap = NULL,
+                       cj_comparisons = NULL, cj_rankings = NULL),
       simulation = list(
         data = sim_data(), truth = sim_truth_val(), code = sim_code_val(),
         predictors = sim_predictors_val(),
@@ -4370,6 +4789,9 @@ server <- function(input, output, session) {
     code_est <- c(paste0("maxit = ", eo$maxit),
                   paste0("tol = ", format(eo$tol)))
     code_call <- NULL
+    # the joint calibration of responses and judgements, when the Rasch
+    # branch anchors on one; kept beside the fit rather than inside it
+    cj_run <- NULL
     code_notes <- character(0)
 
     if (identical(input$model_type, "efrm")) {
@@ -4485,7 +4907,40 @@ server <- function(input, output, session) {
 
     withProgress(message = "Estimating (pairwise conditional ML)…", value = 0.3, {
       fit <- tryCatch({
-        if (identical(input$model_type, "btl")) {
+        if (identical(input$model_type, "btl") &&
+            identical(input$bt_layout %||% "pairs", "ranks")) {
+          # rankings: one ranked object per row, fitted by pl(); the judge
+          # column is optional, and anchors come from a two-column CSV
+          pl_roles <- c(input$pl_ranking %||% NONE, input$pl_object %||% NONE,
+                        input$pl_rank %||% NONE)
+          if (any(pl_roles == NONE))
+            stop("nominate the ranking, object and rank columns")
+          pl_judge <- if (!is.null(input$pl_judge) && input$pl_judge != NONE)
+            input$pl_judge else NULL
+          pl_anchor_vec <- pl_anchors_in()
+          if (!is.null(pl_anchor_vec))
+            code_notes <- c(code_notes,
+              paste0("rk_anchors <- read.csv(", qstr(input$pl_anchor_file$name),
+                     ", check.names = FALSE, stringsAsFactors = FALSE)"),
+              "rk_anchor_values <- with(rk_anchors, setNames(location, object))")
+          pl_ties <- input$pl_ties %||% "drop"
+          pl_se <- input$pl_se %||% "sandwich"
+          pl_split <- input$pl_split %||% "first"
+          code_call <- paste0("rk <- pl(dat,\n  ", paste(c(
+            paste0("ranking = ", qstr(input$pl_ranking)),
+            paste0("object = ", qstr(input$pl_object)),
+            paste0("rank = ", qstr(input$pl_rank)),
+            if (!is.null(pl_judge)) paste0("judge = ", qstr(pl_judge)),
+            if (!is.null(pl_anchor_vec)) "anchors = rk_anchor_values",
+            paste0("ties = ", qstr(pl_ties)),
+            paste0("se = ", qstr(pl_se)),
+            paste0("split = ", qstr(pl_split)),
+            code_est), collapse = ",\n  "), ")")
+          pl(df, ranking = input$pl_ranking, object = input$pl_object,
+             rank = input$pl_rank, judge = pl_judge, anchors = pl_anchor_vec,
+             ties = pl_ties, se = pl_se, split = pl_split,
+             maxit = eo$maxit, tol = eo$tol)
+        } else if (identical(input$model_type, "btl")) {
           # a polytomous response column overrides the winner column (and the
           # ties rule: polytomous ties belong in a middle category); otherwise a
           # margin column combines with the winner into the polytomous response
@@ -4701,7 +5156,71 @@ server <- function(input, output, session) {
                  "threshold estimation; remove the anchor file or choose ",
                  "ordinary partial-credit estimation")
           }
-          code_notes <- if (!is.null(anc)) c(
+          # Judgements of the items calibrate them jointly with the responses
+          # first, and the joint calibration anchors the response analysis:
+          # every item but the last is fixed at its joint thresholds, so the
+          # persons are measured on the joint scale. An anchor file uploaded
+          # over the judgements a reopened analysis carried takes their place.
+          cjs <- cj_sources()
+          if (!is.null(cjs) && !is.null(input$anchor_file)) {
+            if (!identical(cjs$origin, "project"))
+              stop("choose either anchors for equating or judgements of the ",
+                   "items; the joint calibration supplies its own anchors")
+            cjs <- NULL
+          }
+          cj_code <- character(0)
+          if (!is.null(cjs)) {
+            if (rsm_on)
+              stop("judgements of the items calibrate partial-credit ",
+                   "thresholds; choose the partial credit structure")
+            if (!is.null(pcc))
+              stop("judgements of the items cannot be combined with ",
+                   "principal-components threshold estimation; choose ",
+                   "ordinary partial-credit estimation")
+            if (!is.null(mc_key))
+              stop("judgements of the items need scored responses; remove ",
+                   "the scoring key")
+            cj_items <- .app_joint_items(df, its, idc, fac)
+            fix_comp <- isTRUE(input$cj_fix_comp) && !is.null(cjs$comparisons)
+            fix_rank <- isTRUE(input$cj_fix_rank) && !is.null(cjs$rankings)
+            cj_run <- rasch_cj(df, comparisons = cjs$comparisons,
+                               rankings = cjs$rankings, items = cj_items,
+                               units = .app_joint_units(
+                                 fix_comp, fix_rank, cjs$comparisons,
+                                 cjs$rankings),
+                               maxit = eo$maxit, tol = eo$tol)
+            if (!isTRUE(cj_run$converged))
+              stop("the joint calibration of responses and judgements did ",
+                   "not converge in ", cj_run$iterations, " iterations; ",
+                   "raise the maximum iterations or loosen the criterion")
+            anc <- .app_joint_anchors(cj_run)
+            run_source$resources["anchors"] <- list(anc)
+            run_source$resources["cj_comparisons"] <- list(cjs$comparisons)
+            run_source$resources["cj_rankings"] <- list(cjs$rankings)
+            source_code <- function(what, f, attr_name) switch(cjs$origin,
+              upload = paste0("cj_", what, " <- read.csv(", qstr(f$name),
+                              ", check.names = FALSE, stringsAsFactors = FALSE)"),
+              example = paste0("cj_", what, " <- attr(dat, ", qstr(attr_name),
+                               ")"),
+              project = paste0("cj_", what, " <- project$resources$cj_", what))
+            cj_code <- c(
+              if (!is.null(cjs$comparisons))
+                source_code("comparisons", input$cj_comp_file, "comparisons"),
+              if (!is.null(cjs$rankings))
+                source_code("rankings", input$cj_rank_file, "rankings"),
+              paste0("cj <- rasch_cj(dat,\n  ", paste(c(
+                if (!is.null(cjs$comparisons)) "comparisons = cj_comparisons",
+                if (!is.null(cjs$rankings)) "rankings = cj_rankings",
+                if (!is.null(cj_items)) paste0("items = ", qvec(cj_items)),
+                if (fix_comp || fix_rank)
+                  sprintf("units = c(comparisons = %s, rankings = %s)",
+                          if (fix_comp) "1" else "NA",
+                          if (fix_rank) "1" else "NA"),
+                code_est), collapse = ",\n  "), ")"),
+              paste0("anchors <- cj$anchors[cj$anchors$item != ",
+                     qstr(.app_joint_free_item(cj_run)), ", , drop = FALSE]"))
+          }
+          code_notes <- if (!is.null(cjs)) cj_code else if (!is.null(anc)) c(
             if (!is.null(input$anchor_file))
               paste0("anchors <- read.csv(", qstr(input$anchor_file$name),
                      ", check.names = FALSE, stringsAsFactors = FALSE)")
@@ -4748,7 +5267,7 @@ server <- function(input, output, session) {
         tryCatch(key_in(), error = function(e) NULL))
     complete_fit(fit, code_call, code_notes, src_line,
                  if (!is.null(sim_data())) sim_gen() else NULL,
-                 run_source)
+                 run_source, joint = cj_run)
   })
   fit <- reactive({
     s <- active_step()
@@ -4843,6 +5362,12 @@ server <- function(input, output, session) {
     rasch_dif_factors <- if (rasch_on)
       setdiff(names(f$factors), f$frame_group %||% character(0)) else
         character(0)
+    # the Rankings page shows for a rank analysis alone; every other page
+    # hides with it because neither fit() nor btl_fit() is then available
+    show("p_pl", !is.null(pl_fit()))
+    # the Joint calibration page belongs to a Rasch fit anchored on
+    # judgements of the items
+    show("p_joint", rasch_on && !is.null(cj_fit()))
     show("p_summary", rasch_on || btl_on)
     show("p_items", rasch_on || btl_on)
     show("p_explanatory", inherits(f, "rasch_explanatory") ||
@@ -5076,6 +5601,14 @@ server <- function(input, output, session) {
     it <- dif_sel_item()
     vars <- dif_sel_vars()
     selected <- dr$summary[dif_sel_row(), , drop = FALSE]
+    if (it %in% names(dr$bundles)) {
+      showNotification(
+        paste("A bundle is tested as one unit but has no single location to",
+              "split; resolve its member items one at a time, or resolve",
+              "all DIF automatically."),
+        type = "warning", duration = 10)
+      return()
+    }
     if (isTRUE(selected$nonuniform_DIF)) {
       showNotification(
         paste("This item has non-uniform DIF. A location split cannot model",
@@ -5127,10 +5660,15 @@ server <- function(input, output, session) {
     run_factors <- names(fit()$factors)
     run_alpha <- dif_alpha()
     run_adjust <- "holm"
-    run_effects <- input$dif_effects %||% "main"
+    run_criterion <- input$dif_criterion %||% "anova"
+    # the Wald criterion tests each factor on its own, so the factor model
+    # is main effects whatever the analysis-of-variance toggle says
+    run_effects <- if (identical(run_criterion, "wald")) "main" else
+      input$dif_effects %||% "main"
     rr <- tryCatch(
       resolve_dif(fit(), factors = run_factors, alpha = run_alpha,
-                  p_adjust = run_adjust, effects = run_effects),
+                  p_adjust = run_adjust, effects = run_effects,
+                  criterion = run_criterion),
       error = function(e) e)
     if (inherits(rr, "error")) {
       showNotification(paste("Automatic resolution failed:", conditionMessage(rr)),
@@ -5140,6 +5678,7 @@ server <- function(input, output, session) {
       rr$run_alpha <- run_alpha
       rr$run_p_adjust <- run_adjust
       rr$run_effects <- run_effects
+      rr$run_criterion <- run_criterion
       resolve_res(rr)
       push_analysis_step(
         "dif_auto", sprintf("Automatic DIF: %d split(s)", rr$n_splits),
@@ -5147,7 +5686,8 @@ server <- function(input, output, session) {
         code = paste0(
           "dif_resolution <- resolve_dif(fit, factors = ", qvec(run_factors),
           ", alpha = ", run_alpha, ", p_adjust = ", qstr(run_adjust),
-          ", effects = ", qstr(run_effects), ")\n",
+          ", effects = ", qstr(run_effects),
+          ", criterion = ", qstr(run_criterion), ")\n",
           "fit <- dif_resolution$fit")
       )
       showNotification(
@@ -5164,8 +5704,12 @@ server <- function(input, output, session) {
     left <- if (length(n_left) != 1L || is.na(n_left))
       "the number of items still flagging DIF is unknown" else
       sprintf("%d item(s) still flag DIF", n_left)
+    # resolutions saved before the criterion existed used the ANOVA
+    criterion <- if (identical(rr$criterion %||% "anova", "wald"))
+      "conditional Wald" else "residual ANOVA"
     p(class = "text-muted small mb-2",
-      sprintf("%d split(s); %s; %s.", rr$n_splits, rr$stopped, left))
+      sprintf("%d split(s) by the %s criterion; %s; %s.",
+              rr$n_splits, criterion, rr$stopped, left))
   })
   output$resolve_tbl <- DT::renderDT({
     rr <- resolve_res(); req(!is.null(rr))
@@ -5676,8 +6220,410 @@ server <- function(input, output, session) {
   }
   alpha_design_applicable <- function(f)
     .classical_design_applicable(f)
+  # ------------------------------------------------------------- rankings --
+  # The rank analysis is reproduced by its R code rather than stored in a
+  # saved analysis, so every card reads the fitted object directly.
+  rk <- reactive({ k <- pl_fit(); req(k); k })
+  output$is_pl <- reactive(!is.null(pl_fit()))
+  outputOptions(output, "is_pl", suspendWhenHidden = FALSE)
+  output$pl_has_judges <- reactive(!is.null(pl_fit()$judges))
+  outputOptions(output, "pl_has_judges", suspendWhenHidden = FALSE)
+  output$pl_has_invariance <- reactive(!is.null(pl_fit()$invariance))
+  outputOptions(output, "pl_has_invariance", suspendWhenHidden = FALSE)
+  pl_ref_df <- function(k)
+    if (isTRUE(k$clustered) && identical(k$se_type, "sandwich"))
+      max(k$n_clusters - 1L, 1L) else Inf
+  output$pl_boxes <- renderUI({
+    k <- rk()
+    rv <- k$reversal; iv <- k$invariance
+    n_moved <- if (is.null(iv)) 0L
+      else sum(!is.na(iv$objects$p_adj) & iv$objects$p_adj < 0.05)
+    metric_grid(
+      metric_tile("metric_objects", "Objects", nrow(k$objects), icon = "podium"),
+      metric_tile("metric_rankings", "Rankings", k$n_rankings,
+                  if (k$size[1] == k$size[2])
+                    sprintf("%d objects each", k$size[1])
+                  else sprintf("%d to %d objects each", k$size[1], k$size[2]),
+                  icon = "grid"),
+      if (!is.null(k$judges))
+        metric_tile("metric_judges", "Judges", nrow(k$judges), icon = "balance"),
+      metric_tile("metric_osi", "Object separation",
+                  if (finite1(k$osi$PSI)) sprintf("%.3f", k$osi$PSI) else "—",
+                  icon = "separation",
+                  status = if (!finite1(k$osi$PSI)) "neutral"
+                    else if (k$osi$PSI >= 0.7) "good" else "bad"),
+      metric_tile("metric_reversal", "Reversal check",
+                  if (is.null(rv) || !finite1(rv$p)) "Unavailable"
+                  else fmt_p(rv$p),
+                  if (!is.null(rv) && finite1(rv$z))
+                    sprintf("Vuong z %.2f, best-first %s", rv$z,
+                            if (rv$loglik_forward >= rv$loglik_reversed)
+                              "fits better" else "fits worse"),
+                  icon = "range",
+                  status = if (is.null(rv) || !finite1(rv$p)) "neutral"
+                    else if (rv$p >= 0.05) "good" else "bad"),
+      metric_tile("metric_invariance", "Invariance",
+                  if (is.null(iv)) "Unavailable"
+                  else if (finite1(iv$p)) fmt_p(iv$p)
+                  else sprintf("%d moving", n_moved),
+                  if (!is.null(iv)) sprintf("%s vs %s", iv$labels[1], iv$labels[2]),
+                  icon = "chisq",
+                  status = if (is.null(iv)) "neutral"
+                    else if (finite1(iv$p)) {
+                      if (iv$p >= 0.05) "good" else "bad"
+                    } else if (n_moved == 0L) "good" else "bad"))
+  })
+  register_code("pl_boxes", function() "rk")
+  pl_summary_table <- function(k) {
+    rv <- k$reversal; iv <- k$invariance
+    data.frame(statistic = c(
+      "Objects", "Rankings", "Judges", "Stages", "Converged", "Iterations",
+      "Log-likelihood", "Standard errors", "Object separation index",
+      "Reversal Vuong z", "Reversal p", "Reversal location correlation",
+      "Invariance LR", "Invariance df", "Invariance p"),
+      value = c(
+        nrow(k$objects), k$n_rankings,
+        if (is.null(k$judges)) NA else nrow(k$judges),
+        k$n_stages, isTRUE(k$converged), k$iterations,
+        round(k$loglik, 3), k$se_type, round(k$osi$PSI, 3),
+        if (is.null(rv)) NA else round(rv$z, 3),
+        if (is.null(rv)) NA else round(rv$p, 4),
+        if (is.null(rv)) NA else round(rv$correlation, 3),
+        if (is.null(iv)) NA else round(iv$lr, 3),
+        if (is.null(iv)) NA else iv$df,
+        if (is.null(iv)) NA else round(iv$p, 4)),
+      stringsAsFactors = FALSE)
+  }
+  register_stat_box("pl_fitsum_tbl",
+    csv_fun = function() pl_summary_table(rk()),
+    csv_name = "rank_summary.csv",
+    ui_fun = function() {
+      k <- rk()
+      conv <- if (isTRUE(k$converged))
+        sprintf("converged in %d iterations", k$iterations)
+      else span(class = "text-danger",
+                sprintf("did not converge in %d iterations", k$iterations))
+      se_lab <- if (!isTRUE(k$se_available)) "standard errors withheld"
+        else if (identical(k$se_type, "model")) "information-based SEs"
+        else paste0("sandwich SEs clustered by ",
+                    if (isTRUE(k$clustered)) "judge" else "ranking")
+      design <- paste(c(
+        sprintf("%d objects", nrow(k$objects)),
+        sprintf("%d rankings of %s objects", k$n_rankings,
+                if (k$size[1] == k$size[2]) k$size[1]
+                else paste(k$size, collapse = " to ")),
+        sprintf("%d choice stages", k$n_stages),
+        if (!is.null(k$judges)) sprintf("%d judges", nrow(k$judges))),
+        collapse = " · ")
+      iv <- k$invariance
+      tagList(
+        div(class = "stat-head",
+            "Plackett-Luce rank analysis · maximum likelihood · ", conv,
+            " · ", se_lab),
+        stat_rows(
+          stat_row("Design", design),
+          stat_row("Log-likelihood", sprintf("%.2f", k$loglik)),
+          stat_row("Object separation index",
+                   if (finite1(k$osi$PSI)) sprintf("%.3f", k$osi$PSI)
+                   else "—"),
+          if (!is.null(k$anchors))
+            stat_row("Anchored objects",
+                     paste(names(k$anchors), collapse = ", ")),
+          if (!is.null(iv))
+            stat_row(sprintf("Invariance (%s vs %s)", iv$labels[1],
+                             iv$labels[2]),
+                     if (finite1(iv$p))
+                       sprintf("LR %.2f on %d df, %s", iv$lr, iv$df,
+                               p_lab(iv$p))
+                     else sprintf("LR %.2f on %d df; probability withheld",
+                                  iv$lr, iv$df)),
+          stat_row("Rankings beyond surprise z 2.5",
+                   sum(!is.na(k$rankings$surprise_z) &
+                         k$rankings$surprise_z > 2.5)),
+          if (!is.null(k$judges))
+            stat_row("Judges beyond |fit residual| 2.5",
+                     sum(!is.na(k$judges$fit_resid) &
+                           abs(k$judges$fit_resid) > 2.5))))
+    },
+    code = function() "print(rk)")
+  output$pl_fitsum_notes <- renderUI({
+    notes <- rk()$notes
+    if (!length(notes)) return(NULL)
+    if (length(notes) == 1L) return(paste0("Note. ", notes, "."))
+    tagList("Notes.", tags$ul(class = "mb-0 ps-3",
+                              lapply(notes, function(n) tags$li(n))))
+  })
+  register_stat_box("pl_reversal_tbl",
+    csv_fun = function() {
+      rv <- rk()$reversal
+      if (is.null(rv))
+        return(data.frame(object = character(0), forward = numeric(0),
+                          reversed = numeric(0), difference = numeric(0)))
+      rv$objects
+    },
+    csv_name = "rank_reversal.csv",
+    ui_fun = function() {
+      rv <- rk()$reversal
+      if (is.null(rv))
+        return(div(class = "stat-head text-muted",
+                   paste("Withheld: the check needs at least two complete",
+                         "rankings of three or more objects and a converged",
+                         "fit in both orientations.")))
+      verdict <- if (!finite1(rv$p)) "no test available"
+        else if (rv$p >= 0.05) "neither orientation fits reliably better"
+        else if (rv$loglik_forward >= rv$loglik_reversed)
+          "best-first fits better, as the ranks are read"
+        else span(class = "text-danger",
+                  "worst-first fits better: the ranks read reversed")
+      tagList(
+        div(class = "stat-head",
+            sprintf("%d complete rankings · ", rv$n_rankings), verdict),
+        stat_rows(
+          stat_row("Log-likelihood, best-first",
+                   sprintf("%.2f", rv$loglik_forward)),
+          stat_row("Log-likelihood, worst-first",
+                   sprintf("%.2f", rv$loglik_reversed)),
+          stat_row("Vuong z",
+                   if (finite1(rv$z)) sprintf("%.2f, %s", rv$z, p_lab(rv$p))
+                   else "withheld"),
+          stat_row("Location correlation",
+                   if (finite1(rv$correlation))
+                     sprintf("%.3f", rv$correlation) else "—"),
+          stat_row("Largest location difference",
+                   sprintf("%.2f logits", rv$max_abs_difference))))
+    },
+    code = function() "rk$reversal")
+  register_plot("pl_map", function() plot_pl(rk()), w = 7, h = 6,
+                code = function() "plot_pl(rk)")
+  register_table("pl_objects_tbl", function() rk()$objects, function() {
+    d <- rk()$objects
+    if (!isTRUE(input$pl_objects_full))
+      d <- d[, intersect(c("object", "location", "se", "rankings", "chosen",
+                           "infit_ms", "outfit_ms", "fit_resid", "extreme"),
+                         names(d)), drop = FALSE]
+    num_dt(d)
+  }, code = function() "rk$objects")
+  register_table("pl_judges_tbl", function() rk()$judges, function() {
+    d <- rk()$judges; req(d)
+    num_dt(d)
+  }, code = function() "rk$judges")
+  register_table("pl_rankings_tbl", function() rk()$rankings, function() {
+    d <- rk()$rankings
+    if (all(is.na(d$judge))) d$judge <- NULL
+    num_dt(d[order(-d$surprise_z, na.last = TRUE), , drop = FALSE])
+  }, code = function() "rk$rankings")
+  register_table("pl_invariance_tbl", function() rk()$invariance$objects,
+                 function() {
+    d <- rk()$invariance$objects; req(d)
+    style_lo_red(num_dt(d), d, "p_adj", 0.05)
+  }, code = function() "rk$invariance$objects")
+  output$pl_invariance_note <- renderUI({
+    iv <- rk()$invariance; req(iv)
+    moved <- iv$objects$object[!is.na(iv$objects$p_adj) &
+                                 iv$objects$p_adj < 0.05]
+    g <- iv$groups
+    sprintf(paste(
+      "Note. %s: %d stages over %d objects; %s: %d stages over %d objects.",
+      "Difference: %s minus %s, each group centred on the objects both",
+      "calibrate unless both are anchored. Objects moving (Holm p < .05): %s."),
+      g$group[1], g$stages[1], g$objects[1], g$group[2], g$stages[2],
+      g$objects[2], iv$labels[1], iv$labels[2],
+      if (length(moved)) paste(moved, collapse = ", ") else "none")
+  })
+
+  # ---------------------------------------------------- joint calibration --
+  # The joint calibration is refitted from the judgements a saved analysis
+  # carries rather than stored, so every card reads the fitted object.
+  cj <- reactive({ k <- cj_fit(); req(k); k })
+  output$is_joint <- reactive(!is.null(cj_fit()))
+  outputOptions(output, "is_joint", suspendWhenHidden = FALSE)
+  output$joint_has_thresholds <- reactive({
+    k <- cj_fit()
+    !is.null(k) && !is.null(k$thresholds) && nrow(k$thresholds) > nrow(k$items)
+  })
+  outputOptions(output, "joint_has_thresholds", suspendWhenHidden = FALSE)
+  # the objects a per-object invariance row names: items, or the thresholds
+  # of polytomous items
+  joint_object_labels <- function(tab)
+    if ("threshold" %in% names(tab))
+      ifelse(is.na(tab$threshold), tab$item, paste0(tab$item, ":", tab$threshold))
+    else tab$item
+  joint_moving <- function(k) {
+    tab <- k$invariance$items
+    if (is.null(tab)) return(character(0))
+    unique(joint_object_labels(tab)[!is.na(tab$p_adj) & tab$p_adj < 0.05])
+  }
+  joint_reference <- function(k) k$reference %||% "responses"
+  joint_unit_label <- function(u)
+    if (!isTRUE(u$estimated)) "1, fixed to the responses"
+    else if (finite1(u$se)) sprintf("%.3f (se %.3f)", u$unit, u$se)
+    else sprintf("%.3f", u$unit)
+  output$joint_boxes <- renderUI({
+    k <- cj()
+    lr <- k$invariance$lr
+    n_moved <- length(joint_moving(k))
+    unit_tile <- function(id, frame, label, icon) {
+      u <- k$units[k$units$frame == frame, , drop = FALSE]
+      if (!nrow(u)) return(NULL)
+      metric_tile(id, label,
+                  if (!isTRUE(u$estimated)) "1.00" else sprintf("%.2f", u$unit),
+                  sprintf("%d %s, %s", k$n[[frame]], frame,
+                          if (!isTRUE(u$estimated)) "unit fixed"
+                          else if (finite1(u$se)) sprintf("unit se %.2f", u$se)
+                          else "unit estimated"),
+                  icon = icon)
+    }
+    metric_grid(
+      metric_tile("metric_joint_items", "Items", nrow(k$items),
+                  sprintf("%d informative persons", k$n[["persons"]]),
+                  icon = "ruler", status = "item"),
+      unit_tile("metric_joint_comparisons", "comparisons",
+                "Unit of comparisons", "pair"),
+      unit_tile("metric_joint_rankings", "rankings", "Unit of rankings",
+                "podium"),
+      metric_tile("metric_joint_invariance", "Invariance",
+                  if (!is.null(lr) && finite1(lr$p)) fmt_p(lr$p)
+                  else "Unavailable",
+                  if (!is.null(lr) && finite1(lr$statistic))
+                    sprintf("LR %.1f on %d df", lr$statistic, lr$df),
+                  icon = "chisq",
+                  status = if (is.null(lr) || !finite1(lr$p)) "neutral"
+                    else if (lr$p >= 0.05) "good" else "bad"),
+      metric_tile("metric_joint_moving", "Objects moving", n_moved,
+                  "differ between frames, Holm p < .05", icon = "outlier",
+                  status = if (n_moved == 0L) "good" else "bad"))
+  })
+  register_code("joint_boxes", function() "cj")
+  joint_summary_table <- function(k) {
+    lr <- k$invariance$lr
+    units <- k$units[k$units$frame != joint_reference(k), , drop = FALSE]
+    data.frame(statistic = c(
+      "Items", "Thresholds", "Informative persons", "Comparisons", "Rankings",
+      "Converged", "Iterations", "Log-likelihood",
+      "Log-likelihood, frames separate",
+      sprintf("Unit of %s", units$frame),
+      sprintf("Unit se of %s", units$frame),
+      "Invariance LR", "Invariance df", "Invariance p",
+      "Objects moving (Holm p < .05)", "Free item"),
+      value = c(
+        nrow(k$items),
+        if (is.null(k$thresholds)) nrow(k$items) else nrow(k$thresholds),
+        k$n[["persons"]], k$n[["comparisons"]], k$n[["rankings"]],
+        isTRUE(k$converged), k$iterations, round(k$loglik, 3),
+        round(k$loglik_separate, 3),
+        round(units$unit, 4), round(units$se, 4),
+        if (is.null(lr)) NA else round(lr$statistic, 3),
+        if (is.null(lr)) NA else lr$df,
+        if (is.null(lr)) NA else round(lr$p, 4),
+        length(joint_moving(k)), .app_joint_free_item(k)),
+      stringsAsFactors = FALSE)
+  }
+  register_stat_box("joint_fitsum_tbl",
+    csv_fun = function() joint_summary_table(cj()),
+    csv_name = "joint_summary.csv",
+    ui_fun = function() {
+      k <- cj()
+      lr <- k$invariance$lr
+      conv <- if (isTRUE(k$converged))
+        sprintf("converged in %d iterations", k$iterations)
+      else span(class = "text-danger",
+                sprintf("did not converge in %d iterations", k$iterations))
+      n_thr <- if (is.null(k$thresholds)) nrow(k$items) else nrow(k$thresholds)
+      design <- paste(c(
+        sprintf("%d items", nrow(k$items)),
+        if (n_thr > nrow(k$items)) sprintf("%d thresholds", n_thr),
+        sprintf("%d informative persons", k$n[["persons"]]),
+        if (k$n[["comparisons"]] > 0)
+          sprintf("%d comparisons", k$n[["comparisons"]]),
+        if (k$n[["rankings"]] > 0) sprintf("%d rankings", k$n[["rankings"]])),
+        collapse = " · ")
+      units <- k$units[k$units$frame != joint_reference(k), , drop = FALSE]
+      moved <- joint_moving(k)
+      tagList(
+        div(class = "stat-head",
+            "Joint calibration of responses and judgements · full likelihood · ",
+            conv),
+        stat_rows(
+          stat_row("Design", design),
+          stat_row("Log-likelihood", sprintf("%.2f", k$loglik)),
+          lapply(seq_len(nrow(units)), function(r)
+            stat_row(sprintf("Unit of %s relative to %s", units$frame[r],
+                             joint_reference(k)),
+                     joint_unit_label(units[r, , drop = FALSE]))),
+          stat_row("Invariance across frames",
+                   if (!is.null(lr) && finite1(lr$p))
+                     sprintf("LR %.2f on %d df, %s", lr$statistic, lr$df,
+                             p_lab(lr$p))
+                   else if (!is.null(lr) && finite1(lr$statistic))
+                     sprintf("LR %.2f on %d df; probability withheld",
+                             lr$statistic, lr$df)
+                   else "withheld"),
+          stat_row("Objects differing between frames (Holm p < .05)",
+                   if (length(moved)) paste(moved, collapse = ", ")
+                   else "none"),
+          stat_row("Anchored in the response analysis",
+                   sprintf("every item but %s, which is left free",
+                           .app_joint_free_item(k)))))
+    },
+    code = function() "print(cj)")
+  output$joint_fitsum_notes <- renderUI({
+    notes <- cj()$notes
+    if (!length(notes)) return(NULL)
+    if (length(notes) == 1L) return(paste0("Note. ", notes, "."))
+    tagList("Notes.", tags$ul(class = "mb-0 ps-3",
+                              lapply(notes, function(n) tags$li(n))))
+  })
+  register_plot("joint_map", function() plot_cj(cj()), w = 7, h = 6,
+                code = function() "plot_cj(cj)")
+  register_table("joint_items_tbl", function() cj()$items,
+                 function() num_dt(cj()$items),
+                 code = function() "cj$items")
+  register_table("joint_thresholds_tbl", function() cj()$thresholds,
+                 function() { d <- cj()$thresholds; req(d); num_dt(d) },
+                 code = function() "cj$thresholds")
+  register_table("joint_invariance_tbl", function() cj()$invariance$items,
+                 function() {
+    d <- cj()$invariance$items; req(d)
+    style_lo_red(num_dt(d), d, "p_adj", 0.05)
+  }, code = function() "cj$invariance$items")
+  output$joint_invariance_note <- renderUI({
+    k <- cj(); tab <- k$invariance$items; req(tab)
+    moved <- joint_moving(k)
+    sprintf(paste(
+      "Note. Each frame calibrates the objects on its own, expressed on the",
+      "scale of the %s; the difference is the frame's location minus the",
+      "reference location, with its standard error, z and Holm-adjusted",
+      "probability. Objects differing between frames (Holm p < .05): %s."),
+      joint_reference(k),
+      if (length(moved)) paste(moved, collapse = ", ") else "none")
+  })
+  register_table("joint_anchors_tbl", function() .app_joint_anchors(cj()),
+                 function() num_dt(.app_joint_anchors(cj())),
+                 code = function() "anchors", csv_name = "joint_anchors.csv")
+  output$joint_anchors_note <- renderUI({
+    k <- cj()
+    sprintf(paste(
+      "Note. The joint thresholds passed to the response analysis as",
+      "anchors. %s is left free, so the analysis keeps a parameter to",
+      "estimate; its joint location is in the Items table above."),
+      .app_joint_free_item(k))
+  })
+
   output$nav_status <- renderUI({
     sep <- span(class = "rasch-nav-sep", "·")
+    k <- pl_fit()
+    if (!is.null(k)) {
+      osi <- k$osi$PSI
+      return(div(class = "rasch-nav-summary",
+        span(class = "rasch-nav-model", "Rankings"),
+        span(class = "rasch-nav-secondary", sep,
+             paste(nrow(k$objects), "objects"), sep,
+             paste(k$n_rankings, "rankings")),
+        sep,
+        span(class = if (finite1(osi) && osi >= 0.7)
+          "rasch-nav-good" else "rasch-nav-warn",
+          if (finite1(osi)) sprintf("OSI %.2f", osi) else "OSI —")))
+    }
     b <- tryCatch(bfit(), error = function(e) NULL)
     if (!is.null(b)) {
       osi <- b$osi$PSI
@@ -7226,19 +8172,70 @@ server <- function(input, output, session) {
   # one merged reactive: one factor -> one-way ANOVA (one row per item); several
   # factors -> joint model, main effects by default or factor-by-factor
   # interactions when requested (effects is ignored with a single factor)
+  # The typed bundles, read by the package parser. They are defined over
+  # the source items: dtf() takes them as typed, and dif_anova() takes each
+  # split item as all of its group copies, checked against the item names
+  # it tests (a structural fit pools its residuals to the underlying
+  # items). A problem is reported under the control and withholds every
+  # DIF display until the text is fixed: an analysis that quietly
+  # proceeded without the bundles would not be the one described.
+  dif_bundle_items <- reactive({
+    f <- fit()
+    if (inherits(f, c("rasch_mfrm", "rasch_efrm")) && !is.null(f$virtual_map))
+      unique(f$virtual_map$item) else colnames(f$residuals)
+  })
+  dif_bundles_state <- reactive({
+    b <- tryCatch(.parse_dif_bundles(input$dif_bundles),
+                  error = function(e) e)
+    if (inherits(b, "error") || is.null(b)) return(b)
+    tryCatch({
+      .dif_bundles(.app_dif_bundles(b, fit()), dif_bundle_items())
+      b
+    }, error = function(e) e)
+  })
+  dif_bundles <- reactive({
+    b <- dif_bundles_state()
+    if (inherits(b, "error"))
+      validate(need(FALSE, paste("Item bundles:", conditionMessage(b))))
+    b
+  })
+  dif_anova_bundles <- reactive(.app_dif_bundles(dif_bundles(), fit()))
+  output$dif_bundles_note <- renderUI({
+    b <- dif_bundles_state()
+    if (inherits(b, "error"))
+      p(class = "text-danger small", conditionMessage(b))
+    else if (length(b))
+      p(class = "text-muted small",
+        sprintf("%d bundle(s): %s.", length(b),
+                paste(sprintf("%s (%d items)", names(b), lengths(b)),
+                      collapse = ", ")))
+  })
   dif_res <- reactive({
     f <- fit(); req(!is.null(f$factors))
     soft(dif_anova(f, effects = input$dif_effects %||% "main",
-                   p_adjust = "holm", alpha = dif_alpha()))
+                   p_adjust = "holm", alpha = dif_alpha(),
+                   bundles = dif_anova_bundles()))
   })
-  observeEvent(list(input$dif_effects, input$dif_alpha), {
+  observeEvent(list(input$dif_effects, input$dif_alpha, input$dif_bundles), {
     if (!isTRUE(restoring_project()) &&
-        inputs_changed(c("dif_effects", "dif_alpha"))) dif_boot_val(NULL)
+        inputs_changed(c("dif_effects", "dif_alpha", "dif_bundles")))
+      dif_boot_val(NULL)
   }, ignoreInit = TRUE)
   # code footer: omit the effects argument when there is only one factor
   dif_effects_arg <- function()
     if (dif_multi()) sprintf('effects = %s, ', qstr(input$dif_effects %||% "main"))
     else ""
+  # code footer: the bundles as an R list literal, or nothing
+  bundles_code <- function(b) {
+    if (!length(b)) return("")
+    nm <- names(b)
+    key <- ifelse(make.names(nm) == nm, nm,
+                  sprintf("`%s`", gsub("`", "\\`", nm, fixed = TRUE)))
+    sprintf("list(%s)", paste(sprintf("%s = %s", key, vapply(b, qvec, "")),
+                              collapse = ", "))
+  }
+  dif_bundles_arg <- function(b = dif_anova_bundles())
+    if (!length(b)) "" else paste0(", bundles = ", bundles_code(b))
   register_table("dif_tbl", function() dif_res()$summary, function() {
     d <- curate(dif_res()$summary, "dif_fact", full = isTRUE(input$dif_full))
     if ("superseded" %in% names(d))
@@ -7249,8 +8246,8 @@ server <- function(input, output, session) {
     dt <- style_lo_red(dt, d, "p_uniform_adj", dif_alpha())
     style_lo_red(dt, d, "p_nonuniform_adj", dif_alpha())
   }, code = function()
-    sprintf('dif_anova(fit, %sp_adjust = %s, alpha = %s)$summary',
-            dif_effects_arg(), qstr("holm"), dif_alpha()))
+    sprintf('dif_anova(fit, %sp_adjust = %s, alpha = %s%s)$summary',
+            dif_effects_arg(), qstr("holm"), dif_alpha(), dif_bundles_arg()))
   # full per-item ANOVA table: every model term, computed lazily when its
   # disclosure is first switched on (the DT renders only once visible)
   register_table("dif_full_tbl", function() dif_res()$terms, function() {
@@ -7259,8 +8256,8 @@ server <- function(input, output, session) {
     d$superseded <- ifelse(d$superseded, "(superseded)", "")
     style_lo_red(num_dt(d), d, "p_adj", dif_alpha())
   }, code = function()
-    sprintf('dif_anova(fit, %sp_adjust = %s, alpha = %s)$terms',
-            dif_effects_arg(), qstr("holm"), dif_alpha()))
+    sprintf('dif_anova(fit, %sp_adjust = %s, alpha = %s%s)$terms',
+            dif_effects_arg(), qstr("holm"), dif_alpha(), dif_bundles_arg()))
   register_table("dif_boot_tbl", function() {
     bv <- dif_boot_val(); req(!is.null(bv)); bv$db$summary
   }, function() {
@@ -7276,9 +8273,10 @@ server <- function(input, output, session) {
   }, code = function() {
     bv <- dif_boot_val(); req(!is.null(bv))
     sprintf(paste0(
-      "d <- dif_anova(fit, %sp_adjust = %s, alpha = %s)\n",
+      "d <- dif_anova(fit, %sp_adjust = %s, alpha = %s%s)\n",
       "dif_bootstrap(fit, d, B = %d, workers = 4, seed = %d)$summary"),
-      dif_effects_arg(), qstr("holm"), dif_alpha(), bv$B, bv$seed)
+      dif_effects_arg(), qstr("holm"), dif_alpha(), dif_bundles_arg(),
+      bv$B, bv$seed)
   })
   output$dif_note <- renderUI({
     r <- dif_res(); d <- r$summary
@@ -7348,6 +8346,10 @@ server <- function(input, output, session) {
   register_plot("dif_icc", function() {
     f <- fit()
     req(!is.null(f$factors))
+    if (dif_sel_item() %in% names(dif_res()$bundles))
+      validate(need(FALSE, paste(
+        "A bundle has no single characteristic curve; select an item row,",
+        "or read the bundle in the differential test functioning panel.")))
     if (inherits(f, "rasch_efrm")) {
       req(dif_sel_item() %in% f$virtual_map$item)
       plot_icc_frames(f, dif_sel_item(), group = dif_sel_vars())
@@ -7372,6 +8374,11 @@ server <- function(input, output, session) {
     flg <- max(0.05, input$dif_size_flag %||% 0.5)
     mn <- max(2, input$dif_size_minn %||% 20)
     dr <- dif_res()
+    if (dif_sel_item() %in% names(dr$bundles))
+      return(simpleError(paste(
+        "A bundle has no single resolved location to compare; its test is",
+        "the DIF table row, and its functioning is in the differential",
+        "test functioning panel.")))
     tryCatch(dif_posthoc(
       f, dif_sel_item(), term = dif_sel_term(), factors = dr$factor_names,
       within = dr$within, flag_logits = flg, min_n = mn,
@@ -7505,6 +8512,215 @@ server <- function(input, output, session) {
       if (inherits(ph, "error")) stop(conditionMessage(ph))
       write_csv_plain(ph$table, file)
     })
+
+  # conditional Wald tests: one refit per item and factor, so ordinary
+  # Rasch fits only; computed when the panel is first opened (the DT
+  # suspends while hidden). The selected row shows its level locations.
+  dif_wald_res <- reactive({
+    f <- fit()
+    req(!is.null(f$factors), !inherits(f, c("rasch_efrm", "rasch_mfrm")))
+    soft(dif_wald(f, p_adjust = "holm", alpha = dif_alpha()))
+  })
+  dif_wald_code <- function(what)
+    sprintf('dif_wald(fit, p_adjust = "holm", alpha = %s)$%s',
+            dif_alpha(), what)
+  register_table("dif_wald_tbl", function() dif_wald_res()$summary,
+                 function() {
+    d <- dif_wald_res()$summary
+    d$significant <- NULL                     # red adjusted p replaces the flag
+    if (!isTRUE(input$dif_wald_full))
+      d <- d[, intersect(c("item", "factor", "shift", "se", "wald", "df",
+                           "p_adj"), names(d)), drop = FALSE]
+    style_lo_red(num_dt(d, selection = "single"), d, "p_adj", dif_alpha())
+  }, code = function() dif_wald_code("summary"))
+  dif_wald_sel <- reactive({
+    s <- dif_wald_res()$summary; req(nrow(s) >= 1)
+    r <- input$dif_wald_tbl_rows_selected
+    i <- if (length(r) && !is.na(r[1]) && r[1] >= 1 && r[1] <= nrow(s))
+      r[1] else 1L
+    s[i, , drop = FALSE]
+  })
+  register_table("dif_wald_levels_tbl", function() dif_wald_res()$levels,
+                 function() {
+    lv <- dif_wald_res()$levels; s <- dif_wald_sel()
+    num_dt(lv[lv$item == s$item & lv$factor == s$factor, , drop = FALSE])
+  }, code = function() dif_wald_code("levels"))
+  output$dif_wald_note <- renderUI({
+    r <- dif_wald_res(); pp <- r$summary$p_adj
+    tested <- sum(is.finite(pp))
+    withheld <- length(pp) - tested
+    status <- if (tested) sprintf(
+      "%d of %d item-by-factor tests significant after adjustment%s",
+      sum(pp[is.finite(pp)] < dif_alpha()), tested,
+      if (withheld) sprintf(" (%d withheld)", withheld) else "")
+    else sprintf("no test supports inference (%d withheld)", withheld)
+    base <- sprintf(paste(
+      "Note. %s. Shift: second level minus first for two levels, range of",
+      "the locations otherwise; positive means harder for the second",
+      "level."), status)
+    notes <- r$notes
+    if (!length(notes)) return(base)
+    if (length(notes) == 1L) return(paste0(base, " ", notes, "."))
+    tagList(base, tags$ul(class = "mb-0 ps-3",
+                          lapply(notes, function(n) tags$li(n))))
+  })
+
+  # differential test functioning, available once the active fit carries
+  # split items. The comparison is recomputed from the controls rather than
+  # stored with a project; the grouping defaults to the term the last split
+  # used, and the reference level to the first level of that grouping.
+  output$dif_has_split <- reactive({
+    f <- fit()
+    !is.null(f$split_map) && !inherits(f, c("rasch_mfrm", "rasch_efrm"))
+  })
+  outputOptions(output, "dif_has_split", suspendWhenHidden = FALSE)
+  dtf_split_term <- reactive({
+    s <- active_step()
+    if (is.null(s)) return(NULL)
+    if (identical(s$type, "dif_split"))
+      return(paste(s$details$factors, collapse = ":"))
+    if (identical(s$type, "dif_auto")) {
+      rr <- resolve_res()
+      if (!is.null(rr) && nrow(rr$splits)) return(unique(rr$splits$factor)[1L])
+    }
+    NULL
+  })
+  dtf_by_choices <- reactive({
+    f <- fit(); fac <- names(f$factors); req(length(fac) >= 1)
+    ch <- fac
+    if (length(fac) > 1L)
+      ch <- c(ch, utils::combn(fac, 2L, FUN = paste, collapse = ":"))
+    unique(c(ch, dtf_split_term()))
+  })
+  observeEvent(list(dtf_by_choices(), dtf_split_term()), {
+    ch <- dtf_by_choices(); cur <- isolate(input$dtf_by)
+    sel <- dtf_split_term() %||%
+      (if (!is.null(cur) && cur %in% ch) cur else ch[1L])
+    updateSelectInput(session, "dtf_by", choices = ch, selected = sel)
+  })
+  dtf_levels <- reactive({
+    f <- fit(); by <- input$dtf_by
+    req(!is.null(by), nzchar(by), by %in% dtf_by_choices())
+    vars <- if (by %in% names(f$factors)) by else
+      strsplit(by, ":", fixed = TRUE)[[1]]
+    req(all(vars %in% names(f$factors)))
+    grp <- if (length(vars) == 1L) f$factors[[vars]] else
+      app_factor_cells(f$factors[vars], sep = ":")
+    lv <- levels(factor(grp))
+    lv[nzchar(lv)]
+  })
+  observeEvent(dtf_levels(), {
+    lv <- dtf_levels(); cur <- isolate(input$dtf_reference)
+    updateSelectInput(session, "dtf_reference", choices = lv,
+                      selected = if (!is.null(cur) && cur %in% lv) cur
+                                 else lv[1L])
+  })
+  observeEvent(list(dtf_levels(), input$dtf_reference), {
+    lv <- dtf_levels(); ref <- input$dtf_reference
+    focal <- setdiff(lv, ref); cur <- isolate(input$dtf_group)
+    updateSelectInput(session, "dtf_group", choices = focal,
+                      selected = if (!is.null(cur) && cur %in% focal) cur
+                                 else focal[1L])
+  })
+  dtf_args <- reactive({
+    f <- fit(); req(!is.null(f$split_map))
+    by <- input$dtf_by; ref <- input$dtf_reference
+    req(!is.null(by), by %in% dtf_by_choices(),
+        !is.null(ref), ref %in% dtf_levels())
+    list(by = by, reference = ref)
+  })
+  # dtf() refuses with a plain error (a grouping that does not match the
+  # split, no anchor left); the refusal is a result here and is shown in
+  # the validation voice under the controls and in place of each table
+  dtf_res <- reactive({
+    a <- dtf_args(); b <- dif_bundles()
+    tryCatch(dtf(fit(), by = a$by, reference = a$reference, bundles = b,
+                 p_adjust = "holm", alpha = dif_alpha()),
+             error = function(e) e)
+  })
+  dtf_ready <- function() {
+    r <- dtf_res()
+    if (inherits(r, "error")) validate(need(FALSE, conditionMessage(r)))
+    r
+  }
+  dtf_call <- function() {
+    a <- dtf_args()
+    sprintf('dtf(fit, by = %s, reference = %s%s, p_adjust = "holm", alpha = %s)',
+            qstr(a$by), qstr(a$reference), dif_bundles_arg(dif_bundles()),
+            dif_alpha())
+  }
+  dtf_code <- function(what) function() paste0(dtf_call(), what)
+  output$dtf_note <- renderUI({
+    r <- dtf_res()
+    if (inherits(r, "error"))
+      return(p(class = "text-muted small mb-0", conditionMessage(r)))
+    n_split <- sum(r$items$split[r$items$group == r$groups[1L]])
+    base <- sprintf(paste(
+      "%d item(s) compared by %s against the reference level %s: %d",
+      "split, %d anchoring the groups on one scale."),
+      r$n_items, r$by, r$reference, n_split, length(r$anchors))
+    notes <- r$notes
+    if (!length(notes)) return(p(class = "text-muted small mb-0", base))
+    if (length(notes) == 1L)
+      return(p(class = "text-muted small mb-0", paste0(base, " ", notes, ".")))
+    tagList(p(class = "text-muted small mb-1", base),
+            tags$ul(class = "text-muted small mb-0 ps-3",
+                    lapply(notes, function(n) tags$li(n))))
+  })
+  register_table("dtf_test_tbl", function() dtf_ready()$test, function() {
+    d <- dtf_ready()$test
+    if (!isTRUE(input$dtf_test_full))
+      d <- d[, intersect(c(
+        "group", "n", "shift_mean", "se", "z", "p_adj",
+        "sDTF_logit", "p_sDTF_logit_adj", "uDTF_logit",
+        "sDTF_score", "p_sDTF_score_adj", "uDTF_score",
+        "sDTF_pct", "uDTF_pct"), names(d)), drop = FALSE]
+    dt <- num_dt(d)
+    for (col in intersect(c("p_adj", "p_sDTF_logit_adj", "p_sDTF_score_adj"),
+                          names(d)))
+      dt <- style_lo_red(dt, d, col, dif_alpha())
+    dt
+  }, code = dtf_code("$test"))
+  register_table("dtf_items_tbl", function() dtf_ready()$items, function() {
+    d <- dtf_ready()$items
+    d$significant <- NULL
+    if (!isTRUE(input$dtf_items_full))
+      d <- d[, intersect(c(
+        "group", "item", "location_reference", "location_group", "shift",
+        "se", "z", "p_adj", "split"), names(d)), drop = FALSE]
+    style_lo_red(num_dt(d), d, "p_adj", dif_alpha())
+  }, code = dtf_code("$items"))
+  register_table("dtf_scores_tbl", function() dtf_ready()$scores, function() {
+    d <- dtf_ready()$scores; g <- input$dtf_group
+    if (!is.null(g) && g %in% d$group) d <- d[d$group == g, , drop = FALSE]
+    num_dt(d)
+  }, code = dtf_code("$scores"))
+  output$dif_has_bundles <- reactive({
+    r <- dtf_res(); !inherits(r, "error") && !is.null(r$bundles)
+  })
+  outputOptions(output, "dif_has_bundles", suspendWhenHidden = FALSE)
+  register_table("dtf_bundles_tbl", function() dtf_ready()$bundles, function() {
+    d <- dtf_ready()$bundles; req(!is.null(d))
+    d$significant <- NULL
+    if (!isTRUE(input$dtf_bundles_full))
+      d <- d[, intersect(c(
+        "group", "bundle", "n_items", "shift_mean", "se", "z", "p_adj",
+        "chisq_hom", "df_hom", "p_hom_adj", "sDBF_score",
+        "p_sDBF_score_adj", "uDBF_score", "sDBF_pct", "uDBF_pct"),
+        names(d)), drop = FALSE]
+    dt <- num_dt(d)
+    for (col in intersect(c("p_adj", "p_hom_adj", "p_sDBF_score_adj"),
+                          names(d)))
+      dt <- style_lo_red(dt, d, col, dif_alpha())
+    dt
+  }, code = dtf_code("$bundles"))
+  register_plot("dtf_plot", function() {
+    r <- dtf_ready(); g <- input$dtf_group
+    req(!is.null(g), g %in% r$groups)
+    plot_dtf(r, group = g)
+  }, code = function()
+    sprintf("dtf_result <- %s\nplot_dtf(dtf_result, group = %s)",
+            dtf_call(), qstr(input$dtf_group %||% "")))
 
   # planned DIF contrasts: the family is derived from the factor structure
   # and every question tested at once; repeated rows use the person identifier
@@ -9984,6 +11200,8 @@ server <- function(input, output, session) {
     clear_btl_analysis_steps()
     fit_val(NULL)
     btl_fit(NULL)
+    pl_fit(NULL)
+    cj_fit(NULL)
     rcode_str(NULL)
     fitted_sim_gen(NULL)
     person_weight_state(NULL)
@@ -10134,6 +11352,13 @@ server <- function(input, output, session) {
   }
 
   project_state <- function() {
+    if (!is.null(pl_fit())) {
+      showNotification(paste("A rank analysis is not stored in a saved",
+                             "analysis file; the R code on the Data page",
+                             "reproduces it."),
+                       type = "warning", duration = 8)
+      stop("no analysis to save")
+    }
     base <- if (!is.null(btl_fit())) btl_fit() else analysis()
     source <- .app_fit_source(base)
     settings <- .collect_app_settings(input)
@@ -10355,11 +11580,15 @@ server <- function(input, output, session) {
       updateSelectInput(session, "demo_choice", selected = "none")
       updateRadioButtons(session, "model_type", selected = p$model_type)
 
+      pl_fit(NULL)
       if (inherits(p$base_fit, "rasch_btl")) {
-        fit_val(NULL); btl_fit(p$base_fit)
+        fit_val(NULL); btl_fit(p$base_fit); cj_fit(NULL)
         analysis_steps(list()); btl_analysis_steps(p$btl_steps %||% list())
       } else {
         btl_fit(NULL); fit_val(p$base_fit)
+        # a fit anchored on judgements of the items gets its joint
+        # calibration back from the judgements the analysis carries
+        cj_fit(.app_joint_refit(p$base_fit))
         btl_analysis_steps(list()); analysis_steps(p$rasch_steps %||% list())
       }
       rcode_str(p$rcode %||% NULL)
@@ -10444,8 +11673,12 @@ server <- function(input, output, session) {
   report_content <- function(file, format = input$report_format %||% "html") {
     f <- if (!is.null(btl_fit())) bfit() else fit_or_null()
     if (is.null(f)) {
-      showNotification("Run an analysis first, then download the report.",
-                       type = "warning", duration = 8)
+      showNotification(
+        if (!is.null(pl_fit()))
+          paste("The report covers person-by-item and paired-comparison",
+                "analyses; the Rankings page tables have CSV downloads.")
+        else "Run an analysis first, then download the report.",
+        type = "warning", duration = 8)
       stop("no fit to report")
     }
     f <- fit_with_app_results(f)
@@ -10476,6 +11709,14 @@ server <- function(input, output, session) {
   output$dl_zip <- downloadHandler(
     filename = function() format(Sys.time(), "rasch_results_%Y%m%d_%H%M.zip"),
     content = function(file) {
+      if (!is.null(pl_fit())) {
+        showNotification(
+          paste("The results archive covers person-by-item and",
+                "paired-comparison analyses; the Rankings page tables have",
+                "CSV downloads."),
+          type = "warning", duration = 8)
+        stop("no fit to archive")
+      }
       f <- if (!is.null(btl_fit())) bfit() else fit()
       f <- fit_with_app_results(f)
       tailored <- if (inherits(f, "rasch_btl")) NULL else guess_res()
@@ -10500,8 +11741,9 @@ server <- function(input, output, session) {
               "dimensionality, frame-invariance, tailored guessing, and externally weighted secondary",
               "person measures passed to save_outputs()."),
         paste("Not included: app-only comparison, equating, rescoring, planned",
-              "contrast, dependence-magnitude, spread, and",
-              "other displays for which save_outputs() has no serialization contract."),
+              "contrast, dependence-magnitude, spread, DIF Wald-test, DTF,",
+              "rank-analysis, joint-calibration and other displays",
+              "for which save_outputs() has no serialization contract."),
         paste("Use the table-specific CSV downloads for those displays. Save the",
               ".rasch analysis to retain the app state and reopen it later.")),
         file.path(tmp, "README.txt"))

@@ -1101,7 +1101,7 @@ simulate_btl <- function(n_objects = 8, n_judges = 12, reps_per_pair = 25,
 #'   \code{item}, \code{rater}, \code{score}) ready for
 #'   \code{\link{rasch_mfrm}}, with the truth attached.
 #' @examples
-#' d <- simulate_mfrm(60, 5, 6, rater_severity_sd = 0.8, seed = 1)
+#' d <- simulate_mfrm(60, 5, 4, rater_severity_sd = 0.8, seed = 1)
 #' mf <- rasch_mfrm(d, person = "person", item = "item", score = "score",
 #'                  facets = "rater")
 #' cor(mf$facet_effects$rater$severity, attr(d, "truth")$severity)  # recovered

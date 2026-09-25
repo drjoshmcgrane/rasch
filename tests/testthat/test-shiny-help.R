@@ -308,6 +308,8 @@ test_that("bundled app examples are exactly reconstructible", {
   expect_identical(.app_example_data("mfrm"), e$.demo_mfrm())
   expect_identical(.app_example_data("efrm"), e$.demo_efrm())
   expect_identical(.app_example_data("btl"), e$.demo_btl())
+  expect_identical(.app_example_data("pl"), e$.demo_pl())
+  expect_identical(.app_example_data("cj"), e$.demo_cj())
   cj_data <- simulate_btl(
     n_objects = 8, n_judges = 48, reps_per_pair = 84,
     erratic_judges = 2 / 48,

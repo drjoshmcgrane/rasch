@@ -953,14 +953,16 @@ print.rasch_pl <- function(x, ...) {
                        "log-likelihood %.2f, worst-first %.2f; Vuong z = %.2f, ",
                        "p = %s; location correlation %.3f\n"),
                 r$n_rankings, r$loglik_forward, r$loglik_reversed, r$z,
-                .fmt_p(r$p), r$correlation))
+                if (is.finite(r$p)) .fmt_p(r$p) else "withheld",
+                r$correlation))
   }
   if (!is.null(x$invariance)) {
     v <- x$invariance
     flag <- v$objects$object[!is.na(v$objects$p_adj) & v$objects$p_adj < 0.05]
     cat(sprintf(paste0("Invariance check (%s vs %s): LR = %.2f on %d df, ",
                        "p = %s; objects moving (Holm p < 0.05): %s\n"),
-                v$labels[1], v$labels[2], v$lr, v$df, .fmt_p(v$p),
+                v$labels[1], v$labels[2], v$lr, v$df,
+                if (is.finite(v$p)) .fmt_p(v$p) else "withheld",
                 if (length(flag)) paste(flag, collapse = ", ") else "none"))
   }
   print(.fmt_df(x$objects[, c("object", "location", "se", "rankings",

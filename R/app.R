@@ -45,7 +45,8 @@ run_app <- function(...) {
 # is internal: it exists so the analysis code shown for an example run is
 # executable without embedding hundreds of lines of generated data.
 .app_example_data <- function(name) {
-  name <- match.arg(name, c("pcm", "dich", "rsm", "mfrm", "efrm", "btl"))
+  name <- match.arg(name, c("pcm", "dich", "rsm", "mfrm", "efrm", "btl",
+                            "pl", "cj"))
   path <- system.file("shiny", "examples.R", package = "rasch")
   if (!nzchar(path)) stop("bundled app examples not found: reinstall rasch")
   env <- new.env(parent = asNamespace("rasch"))
@@ -53,7 +54,8 @@ run_app <- function(...) {
   switch(name,
     pcm = env$.demo_data(), dich = env$.demo_dich(),
     rsm = env$.demo_rsm(), mfrm = env$.demo_mfrm(),
-    efrm = env$.demo_efrm(), btl = env$.demo_btl())
+    efrm = env$.demo_efrm(), btl = env$.demo_btl(), pl = env$.demo_pl(),
+    cj = env$.demo_cj())
 }
 
 # Check the app's display packages in one pass. Reports everything missing

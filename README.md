@@ -57,6 +57,8 @@ occasions, raters, and other parts of the measurement design.
 | `btl()` | Comparative judgement models for dichotomous and polytomous paired comparisons |
 | `btl_efrm()` | Extended frame of reference model for paired comparisons |
 | `btl_explanatory()` | Explanatory comparative judgement models |
+| `pl()` | Plackett-Luce model for rankings |
+| `rasch_cj()` | Joint calibration of items or persons from responses, paired comparisons and rankings |
 
 Person measures are estimated by weighted likelihood (Warm, 1989).
 Externally imposed item or item-set weights can be used for a supplementary
@@ -91,6 +93,9 @@ downloaded. The R code for each result is shown in the interface. Its
 fit bootstrap calibrates item and person fit, or pair, object and judge fit
 for comparative judgement, in a cancellable background process. Its adjusted
 probabilities refer to the fitted global null, separately for each statistic.
+Rankings are analysed on their own page, and paired comparisons or rankings
+of the items uploaded beside the responses are calibrated jointly with them
+and anchor the analysis.
 The simulation page generates each supported data structure, with controls for
 its principal parameters and planted departures.
 Simulated data can be downloaded as a CSV or together with the generating call,

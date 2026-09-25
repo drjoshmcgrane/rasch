@@ -65,6 +65,71 @@
   d
 }
 
+# rankings demo: each judge ranks three random sets of five of eight
+# objects, choosing successively from those left with probability
+# proportional to exp(location); judge 7 ranks at random. One ranked
+# object per row, the layout pl() reads.
+.demo_pl <- function(seed = 5, n_judges = 24, sets = 3) {
+  set.seed(seed)
+  beta <- stats::setNames(seq(-1.75, 1.75, length.out = 8),
+                          sprintf("O%d", 1:8))
+  rows <- list()
+  for (j in seq_len(n_judges)) {
+    for (k in seq_len(sets)) {
+      rem <- sample(names(beta), 5)
+      ord <- character(0)
+      while (length(rem) > 1) {
+        pick <- if (j == 7L) sample(rem, 1)
+          else sample(rem, 1, prob = exp(beta[rem]))
+        ord <- c(ord, pick)
+        rem <- setdiff(rem, pick)
+      }
+      rows[[length(rows) + 1L]] <- data.frame(
+        judge = sprintf("J%02d", j), ranking = (j - 1L) * sets + k,
+        object = c(ord, rem), rank = 1:5, stringsAsFactors = FALSE)
+    }
+  }
+  do.call(rbind, rows)
+}
+
+# joint calibration demo: 10 dichotomous items answered by 250 persons and
+# judged directly as well, in 300 paired comparisons of difficulty (unit 0.7
+# of the response scale) and 60 rankings of four items (unit 1.1). Both
+# judgement frames place I07 1.2 logits harder than the responses do. The
+# judgements travel as attributes of the response table, so one dataset
+# carries every frame of the joint calibration.
+.demo_cj <- function(seed = 16, Np = 250) {
+  set.seed(seed)
+  delta <- stats::setNames(seq(-1.6, 1.6, length.out = 10),
+                           sprintf("I%02d", 1:10))
+  theta <- rnorm(Np, 0, 1.2)
+  X <- sapply(delta, function(d) as.integer(runif(Np) < plogis(theta - d)))
+  judged <- delta
+  judged["I07"] <- judged["I07"] + 1.2
+  pairs <- t(utils::combn(names(delta), 2))[sample(45, 300, replace = TRUE), ]
+  p_a <- plogis(0.7 * (judged[pairs[, 1]] - judged[pairs[, 2]]))
+  comparisons <- data.frame(
+    object_a = pairs[, 1], object_b = pairs[, 2],
+    winner = ifelse(runif(300) < p_a, pairs[, 1], pairs[, 2]),
+    stringsAsFactors = FALSE)
+  rankings <- do.call(rbind, lapply(1:60, function(j) {
+    rem <- sample(names(delta), 4)
+    ord <- character(0)
+    while (length(rem) > 1) {
+      pick <- sample(rem, 1, prob = exp(1.1 * judged[rem]))
+      ord <- c(ord, pick)
+      rem <- setdiff(rem, pick)
+    }
+    data.frame(ranking = j, item = c(ord, rem), rank = 1:4,
+               stringsAsFactors = FALSE)
+  }))
+  out <- data.frame(person_id = sprintf("P%04d", seq_len(Np)), X,
+                    check.names = FALSE)
+  attr(out, "comparisons") <- comparisons
+  attr(out, "rankings") <- rankings
+  out
+}
+
 # rating scale demo: common step structure, item locations vary
 .demo_rsm <- function(seed = 51, Np = 1000) {
   set.seed(seed)

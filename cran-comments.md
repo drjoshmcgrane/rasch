@@ -1,17 +1,22 @@
-# CRAN comments for rasch 1.13.0
+# CRAN comments for rasch 1.14.0
 
 ## Summary
 
-This feature update adds a Plackett-Luce model for rankings (`pl()`), a
-joint calibration of item responses, paired comparisons and rankings
-(`rasch_cj()`), including persons measured from their responses and from
+This feature update follows the accepted 1.12.1. It adds a Plackett-Luce
+model for rankings (`pl()`), a joint calibration of item responses, paired
+comparisons and rankings (`rasch_cj()`, with its calibration map
+`plot_cj()`), including persons measured from their responses and from
 judgements of their work and tests of one construct with no item in common
 linked through the judgements, differential bundle and test functioning
 (`dif_anova(bundles = )`, `dtf()`, `plot_dtf()`), and a conditional Wald
 test of differential item functioning (`dif_wald()`). The DIF analysis of
 a split fit forms its class intervals on one score-to-measure mapping for
-every group. No existing estimator is changed. The application and report
-corrections are described in NEWS.
+every group. The Shiny application gains the same estimators: a rankings
+page, a joint calibration of judgements uploaded beside the responses that
+anchors the response analysis, and the conditional Wald tests, item
+bundles and differential test functioning in its DIF panel. No existing
+estimator is changed. The application and report corrections are
+described in NEWS.
 
 The new calibrations were audited before submission with null simulation
 screens and regression tests, held in the repository and not in the
@@ -20,10 +25,10 @@ package.
 ## Check time
 
 CRAN runs representative end-to-end workflows and focused regression tests.
-The complete test suite, including the tests of the new calibrations,
-remains enabled with `NOT_CRAN=true` locally and in continuous integration
-on Windows, macOS and Linux. Statistical validation studies remain in the
-repository.
+The complete test suite, including the tests of the new calibrations and
+of the application pages, remains enabled with `NOT_CRAN=true` locally and
+in continuous integration on Windows, macOS and Linux. Statistical
+validation studies remain in the repository.
 
 Three vignettes use recorded model or bootstrap calculations. The analysis
 code, datasets, seeds and replication counts are retained; tables and
@@ -35,7 +40,7 @@ example is marked as optional. The package's statistical computations and
 default replication counts have not been reduced to shorten checks. CRAN's
 two-core limit is respected.
 
-The installed size is 8.1 MB, as the accepted 1.12.1 was 8.0 MB; the
+The installed size is 8.2 MB, as the accepted 1.12.1 was 8.0 MB; the
 `doc` directory holds the eight vignettes.
 
 ## Local checks
@@ -43,7 +48,7 @@ The installed size is 8.1 MB, as the accepted 1.12.1 was 8.0 MB; the
 `R CMD check --as-cran --timings` on macOS Sequoia 15.6, R 4.6.1
 (aarch64-apple-darwin23): 0 errors, 0 warnings, 0 notes, in 341 seconds
 including network checks. The five-second example threshold was set
-explicitly; the slowest example was `simulate_mfrm` at 2.125 s, and the
+explicitly; the slowest example was `plot_scree` at 1.8 s, and the
 `--run-donttest` pass was also OK. The CRAN test selection passed 743
 expectations, with 28 longer tests skipped on CRAN. All eight vignettes and
 the PDF and HTML manuals passed.
@@ -54,15 +59,18 @@ need an installed package namespace.
 
 ## win-builder
 
-The submitted tarball was uploaded to win-builder for R-release and
-R-devel on 25 September 2026. Both returned 0 errors, 0 warnings and
-0 notes on Windows Server 2022:
+The submitted tarball was uploaded to win-builder for R-devel and
+R-release on 25 September 2026. R-devel (2026-09-21 r90579) returned
+0 errors, 0 warnings and 0 notes on Windows Server 2022: installation
+61 seconds; check 654 seconds. The R-release result for this tarball was
+still queued when these comments were written.
 
-* R-release (R 4.6.1): installation 66 seconds; check 626 seconds.
-* R-devel (2026-09-21 r90579): installation 66 seconds; check 683 seconds.
-
-An earlier upload of this version drew a NOTE on both platforms for the
-`resolve_dif` example, at 15 seconds against the ten-second Windows
-threshold. The example now uses 300 persons and six items; it runs in
-1.7 seconds locally and 7.3 seconds on win-builder, and both criteria
-still find the planted item.
+An earlier build of this version, differing only in the `simulate_mfrm`
+example, passed R-release (R 4.6.1) with 0 errors, 0 warnings and 0 notes
+(installation 61 seconds; check 578 seconds) and drew one NOTE on R-devel:
+that example ran in 10.19 seconds against the ten-second Windows
+threshold, having taken 9.9 seconds in the same check of 1.13.0. The
+example now simulates four raters instead of six; it runs in 1.0 second
+locally and 4.5 seconds on win-builder R-devel, and still recovers the
+rater severities. The `resolve_dif` example, which drew the same NOTE in
+an earlier upload of 1.13.0, ran in 7.4 seconds on win-builder R-devel.

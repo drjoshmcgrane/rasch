@@ -19,6 +19,60 @@
     length(x) == 1L && !is.na(x) && nzchar(trimws(x))
 }
 
+# The app's item-bundle control is typed text, one bundle per line as
+# "name: item, item, ...". The same parser serves the running app and the
+# project validator, so a saved DIF analysis is pinned to the bundles the
+# restored text describes. Membership against the fitted items is checked
+# separately by .dif_bundles(). Blank text is no bundles.
+.parse_dif_bundles <- function(text) {
+  if (is.null(text) || length(text) != 1L || is.na(text) ||
+      !nzchar(trimws(text)))
+    return(NULL)
+  lines <- trimws(strsplit(as.character(text), "\\r?\\n")[[1L]])
+  lines <- lines[nzchar(lines)]
+  out <- list()
+  for (i in seq_along(lines)) {
+    parts <- regmatches(lines[i], regexpr(":", lines[i], fixed = TRUE),
+                        invert = TRUE)[[1L]]
+    name <- if (length(parts) == 2L) trimws(parts[1L]) else ""
+    if (!nzchar(name))
+      stop(sprintf("bundle line %d needs the form name: item, item, ...", i),
+           call. = FALSE)
+    members <- unique(trimws(strsplit(parts[2L], ",", fixed = TRUE)[[1L]]))
+    members <- members[nzchar(members)]
+    if (length(members) < 2L)
+      stop(sprintf("bundle line %d needs a name and at least two items", i),
+           call. = FALSE)
+    out[[name]] <- members
+  }
+  out
+}
+
+# The bundles as dif_anova() tests them on a fit. Bundles are typed over the
+# source items; on a fit whose items have been split, a source item stands
+# for all of its group copies, so the bundle's pooled residual still covers
+# every person. Members that are not sources are left for .dif_bundles()
+# to report.
+.app_dif_bundles <- function(bundles, fit) {
+  if (!length(bundles) || is.null(fit$split_map) ||
+      !inherits(fit, "rasch") || inherits(fit, c("rasch_mfrm", "rasch_efrm")))
+    return(bundles)
+  map <- .split_source_map(fit)
+  lapply(bundles, function(members) unique(unlist(lapply(members, function(m)
+    if (m %in% names(map) || !(m %in% map)) m else names(map)[map == m]))))
+}
+
+# Do two bundle definitions name the same bundles with the same members?
+# No bundles (NULL or empty) matches no bundles.
+.same_dif_bundles <- function(saved, parsed) {
+  if (!length(saved) || !length(parsed)) return(!length(saved) && !length(parsed))
+  if (!is.list(saved) || !is.list(parsed) || length(saved) != length(parsed) ||
+      !identical(names(saved), names(parsed)))
+    return(FALSE)
+  all(vapply(seq_along(saved), function(i)
+    identical(as.character(saved[[i]]), as.character(parsed[[i]])), TRUE))
+}
+
 .validate_app_frame_calibration <- function(fit, label) {
   if (!inherits(fit, c("rasch_efrm", "rasch_btl_efrm")))
     return(invisible(NULL))
@@ -513,6 +567,15 @@
           !isTRUE(all.equal(primary_dif$alpha, alpha, tolerance = 0)))
         fail(paste("the saved primary DIF analysis does not match the",
                    "restored DIF settings"))
+      # the bundles the analysis tested must be the ones the restored text
+      # describes; a project saved before the control existed has neither
+      bundles <- tryCatch(
+        .app_dif_bundles(.parse_dif_bundles(settings$dif_bundles), active_fit),
+        error = function(e) e)
+      if (inherits(bundles, "error") ||
+          !.same_dif_bundles(primary_dif$bundles, bundles))
+        fail(paste("the saved primary DIF analysis does not match the",
+                   "restored item bundles"))
     }
   }
 
@@ -570,7 +633,9 @@
        !identical(resolution$algorithm, "factor-design-resolution-3") ||
        !.dif_intervals_current(resolution, resolution$fit) ||
        !.app_scalar_text(resolution$effects) ||
-       !resolution$effects %in% c("main", "factorial")))
+       !resolution$effects %in% c("main", "factorial") ||
+       !.app_scalar_text(resolution$criterion %||% "anova") ||
+       !(resolution$criterion %||% "anova") %in% c("anova", "wald")))
     fail(paste("the saved automatic DIF resolution uses a superseded",
                "calculation; recompute it"))
 

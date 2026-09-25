@@ -126,8 +126,15 @@ test_that("the resolution summary withholds an unknown remaining-DIF count", {
     session$flushReact()
     expect_match(
       as.character(output$resolve_summary$html),
-      "1 split(s); no further item flagged DIF; 3 item(s) still flag DIF.",
+      paste("1 split(s) by the residual ANOVA criterion; no further item",
+            "flagged DIF; 3 item(s) still flag DIF."),
       fixed = TRUE)
+    resolve_res(list(n_splits = 1L, n_remaining_dif = 0L,
+                     splits = empty_splits, criterion = "wald",
+                     stopped = "no further item flagged DIF"))
+    session$flushReact()
+    expect_match(as.character(output$resolve_summary$html),
+                 "1 split(s) by the conditional Wald criterion;", fixed = TRUE)
   })
 })
 

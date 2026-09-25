@@ -1,3 +1,46 @@
+# rasch 1.14.0
+
+* The Shiny app calibrates items jointly from responses and judgements.
+  Paired comparisons or rankings of the items are uploaded as CSV files
+  beside the anchors, or come with the new "Joint calibration" example
+  dataset, and the Rasch run passes them with the responses to
+  `rasch_cj()`; the joint thresholds then anchor the response analysis on
+  every item but the last, which stays free so the calibration keeps a
+  parameter to estimate. A Joint calibration page shows the unit of each
+  judgement frame relative to the responses, estimated or fixed at 1 by a
+  checkbox, the likelihood-ratio test of invariance across frames with the
+  objects that move, the per-item and per-threshold estimates, the
+  invariance table and the anchor table, and `plot_cj()` draws the
+  calibration map: each item's combined location with its interval and the
+  location each frame gives it alone, on the scale of the responses. The
+  disclosed R code reads the judgements from the upload, the example or
+  the reopened analysis and reproduces the joint calibration and the
+  anchored fit; a saved analysis keeps the judgements and refits the joint
+  calibration when it is reopened. A run that combines judgements with an
+  anchor file, a rating scale structure, principal-components thresholds
+  or a scoring key is refused with the reason.
+* The Shiny app analyses rankings with `pl()`. The comparative judgement
+  model gains a rankings layout, with the columns naming the ranking, the
+  object, the rank and optionally the judge, the standard-error type, the
+  choice-position split of the invariance test and the treatment of ties,
+  and a "Rankings" example dataset. A Rankings page shows the object
+  separation index, the reversal check against the worst-first reading,
+  the invariance test across choice positions, the object map, and the
+  object, judge, ranking and invariance tables, each with its R code. A
+  rank analysis is reproduced by the code on the Data page; it is not
+  saved as a project, reported or archived.
+* The Shiny app's DIF panel gains the conditional Wald tests of
+  `dif_wald()`, one factor at a time, with the level locations of the
+  selected item beside them; automatic resolution can flag items from
+  those tests instead of the residual analysis of variance. Item bundles
+  typed as `name: item, item, ...` are tested as units in the analysis of
+  variance and in differential test functioning, and a "Differential test
+  functioning" panel reports `dtf()` once items are split: the shift of
+  each split item and their mean, the score-to-measure differences, the
+  signed and unsigned summaries, the bundle functioning, and the
+  expected-score curves of `plot_dtf()`. A saved analysis is pinned to the
+  bundles its text describes.
+
 # rasch 1.13.0
 
 * `pl()` analyses rankings with the Plackett-Luce model, as `btl()` analyses

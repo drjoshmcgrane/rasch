@@ -72,6 +72,7 @@ reference:
   - rasch
   - rasch_mfrm
   - rasch_efrm
+  - rasch_cj
   - rasch_explanatory
   - btl_explanatory
   - explanatory_test
@@ -154,6 +155,7 @@ reference:
   - btl_equate
   - btl_information
   - btl_next_pairs
+  - pl
   - judge_surprise
   - judge_pair_surprise
   - plot_btl

@@ -127,9 +127,11 @@ test_that("a restored project survives the echo of its own controls", {
                  fixed = TRUE)
 
     # the DIF panel is guarded the same way: a restored DIF bootstrap keeps
-    # its place through the echo of the controls it was saved with
+    # its place through the echo of the controls it was saved with (the
+    # bundle text, which the project predates, is the blank the restore sent)
     dif_boot_val("a restored DIF bootstrap")
-    session$setInputs(dif_effects = "main", dif_alpha = 0.05)
+    session$setInputs(dif_effects = "main", dif_alpha = 0.05,
+                      dif_bundles = "")
     session$flushReact()
     expect_identical(dif_boot_val(), "a restored DIF bootstrap")
     session$setInputs(dif_effects = "factorial")
@@ -163,10 +165,15 @@ test_that("an echoed control is recognised whatever mode it comes back in", {
   expect_false(e$.same_input_value(NULL, 19))
   expect_false(e$.same_input_value("I01", c("I01", "I02")))
 
-  # only the controls a restore actually updates are recorded
+  # only the controls a restore actually updates are recorded: the saved
+  # ones, and the two a project can predate, which the restore always sends
+  # (blank bundle text, the paired-comparison layout)
   restored <- e$.restored_input_values(
     list(dim_boot_B = 9, exp_type_1 = "numeric", not_a_control = 1))
-  expect_identical(sort(names(restored)), c("dim_boot_B", "exp_type_1"))
+  expect_identical(sort(names(restored)),
+                   c("bt_layout", "dif_bundles", "dim_boot_B", "exp_type_1"))
+  expect_identical(restored$dif_bundles, "")
+  expect_identical(restored$bt_layout, "pairs")
   expect_identical(e$.restored_input_values(list()), list())
 })
 

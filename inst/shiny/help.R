@@ -55,6 +55,112 @@ APP_HELP <- c(
     "variance not attributed to measurement error. Larger values indicate a",
     "more reproducible object ordering."
   ),
+  metric_rankings = "Number of rankings in the active rank analysis, with the range of objects each ranks.",
+  metric_reversal = paste(
+    "Vuong test comparing the fit with the ranks read best-first against the",
+    "same data read worst-first. A small probability with the worst-first",
+    "orientation fitting better suggests the rank column reads the wrong way."
+  ),
+  metric_invariance = paste(
+    "Likelihood-ratio test of whether the object locations estimated from",
+    "different choice positions agree. A small probability suggests the",
+    "objects are not being ordered by the same trait at every stage. With",
+    "judge-clustered rankings the test is withheld and the tile counts the",
+    "objects whose location moves (Holm-adjusted p below .05)."
+  ),
+  pl_fitsum_tbl = paste(
+    "The Plackett-Luce rank analysis: design, convergence, standard-error",
+    "type, log-likelihood, the Object Separation Index and the invariance",
+    "test. Anchored objects hold their given locations."
+  ),
+  pl_reversal_tbl = paste(
+    "Fits the rankings read worst-first as well as best-first and compares",
+    "the two by the Vuong test. The location correlation and largest",
+    "difference show how far the two readings disagree."
+  ),
+  pl_map = paste(
+    "Object locations with confidence bands, ordered by location. Objects",
+    "with poor fit are flagged; extreme objects, always chosen first or",
+    "last, have no finite estimate."
+  ),
+  pl_objects_tbl = paste(
+    "One row per object: location, standard error, the rankings and stages",
+    "the object appears in, how often it was chosen, and the infit, outfit",
+    "and standardised fit residual. All columns adds the estimation detail."
+  ),
+  pl_judges_tbl = paste(
+    "One row per judge: rankings and stages contributed, pooled fit",
+    "statistics and mean surprise. Large fit residuals or mean surprise",
+    "mark a judge whose rankings the model finds unlikely."
+  ),
+  pl_rankings_tbl = paste(
+    "One row per ranking with its size, stages, log-likelihood and surprise",
+    "z. Rankings are ordered from the most surprising; large positive",
+    "values are the least likely under the fitted model."
+  ),
+  pl_invariance_tbl = paste(
+    "Object locations estimated separately from the two choice-position",
+    "groups, with their difference, standard error, z and Holm-adjusted",
+    "probability. Objects that move are highlighted."
+  ),
+  metric_joint_items = paste(
+    "Number of items in the joint calibration of responses and judgements.",
+    "Persons who answered every item the same way carry no information",
+    "about the items and are not counted."
+  ),
+  metric_joint_comparisons = paste(
+    "The unit of the paired comparisons relative to the responses: the",
+    "logit scale of the judgements divided by that of the responses, with",
+    "its standard error, or 1 when the checkbox fixed it. A unit below 1",
+    "means the judgements spread the items less than the responses do."
+  ),
+  metric_joint_rankings = paste(
+    "The unit of the rankings relative to the responses: the logit scale of",
+    "the rankings divided by that of the responses, with its standard error,",
+    "or 1 when the checkbox fixed it."
+  ),
+  metric_joint_invariance = paste(
+    "Likelihood-ratio test of whether every frame places the items in the",
+    "same locations, up to its unit. A small probability means at least one",
+    "item is judged easier or harder than the responses show it to be."
+  ),
+  metric_joint_moving = paste(
+    "Objects (items, or the thresholds of polytomous items) whose location",
+    "in a judgement frame differs from the reference at a Holm-adjusted",
+    "probability below .05."
+  ),
+  joint_fitsum_tbl = paste(
+    "The joint calibration: design, convergence, log-likelihood, the unit of",
+    "each judgement frame relative to the responses, the invariance test",
+    "across frames, the objects that differ, and the item left free when",
+    "the calibration anchors the response analysis."
+  ),
+  joint_map = paste(
+    "Each item's combined location with its 95 per cent interval, and the",
+    "location each frame gives the item on its own, on the scale of the",
+    "responses. An item whose location differs between frames at a",
+    "Holm-adjusted probability below .05 is drawn in red."
+  ),
+  joint_items_tbl = paste(
+    "One row per item: the combined location and standard error from every",
+    "frame together, then the location each frame gives the item alone,",
+    "expressed on the scale of the responses."
+  ),
+  joint_thresholds_tbl = paste(
+    "One row per threshold of a polytomous item: the combined estimate",
+    "and its standard error. The item's location is the mean of its",
+    "thresholds."
+  ),
+  joint_invariance_tbl = paste(
+    "Each object's location in a judgement frame against its location in",
+    "the reference frame, with the difference, standard error, z and",
+    "Holm-adjusted probability. Objects that differ are highlighted."
+  ),
+  joint_anchors_tbl = paste(
+    "The joint thresholds passed to the response analysis as individual",
+    "anchors, one row per threshold. The last item is left free so the",
+    "analysis keeps a parameter to estimate."
+  ),
   metric_pair_fit = paste(
     "The overall pairwise fit probability. After a fit bootstrap, it uses the",
     "fitted-design null. Small values indicate departure from the fitted",
@@ -320,6 +426,48 @@ APP_HELP <- c(
     "Reports planned one-degree-of-freedom contrasts derived from the factor",
     "structure: two-level differences, ordered trends, nominal comparisons and",
     "factor-pair interactions. Probabilities are adjusted over this planned family."
+  ),
+  dif_wald_tbl = paste(
+    "Refits each item conditionally with a separate location in every level",
+    "of a factor and tests the equality of those locations with a Wald",
+    "statistic. Shift is the second level minus the first for two levels,",
+    "otherwise the range of the locations; positive means harder for the",
+    "second level. Probabilities are Holm-adjusted. Select a row for its",
+    "locations by level."
+  ),
+  dif_wald_levels_tbl = paste(
+    "Reports the selected item's location, standard error and person count",
+    "within each level of the selected factor, from the conditional refit."
+  ),
+  dtf_test_tbl = paste(
+    "Compares each group's expected test score with the reference group's",
+    "over the location scale, the split items placed on one scale by the",
+    "unsplit anchors. Signed functioning (sDTF) lets item shifts cancel;",
+    "unsigned functioning (uDTF) does not. Both are reported in logits,",
+    "score units and as a percentage of the maximum score, with the mean",
+    "item shift and its test."
+  ),
+  dtf_items_tbl = paste(
+    "Reports each item's location in the reference group and the compared",
+    "group, and the shift between them. Unsplit items anchor the scale and",
+    "shift by zero; only split items are tested."
+  ),
+  dtf_scores_tbl = paste(
+    "Maps each raw score to the measure it implies on the reference scale",
+    "and on the compared group's scale, with the shift between them."
+  ),
+  dtf_bundles_tbl = paste(
+    "Tests each item bundle as one unit: the mean shift of its members, a",
+    "homogeneity test of whether the members shift alike, and the signed",
+    "and unsigned bundle functioning (sDBF and uDBF) in score units and",
+    "as a percentage of the bundle's maximum score."
+  ),
+  dtf_plot = paste(
+    "Above, the expected test score of the reference group (solid) and the",
+    "plotted group (dashed) over the location scale. Below, the score",
+    "difference, reference minus group, with its confidence band; a curve",
+    "leaving the band marks the locations at which the test functions",
+    "differently for the two groups."
   ),
 
   # Facets and frames ------------------------------------------------------
