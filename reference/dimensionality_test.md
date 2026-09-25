@@ -76,7 +76,9 @@ dimensionality_test(
   alone; neither split then has an inferential verdict. Each replicate
   refits the calibration, so `B = 200` costs about two hundred fits; the
   bootstrap is available for single-facet fits with a common unit whose
-  thresholds were estimated directly.
+  thresholds were estimated directly. For any other fit `B > 0` is
+  refused, and the `B = 0` note says the comparison stays descriptive
+  for that fit instead of pointing at the bootstrap.
 
 - workers:
 
@@ -113,7 +115,7 @@ it; a saved result without the current stamp used a superseded mean or
 binomial reference. An analysis file carrying one opens with that result
 dropped and a warning, and the rest of the analysis intact.
 `verdict_note` explains why a descriptive comparison has no inferential
-verdict.
+verdict and whether `B > 0` can supply one for this fit.
 
 ## Details
 
@@ -127,17 +129,18 @@ choosing the split from the same residuals is anti-conservative. Without
 bootstrap calibration neither split therefore has a binary verdict:
 `multidimensional` is `NA`, while the interval and uncalibrated binomial
 reading remain available descriptively. `B > 0` supplies a model-based
-reference for either split: each replicate draws responses from the
-fitted model conditional on every person's raw score and missingness
-pattern, refits the calibration, retains a fixed split or repeats a
-residual-component split on its own residuals and recomputes the
-proportion, so the bootstrap probability `p_boot` carries the same
-selection the observed proportion carries. With `B > 0` the verdict is
-`p_boot <= alpha`; the binomial interval is still reported, as a
-description of the observed proportion rather than a test of it. A
-one-sided bootstrap probability cannot be smaller than `1/(B_used + 1)`.
-If that floor exceeds `alpha`, the bootstrap has no rejection region and
-the verdict is withheld for either split.
+reference for either split (`verdict_note` says so, or says why this fit
+has none): each replicate draws responses from the fitted model
+conditional on every person's raw score and missingness pattern, refits
+the calibration, retains a fixed split or repeats a residual-component
+split on its own residuals and recomputes the proportion, so the
+bootstrap probability `p_boot` carries the same selection the observed
+proportion carries. With `B > 0` the verdict is `p_boot <= alpha`; the
+binomial interval is still reported, as a description of the observed
+proportion rather than a test of it. A one-sided bootstrap probability
+cannot be smaller than `1/(B_used + 1)`. If that floor exceeds `alpha`,
+the bootstrap has no rejection region and the verdict is withheld for
+either split.
 
 The mean difference between the two subset estimates is reported but not
 tested. Each subset estimate is a weighted-likelihood estimate on a

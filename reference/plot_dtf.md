@@ -1,0 +1,45 @@
+# Plot differential test functioning
+
+Draws the expected-score curves of the reference and one other group
+over the location scale, with the difference between them below.
+
+## Usage
+
+``` r
+plot_dtf(x, group = NULL, ...)
+```
+
+## Arguments
+
+- x:
+
+  A [`dtf`](https://drjoshmcgrane.github.io/rasch/reference/dtf.md)
+  result.
+
+- group:
+
+  The group to draw; the first compared group by default.
+
+- ...:
+
+  Further arguments passed to
+  [`plot`](https://rdrr.io/r/graphics/plot.default.html) for the
+  expected-score panel, overriding its defaults.
+
+## Value
+
+`x`, invisibly.
+
+## Examples
+
+``` r
+set.seed(2)
+n <- 400
+d <- seq(-1.5, 1.5, length.out = 8)
+g <- rep(c("a", "b"), each = n / 2)
+sh <- matrix(0, n, 8); sh[g == "b", 2:3] <- 0.8
+X <- matrix(rbinom(n * 8, 1, plogis(outer(rnorm(n), d, "-") - sh)), n, 8)
+colnames(X) <- paste0("I", 1:8)
+fit <- rasch(data.frame(X, grp = g), factors = "grp")
+plot_dtf(dtf(fit, by = "grp", items = c("I2", "I3")))
+```

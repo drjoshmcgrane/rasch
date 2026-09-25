@@ -38,7 +38,7 @@
 
     <a class="navbar-brand me-2" href="index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.14.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -130,6 +130,14 @@
 <td><code><a href="reference/btl_explanatory.html">btl_explanatory()</a></code></td>
 <td>Explanatory comparative judgement models</td>
 </tr>
+<tr>
+<td><code><a href="reference/pl.html">pl()</a></code></td>
+<td>Plackett-Luce model for rankings</td>
+</tr>
+<tr>
+<td><code><a href="reference/rasch_cj.html">rasch_cj()</a></code></td>
+<td>Joint calibration of items or persons from responses, paired comparisons and rankings</td>
+</tr>
 </tbody>
 </table>
 <p>Person measures are estimated by weighted likelihood (Warm, 1989). Externally imposed item or item-set weights can be used for a supplementary person measure without changing the fitted calibration or its diagnostics. Anchored estimation is available for equating, and incomplete linked designs can be fitted when their observed response structure identifies a common scale.</p>
@@ -141,7 +149,7 @@
 <p>The package includes a graphical interface for analysts who do not normally work in R. Launch it after installation with:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">rasch</span><span class="fu">::</span><span class="fu"><a href="reference/run_app.html">run_app</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p>The application imports data, assigns variables to their measurement roles, fits the selected model, and displays the resulting tables and plots. An analysis can be saved as a <code>.rasch</code> project and reopened with its data roles and estimation settings. Tables, figures and HTML, Word or PDF reports can be downloaded. The R code for each result is shown in the interface. Its fit bootstrap calibrates item and person fit, or pair, object and judge fit for comparative judgement, in a cancellable background process. Its adjusted probabilities refer to the fitted global null, separately for each statistic. The simulation page generates each supported data structure, with controls for its principal parameters and planted departures. Simulated data can be downloaded as a CSV or together with the generating call, true values and explanatory metadata.</p>
+<p>The application imports data, assigns variables to their measurement roles, fits the selected model, and displays the resulting tables and plots. An analysis can be saved as a <code>.rasch</code> project and reopened with its data roles and estimation settings. Tables, figures and HTML, Word or PDF reports can be downloaded. The R code for each result is shown in the interface. Its fit bootstrap calibrates item and person fit, or pair, object and judge fit for comparative judgement, in a cancellable background process. Its adjusted probabilities refer to the fitted global null, separately for each statistic. Rankings are analysed on their own page, and paired comparisons or rankings of the items uploaded beside the responses are calibrated jointly with them and anchor the analysis. The simulation page generates each supported data structure, with controls for its principal parameters and planted departures. Simulated data can be downloaded as a CSV or together with the generating call, true values and explanatory metadata.</p>
 <p align="center">
 <img src="reference/figures/app-items.png" alt="Item statistics and an item characteristic curve in the rasch Shiny application" width="90%"></p>
 </div>

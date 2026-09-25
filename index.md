@@ -50,6 +50,8 @@ design.
 | [`btl()`](https://drjoshmcgrane.github.io/rasch/reference/btl.md) | Comparative judgement models for dichotomous and polytomous paired comparisons |
 | [`btl_efrm()`](https://drjoshmcgrane.github.io/rasch/reference/btl_efrm.md) | Extended frame of reference model for paired comparisons |
 | [`btl_explanatory()`](https://drjoshmcgrane.github.io/rasch/reference/btl_explanatory.md) | Explanatory comparative judgement models |
+| [`pl()`](https://drjoshmcgrane.github.io/rasch/reference/pl.md) | Plackett-Luce model for rankings |
+| [`rasch_cj()`](https://drjoshmcgrane.github.io/rasch/reference/rasch_cj.md) | Joint calibration of items or persons from responses, paired comparisons and rankings |
 
 Person measures are estimated by weighted likelihood (Warm, 1989).
 Externally imposed item or item-set weights can be used for a
@@ -86,11 +88,13 @@ or PDF reports can be downloaded. The R code for each result is shown in
 the interface. Its fit bootstrap calibrates item and person fit, or
 pair, object and judge fit for comparative judgement, in a cancellable
 background process. Its adjusted probabilities refer to the fitted
-global null, separately for each statistic. The simulation page
-generates each supported data structure, with controls for its principal
-parameters and planted departures. Simulated data can be downloaded as a
-CSV or together with the generating call, true values and explanatory
-metadata.
+global null, separately for each statistic. Rankings are analysed on
+their own page, and paired comparisons or rankings of the items uploaded
+beside the responses are calibrated jointly with them and anchor the
+analysis. The simulation page generates each supported data structure,
+with controls for its principal parameters and planted departures.
+Simulated data can be downloaded as a CSV or together with the
+generating call, true values and explanatory metadata.
 
 ![Item statistics and an item characteristic curve in the rasch Shiny
 application](reference/figures/app-items.png)

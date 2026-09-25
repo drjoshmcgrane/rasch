@@ -36,11 +36,13 @@
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/dif_contrasts.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/dif_posthoc.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/dif_size.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/dif_wald.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/dimensionality_magnitude.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/dimensionality_test.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/distractor_analysis.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/distractor_rescore.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/drop_items.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/dtf.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/equate_tests.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/explanatory_diagnostics.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/explanatory_test.html</loc></url>
@@ -57,6 +59,7 @@
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/pcml_pc.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/person_extrapolated.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/person_wle.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/pl.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl_categories.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl_dependence.html</loc></url>
@@ -70,7 +73,9 @@
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_btl_units.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_catfreq.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_ccc.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_cj.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_distractors.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_dtf.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_equate.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_facets.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_frames.html</loc></url>
@@ -84,6 +89,7 @@
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_pcc.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_person_fit.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_pimap.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_pl.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_recovery.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_resid_cor.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/plot_resid_dist.html</loc></url>
@@ -96,6 +102,7 @@
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/rack_data.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/rasch-package.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/rasch.html</loc></url>
+<url><loc>https://drjoshmcgrane.github.io/rasch/reference/rasch_cj.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/rasch_efrm.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/rasch_explanatory.html</loc></url>
 <url><loc>https://drjoshmcgrane.github.io/rasch/reference/rasch_mfrm.html</loc></url>

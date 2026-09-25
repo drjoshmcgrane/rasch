@@ -19,7 +19,8 @@ dif_anova(
   sizes = FALSE,
   id = NULL,
   within = NULL,
-  pool_facets = TRUE
+  pool_facets = TRUE,
+  bundles = NULL
 )
 ```
 
@@ -91,6 +92,13 @@ dif_anova(
   by item, so this argument does not alter EFRM fits. Ignored for
   ordinary fits.
 
+- bundles:
+
+  Optional named list of item-name vectors. Each bundle is tested as one
+  further row, named by the list name, on the standardised sum of its
+  members' residuals. A bundle needs at least two items and cannot
+  contain every item.
+
 ## Value
 
 A list with:
@@ -135,7 +143,8 @@ A list with:
   The covariance reference used for uniform between-person terms.
 
 The remaining components record the factors, class intervals,
-adjustment, significance level, and design settings.
+adjustment, significance level, design settings and, when supplied, the
+`bundles`.
 
 ## Details
 
@@ -151,7 +160,17 @@ nuisance term and is not included. A reported term remains in this
 family when its probability is unavailable. Effects that cannot be
 estimated from the retained design are reported as `NA`, including
 within-person effects whose adjusted mean is confounded with
-between-person terms in an incomplete factorial design.
+between-person terms in an incomplete factorial design. A term is judged
+on its own contrasts: an empty cell elsewhere in the item's model (an
+unoccupied factor-by-class-interval combination, say) aliases a nuisance
+column without withholding the terms the design still estimates, which
+are tested on the retained full-rank columns. A term whose own contrasts
+are aliased, or whose Type II degrees of freedom no longer count them
+all, is the one reported as `NA`. Every withheld row is named in `notes`
+with the reason that applies to it. A withheld DIF test stays in the
+multiplicity family; a withheld class-interval row is a nuisance term,
+never a member of it, and its note and the counts on the `notes` summary
+say so.
 
 When identifiers repeat, the person is the unit of analysis.
 Between-person terms use person means and the between-person error
@@ -187,7 +206,45 @@ does. MFRM residuals are pooled to underlying items unless
 the frame-defining factors remain excluded. Inference is available only
 from a converged calibration.
 
+**Bundles.** A bundle names a set of items that might function
+differently as a group, such as the items sharing a passage or a
+response format, even when no one of them shows DIF on its own
+(differential bundle functioning, Douglas, Roussos and Stout 1996). Each
+bundle is tested as one more row of the table: its residual is the
+standardised sum \\\sum\_{i \in B} z_i / \sqrt{n_B}\\ of its members'
+residuals, exactly the pooling an MFRM item receives over its facet
+cells, so a common shift that is too small to flag item by item
+accumulates. Under the conditional calibration a bundle's shift is
+identified against the items outside it, so a bundle cannot be the whole
+test; differential test functioning is a question for
+[`dtf`](https://drjoshmcgrane.github.io/rasch/reference/dtf.md), which
+measures it from a resolved calibration with named anchors. Bundle rows
+join the same adjustment family as the items and take no post-hoc
+follow-up;
+[`dtf`](https://drjoshmcgrane.github.io/rasch/reference/dtf.md) reports
+a flagged bundle's shift.
+
+**Split fits.** After
+[`split_items`](https://drjoshmcgrane.github.io/rasch/reference/split_items.md)
+each group answers its own copy of a split item, so a raw score maps to
+a different person location in each group and class intervals formed on
+those locations place one group only in some intervals; the DIF tests on
+the remaining items lose their power, and the fit's own `class_interval`
+is not used. The intervals are instead formed on the location every
+person would have under the first copy of each split item, the same
+score-to-measure mapping for every group, so persons with the same
+responses share an interval (with complete data, the merged raw score
+defines the intervals). The residuals keep each person's own location. A
+note records this.
+[`dif_wald`](https://drjoshmcgrane.github.io/rasch/reference/dif_wald.md)
+tests DIF without class intervals at all.
+
 ## References
+
+Douglas, J. A., Roussos, L. A. and Stout, W. (1996). Item-bundle DIF
+hypothesis testing: Identifying suspect bundles and assessing their
+differential functioning. Journal of Educational Measurement, 33(4),
+465–484.
 
 Holm, S. (1979). A simple sequentially rejective multiple test
 procedure. Scandinavian Journal of Statistics, 6(2), 65–70.
@@ -208,9 +265,11 @@ Erlbaum.
 
 [`dif_size`](https://drjoshmcgrane.github.io/rasch/reference/dif_size.md),
 [`dif_contrasts`](https://drjoshmcgrane.github.io/rasch/reference/dif_contrasts.md),
+[`dif_wald`](https://drjoshmcgrane.github.io/rasch/reference/dif_wald.md)
 and
 [`resolve_dif`](https://drjoshmcgrane.github.io/rasch/reference/resolve_dif.md);
-and
+[`dtf`](https://drjoshmcgrane.github.io/rasch/reference/dtf.md) for the
+size of bundle and test-level differences on a resolved calibration; and
 [`frame_invariance`](https://drjoshmcgrane.github.io/rasch/reference/frame_invariance.md)
 for the frame-defining factor this function excludes.
 

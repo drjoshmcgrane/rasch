@@ -9,7 +9,12 @@
 estimated effect,
 and refits after each split. This order addresses the artificial DIF that a
 large departure can induce in otherwise invariant items (Andrich and
-Hagquist 2012, 2015). Each split gives the item a separate location in every
+Hagquist 2012, 2015). The DIF in each round is judged by the residual
+analysis of dif_anova or, with criterion = &quot;wald&quot;,
+by the conditional Wald test of dif_wald, which compares
+each item's split locations on the calibration anchored by the unsplit
+items and so needs no class intervals. Each split gives the item a
+separate location in every
 factor cell. A PCM also estimates the split copies' thresholds separately;
 an RSM retains its common rating-scale threshold structure. A location split does not model a
 group-specific discrimination, so items with non-uniform DIF are left for
@@ -20,7 +25,12 @@ split."><meta property="og:description" content="Splits items with uniform DIF o
 estimated effect,
 and refits after each split. This order addresses the artificial DIF that a
 large departure can induce in otherwise invariant items (Andrich and
-Hagquist 2012, 2015). Each split gives the item a separate location in every
+Hagquist 2012, 2015). The DIF in each round is judged by the residual
+analysis of dif_anova or, with criterion = &quot;wald&quot;,
+by the conditional Wald test of dif_wald, which compares
+each item's split locations on the calibration anchored by the unsplit
+items and so needs no class intervals. Each split gives the item a
+separate location in every
 factor cell. A PCM also estimates the split copies' thresholds separately;
 an RSM retains its common rating-scale threshold structure. A location split does not model a
 group-specific discrimination, so items with non-uniform DIF are left for
@@ -35,7 +45,7 @@ split."><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch
 
     <a class="navbar-brand me-2" href="../index.html">rasch</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.12.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.14.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -72,7 +82,12 @@ split."><meta property="og:image" content="https://drjoshmcgrane.github.io/rasch
 estimated effect,
 and refits after each split. This order addresses the artificial DIF that a
 large departure can induce in otherwise invariant items (Andrich and
-Hagquist 2012, 2015). Each split gives the item a separate location in every
+Hagquist 2012, 2015). The DIF in each round is judged by the residual
+analysis of <code><a href="dif_anova.html">dif_anova</a></code> or, with <code>criterion = "wald"</code>,
+by the conditional Wald test of <code><a href="dif_wald.html">dif_wald</a></code>, which compares
+each item's split locations on the calibration anchored by the unsplit
+items and so needs no class intervals. Each split gives the item a
+separate location in every
 factor cell. A PCM also estimates the split copies' thresholds separately;
 an RSM retains its common rating-scale threshold structure. A location split does not model a
 group-specific discrimination, so items with non-uniform DIF are left for
@@ -92,7 +107,8 @@ split.</p>
 <span>  min_n <span class="op">=</span> <span class="fl">20L</span>,</span>
 <span>  min_anchors <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  max_splits <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  effects <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"main"</span>, <span class="st">"factorial"</span><span class="op">)</span></span>
+<span>  effects <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"main"</span>, <span class="st">"factorial"</span><span class="op">)</span>,</span>
+<span>  criterion <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"anova"</span>, <span class="st">"wald"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -142,6 +158,16 @@ of items.</p></dd>
 <code>"factorial"</code> also tests their interactions. The same model is
 used at every round and in the final DIF assessment.</p></dd>
 
+
+<dt id="arg-criterion">criterion<a class="anchor" aria-label="anchor" href="#arg-criterion"></a></dt>
+<dd><p><code>"anova"</code> flags and ranks items by the residual
+analysis of <code><a href="dif_anova.html">dif_anova</a></code> (uniform DIF only is split; a
+significant non-uniform term leaves the item for review).
+<code>"wald"</code> flags items by the conditional Wald test of
+<code><a href="dif_wald.html">dif_wald</a></code> on each factor's main effect and ranks them by
+the resolved location shift; it requires <code>effects = "main"</code> and
+does not test non-uniform DIF.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -155,11 +181,21 @@ used at every round and in the final DIF assessment.</p></dd>
   DIF, so the remaining-DIF count is a lower bound whenever
   <code>n_untested</code> is positive. A split copy answered in one level of its
   splitting factor only is not counted: its term is structurally absent,
-  not lost. <code>n_remaining_dif</code> is <code>NA</code> when no hypothesis was
-  estimable. <code>n_nonuniform</code> counts significant non-uniform item-factor
-  findings and is <code>NA</code> if any answerable non-uniform hypothesis is
-  unavailable, or no hypothesis was estimable. <code>n_untested</code> is always
-  a count. <code>effects</code> records the factor model used.</p>
+  not lost. A split's <code>magnitude</code> is <code>NA</code> when the
+  complete-design post-hoc comparison that supplies it failed or returned
+  no trustworthy finite estimate; the split still stands, and <code>notes</code>
+  names the item, the factor and the reason. An <code>NA</code> magnitude is an
+  unmeasured difference, not a zero one. <code>n_remaining_dif</code> is
+  <code>NA</code> when no hypothesis was estimable. <code>n_nonuniform</code> counts
+  significant non-uniform item-factor findings and is <code>NA</code> if any
+  answerable non-uniform hypothesis is unavailable, or no hypothesis was
+  estimable. <code>n_untested</code> is always a count. <code>effects</code> records
+  the factor model used and <code>criterion</code> the test. With the Wald
+  criterion <code>eta2</code> is <code>NA</code>, <code>magnitude</code> is the absolute
+  resolved shift the test compared (the range of the locations for more
+  than two levels), the <code>dif</code> table carries the <code>shift</code> and
+  <code>p_adj</code> of each item still flagged, and <code>n_nonuniform</code> is
+  <code>NA</code> because non-uniform DIF is not tested.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
@@ -170,21 +206,25 @@ used at every round and in the final DIF assessment.</p></dd>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="split_items.html">split_items</a></code> for a single split,
-  <code><a href="drop_items.html">drop_items</a></code> to remove an item instead, and
-  <code><a href="dif_anova.html">dif_anova</a></code> for the test it resolves.</p></div>
+  <code><a href="drop_items.html">drop_items</a></code> to remove an item instead,
+  <code><a href="dif_anova.html">dif_anova</a></code> and <code><a href="dif_wald.html">dif_wald</a></code> for the tests it
+  resolves.</p></div>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span>; <span class="va">n</span> <span class="op">&lt;-</span> <span class="fl">600</span></span></span>
-<span class="r-in"><span><span class="va">d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="op">-</span><span class="fl">2</span>, <span class="fl">2</span>, length.out <span class="op">=</span> <span class="fl">8</span><span class="op">)</span>; <span class="va">g</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"a"</span>, <span class="st">"b"</span><span class="op">)</span>, each <span class="op">=</span> <span class="va">n</span> <span class="op">/</span> <span class="fl">2</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">sh</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fl">0</span>, <span class="va">n</span>, <span class="fl">8</span><span class="op">)</span>; <span class="va">sh</span><span class="op">[</span><span class="va">g</span> <span class="op">==</span> <span class="st">"b"</span>, <span class="fl">3</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">1.2</span>      <span class="co"># one strong DIF item</span></span></span>
-<span class="r-in"><span><span class="va">X</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Binomial.html" class="external-link">rbinom</a></span><span class="op">(</span><span class="va">n</span> <span class="op">*</span> <span class="fl">8</span>, <span class="fl">1</span>, <span class="fu"><a href="https://rdrr.io/r/stats/Logistic.html" class="external-link">plogis</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/outer.html" class="external-link">outer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span>, <span class="va">d</span>, <span class="st">"-"</span><span class="op">)</span> <span class="op">-</span> <span class="va">sh</span><span class="op">)</span><span class="op">)</span>, <span class="va">n</span>, <span class="fl">8</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">X</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"I"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">8</span><span class="op">)</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span>; <span class="va">n</span> <span class="op">&lt;-</span> <span class="fl">300</span></span></span>
+<span class="r-in"><span><span class="va">d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="op">-</span><span class="fl">2</span>, <span class="fl">2</span>, length.out <span class="op">=</span> <span class="fl">6</span><span class="op">)</span>; <span class="va">g</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"a"</span>, <span class="st">"b"</span><span class="op">)</span>, each <span class="op">=</span> <span class="va">n</span> <span class="op">/</span> <span class="fl">2</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">sh</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fl">0</span>, <span class="va">n</span>, <span class="fl">6</span><span class="op">)</span>; <span class="va">sh</span><span class="op">[</span><span class="va">g</span> <span class="op">==</span> <span class="st">"b"</span>, <span class="fl">3</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">1.5</span>      <span class="co"># one strong DIF item</span></span></span>
+<span class="r-in"><span><span class="va">X</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Binomial.html" class="external-link">rbinom</a></span><span class="op">(</span><span class="va">n</span> <span class="op">*</span> <span class="fl">6</span>, <span class="fl">1</span>, <span class="fu"><a href="https://rdrr.io/r/stats/Logistic.html" class="external-link">plogis</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/outer.html" class="external-link">outer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span>, <span class="va">d</span>, <span class="st">"-"</span><span class="op">)</span> <span class="op">-</span> <span class="va">sh</span><span class="op">)</span><span class="op">)</span>, <span class="va">n</span>, <span class="fl">6</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">X</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"I"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="rasch.html">rasch</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span><span class="va">X</span>, grp <span class="op">=</span> <span class="va">g</span><span class="op">)</span>, factors <span class="op">=</span> <span class="st">"grp"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">resolve_dif</span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">$</span><span class="va">splits</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  order item factor base_item  eta2 magnitude</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>      1   I3    grp        I3 0.054     1.111</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      1   I3    grp        I3 0.108     1.726</span>
+<span class="r-in"><span><span class="fu">resolve_dif</span><span class="op">(</span><span class="va">fit</span>, criterion <span class="op">=</span> <span class="st">"wald"</span><span class="op">)</span><span class="op">$</span><span class="va">splits</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  order item factor base_item eta2 magnitude</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      1   I3    grp        I3          1.726</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

@@ -10,6 +10,8 @@ Fit Rasch models and estimate item and person parameters.
   : Fit a many-facet Rasch model
 - [`rasch_efrm()`](https://drjoshmcgrane.github.io/rasch/reference/rasch_efrm.md)
   : Fit the extended frame of reference model
+- [`rasch_cj()`](https://drjoshmcgrane.github.io/rasch/reference/rasch_cj.md)
+  : Calibrate items from responses and comparative judgements together
 - [`rasch_explanatory()`](https://drjoshmcgrane.github.io/rasch/reference/rasch_explanatory.md)
   : Fit an explanatory Rasch model
 - [`btl_explanatory()`](https://drjoshmcgrane.github.io/rasch/reference/btl_explanatory.md)
@@ -79,6 +81,8 @@ Examine DIF across groups or occasions and equate calibrations.
   : Pairwise follow-up comparisons for a DIF term
 - [`dif_size()`](https://drjoshmcgrane.github.io/rasch/reference/dif_size.md)
   : DIF differences between factor levels
+- [`dif_wald()`](https://drjoshmcgrane.github.io/rasch/reference/dif_wald.md)
+  : Conditional Wald test of DIF on the resolved calibration
 - [`split_items()`](https://drjoshmcgrane.github.io/rasch/reference/split_items.md)
   : Split items by a person factor to resolve DIF
 - [`drop_items()`](https://drjoshmcgrane.github.io/rasch/reference/drop_items.md)
@@ -89,6 +93,8 @@ Examine DIF across groups or occasions and equate calibrations.
   : Test item invariance across frames
 - [`resolve_dif()`](https://drjoshmcgrane.github.io/rasch/reference/resolve_dif.md)
   : Resolve differential item functioning by iterative item splitting
+- [`dtf()`](https://drjoshmcgrane.github.io/rasch/reference/dtf.md) :
+  Differential test and bundle functioning
 - [`equate_tests()`](https://drjoshmcgrane.github.io/rasch/reference/equate_tests.md)
   : Equate two test calibrations through their common items
 - [`tailored_analysis()`](https://drjoshmcgrane.github.io/rasch/reference/tailored_analysis.md)
@@ -146,6 +152,8 @@ Fit and examine models for dichotomous or ordered paired comparisons.
   : Information and targeting of a paired-comparison design
 - [`btl_next_pairs()`](https://drjoshmcgrane.github.io/rasch/reference/btl_next_pairs.md)
   : Recommend the next informative comparisons (adaptive step)
+- [`pl()`](https://drjoshmcgrane.github.io/rasch/reference/pl.md) : Rank
+  analysis with the Plackett-Luce model
 - [`judge_surprise()`](https://drjoshmcgrane.github.io/rasch/reference/judge_surprise.md)
   : Unexpected judgements of one judge
 - [`judge_pair_surprise()`](https://drjoshmcgrane.github.io/rasch/reference/judge_pair_surprise.md)
@@ -183,8 +191,12 @@ Plot fitted models and diagnostic results.
   : Plot category frequencies
 - [`plot_ccc()`](https://drjoshmcgrane.github.io/rasch/reference/plot_ccc.md)
   : Plot category probability curves
+- [`plot_cj()`](https://drjoshmcgrane.github.io/rasch/reference/plot_cj.md)
+  : Plot a joint calibration of responses and judgements
 - [`plot_distractors()`](https://drjoshmcgrane.github.io/rasch/reference/plot_distractors.md)
   : Plot multiple-choice option curves
+- [`plot_dtf()`](https://drjoshmcgrane.github.io/rasch/reference/plot_dtf.md)
+  : Plot differential test functioning
 - [`plot_equate()`](https://drjoshmcgrane.github.io/rasch/reference/plot_equate.md)
   : Plot a test-equating comparison
 - [`plot_facets()`](https://drjoshmcgrane.github.io/rasch/reference/plot_facets.md)
@@ -211,6 +223,8 @@ Plot fitted models and diagnostic results.
   : Plot person fit
 - [`plot_pimap()`](https://drjoshmcgrane.github.io/rasch/reference/plot_pimap.md)
   : Plot the person-item threshold distribution
+- [`plot_pl()`](https://drjoshmcgrane.github.io/rasch/reference/plot_pl.md)
+  : Plot Plackett-Luce object locations
 - [`plot_recovery()`](https://drjoshmcgrane.github.io/rasch/reference/plot_recovery.md)
   : Plot fitted against generating parameters
 - [`plot_resid_cor()`](https://drjoshmcgrane.github.io/rasch/reference/plot_resid_cor.md)
