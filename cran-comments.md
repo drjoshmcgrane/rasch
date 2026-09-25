@@ -59,11 +59,12 @@ need an installed package namespace.
 
 ## win-builder
 
-The submitted tarball was uploaded to win-builder for R-devel and
-R-release on 25 September 2026. R-devel (2026-09-21 r90579) returned
-0 errors, 0 warnings and 0 notes on Windows Server 2022: installation
-61 seconds; check 654 seconds. The R-release result for this tarball was
-still queued when these comments were written.
+The submitted tarball was uploaded to win-builder for R-release and
+R-devel on 25 September 2026. Both returned 0 errors, 0 warnings and
+0 notes on Windows Server 2022:
+
+* R-release (R 4.6.1): installation 58 seconds; check 572 seconds.
+* R-devel (2026-09-21 r90579): installation 61 seconds; check 654 seconds.
 
 An earlier build of this version, differing only in the `simulate_mfrm`
 example, passed R-release (R 4.6.1) with 0 errors, 0 warnings and 0 notes
@@ -71,6 +72,6 @@ example, passed R-release (R 4.6.1) with 0 errors, 0 warnings and 0 notes
 that example ran in 10.19 seconds against the ten-second Windows
 threshold, having taken 9.9 seconds in the same check of 1.13.0. The
 example now simulates four raters instead of six; it runs in 1.0 second
-locally and 4.5 seconds on win-builder R-devel, and still recovers the
+locally and 4.0 to 4.5 seconds on win-builder, and still recovers the
 rater severities. The `resolve_dif` example, which drew the same NOTE in
-an earlier upload of 1.13.0, ran in 7.4 seconds on win-builder R-devel.
+an earlier upload of 1.13.0, ran in 6.7 to 7.4 seconds on win-builder.
