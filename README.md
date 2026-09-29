@@ -88,8 +88,8 @@ rasch::run_app()
 The application imports data, assigns variables to their measurement roles,
 fits the selected model, and displays the resulting tables and plots. An
 analysis can be saved as a `.rasch` project and reopened with its data roles
-and estimation settings. Tables, figures and HTML, Word or PDF reports can be
-downloaded. The R code for each result is shown in the interface. Its
+and estimation settings. Tables, figures and Markdown, Word or PDF reports can
+be downloaded. The R code for each result is shown in the interface. Its
 fit bootstrap calibrates item and person fit, or pair, object and judge fit
 for comparative judgement, in a cancellable background process. Its adjusted
 probabilities refer to the fitted global null, separately for each statistic.

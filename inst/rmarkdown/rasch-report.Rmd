@@ -3,6 +3,7 @@ title: "Rasch measurement analysis"
 params:
   title: "Rasch measurement analysis"
   fit_file: null
+  figures: true
 output:
   html_document:
     self_contained: true
@@ -14,6 +15,9 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
                       dpi = 150, out.width = "100%")
 fit <- readRDS(params$fit_file)
 is_btl <- inherits(fit, "rasch_btl")
+# a Markdown report is one text file, so its figures are left out and
+# their section says where they are
+figures <- isTRUE(params$figures)
 reported_dimensionality <- attr(fit, "report_dimensionality")
 reported_subtest <- attr(fit, "report_subtest")
 # a refusal is kept so the document says why the dimensionality analysis is
@@ -134,7 +138,7 @@ cat(format(Sys.time(), "%d %B %Y, %H:%M"), "\n\n")
 ```
 
 ```{r html-layout, results='asis'}
-if (knitr::is_html_output()) cat(
+if (knitr::is_html_output(excludes = c("markdown", "gfm"))) cat(
   "<style>table{display:block;max-width:100%;overflow-x:auto;white-space:nowrap}",
   "img{max-width:100%;height:auto}</style>\n", sep = "")
 ```
@@ -205,6 +209,10 @@ if (!is_btl) {
   }
   cat("\n# Targeting and reliability\n\n")
   print(show_table(targeting_table(fit)))
+  if (!is.null(fit$score_table)) {
+    cat("\n# Score to measure\n\n")
+    print(show_table(score_table(fit)))
+  }
   cat("\n# Unidimensionality t-test\n\n")
   if (!is.null(reported_subtest$note)) {
     cat("Not available: ", report_text(reported_subtest$note), "\n\n",
@@ -238,6 +246,49 @@ if (!is_btl) {
     } else if (is.na(reported_subtest$multidimensional)) {
       cat(report_text(reported_subtest$verdict_note), "\n\n")
     }
+  }
+  cat("\n# Residual principal components\n\n")
+  if (!is.null(reported_dimensionality)) {
+    print(show_table(report_columns(as.data.frame(reported_dimensionality),
+      c("component", "eigenvalue", "proportion", "cumulative",
+        "reference_mean", "reference_critical", "parallel_p_adj",
+        "parallel_significant"))))
+    adjustment <- attr(reported_dimensionality, "parallel_adjustment",
+                       exact = TRUE)
+    if (!is.null(adjustment))
+      cat("The reference columns come from parallel analysis of simulated",
+          " residuals; `parallel_p_adj` carries the ",
+          report_text(adjustment), " adjustment.\n\n", sep = "")
+  } else if (!is.null(dimensionality_refusal)) {
+    cat("Not available: ", report_text(dimensionality_refusal), "\n\n",
+        sep = "")
+  }
+  cat("\n# Local dependence\n\n")
+  rc <- tryCatch(residual_correlations(fit),
+                 error = function(e) conditionMessage(e))
+  if (is.character(rc)) {
+    cat("Not available: ", report_text(rc), "\n\n", sep = "")
+  } else {
+    cat(sprintf(paste0(
+      "The average off-diagonal residual correlation is %.3f. Binary Q3 ",
+      "flags are withheld because there is no universal critical value; ",
+      "the pairs with the largest residual correlations follow, each with ",
+      "its excess over the average as `q3_star`.\n\n"), rc$average))
+    print(show_table(report_columns(utils::head(rc$pairs, 10L),
+      c("item_a", "item_b", "q3", "q3_star"))))
+  }
+  ctt <- tryCatch(ctt_table(fit), error = function(e) NULL)
+  if (!is.null(ctt)) {
+    cat("\n# Classical companions\n\n")
+    fmt_stat <- function(v, digits) if (length(v) == 1L && is.finite(v))
+      sprintf(paste0("%.", digits, "f"), v) else "unavailable"
+    cat("Complete cases n = ", ctt$n, "; raw score mean ",
+        fmt_stat(ctt$mean, 2), ", SD ", fmt_stat(ctt$sd, 2),
+        "; coefficient alpha ", fmt_stat(ctt$alpha, 3),
+        "; classical SEM ", fmt_stat(ctt$sem, 2), ".\n\n", sep = "")
+    if (!is.null(ctt$note))
+      cat(report_text(ctt$note), "\n\n", sep = "")
+    print(show_table(ctt$table))
   }
   cat("\n# Person estimates\n\n")
   print(show_table(report_columns(fit$person,
@@ -577,7 +628,13 @@ if (is_btl) {
 
 # Diagnostic figures
 
-```{r rasch-plots, fig.show='hold'}
+```{r figures-note, results='asis', eval=!figures}
+cat("The diagnostic figures are not part of this report; `save_outputs()`",
+    "writes them as image files, and the application's results archive",
+    "holds the same figures.\n\n")
+```
+
+```{r rasch-plots, fig.show='hold', eval=figures}
 if (!is_btl) {
   safe_plot(plot_pimap(fit))
   safe_plot(plot_tif(fit))
@@ -600,7 +657,7 @@ if (!is_btl) {
 }
 ```
 
-```{r btl-plots, fig.show='hold'}
+```{r btl-plots, fig.show='hold', eval=figures}
 if (is_btl) {
   safe_plot(plot_btl(fit))
   safe_plot(plot_btl_targeting(fit))

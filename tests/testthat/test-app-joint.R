@@ -402,11 +402,14 @@ test_that("uploaded judgements are checked, reach rasch_cj() and are reproduced 
     expect_identical(unname(cj$n), c(232L, 300L, 60L))
     code <- current_rcode()
     expect_match(code, 'cj_comparisons <- read.csv("comparisons.csv"', fixed = TRUE)
-    code <- sub('read.csv("responses.csv"', paste0('read.csv("', data_csv, '"'),
+    code <- sub('read.csv("responses.csv"',
+                paste0("read.csv(", encodeString(data_csv, quote = "\"")),
                 code, fixed = TRUE)
-    code <- sub('read.csv("comparisons.csv"', paste0('read.csv("', comp_csv, '"'),
+    code <- sub('read.csv("comparisons.csv"',
+                paste0("read.csv(", encodeString(comp_csv, quote = "\"")),
                 code, fixed = TRUE)
-    code <- sub('read.csv("rankings.csv"', paste0('read.csv("', rank_csv, '"'),
+    code <- sub('read.csv("rankings.csv"',
+                paste0("read.csv(", encodeString(rank_csv, quote = "\"")),
                 code, fixed = TRUE)
     env <- new.env(parent = globalenv())
     eval(parse(text = code), envir = env)

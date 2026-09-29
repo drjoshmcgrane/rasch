@@ -2,12 +2,12 @@
 % Please edit documentation in R/export.R
 \name{report_document}
 \alias{report_document}
-\title{Write an editable or print-ready analysis report}
+\title{Write a Markdown, HTML, Word or PDF analysis report}
 \usage{
 report_document(
   fit,
   file,
-  format = c("auto", "html", "docx", "pdf"),
+  format = c("auto", "md", "html", "docx", "pdf"),
   title = "Rasch measurement analysis",
   dif = NULL,
   bootstrap = NULL,
@@ -23,9 +23,14 @@ report_document(
 \item{fit}{A fitted object from \code{\link{rasch}}, \code{\link{rasch_mfrm}},
 \code{\link{rasch_efrm}}, \code{\link{btl}}, or \code{\link{btl_efrm}}.}
 
-\item{file}{Output path ending in \code{.html}, \code{.docx}, or \code{.pdf}.}
+\item{file}{Output path ending in \code{.md}, \code{.html}, \code{.docx},
+or \code{.pdf}.}
 
-\item{format}{Output format. By default it is inferred from \code{file}.}
+\item{format}{Output format. By default it is inferred from \code{file}.
+\code{"md"} writes GitHub-flavoured Markdown: the title is the first
+heading, the tables are pipe tables, and the diagnostic figures are left
+out so the report stays one text file that a person or a language model
+can read as it is.}
 
 \item{title}{Report title.}
 
@@ -56,24 +61,27 @@ precedence over a compatible result retained by the application.}
 Invisibly, the output path.
 }
 \description{
-Renders the active Rasch or paired-comparison fit as a self-contained HTML
-document, an editable Word document, or a PDF. The report contains the
-principal estimates, model-specific tables, diagnostic figures, and
-software provenance. Complete machine-readable results remain available
-from \code{\link{save_outputs}}. Reports downloaded from the application
+Renders the active Rasch or paired-comparison fit as one Markdown file, a
+self-contained HTML document, an editable Word document, or a PDF. The
+report contains the principal estimates, model-specific tables, diagnostic
+figures, and software provenance. Complete machine-readable results remain
+available from \code{\link{save_outputs}}. Reports downloaded from the application
 retain compatible tailored item shifts and externally weighted secondary
 person measures.
 For keyed fits with repeated person IDs, the report explains why distractor
 analysis is unavailable and retains the other model outputs.
 }
 \details{
-Word and HTML output require Pandoc, supplied with RStudio and
-  available through \pkg{rmarkdown}. PDF output also requires a LaTeX
-  installation such as TinyTeX.
+Markdown, Word and HTML output require Pandoc, supplied with
+  RStudio and available through \pkg{rmarkdown}; Markdown needs Pandoc 2.8
+  or later. PDF output also requires a LaTeX installation such as TinyTeX.
+  \code{\link{save_outputs}} writes the figures a Markdown report leaves
+  out.
 }
 \examples{
 \dontrun{
 fit <- rasch(matrix(rbinom(3000, 1, .5), 300, 10))
+report_document(fit, file.path(tempdir(), "analysis.md"))
 report_document(fit, file.path(tempdir(), "analysis.docx"))
 }
 }

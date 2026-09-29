@@ -533,7 +533,7 @@ knitr::include_graphics("figures/app-rcode.png")
 
 Under **More**, an analysis can be saved as a `.rasch` project and reopened
 with its data roles and estimation settings intact, or exported as tables,
-figures and an HTML, Word or PDF report. The same menu holds the simulation
+figures and a Markdown, Word or PDF report. The same menu holds the simulation
 designs of the plant-and-detect vignette and the model comparison that
 `compare_fits()` and `lr_test()` produce.
 

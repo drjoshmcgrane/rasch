@@ -555,6 +555,48 @@ test_that("report_document writes a self-contained HTML report", {
                "extension")
 })
 
+test_that("report_document writes a Markdown report as one text file", {
+  skip_if_not_installed("rmarkdown")
+  skip_if_not(rmarkdown::pandoc_available("2.8"))
+  set.seed(31)
+  X <- matrix(rbinom(120 * 5, 1, .5), 120, 5,
+              dimnames = list(NULL, paste0("I", 1:5)))
+  fit <- rasch(X)
+  dir <- tempfile("md-report")
+  dir.create(dir)
+  on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+  out <- file.path(dir, "analysis.md")
+
+  expect_identical(report_document(fit, out, title = "Study #1 (draft) *x*"),
+                   normalizePath(out))
+  # one file: no figure directory beside it
+  expect_identical(list.files(dir, all.files = TRUE, no.. = TRUE),
+                   "analysis.md")
+  lines <- readLines(out, warn = FALSE)
+  md <- paste(lines, collapse = "\n")
+  # the title is the first heading, escaped as pandoc escapes headings,
+  # and the sections sit one level below it
+  expect_identical(lines[1L], "# Study \\#1 (draft) \\*x\\*")
+  expect_true("## Analysis summary" %in% lines)
+  expect_true("## Score to measure" %in% lines)
+  expect_true("## Local dependence" %in% lines)
+  expect_true("## Classical companions" %in% lines)
+  expect_true("## Reproducibility" %in% lines)
+  expect_false(any(grepl("^# ", lines[-1L])))
+  # pipe tables, no HTML leaking from the html-only layout chunk,
+  # and no smart punctuation rewriting the text
+  expect_match(md, "\n| statistic | value |\n|:---|:---|\n", fixed = TRUE)
+  expect_false(grepl("<style", md, fixed = TRUE))
+  expect_false(grepl("<div", md, fixed = TRUE))
+  expect_false(grepl("[\u2018\u2019\u201c\u201d\u2014]", md, perl = TRUE))
+  # the figures are left out and their section says where they are
+  expect_match(md, "## Diagnostic figures\n\nThe diagnostic figures are not part of this report; `save_outputs()`",
+               fixed = TRUE)
+  expect_false(grepl("![", md, fixed = TRUE))
+  expect_error(report_document(fit, sub("md$", "docx", out), format = "md"),
+               "extension")
+})
+
 test_that("report_document escapes fitted names used as headings", {
   skip_if_not_installed("rmarkdown")
   skip_if_not(rmarkdown::pandoc_available())

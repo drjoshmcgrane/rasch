@@ -141,7 +141,8 @@ test_that("the anchor CSV for a rank analysis reaches pl() and its code", {
     expect_match(code, 'split = "half"', fixed = TRUE)
     expect_false(grepl("judge =", code, fixed = TRUE))
     env <- new.env(parent = globalenv())
-    code <- sub('read.csv("anchors.csv"', paste0('read.csv("', anchors, '"'),
+    code <- sub('read.csv("anchors.csv"',
+                paste0("read.csv(", encodeString(anchors, quote = "\"")),
                 code, fixed = TRUE)
     eval(parse(text = code), envir = env)
     expect_equal(env$rk$objects$location, k$objects$location)

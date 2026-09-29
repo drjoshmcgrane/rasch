@@ -2879,11 +2879,11 @@ panel_export <- nav_panel("Export", value = "p_export", icon = bs_icon("download
                     buttonLabel = "Open analysis…",
                     placeholder = "Choose a saved .rasch file"))),
       card(info_header("Analysis report",
-        "A formatted report of the active fit. HTML is self-contained; Word is editable; PDF requires a LaTeX installation such as TinyTeX."),
+        "A formatted report of the active fit. Markdown is one text file that an editor or a language model can read; Word is editable; PDF requires a LaTeX installation such as TinyTeX. The figures a Markdown report leaves out are in the results archive."),
         card_body(
           radioButtons("report_format", NULL,
-                       c("HTML" = "html", "Word" = "docx", "PDF" = "pdf"),
-                       selected = "html", inline = TRUE),
+                       c("Markdown" = "md", "Word" = "docx", "PDF" = "pdf"),
+                       selected = "md", inline = TRUE),
           downloadButton("dl_report", "Download report",
                          class = "btn-primary", icon = bs_icon("file-earmark-text")))),
       card(info_header("Model results archive",
@@ -3132,7 +3132,7 @@ ui <- page_navbar(
   nav_item(uiOutput("nav_status")),
   nav_item(downloadLink("dl_report_nav", label = bs_icon("file-earmark-text"),
                         class = "nav-link px-2",
-                        title = "Analysis report (HTML)")),
+                        title = "Analysis report (Markdown)")),
   nav_item(input_dark_mode())
 )
 
@@ -11666,15 +11666,16 @@ server <- function(input, output, session) {
     try(nav_select("nav", "p_summary", session = session), silent = TRUE)
   })
 
-  # The Export page offers HTML, Word and PDF. The navbar shortcut remains a
-  # one-click HTML report. Comparative Judgement uses the R Markdown report;
-  # the established self-contained HTML writer remains the richer Rasch path.
+  # The Export page offers Markdown, Word and PDF, all from the R Markdown
+  # report, and the navbar shortcut is a one-click Markdown report. The
+  # Markdown report leaves its figures out; the results archive holds them.
   fit_with_app_results <- function(f) {
     z <- person_weight_state()
     if (!is.null(z)) attr(f, "report_person_weights") <- z
     f
   }
-  report_content <- function(file, format = input$report_format %||% "html") {
+  report_labels <- c(md = "Markdown", html = "HTML", docx = "Word", pdf = "PDF")
+  report_content <- function(file, format = input$report_format %||% "md") {
     f <- if (!is.null(btl_fit())) bfit() else fit_or_null()
     if (is.null(f)) {
       showNotification(
@@ -11687,28 +11688,23 @@ server <- function(input, output, session) {
     }
     f <- fit_with_app_results(f)
     tailored <- if (inherits(f, "rasch_btl")) NULL else guess_res()
-    withProgress(message = paste("Building the", toupper(format), "report…"),
+    withProgress(message = paste("Building the", report_labels[[format]],
+                                 "report…"),
                  value = 0.4, {
-      if (identical(format, "html") && !inherits(f, "rasch_btl"))
-        report_html(f, file, dif = app_dif_res(strict = TRUE), bootstrap = app_boot_res(),
-                    dif_bootstrap = app_dif_boot_res(),
-                    dimensionality = app_dim_res(),
-                    subtest = app_subtest_res(strict = TRUE), invariance = app_inv_res(),
-                    tailored = tailored)
-      else report_document(f, file, format = format,
-                           dif = app_dif_res(strict = TRUE), bootstrap = app_boot_res(),
-                           dif_bootstrap = app_dif_boot_res(),
-                           dimensionality = app_dim_res(),
-                           subtest = app_subtest_res(strict = TRUE),
-                           invariance = app_inv_res(), tailored = tailored)
+      report_document(f, file, format = format,
+                      dif = app_dif_res(strict = TRUE), bootstrap = app_boot_res(),
+                      dif_bootstrap = app_dif_boot_res(),
+                      dimensionality = app_dim_res(),
+                      subtest = app_subtest_res(strict = TRUE),
+                      invariance = app_inv_res(), tailored = tailored)
     })
   }
   output$dl_report <- downloadHandler(
-    filename = function() paste0("rasch_report.", input$report_format %||% "html"),
-    content = function(file) report_content(file, input$report_format %||% "html"))
+    filename = function() paste0("rasch_report.", input$report_format %||% "md"),
+    content = function(file) report_content(file, input$report_format %||% "md"))
   output$dl_report_nav <- downloadHandler(
-    filename = function() "rasch_report.html",
-    content = function(file) report_content(file, "html"))
+    filename = function() "rasch_report.md",
+    content = function(file) report_content(file, "md"))
 
   output$dl_zip <- downloadHandler(
     filename = function() format(Sys.time(), "rasch_results_%Y%m%d_%H%M.zip"),

@@ -1390,13 +1390,13 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
   invisible(file)
 }
 
-#' Write an editable or print-ready analysis report
+#' Write a Markdown, HTML, Word or PDF analysis report
 #'
-#' Renders the active Rasch or paired-comparison fit as a self-contained HTML
-#' document, an editable Word document, or a PDF. The report contains the
-#' principal estimates, model-specific tables, diagnostic figures, and
-#' software provenance. Complete machine-readable results remain available
-#' from \code{\link{save_outputs}}. Reports downloaded from the application
+#' Renders the active Rasch or paired-comparison fit as one Markdown file, a
+#' self-contained HTML document, an editable Word document, or a PDF. The
+#' report contains the principal estimates, model-specific tables, diagnostic
+#' figures, and software provenance. Complete machine-readable results remain
+#' available from \code{\link{save_outputs}}. Reports downloaded from the application
 #' retain compatible tailored item shifts and externally weighted secondary
 #' person measures.
 #' For keyed fits with repeated person IDs, the report explains why distractor
@@ -1404,8 +1404,13 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
 #'
 #' @param fit A fitted object from \code{\link{rasch}}, \code{\link{rasch_mfrm}},
 #'   \code{\link{rasch_efrm}}, \code{\link{btl}}, or \code{\link{btl_efrm}}.
-#' @param file Output path ending in \code{.html}, \code{.docx}, or \code{.pdf}.
+#' @param file Output path ending in \code{.md}, \code{.html}, \code{.docx},
+#'   or \code{.pdf}.
 #' @param format Output format. By default it is inferred from \code{file}.
+#'   \code{"md"} writes GitHub-flavoured Markdown: the title is the first
+#'   heading, the tables are pipe tables, and the diagnostic figures are left
+#'   out so the report stays one text file that a person or a language model
+#'   can read as it is.
 #' @param dif,bootstrap Optional computed \code{\link{dif_anova}} and
 #'   \code{\link{fit_bootstrap}} results from this fit, rendered as run rather than
 #'   recomputed at defaults.
@@ -1424,17 +1429,20 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
 #'   precedence over a compatible result retained by the application.
 #' @param title Report title.
 #' @return Invisibly, the output path.
-#' @details Word and HTML output require Pandoc, supplied with RStudio and
-#'   available through \pkg{rmarkdown}. PDF output also requires a LaTeX
-#'   installation such as TinyTeX.
+#' @details Markdown, Word and HTML output require Pandoc, supplied with
+#'   RStudio and available through \pkg{rmarkdown}; Markdown needs Pandoc 2.8
+#'   or later. PDF output also requires a LaTeX installation such as TinyTeX.
+#'   \code{\link{save_outputs}} writes the figures a Markdown report leaves
+#'   out.
 #' @examples
 #' \dontrun{
 #' fit <- rasch(matrix(rbinom(3000, 1, .5), 300, 10))
+#' report_document(fit, file.path(tempdir(), "analysis.md"))
 #' report_document(fit, file.path(tempdir(), "analysis.docx"))
 #' }
 #' @export
 report_document <- function(fit, file,
-                            format = c("auto", "html", "docx", "pdf"),
+                            format = c("auto", "md", "html", "docx", "pdf"),
                             title = "Rasch measurement analysis",
                             dif = NULL, bootstrap = NULL,
                             dif_bootstrap = NULL, dimensionality = NULL,
@@ -1477,18 +1485,20 @@ report_document <- function(fit, file,
   format <- match.arg(format)
   ext <- tolower(tools::file_ext(file))
   if (format == "auto") {
-    format <- switch(ext, html = "html", htm = "html",
+    format <- switch(ext, md = "md", html = "html", htm = "html",
                      docx = "docx", pdf = "pdf", NA_character_)
     if (is.na(format))
-      stop("infer the report format from a .html, .docx, or .pdf filename")
+      stop("infer the report format from a .md, .html, .docx, or .pdf filename")
   }
-  wanted <- c(html = "html", docx = "docx", pdf = "pdf")[[format]]
+  wanted <- c(md = "md", html = "html", docx = "docx", pdf = "pdf")[[format]]
   if (!ext %in% c(wanted, if (format == "html") "htm"))
     stop("the filename extension does not match the requested format")
   if (!requireNamespace("rmarkdown", quietly = TRUE))
     stop("report_document() needs the suggested package rmarkdown")
   if (!rmarkdown::pandoc_available())
     stop("Pandoc is unavailable; install it or use RStudio's bundled Pandoc")
+  if (format == "md" && !rmarkdown::pandoc_available("2.8"))
+    stop("the Markdown report needs Pandoc 2.8 or later")
 
   template <- system.file("rmarkdown", "rasch-report.Rmd", package = "rasch")
   if (!nzchar(template)) {
@@ -1502,8 +1512,23 @@ report_document <- function(fit, file,
   saveRDS(fit, fit_file, version = 3)
   on.exit(unlink(fit_file), add = TRUE)
   meta <- c("--metadata", paste0("title=", title))
+  if (format == "md") {
+    # Pandoc's own Markdown template writes the title as YAML front matter.
+    # This one writes it as the first heading, with the report's sections
+    # shifted one level below it, and pandoc escapes the title as it does
+    # every heading. Figures would be separate image files, so the template
+    # is told to leave them out.
+    md_template <- tempfile("rasch-report-", fileext = ".gfm")
+    writeLines(c("$if(title)$", "# $title$", "", "$endif$", "$body$"),
+               md_template)
+    on.exit(unlink(md_template), add = TRUE)
+  }
   output_format <- switch(
     format,
+    md = rmarkdown::md_document(
+      variant = "gfm", md_extensions = "-smart",
+      pandoc_args = c("--standalone", "--template", md_template,
+                      "--shift-heading-level-by=1", "--wrap=none", meta)),
     html = rmarkdown::html_document(self_contained = TRUE,
                                     pandoc_args = meta),
     docx = rmarkdown::word_document(pandoc_args = meta),
@@ -1513,7 +1538,8 @@ report_document <- function(fit, file,
   rendered <- rmarkdown::render(
     input = template, output_format = output_format,
     output_file = basename(file), output_dir = dirname(file),
-    params = list(title = title, fit_file = fit_file),
+    params = list(title = title, fit_file = fit_file,
+                  figures = format != "md"),
     envir = env, quiet = TRUE)
   if (!file.exists(rendered))
     stop("the report renderer did not create the requested file")

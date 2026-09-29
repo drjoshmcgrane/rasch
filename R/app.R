@@ -4,7 +4,7 @@
 #'
 #' Opens the Shiny application for fitting models and examining their tables,
 #' plots and diagnostics. The R code for each result is available in the app.
-#' Analyses can be saved and reopened, or exported as HTML, Word or PDF
+#' Analyses can be saved and reopened, or exported as Markdown, Word or PDF
 #' reports.
 #'
 #' The app's interface packages ('shiny', 'bslib', 'DT', 'bsicons', and

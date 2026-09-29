@@ -376,7 +376,14 @@
             scores <- lapply(blocks, function(ii) {
               Xg <- X[ii, , drop = FALSE]
               A <- diag(length(ii)) - Xg %*% Xi %*% t(Xg)
-              if (!is.finite(rcond(A)) || rcond(A) < 1e-10) return(NULL)
+              # A has eigenvalues in [0, 1]; a zero means the design fits a
+              # direction of the cluster's rows exactly. The smallest
+              # eigenvalue is judged against the tolerance of the HC3
+              # leverage clamp below, not the relative condition number, which
+              # rates a one-row cluster well conditioned unless rounding
+              # lands its single entry on exact zero.
+              ev <- eigen(A, symmetric = TRUE, only.values = TRUE)$values
+              if (!all(is.finite(ev)) || min(ev) < 1e-8) return(NULL)
               drop(crossprod(Xg, solve(A, er[ii])))
             })
             bad_cluster <- any(vapply(scores, is.null, TRUE))
