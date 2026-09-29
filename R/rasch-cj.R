@@ -671,7 +671,10 @@
 #'   parameter scale.
 #' @return An object of class \code{"rasch_cj"} with components
 #'   \code{items} (item, location, se, and the separate calibration of each
-#'   item-level object from each frame on the reference scale),
+#'   item-level object from each frame in the reference unit, retaining
+#'   each frame's own origins), \code{frame_locations} (separate item
+#'   locations for plotting, aligned to the combined origin within each
+#'   connected block, with the frame, item, block and location),
 #'   \code{thresholds} (item, k, threshold, se), \code{objects} (the judged
 #'   objects and the frames reaching them), \code{units} (frame, unit, se,
 #'   and whether it was estimated), \code{invariance} (a list with the
@@ -683,6 +686,8 @@
 #'   \code{reference} frame, the \code{tests} named in \code{data}, and
 #'   \code{notes}. The per-object invariance table has an \code{against}
 #'   column naming the frame each row is compared with.
+#'   \code{invariance$n_contrasts} counts the planned object contrasts,
+#'   including those withheld when a separate calibration fails.
 #'
 #'   In the person mode, \code{mode} is \code{"persons"} and the object
 #'   holds \code{persons} (person, n_items, raw, max_raw, the combined
@@ -1096,7 +1101,7 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
   # unit, with one constraint per connected block of its own design; the
   # result is kept on the object scale, lam over all objects with NA where
   # the frame does not reach.
-  sep <- list(); judged <- list(); blocks <- list()
+  sep <- list(); judged <- list(); blocks <- list(); item_blocks <- list()
   for (t in test_names) {
     o <- o_list[[t]]
     if (!nrow(o$A)) next
@@ -1124,6 +1129,7 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
                      ll = fit_t$ll, n_free = fit_t$n_free, converged = fit_t$converged)
     judged[[t]] <- jo
     blocks[[t]] <- components[match(obj_of_item[jo], cols[inf])]
+    item_blocks[[t]] <- setNames(components, item_names[cols[inf]])
   }
   frame_alone <- function(ll, parts, adj_f) {
     jo <- which(rowSums(adj_f) > 0)
@@ -1247,6 +1253,7 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
   # each frame's separate calibration on the reference scale: divided by
   # the fitted unit and centred within each block of the frame's design
   scaled <- list()
+  frame_locations <- list()
   for (f in names(sep)) {
     u <- unit_of(th, f); jo <- judged[[f]]; comp <- blocks[[f]]
     C <- matrix(0, length(jo), length(jo))
@@ -1270,16 +1277,43 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
       col[match(obj_item[jo][at_item], item_names)] <- lam_f[jo][at_item]
       item_tab[[paste0("location_", f)]] <- col
     }
+    # Only origins are aligned for display. A response frame reaches all
+    # its informative items, including those without any judgements. A
+    # judgement frame reaches its judged objects (items or thresholds).
+    display <- which(is.finite(col))
+    if (f %in% test_names) {
+      item_block <- unname(item_blocks[[f]][item_names[display]])
+      block_ids <- unique(item_block)
+      shift <- vapply(block_ids, function(g) {
+        ii <- display[item_block == g]
+        mean(delta[ii] - col[ii])
+      }, 0.0)
+    } else {
+      item_block <- comp[at_item][match(display, obj_of_item[jo][at_item])]
+      block_ids <- unique(comp)
+      shift <- vapply(block_ids, function(g) {
+        jj <- jo[comp == g]
+        mean(as.vector(O[jj, , drop = FALSE] %*% psi) - lam_f[jj])
+      }, 0.0)
+    }
+    aligned <- col[display] + shift[match(item_block, block_ids)]
+    if (!isTRUE(sep[[f]]$converged)) aligned[] <- NA_real_
+    frame_locations[[f]] <- data.frame(frame = rep(f, length(display)),
+      item = item_names[display],
+      block = item_block, location = aligned, stringsAsFactors = FALSE)
   }
   # per-object Wald contrasts: every frame against the reference on the
   # objects both reach, and every test after the first against every
   # judgement frame, centred within the blocks the two designs share
+  n_contrasts <- 0L
   contrast <- function(f, g) {
-    if (!isTRUE(sep[[f]]$converged) || !isTRUE(sep[[g]]$converged))
-      return(NULL)
     a <- scaled[[f]]; b <- scaled[[g]]
     common <- intersect(a$jo, b$jo)
     if (length(common) < 2L) return(NULL)
+    n_contrasts <<- n_contrasts + length(common)
+    if (!isTRUE(fit$converged) || !isTRUE(sep[[f]]$converged) ||
+        !isTRUE(sep[[g]]$converged))
+      return(NULL)
     blk <- paste(a$comp[match(common, a$jo)], b$comp[match(common, b$jo)])
     nc <- length(common); C <- matrix(0, nc, nc)
     for (k in unique(blk)) { rows <- blk == k; C[rows, rows] <- -1 / sum(rows) }
@@ -1312,7 +1346,7 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
                row.names = NULL)
   }
   inv_tab <- NULL
-  if (fit$converged && !is.null(scaled[[ref]])) {
+  if (!is.null(scaled[[ref]])) {
     for (f in setdiff(names(scaled), ref)) inv_tab <- rbind(inv_tab, contrast(f, ref))
     for (t in setdiff(test_names, ref))
       for (j in intersect(c("comparisons", "rankings"), names(scaled)))
@@ -1328,8 +1362,10 @@ rasch_cj <- function(data, comparisons = NULL, object_a = "object_a",
                         stringsAsFactors = FALSE, row.names = NULL)
 
   structure(list(items = item_tab, thresholds = thr_tab, objects = obj_tab,
+                 frame_locations = do.call(rbind, frame_locations),
                  units = units_tab,
-                 invariance = list(lr = lr, items = inv_tab),
+                 invariance = list(lr = lr, items = inv_tab,
+                                   n_contrasts = n_contrasts),
                  anchors = anchors, cov = cov_p, cov_items = cov_d,
                  loglik = fit$ll, loglik_separate = ll_sep,
                  converged = fit$converged, iterations = fit$iterations,
@@ -1386,14 +1422,12 @@ print.rasch_cj <- function(x, ...) {
     }
   } else {
     tab <- x$invariance$items
-    if (!is.null(tab)) {
-      hit <- !is.na(tab$p_adj) & tab$p_adj < 0.05
-      lab <- if ("threshold" %in% names(tab))
-        ifelse(is.na(tab$threshold), tab$item, paste0(tab$item, ":", tab$threshold))
-      else tab$item
-      cat(sprintf("Objects differing between frames (Holm p < 0.05): %s\n",
-                  if (any(hit)) paste(unique(lab[hit]), collapse = ", ") else "none"))
-    }
+    lab <- if ("threshold" %in% names(tab))
+      ifelse(is.na(tab$threshold), tab$item, paste0(tab$item, ":", tab$threshold))
+    else tab$item
+    inv <- .invariance_summary(tab, lab, x$invariance$n_contrasts)
+    cat(sprintf("Objects differing between frames (Holm p < 0.05): %s\n",
+                inv$text))
   }
   for (n in x$notes) cat("Note: ", n, "\n", sep = "")
   invisible(x)

@@ -958,12 +958,12 @@ print.rasch_pl <- function(x, ...) {
   }
   if (!is.null(x$invariance)) {
     v <- x$invariance
-    flag <- v$objects$object[!is.na(v$objects$p_adj) & v$objects$p_adj < 0.05]
+    inv <- .invariance_summary(v$objects, v$objects$object)
     cat(sprintf(paste0("Invariance check (%s vs %s): LR = %.2f on %d df, ",
                        "p = %s; objects moving (Holm p < 0.05): %s\n"),
                 v$labels[1], v$labels[2], v$lr, v$df,
                 if (is.finite(v$p)) .fmt_p(v$p) else "withheld",
-                if (length(flag)) paste(flag, collapse = ", ") else "none"))
+                inv$text))
   }
   print(.fmt_df(x$objects[, c("object", "location", "se", "rankings",
                               "chosen", "fit_resid", "extreme")]),

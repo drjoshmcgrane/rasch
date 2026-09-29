@@ -26,4 +26,5 @@
 ^tools/simval$
 ^tools/vignettes$
 ^tools/audit-september-additions\.(R|md)$
+^tools/audit-september-app\.(R|md)$
 ^vignettes/articles$

@@ -712,6 +712,14 @@ test_that("two disconnected tests are calibrated together with a unit for the se
   expect_true(all(is.na(it$location_B[seq_len(10)])))
   expect_true(all(is.na(it$location_A[10 + seq_len(10)])))
   expect_true(all(is.finite(it$location_A[seq_len(10)])))
+  # Separate tests have unrelated origins; their plot markers must align
+  # each test to the combined locations on the items that test reaches.
+  for (frame in c("A", "B")) {
+    loc <- fit$frame_locations[fit$frame_locations$frame == frame, ]
+    idx <- match(loc$item, it$item)
+    expect_equal(mean(loc$location), mean(it$location[idx]))
+    expect_equal(diff(loc$location), diff(it[[paste0("location_", frame)]][idx]))
+  }
   # the separate calibration of B is in B's own unit; scaled by the unit
   # it matches the joint locations
   expect_lt(sqrt(mean((it$location_B[10 + 1:10] -

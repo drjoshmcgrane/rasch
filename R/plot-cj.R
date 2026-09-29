@@ -12,11 +12,13 @@
 #' combined location of each item with its 95 per cent interval, and beside
 #' it the location each frame (the responses, the comparisons, the rankings,
 #' or each test when several are linked) gives the item on its own, expressed
-#' on the reference scale. The spread of the frame markers around the
-#' combined location is the evidence the invariance test summarises; an item
-#' whose location differs between frames at a Holm-adjusted p below .05 in
-#' the per-object invariance table is drawn in red. A frame that does not
-#' reach an item leaves no marker for it.
+#' in the reference unit. Each connected block of a frame is shifted to
+#' match the mean combined location of the objects it reaches. The markers
+#' show relative placements, not differences between arbitrary origins. An item
+#' is drawn in red when an item or threshold contrast in the invariance table
+#' has a Holm-adjusted p below .05. A frame that does not
+#' reach an item, or whose separate calibration did not converge, leaves no
+#' marker for it.
 #'
 #' @param fit An item-mode object from \code{\link{rasch_cj}}.
 #' @param frames Logical; draw the separate calibration of each frame beside
@@ -52,9 +54,19 @@ plot_cj <- function(fit, frames = TRUE) {
   d <- fit$items[order(fit$items$location), ]
   k <- nrow(d)
   sep <- if (frames) grep("^location_", names(d), value = TRUE) else character(0)
+  if (length(sep) && is.null(fit$frame_locations)) {
+    warning("separate-frame origins are unavailable in this saved fit; ",
+            "refit to draw the frame markers", call. = FALSE)
+    sep <- character(0)
+  }
   frame_names <- sub("^location_", "", sep)
-  # An item moves when any judgement frame places it away from its reference
-  # location; the per-object table carries one row per frame and object.
+  for (j in seq_along(sep)) {
+    loc <- fit$frame_locations
+    loc <- loc[loc$frame == frame_names[j], , drop = FALSE]
+    d[[sep[j]]] <- loc$location[match(d$item, loc$item)]
+  }
+  # Flag an item when any of its item or threshold contrasts is significant;
+  # a threshold contrast need not imply a difference in the item mean.
   tab <- fit$invariance$items
   moved <- if (is.null(tab)) rep(FALSE, k) else
     d$item %in% tab$item[!is.na(tab$p_adj) & tab$p_adj < 0.05]

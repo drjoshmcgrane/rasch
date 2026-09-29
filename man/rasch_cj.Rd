@@ -89,7 +89,10 @@ parameter scale.}
 \value{
 An object of class \code{"rasch_cj"} with components
   \code{items} (item, location, se, and the separate calibration of each
-  item-level object from each frame on the reference scale),
+  item-level object from each frame in the reference unit, retaining
+  each frame's own origins), \code{frame_locations} (separate item
+  locations for plotting, aligned to the combined origin within each
+  connected block, with the frame, item, block and location),
   \code{thresholds} (item, k, threshold, se), \code{objects} (the judged
   objects and the frames reaching them), \code{units} (frame, unit, se,
   and whether it was estimated), \code{invariance} (a list with the
@@ -101,6 +104,8 @@ An object of class \code{"rasch_cj"} with components
   \code{reference} frame, the \code{tests} named in \code{data}, and
   \code{notes}. The per-object invariance table has an \code{against}
   column naming the frame each row is compared with.
+  \code{invariance$n_contrasts} counts the planned object contrasts,
+  including those withheld when a separate calibration fails.
 
   In the person mode, \code{mode} is \code{"persons"} and the object
   holds \code{persons} (person, n_items, raw, max_raw, the combined

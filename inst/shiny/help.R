@@ -62,11 +62,11 @@ APP_HELP <- c(
     "orientation fitting better suggests the rank column reads the wrong way."
   ),
   metric_invariance = paste(
-    "Likelihood-ratio test of whether the object locations estimated from",
-    "different choice positions agree. A small probability suggests the",
-    "objects are not being ordered by the same trait at every stage. With",
-    "judge-clustered rankings the test is withheld and the tile counts the",
-    "objects whose location moves (Holm-adjusted p below .05)."
+    "Tests agreement between object locations from different choice positions.",
+    "With judge-clustered rankings the likelihood-ratio test is withheld;",
+    "the tile instead counts objects that move (Holm-adjusted p below .05),",
+    "with the number of estimable contrasts. Unavailable tests are not",
+    "counted as passes."
   ),
   pl_fitsum_tbl = paste(
     "The Plackett-Luce rank analysis: design, convergence, standard-error",
@@ -137,14 +137,16 @@ APP_HELP <- c(
   ),
   joint_map = paste(
     "Each item's combined location with its 95 per cent interval, and the",
-    "location each frame gives the item on its own, on the scale of the",
-    "responses. An item whose location differs between frames at a",
-    "Holm-adjusted probability below .05 is drawn in red."
+    "location from each frame in the response unit. Separate locations are",
+    "aligned to the combined origin within each connected block. An item",
+    "is red when an item or threshold contrast has a Holm-adjusted",
+    "probability below .05."
   ),
   joint_items_tbl = paste(
     "One row per item: the combined location and standard error from every",
     "frame together, then the location each frame gives the item alone,",
-    "expressed on the scale of the responses."
+    "expressed in the response unit but retaining each frame's own origins.",
+    "The calibration map aligns these origins for comparison."
   ),
   joint_thresholds_tbl = paste(
     "One row per threshold of a polytomous item: the combined estimate",
@@ -440,12 +442,11 @@ APP_HELP <- c(
     "within each level of the selected factor, from the conditional refit."
   ),
   dtf_test_tbl = paste(
-    "Compares each group's expected test score with the reference group's",
-    "over the location scale, the split items placed on one scale by the",
-    "unsplit anchors. Signed functioning (sDTF) lets item shifts cancel;",
-    "unsigned functioning (uDTF) does not. Both are reported in logits,",
-    "score units and as a percentage of the maximum score, with the mean",
-    "item shift and its test."
+    "Compares expected test scores between groups on the scale set by the",
+    "unsplit anchors. Signed functioning lets differences cancel across",
+    "person locations; unsigned functioning does not. Opposing item effects",
+    "can cancel within either test-level summary. Results include logits,",
+    "score units, percentage of maximum score, and the mean item shift."
   ),
   dtf_items_tbl = paste(
     "Reports each item's location in the reference group and the compared",
@@ -465,9 +466,9 @@ APP_HELP <- c(
   dtf_plot = paste(
     "Above, the expected test score of the reference group (solid) and the",
     "plotted group (dashed) over the location scale. Below, the score",
-    "difference, reference minus group, with its confidence band; a curve",
-    "leaving the band marks the locations at which the test functions",
-    "differently for the two groups."
+    "difference, reference minus group, with its pointwise 95 per cent",
+    "confidence band. Excluding zero indicates a difference at that location,",
+    "not a simultaneous test over the whole curve."
   ),
 
   # Facets and frames ------------------------------------------------------

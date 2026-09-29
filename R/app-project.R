@@ -38,6 +38,9 @@
     if (!nzchar(name))
       stop(sprintf("bundle line %d needs the form name: item, item, ...", i),
            call. = FALSE)
+    if (name %in% names(out))
+      stop(sprintf("bundle line %d repeats the name '%s'; use distinct bundle names",
+                   i, name), call. = FALSE)
     members <- unique(trimws(strsplit(parts[2L], ",", fixed = TRUE)[[1L]]))
     members <- members[nzchar(members)]
     if (length(members) < 2L)

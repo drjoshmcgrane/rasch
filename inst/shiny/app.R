@@ -224,6 +224,7 @@ NONE_CH <- c(None = "(none)")
 .has_repeated_residual_units <-
   .rasch_internal(".has_repeated_residual_units")
 .parse_dif_bundles <- .rasch_internal(".parse_dif_bundles")
+.invariance_summary <- .rasch_internal(".invariance_summary")
 .app_dif_bundles <- .rasch_internal(".app_dif_bundles")
 .dif_bundles <- .rasch_internal(".dif_bundles")
 .fit_boot_signature <- .rasch_internal(".fit_boot_signature")
@@ -2847,7 +2848,7 @@ panel_joint <- nav_panel("Joint calibration", value = "p_joint",
         footer = uiOutput("joint_fitsum_notes"))),
       plotCard("joint_map", "Calibration map", height = "520px")),
     tableCard("joint_items_tbl", "Items",
-      note = "One row per item: the combined location with its standard error, then the location each frame gives the item on its own, expressed on the scale of the responses."),
+      note = "One row per item: the combined location with its standard error, then each frame's separate location in the response unit, retaining its own origins. The calibration map aligns these origins."),
     conditionalPanel("output.joint_has_thresholds == true",
       tableCard("joint_thresholds_tbl", "Thresholds",
         note = "One row per threshold of a polytomous item: the combined estimate and its standard error.")),
@@ -6236,8 +6237,7 @@ server <- function(input, output, session) {
   output$pl_boxes <- renderUI({
     k <- rk()
     rv <- k$reversal; iv <- k$invariance
-    n_moved <- if (is.null(iv)) 0L
-      else sum(!is.na(iv$objects$p_adj) & iv$objects$p_adj < 0.05)
+    inv <- .invariance_summary(iv$objects, iv$objects$object)
     metric_grid(
       metric_tile("metric_objects", "Objects", nrow(k$objects), icon = "podium"),
       metric_tile("metric_rankings", "Rankings", k$n_rankings,
@@ -6261,17 +6261,21 @@ server <- function(input, output, session) {
                               "fits better" else "fits worse"),
                   icon = "range",
                   status = if (is.null(rv) || !finite1(rv$p)) "neutral"
-                    else if (rv$p >= 0.05) "good" else "bad"),
+                    else if (rv$p >= 0.05 ||
+                             rv$loglik_forward >= rv$loglik_reversed) "good"
+                    else "bad"),
       metric_tile("metric_invariance", "Invariance",
                   if (is.null(iv)) "Unavailable"
                   else if (finite1(iv$p)) fmt_p(iv$p)
-                  else sprintf("%d moving", n_moved),
-                  if (!is.null(iv)) sprintf("%s vs %s", iv$labels[1], iv$labels[2]),
+                  else if (!inv$tested) "Unavailable"
+                  else sprintf("%d moving", inv$n_moved),
+                  if (!is.null(iv)) sprintf("%s vs %s; %s", iv$labels[1],
+                                           iv$labels[2], inv$coverage),
                   icon = "chisq",
                   status = if (is.null(iv)) "neutral"
                     else if (finite1(iv$p)) {
                       if (iv$p >= 0.05) "good" else "bad"
-                    } else if (n_moved == 0L) "good" else "bad"))
+                    } else inv$status))
   })
   register_code("pl_boxes", function() "rk")
   pl_summary_table <- function(k) {
@@ -6419,8 +6423,7 @@ server <- function(input, output, session) {
   }, code = function() "rk$invariance$objects")
   output$pl_invariance_note <- renderUI({
     iv <- rk()$invariance; req(iv)
-    moved <- iv$objects$object[!is.na(iv$objects$p_adj) &
-                                 iv$objects$p_adj < 0.05]
+    inv <- .invariance_summary(iv$objects, iv$objects$object)
     g <- iv$groups
     sprintf(paste(
       "Note. %s: %d stages over %d objects; %s: %d stages over %d objects.",
@@ -6428,7 +6431,7 @@ server <- function(input, output, session) {
       "calibrate unless both are anchored. Objects moving (Holm p < .05): %s."),
       g$group[1], g$stages[1], g$objects[1], g$group[2], g$stages[2],
       g$objects[2], iv$labels[1], iv$labels[2],
-      if (length(moved)) paste(moved, collapse = ", ") else "none")
+      inv$text)
   })
 
   # ---------------------------------------------------- joint calibration --
@@ -6448,10 +6451,9 @@ server <- function(input, output, session) {
     if ("threshold" %in% names(tab))
       ifelse(is.na(tab$threshold), tab$item, paste0(tab$item, ":", tab$threshold))
     else tab$item
-  joint_moving <- function(k) {
+  joint_invariance <- function(k) {
     tab <- k$invariance$items
-    if (is.null(tab)) return(character(0))
-    unique(joint_object_labels(tab)[!is.na(tab$p_adj) & tab$p_adj < 0.05])
+    .invariance_summary(tab, joint_object_labels(tab), k$invariance$n_contrasts)
   }
   joint_reference <- function(k) k$reference %||% "responses"
   joint_unit_label <- function(u)
@@ -6461,7 +6463,7 @@ server <- function(input, output, session) {
   output$joint_boxes <- renderUI({
     k <- cj()
     lr <- k$invariance$lr
-    n_moved <- length(joint_moving(k))
+    inv <- joint_invariance(k)
     unit_tile <- function(id, frame, label, icon) {
       u <- k$units[k$units$frame == frame, , drop = FALSE]
       if (!nrow(u)) return(NULL)
@@ -6489,13 +6491,15 @@ server <- function(input, output, session) {
                   icon = "chisq",
                   status = if (is.null(lr) || !finite1(lr$p)) "neutral"
                     else if (lr$p >= 0.05) "good" else "bad"),
-      metric_tile("metric_joint_moving", "Objects moving", n_moved,
-                  "differ between frames, Holm p < .05", icon = "outlier",
-                  status = if (n_moved == 0L) "good" else "bad"))
+      metric_tile("metric_joint_moving", "Objects moving",
+                  if (inv$tested) inv$n_moved else "Unavailable",
+                  paste0("Holm p < .05; ", inv$coverage), icon = "outlier",
+                  status = inv$status))
   })
   register_code("joint_boxes", function() "cj")
   joint_summary_table <- function(k) {
     lr <- k$invariance$lr
+    inv <- joint_invariance(k)
     units <- k$units[k$units$frame != joint_reference(k), , drop = FALSE]
     data.frame(statistic = c(
       "Items", "Thresholds", "Informative persons", "Comparisons", "Rankings",
@@ -6504,7 +6508,8 @@ server <- function(input, output, session) {
       sprintf("Unit of %s", units$frame),
       sprintf("Unit se of %s", units$frame),
       "Invariance LR", "Invariance df", "Invariance p",
-      "Objects moving (Holm p < .05)", "Free item"),
+      "Objects moving (Holm p < .05)", "Object contrasts tested",
+      "Object contrasts withheld", "Free item"),
       value = c(
         nrow(k$items),
         if (is.null(k$thresholds)) nrow(k$items) else nrow(k$thresholds),
@@ -6515,7 +6520,7 @@ server <- function(input, output, session) {
         if (is.null(lr)) NA else round(lr$statistic, 3),
         if (is.null(lr)) NA else lr$df,
         if (is.null(lr)) NA else round(lr$p, 4),
-        length(joint_moving(k)), .app_joint_free_item(k)),
+        inv$n_moved, inv$tested, inv$withheld, .app_joint_free_item(k)),
       stringsAsFactors = FALSE)
   }
   register_stat_box("joint_fitsum_tbl",
@@ -6538,7 +6543,7 @@ server <- function(input, output, session) {
         if (k$n[["rankings"]] > 0) sprintf("%d rankings", k$n[["rankings"]])),
         collapse = " · ")
       units <- k$units[k$units$frame != joint_reference(k), , drop = FALSE]
-      moved <- joint_moving(k)
+      inv <- joint_invariance(k)
       tagList(
         div(class = "stat-head",
             "Joint calibration of responses and judgements · full likelihood · ",
@@ -6559,8 +6564,7 @@ server <- function(input, output, session) {
                              lr$statistic, lr$df)
                    else "withheld"),
           stat_row("Objects differing between frames (Holm p < .05)",
-                   if (length(moved)) paste(moved, collapse = ", ")
-                   else "none"),
+                   inv$text),
           stat_row("Anchored in the response analysis",
                    sprintf("every item but %s, which is left free",
                            .app_joint_free_item(k)))))
@@ -6587,15 +6591,15 @@ server <- function(input, output, session) {
     style_lo_red(num_dt(d), d, "p_adj", 0.05)
   }, code = function() "cj$invariance$items")
   output$joint_invariance_note <- renderUI({
-    k <- cj(); tab <- k$invariance$items; req(tab)
-    moved <- joint_moving(k)
+    k <- cj()
+    inv <- joint_invariance(k)
     sprintf(paste(
       "Note. Each frame calibrates the objects on its own, expressed on the",
       "scale of the %s; the difference is the frame's location minus the",
       "reference location, with its standard error, z and Holm-adjusted",
       "probability. Objects differing between frames (Holm p < .05): %s."),
       joint_reference(k),
-      if (length(moved)) paste(moved, collapse = ", ") else "none")
+      inv$text)
   })
   register_table("joint_anchors_tbl", function() .app_joint_anchors(cj()),
                  function() num_dt(.app_joint_anchors(cj())),
@@ -8230,7 +8234,7 @@ server <- function(input, output, session) {
     if (!length(b)) return("")
     nm <- names(b)
     key <- ifelse(make.names(nm) == nm, nm,
-                  sprintf("`%s`", gsub("`", "\\`", nm, fixed = TRUE)))
+                  qstr(nm))
     sprintf("list(%s)", paste(sprintf("%s = %s", key, vapply(b, qvec, "")),
                               collapse = ", "))
   }

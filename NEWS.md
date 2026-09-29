@@ -1,5 +1,15 @@
 # rasch 1.14.0
 
+* Ranking and joint-calibration summaries distinguish unavailable invariance
+  tests from nonsignificant results. The reversal indicator follows which
+  ranking orientation fits better, not just whether the test is significant.
+* `plot_cj()` aligns separate calibrations to the combined origin within
+  each connected block and omits markers from failed separate calibrations.
+  Estimates, standard errors and invariance tests are unchanged.
+* The app refuses repeated bundle names and preserves special characters
+  in the generated R code. DTF help clarifies test-level cancellation and
+  pointwise confidence bands.
+
 * The Shiny app calibrates items jointly from responses and judgements.
   Paired comparisons or rankings of the items are uploaded as CSV files
   beside the anchors, or come with the new "Joint calibration" example
