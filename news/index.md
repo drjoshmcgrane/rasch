@@ -50,6 +50,16 @@
   reason, on every platform and not only where rounding lands on zero;
   estimates and the other tests are unchanged.
 
+- A DIF term identified only by persons the model fits exactly, as when
+  an item is observed in one group’s class intervals except one interval
+  in which every person of each group has the same residual mean, has a
+  robust (HC3 or CR3) covariance of zero, and the sign of the rounding
+  noise left in it decided between a withheld test and a p-value of
+  zero. The test is now withheld on every platform, with that reason
+  given: the robust covariance is judged against the model-based
+  covariance of the same coefficients. Estimates and every other test
+  are unchanged.
+
 - The Shiny app calibrates items jointly from responses and judgements.
   Paired comparisons or rankings of the items are uploaded as CSV files
   beside the anchors, or come with the new “Joint calibration” example
