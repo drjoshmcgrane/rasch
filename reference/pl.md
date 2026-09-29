@@ -211,7 +211,7 @@ fit
 #> Maximum likelihood: converged in 5 iterations; sandwich SEs clustered by ranking
 #> Object separation index 0.979
 #> Reversal check on 60 complete rankings: best-first log-likelihood -217.06, worst-first -226.30; Vuong z = 1.77, p = 0.076; location correlation 0.989
-#> Invariance check (first choice vs later choices): LR = 5.24 on 4 df, p = 0.264; objects moving (Holm p < 0.05): none
+#> Invariance check (first choice vs later choices): LR = 5.24 on 4 df, p = 0.264; objects moving (Holm p < 0.05): none (5 contrasts tested)
 #>  object location    se rankings chosen fit_resid extreme
 #>       A   -1.617 0.201       60     19    -0.311        
 #>       B   -0.491 0.165       60     48     0.435        

@@ -178,7 +178,10 @@ parameter scale.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>An object of class <code>"rasch_cj"</code> with components
   <code>items</code> (item, location, se, and the separate calibration of each
-  item-level object from each frame on the reference scale),
+  item-level object from each frame in the reference unit, retaining
+  each frame's own origins), <code>frame_locations</code> (separate item
+  locations for plotting, aligned to the combined origin within each
+  connected block, with the frame, item, block and location),
   <code>thresholds</code> (item, k, threshold, se), <code>objects</code> (the judged
   objects and the frames reaching them), <code>units</code> (frame, unit, se,
   and whether it was estimated), <code>invariance</code> (a list with the
@@ -189,7 +192,9 @@ parameter scale.</p></dd>
   <code>converged</code>, <code>iterations</code>, frame sizes in <code>n</code>, the
   <code>reference</code> frame, the <code>tests</code> named in <code>data</code>, and
   <code>notes</code>. The per-object invariance table has an <code>against</code>
-  column naming the frame each row is compared with.</p>
+  column naming the frame each row is compared with.
+  <code>invariance$n_contrasts</code> counts the planned object contrasts,
+  including those withheld when a separate calibration fails.</p>
 <p>In the person mode, <code>mode</code> is <code>"persons"</code> and the object
   holds <code>persons</code> (person, n_items, raw, max_raw, the combined
   location and se, the location and se from responses alone,

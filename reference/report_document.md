@@ -1,10 +1,10 @@
-# Write an editable or print-ready analysis report
+# Write a Markdown, HTML, Word or PDF analysis report
 
-Renders the active Rasch or paired-comparison fit as a self-contained
-HTML document, an editable Word document, or a PDF. The report contains
-the principal estimates, model-specific tables, diagnostic figures, and
-software provenance. Complete machine-readable results remain available
-from
+Renders the active Rasch or paired-comparison fit as one Markdown file,
+a self-contained HTML document, an editable Word document, or a PDF. The
+report contains the principal estimates, model-specific tables,
+diagnostic figures, and software provenance. Complete machine-readable
+results remain available from
 [`save_outputs`](https://drjoshmcgrane.github.io/rasch/reference/save_outputs.md).
 Reports downloaded from the application retain compatible tailored item
 shifts and externally weighted secondary person measures. For keyed fits
@@ -17,7 +17,7 @@ unavailable and retains the other model outputs.
 report_document(
   fit,
   file,
-  format = c("auto", "html", "docx", "pdf"),
+  format = c("auto", "md", "html", "docx", "pdf"),
   title = "Rasch measurement analysis",
   dif = NULL,
   bootstrap = NULL,
@@ -43,11 +43,15 @@ report_document(
 
 - file:
 
-  Output path ending in `.html`, `.docx`, or `.pdf`.
+  Output path ending in `.md`, `.html`, `.docx`, or `.pdf`.
 
 - format:
 
-  Output format. By default it is inferred from `file`.
+  Output format. By default it is inferred from `file`. `"md"` writes
+  GitHub-flavoured Markdown: the title is the first heading, the tables
+  are pipe tables, and the diagnostic figures are left out so the report
+  stays one text file that a person or a language model can read as it
+  is.
 
 - title:
 
@@ -107,15 +111,18 @@ Invisibly, the output path.
 
 ## Details
 
-Word and HTML output require Pandoc, supplied with RStudio and available
-through rmarkdown. PDF output also requires a LaTeX installation such as
-TinyTeX.
+Markdown, Word and HTML output require Pandoc, supplied with RStudio and
+available through rmarkdown; Markdown needs Pandoc 2.8 or later. PDF
+output also requires a LaTeX installation such as TinyTeX.
+[`save_outputs`](https://drjoshmcgrane.github.io/rasch/reference/save_outputs.md)
+writes the figures a Markdown report leaves out.
 
 ## Examples
 
 ``` r
 if (FALSE) { # \dontrun{
 fit <- rasch(matrix(rbinom(3000, 1, .5), 300, 10))
+report_document(fit, file.path(tempdir(), "analysis.md"))
 report_document(fit, file.path(tempdir(), "analysis.docx"))
 } # }
 ```

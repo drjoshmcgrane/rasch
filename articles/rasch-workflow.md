@@ -625,9 +625,9 @@ produced it.](figures/app-rcode.png)
 
 Under **More**, an analysis can be saved as a `.rasch` project and
 reopened with its data roles and estimation settings intact, or exported
-as tables, figures and an HTML, Word or PDF report. The same menu holds
-the simulation designs of the plant-and-detect vignette and the model
-comparison that
+as tables, figures and a Markdown, Word or PDF report. The same menu
+holds the simulation designs of the plant-and-detect vignette and the
+model comparison that
 [`compare_fits()`](https://drjoshmcgrane.github.io/rasch/reference/compare_fits.md)
 and
 [`lr_test()`](https://drjoshmcgrane.github.io/rasch/reference/lr_test.md)

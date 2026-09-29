@@ -124,18 +124,22 @@ rasch_cj(
 
 An object of class `"rasch_cj"` with components `items` (item, location,
 se, and the separate calibration of each item-level object from each
-frame on the reference scale), `thresholds` (item, k, threshold, se),
-`objects` (the judged objects and the frames reaching them), `units`
-(frame, unit, se, and whether it was estimated), `invariance` (a list
-with the likelihood ratio test and the per-object table comparing each
-judgement frame with the reference frame), `anchors` (a data frame ready
-for
+frame in the reference unit, retaining each frame's own origins),
+`frame_locations` (separate item locations for plotting, aligned to the
+combined origin within each connected block, with the frame, item, block
+and location), `thresholds` (item, k, threshold, se), `objects` (the
+judged objects and the frames reaching them), `units` (frame, unit, se,
+and whether it was estimated), `invariance` (a list with the likelihood
+ratio test and the per-object table comparing each judgement frame with
+the reference frame), `anchors` (a data frame ready for
 [`rasch`](https://drjoshmcgrane.github.io/rasch/reference/rasch.md)),
 `cov` (covariance of the thresholds), `cov_items` (covariance of the
 item locations), `loglik`, `converged`, `iterations`, frame sizes in
 `n`, the `reference` frame, the `tests` named in `data`, and `notes`.
 The per-object invariance table has an `against` column naming the frame
-each row is compared with.
+each row is compared with. `invariance$n_contrasts` counts the planned
+object contrasts, including those withheld when a separate calibration
+fails.
 
 In the person mode, `mode` is `"persons"` and the object holds `persons`
 (person, n_items, raw, max_raw, the combined location and se, the

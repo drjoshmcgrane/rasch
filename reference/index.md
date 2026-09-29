@@ -282,6 +282,6 @@ Export results or launch the Shiny application.
 - [`report_html()`](https://drjoshmcgrane.github.io/rasch/reference/report_html.md)
   : Write a self-contained HTML report of a Rasch analysis
 - [`report_document()`](https://drjoshmcgrane.github.io/rasch/reference/report_document.md)
-  : Write an editable or print-ready analysis report
+  : Write a Markdown, HTML, Word or PDF analysis report
 - [`run_app()`](https://drjoshmcgrane.github.io/rasch/reference/run_app.md)
   : Launch the rasch point-and-click graphical interface

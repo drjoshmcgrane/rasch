@@ -2,6 +2,54 @@
 
 ## rasch 1.14.0
 
+- Ranking and joint-calibration summaries distinguish unavailable
+  invariance tests from nonsignificant results. The reversal indicator
+  follows which ranking orientation fits better, not just whether the
+  test is significant.
+
+- [`plot_cj()`](https://drjoshmcgrane.github.io/rasch/reference/plot_cj.md)
+  aligns separate calibrations to the combined origin within each
+  connected block and omits markers from failed separate calibrations.
+  Estimates, standard errors and invariance tests are unchanged.
+
+- The app refuses repeated bundle names and preserves special characters
+  in the generated R code. DTF help clarifies test-level cancellation
+  and pointwise confidence bands.
+
+- [`report_document()`](https://drjoshmcgrane.github.io/rasch/reference/report_document.md)
+  writes a Markdown report: a `.md` file, or `format = "md"`, gives one
+  GitHub-flavoured Markdown file with the title as its first heading and
+  the tables as pipe tables, for an editor or a language model to read
+  as it is. The diagnostic figures are left out of that file, and its
+  figures section says that
+  [`save_outputs()`](https://drjoshmcgrane.github.io/rasch/reference/save_outputs.md)
+  writes them; the Word, PDF and HTML reports keep them. The Markdown
+  report needs Pandoc 2.8 or later.
+
+- The Shiny app’s report export offers Markdown, Word and PDF, with
+  Markdown in place of the HTML report and as the navbar shortcut’s
+  one-click report; the figures the Markdown report leaves out are in
+  the results archive. Every format now comes from the R Markdown
+  report, and
+  [`report_html()`](https://drjoshmcgrane.github.io/rasch/reference/report_html.md)
+  stays in the package for a self-contained HTML report.
+
+- The R Markdown report, and so the Markdown, Word, PDF and HTML reports
+  of
+  [`report_document()`](https://drjoshmcgrane.github.io/rasch/reference/report_document.md),
+  gains the score-to-measure table, the residual principal components
+  with their parallel-analysis reference, the average residual
+  correlation with the ten most correlated item pairs, and the classical
+  item statistics, which the self-contained HTML report already had.
+
+- The cluster-robust (CR3) variance of a DIF analysis of variance judges
+  a fully fitted person cluster by the smallest eigenvalue of its
+  delete-cluster matrix, not by its condition number, which rated a
+  one-row cluster well conditioned unless rounding left its single entry
+  at exact zero. The test is withheld, with that cluster given as the
+  reason, on every platform and not only where rounding lands on zero;
+  estimates and the other tests are unchanged.
+
 - The Shiny app calibrates items jointly from responses and judgements.
   Paired comparisons or rankings of the items are uploaded as CSV files
   beside the anchors, or come with the new “Joint calibration” example
@@ -24,6 +72,7 @@
   that combines judgements with an anchor file, a rating scale
   structure, principal-components thresholds or a scoring key is refused
   with the reason.
+
 - The Shiny app analyses rankings with
   [`pl()`](https://drjoshmcgrane.github.io/rasch/reference/pl.md). The
   comparative judgement model gains a rankings layout, with the columns
@@ -36,6 +85,7 @@
   invariance tables, each with its R code. A rank analysis is reproduced
   by the code on the Data page; it is not saved as a project, reported
   or archived.
+
 - The Shiny app’s DIF panel gains the conditional Wald tests of
   [`dif_wald()`](https://drjoshmcgrane.github.io/rasch/reference/dif_wald.md),
   one factor at a time, with the level locations of the selected item

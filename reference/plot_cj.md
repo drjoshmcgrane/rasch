@@ -5,11 +5,13 @@ Caterpillar plot of the item locations from
 the combined location of each item with its 95 per cent interval, and
 beside it the location each frame (the responses, the comparisons, the
 rankings, or each test when several are linked) gives the item on its
-own, expressed on the reference scale. The spread of the frame markers
-around the combined location is the evidence the invariance test
-summarises; an item whose location differs between frames at a
-Holm-adjusted p below .05 in the per-object invariance table is drawn in
-red. A frame that does not reach an item leaves no marker for it.
+own, expressed in the reference unit. Each connected block of a frame is
+shifted to match the mean combined location of the objects it reaches.
+The markers show relative placements, not differences between arbitrary
+origins. An item is drawn in red when an item or threshold contrast in
+the invariance table has a Holm-adjusted p below .05. A frame that does
+not reach an item, or whose separate calibration did not converge,
+leaves no marker for it.
 
 ## Usage
 

@@ -83,18 +83,18 @@ rasch::run_app()
 The application imports data, assigns variables to their measurement
 roles, fits the selected model, and displays the resulting tables and
 plots. An analysis can be saved as a `.rasch` project and reopened with
-its data roles and estimation settings. Tables, figures and HTML, Word
-or PDF reports can be downloaded. The R code for each result is shown in
-the interface. Its fit bootstrap calibrates item and person fit, or
-pair, object and judge fit for comparative judgement, in a cancellable
-background process. Its adjusted probabilities refer to the fitted
-global null, separately for each statistic. Rankings are analysed on
-their own page, and paired comparisons or rankings of the items uploaded
-beside the responses are calibrated jointly with them and anchor the
-analysis. The simulation page generates each supported data structure,
-with controls for its principal parameters and planted departures.
-Simulated data can be downloaded as a CSV or together with the
-generating call, true values and explanatory metadata.
+its data roles and estimation settings. Tables, figures and Markdown,
+Word or PDF reports can be downloaded. The R code for each result is
+shown in the interface. Its fit bootstrap calibrates item and person
+fit, or pair, object and judge fit for comparative judgement, in a
+cancellable background process. Its adjusted probabilities refer to the
+fitted global null, separately for each statistic. Rankings are analysed
+on their own page, and paired comparisons or rankings of the items
+uploaded beside the responses are calibrated jointly with them and
+anchor the analysis. The simulation page generates each supported data
+structure, with controls for its principal parameters and planted
+departures. Simulated data can be downloaded as a CSV or together with
+the generating call, true values and explanatory metadata.
 
 ![Item statistics and an item characteristic curve in the rasch Shiny
 application](reference/figures/app-items.png)
