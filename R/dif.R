@@ -280,6 +280,28 @@
   paste(z, collapse = ":")
 }
 
+# A sandwich covariance sums squared leverage-adjusted residuals over the
+# rows that identify a term. Rows the model fits exactly contribute nothing,
+# so a term identified only by such rows has a robust covariance of zero in
+# exact arithmetic and of rounding noise in practice, whose sign would then
+# decide between a withheld test and a p-value of zero. The robust covariance
+# Vt of the term's coefficients is judged against their model-based
+# covariance s2 * Xt, which is positive definite whenever the term is
+# estimable: a direction whose robust variance is at or below the tolerance
+# times its model-based variance is taken as zero. Inputs that are not finite
+# or a model-based covariance that is not positive definite are left to the
+# positive-semidefinite check of the caller.
+.robust_covariance_is_zero <- function(Vt, Xt, s2, tolerance = 1e-8) {
+  if (!all(is.finite(Vt)) || !all(is.finite(Xt)) || !is.finite(s2) || s2 <= 0)
+    return(FALSE)
+  R <- tryCatch(chol(Xt), error = function(e) NULL)
+  if (is.null(R)) return(FALSE)
+  # R^{-T} Vt R^{-1} carries the eigenvalues of Vt relative to Xt
+  C <- backsolve(R, t(backsolve(R, Vt, transpose = TRUE)), transpose = TRUE)
+  ev <- eigen((C + t(C)) / 2, symmetric = TRUE, only.values = TRUE)$values
+  all(is.finite(ev)) && min(ev) <= tolerance * s2
+}
+
 # ---------------------------------------------------------------------------
 # Order-invariant person-level DIF tests. Between-person terms get Type II
 # sums of squares on person-level residual means: each term is adjusted for
@@ -397,18 +419,30 @@
           }
           Vt <- Vr[jj, jj, drop = FALSE]
           bt <- cf[jj]
-          Wr <- if (.covariance_is_psd(Vt))
+          # a term identified only by rows the model fits exactly has a
+          # robust covariance of zero, and the sign of the rounding noise
+          # left in it must not decide the test
+          fitted_term <- !bad_cluster && .robust_covariance_is_zero(
+            Vt, Xi[jj, jj, drop = FALSE],
+            rss(m1) / stats::df.residual(m1))
+          Wr <- if (!fitted_term && .covariance_is_psd(Vt))
             tryCatch(drop(t(bt) %*% solve(Vt, bt)),
                      error = function(e) NA_real_) else NA_real_
           if (is.finite(Wr) && Wr >= 0) {
             Fv <- Wr / length(jj)
             p_t <- if (is.finite(df_denom) && df_denom > 0)
               stats::pf(Fv, length(jj), df_denom, lower.tail = FALSE) else NA_real_
-          } else why <- if (bad_cluster) paste(
-            "the retained design fits one person cluster's own rows",
-            "exactly, leaving it no delete-cluster residual") else paste(
-            "the robust covariance of the tested term is singular or not",
-            "positive semidefinite")
+          } else {
+            why <- if (bad_cluster) paste(
+              "the retained design fits one person cluster's own rows",
+              "exactly, leaving it no delete-cluster residual")
+            else if (fitted_term) paste(
+              "the tested term is identified only by rows the model fits",
+              "exactly, leaving its robust covariance at zero")
+            else paste(
+              "the robust covariance of the tested term is singular or not",
+              "positive semidefinite")
+          }
         }
       }
       # the reason travels with the row: the caller names it in the note it
@@ -648,11 +682,13 @@
 #' aliases a nuisance column without withholding the terms the design still
 #' estimates, which are tested on the retained full-rank columns. A term
 #' whose own contrasts are aliased, or whose Type II degrees of freedom no
-#' longer count them all, is the one reported as \code{NA}. Every withheld
-#' row is named in \code{notes} with the reason that applies to it. A
-#' withheld DIF test stays in the multiplicity family; a withheld
-#' class-interval row is a nuisance term, never a member of it, and its
-#' note and the counts on the \code{notes} summary say so.
+#' longer count them all, is the one reported as \code{NA}, as is a term
+#' whose robust covariance is zero because the model fits the persons who
+#' identify it exactly. Every withheld row is named in \code{notes} with
+#' the reason that applies to it. A withheld DIF test stays in the
+#' multiplicity family; a withheld class-interval row is a nuisance term,
+#' never a member of it, and its note and the counts on the \code{notes}
+#' summary say so.
 #'
 #' When identifiers repeat, the person is the unit of analysis. Between-person
 #' terms use person means and the between-person error stratum. Within-person

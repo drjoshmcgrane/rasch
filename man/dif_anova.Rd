@@ -118,11 +118,13 @@ item's model (an unoccupied factor-by-class-interval combination, say)
 aliases a nuisance column without withholding the terms the design still
 estimates, which are tested on the retained full-rank columns. A term
 whose own contrasts are aliased, or whose Type II degrees of freedom no
-longer count them all, is the one reported as \code{NA}. Every withheld
-row is named in \code{notes} with the reason that applies to it. A
-withheld DIF test stays in the multiplicity family; a withheld
-class-interval row is a nuisance term, never a member of it, and its
-note and the counts on the \code{notes} summary say so.
+longer count them all, is the one reported as \code{NA}, as is a term
+whose robust covariance is zero because the model fits the persons who
+identify it exactly. Every withheld row is named in \code{notes} with
+the reason that applies to it. A withheld DIF test stays in the
+multiplicity family; a withheld class-interval row is a nuisance term,
+never a member of it, and its note and the counts on the \code{notes}
+summary say so.
 
 When identifiers repeat, the person is the unit of analysis. Between-person
 terms use person means and the between-person error stratum. Within-person

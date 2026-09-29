@@ -76,6 +76,65 @@ test_that("a fully fitted person cluster is not blamed on the term", {
   expect_false(grepl("covariance of the tested term", why, fixed = TRUE))
 })
 
+# In the shared interval every person in each group has the same residual
+# mean, so the model fits the rows that identify the group contrast exactly
+# and its robust covariance is zero up to rounding, whose sign differs
+# between platforms. The test is withheld either way, for that reason.
+sim_fitted_term <- function() {
+  set.seed(5)
+  ci <- factor(rep(1:3, each = 30))
+  f1 <- factor(c(rep("a", 50), rep("b", 40)))
+  z <- rnorm(90)
+  z[ci == 2 & f1 == "a"] <- 0.4
+  z[ci == 2 & f1 == "b"] <- -1.7
+  data.frame(z = z, f1 = f1, ci = ci)
+}
+
+test_that("a term fitted exactly is withheld whatever the sign of rounding", {
+  zero <- rasch:::.robust_covariance_is_zero
+  expect_true(zero(matrix(2e-16), matrix(0.14), 0.6))
+  expect_true(zero(matrix(-2e-16), matrix(0.14), 0.6))
+  expect_false(zero(matrix(0.02), matrix(0.02), 0.9))
+  # one direction of a two-contrast term at zero is enough
+  expect_true(zero(diag(c(0.02, 1e-18)), diag(2) * 0.02, 1))
+  expect_false(zero(diag(c(0.02, 0.01)), diag(2) * 0.02, 1))
+  # inputs the check cannot judge are left to the caller
+  expect_false(zero(matrix(NA_real_), matrix(0.14), 0.6))
+  expect_false(zero(matrix(2e-16), matrix(-0.14), 0.6))
+
+  d <- sim_fitted_term()
+  got <- rasch:::.dif_type2(d, c("ci", "f1"), variance = "hc3",
+                            robust_terms = "f1")
+  row <- got$term == "f1"
+  expect_true(is.na(got$F_value[row]))
+  expect_true(is.na(got$p[row]))
+  expect_match(got$unavailable_reason[row], "robust covariance at zero")
+  expect_true(is.finite(got$p[got$term == "ci"]))
+
+  # residual left in the shared interval restores the test
+  d$z[d$ci == 2] <- d$z[d$ci == 2] + rnorm(30, sd = .5)
+  got <- rasch:::.dif_type2(d, c("ci", "f1"), variance = "hc3",
+                            robust_terms = "f1")
+  row <- got$term == "f1"
+  expect_true(is.finite(got$p[row]))
+  expect_true(is.na(got$unavailable_reason[row]))
+})
+
+test_that("the cluster-robust branch withholds a term fitted exactly", {
+  # two rows per person, the design fitting each pair of rows well short of
+  # exactly, so the cluster guard stays out of the way
+  d <- sim_fitted_term()
+  d <- d[rep(seq_len(nrow(d)), each = 2), ]
+  pid <- factor(rep(seq_len(90), each = 2))
+  got <- rasch:::.dif_type2(d, c("ci", "f1"), variance = "cr3",
+                            cluster = pid, weights = rep(0.5, nrow(d)))
+  row <- got$term == "f1"
+  expect_true(is.na(got$F_value[row]))
+  why <- got$unavailable_reason[row]
+  expect_match(why, "robust covariance at zero")
+  expect_false(grepl("delete-cluster", why, fixed = TRUE))
+})
+
 test_that("a withheld class-interval row is not counted as a DIF test", {
   skip_on_cran()
   da <- dif_anova(sim_withheld_ci(), factors = c("A", "occasion"),
