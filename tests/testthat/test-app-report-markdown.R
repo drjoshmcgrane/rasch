@@ -39,6 +39,12 @@ test_that("the app writes its Markdown report from the Export page and the navba
     expect_false(any(grepl("<style", lines, fixed = TRUE)))
     nav <- output$dl_report_nav
     expect_true(file.exists(nav))
-    expect_identical(readLines(nav, warn = FALSE)[-2L], lines[-2L])
+    # the date line records the minute of the render, which can turn over
+    # between the two reports
+    date_line <- function(x)
+      grepl("^[0-9]{1,2} [^,]+ [0-9]{4}, [0-9]{2}:[0-9]{2}$", x)
+    expect_identical(sum(date_line(lines)), 1L)
+    nav_lines <- readLines(nav, warn = FALSE)
+    expect_identical(nav_lines[!date_line(nav_lines)], lines[!date_line(lines)])
   })
 })
