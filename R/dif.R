@@ -302,6 +302,28 @@
   all(is.finite(ev)) && min(ev) <= tolerance * s2
 }
 
+# A response the design fits exactly leaves a residual sum of squares of
+# rounding noise, not zero: the classical F is then a term's sum of squares
+# over that noise, and the sandwich covariances collapse together with the
+# model-based covariance they are judged against, so neither the sign of
+# the noise nor the guard above can withhold the test. The residual is
+# judged against the scale of the response itself, the weighted sum of its
+# squares, so the judgement holds at every scale of residual: a residual sum
+# of squares at or below the tolerance times that scale is taken as zero. A
+# response of zeros, which any model fits exactly, has a scale of zero.
+# Inputs that are not finite are left to the caller.
+.residual_variation_is_zero <- function(rss, y, w = rep(1, length(y)),
+                                        tolerance = sqrt(.Machine$double.eps)) {
+  if (!is.finite(rss) || !all(is.finite(y)) || !all(is.finite(w)))
+    return(FALSE)
+  rss <= tolerance * sum(w * y^2)
+}
+
+# the reason carried by every test withheld on that judgement
+.no_residual_variation <- paste(
+  "the retained design fits every residual mean exactly, leaving no",
+  "residual variation to test against")
+
 # ---------------------------------------------------------------------------
 # Order-invariant person-level DIF tests. Between-person terms get Type II
 # sums of squares on person-level residual means: each term is adjusted for
@@ -331,7 +353,12 @@
   rss_full <- rss(full)
   df_res <- if (variance == "cr3") length(unique(cluster)) - full$rank else
     stats::df.residual(full)
-  if (df_res < 1 || rss_full <= 0) return(NULL)
+  if (df_res < 1) return(NULL)
+  # every test, classical or robust, is built on this residual: withhold
+  # them all, with the reason, rather than compute them from rounding noise
+  exact_fit <- .residual_variation_is_zero(rss_full, d[[resp]],
+                                           d$.dif_weights)
+  if (exact_fit) rss_full <- 0
   mse <- rss_full / df_res
   out <- list()
   for (tt in report_terms) {
@@ -343,18 +370,21 @@
     df_t <- stats::df.residual(m0) - stats::df.residual(m1)
     if (df_t < 1) next
     ss_t <- max(rss(m0) - rss(m1), 0)
-    Fv <- (ss_t / df_t) / mse
-    p_t <- stats::pf(Fv, df_t, df_res, lower.tail = FALSE)
+    Fv <- p_t <- NA_real_
+    if (!exact_fit) {
+      Fv <- (ss_t / df_t) / mse
+      p_t <- stats::pf(Fv, df_t, df_res, lower.tail = FALSE)
+    }
     df_denom <- df_res
-    reason <- NA_character_
+    reason <- if (exact_fit) .no_residual_variation else NA_character_
     # Judge-level residual means can have very different precision when
     # comparison workloads differ. HC3 retains the equal-judge estimand but
     # does not impose a common residual variance. The robust Wald statistic is
     # reported as an F with the model residual denominator; the separate
     # cell-support guard below avoids presenting this small-sample
     # approximation where a factor level has too few independent judges.
-    if (variance == "cr3" ||
-        (variance == "hc3" && (is.null(robust_terms) || tt %in% robust_terms))) {
+    if (!exact_fit && (variance == "cr3" ||
+        (variance == "hc3" && (is.null(robust_terms) || tt %in% robust_terms)))) {
       Fv <- p_t <- NA_real_
       why <- paste("the retained design or its residual covariance does",
                    "not support this test")
@@ -453,7 +483,8 @@
       term = tt, df = df_t, df_denom = df_denom, gg_epsilon = NA_real_,
       sum_sq = ss_t, mean_sq = ss_t / df_t,
       F_value = Fv, p = p_t,
-      resid_ss = rss_full, unavailable_reason = reason,
+      resid_ss = if (exact_fit) NA_real_ else rss_full,
+      unavailable_reason = reason,
       stringsAsFactors = FALSE)
   }
   if (!length(out)) return(NULL)
@@ -526,7 +557,11 @@
     rss_f <- sum(vapply(fits_j, function(f) sum(stats::resid(f)^2), 0))
     dfr1 <- stats::df.residual(fits_j[[1]])
     df_err <- m * dfr1
-    if (df_err < 1 || rss_f <= 0) next
+    if (df_err < 1) next
+    if (.residual_variation_is_zero(rss_f, as.vector(S))) {
+      out[[length(out) + 1L]] <- na_row(tt, .no_residual_variation)
+      next
+    }
     # Greenhouse-Geisser epsilon from the residual score covariance
     E <- vapply(fits_j, stats::resid, numeric(n))
     Sg <- crossprod(as.matrix(E)) / dfr1
@@ -684,7 +719,12 @@
 #' whose own contrasts are aliased, or whose Type II degrees of freedom no
 #' longer count them all, is the one reported as \code{NA}, as is a term
 #' whose robust covariance is zero because the model fits the persons who
-#' identify it exactly. Every withheld row is named in \code{notes} with
+#' identify it exactly. When the model fits every person's residual mean
+#' exactly, as it can when every person of a group in a class interval has
+#' the same raw score and the same response, no residual variation remains
+#' to test against, and every test of that item is reported as \code{NA}
+#' under the classical and the robust variances alike rather than computed
+#' from rounding. Every withheld row is named in \code{notes} with
 #' the reason that applies to it. A withheld DIF test stays in the
 #' multiplicity family; a withheld class-interval row is a nuisance term,
 #' never a member of it, and its note and the counts on the \code{notes}

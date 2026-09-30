@@ -42,6 +42,18 @@
   now withheld on every platform, with that reason given: the robust
   covariance is judged against the model-based covariance of the same
   coefficients. Estimates and every other test are unchanged.
+* A DIF analysis of variance whose model fits every person's residual mean
+  exactly, as when every person of a group in a class interval has the same
+  raw score and the same response, computed its tests from rounding: the
+  residual sum of squares of such a fit is not zero but a rounding
+  remainder, so the classical F ran past 10^30 with an adjusted probability
+  of zero, and the guard on the robust covariance let the term through
+  because the model-based covariance it is judged against had collapsed
+  with it. The residual variation is now judged against the scale of the
+  residual means themselves, and every test of such an item is withheld
+  with that reason under the classical, HC3 and CR3 variances; the
+  within-person tests apply the same judgement to their pooled residual.
+  Estimates and every other test are unchanged.
 
 * The Shiny app calibrates items jointly from responses and judgements.
   Paired comparisons or rankings of the items are uploaded as CSV files
