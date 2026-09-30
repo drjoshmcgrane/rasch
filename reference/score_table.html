@@ -89,7 +89,8 @@ estimator's own values; these are <code>NA</code> for MLE.
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame with <code>score</code>, <code>theta</code>, <code>se</code>,
   <code>freq</code>, <code>cum_pct</code> (omitted when no complete responders
-  exist), and <code>extrapolated</code>; <code>NULL</code> when the fitted items do not
+  exist), and <code>extrapolated</code>, preceded by <code>form</code> when the fit
+  has split items; <code>NULL</code> when the fitted items do not
   share one discrimination or an item is represented by several MFRM or
   EFRM response cells.</p>
     </div>
@@ -109,6 +110,13 @@ error at an extrapolated location is \(1/\sqrt{I(\theta)}\) evaluated
 there. With <code>method = "wle"</code> the extrapolation replaces the finite
 Warm estimates at the extremes, giving the extrapolated form of the
 conversion table from a WLE analysis.</p>
+<p>A fit with split items (<code><a href="split_items.html">split_items</a></code>,
+<code><a href="resolve_dif.html">resolve_dif</a></code>) has no common raw score: each person answers
+one copy of a split item, so a score summed over every calibrated column
+belongs to nobody. The table then holds one conversion per test form,
+the copies that a set of persons answered together with every unsplit
+item, under a leading <code>form</code> column that names those copies. Each
+form's frequencies count its own complete responders.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>

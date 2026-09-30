@@ -35,9 +35,10 @@ score_table(
 ## Value
 
 A data frame with `score`, `theta`, `se`, `freq`, `cum_pct` (omitted
-when no complete responders exist), and `extrapolated`; `NULL` when the
-fitted items do not share one discrimination or an item is represented
-by several MFRM or EFRM response cells.
+when no complete responders exist), and `extrapolated`, preceded by
+`form` when the fit has split items; `NULL` when the fitted items do not
+share one discrimination or an item is represented by several MFRM or
+EFRM response cells.
 
 ## Details
 
@@ -54,6 +55,16 @@ zero. The standard error at an extrapolated location is
 \\1/\sqrt{I(\theta)}\\ evaluated there. With `method = "wle"` the
 extrapolation replaces the finite Warm estimates at the extremes, giving
 the extrapolated form of the conversion table from a WLE analysis.
+
+A fit with split items
+([`split_items`](https://drjoshmcgrane.github.io/rasch/reference/split_items.md),
+[`resolve_dif`](https://drjoshmcgrane.github.io/rasch/reference/resolve_dif.md))
+has no common raw score: each person answers one copy of a split item,
+so a score summed over every calibrated column belongs to nobody. The
+table then holds one conversion per test form, the copies that a set of
+persons answered together with every unsplit item, under a leading
+`form` column that names those copies. Each form's frequencies count its
+own complete responders.
 
 ## References
 

@@ -60,6 +60,35 @@
   covariance of the same coefficients. Estimates and every other test
   are unchanged.
 
+- A DIF analysis of variance whose model fits every person’s residual
+  mean exactly, as when every person of a group in a class interval has
+  the same raw score and the same response, computed its tests from
+  rounding: the residual sum of squares of such a fit is not zero but a
+  rounding remainder, so the classical F ran past 10^30 with an adjusted
+  probability of zero, and the guard on the robust covariance let the
+  term through because the model-based covariance it is judged against
+  had collapsed with it. The residual variation is now judged against
+  the scale of the residual means themselves, and every test of such an
+  item is withheld with that reason under the classical, HC3 and CR3
+  variances; the within-person tests apply the same judgement to their
+  pooled residual. Estimates and every other test are unchanged.
+
+- [`score_table()`](https://drjoshmcgrane.github.io/rasch/reference/score_table.md)
+  and the score-to-measure section of the reports and the CSV export
+  gave a split fit
+  ([`split_items()`](https://drjoshmcgrane.github.io/rasch/reference/split_items.md),
+  [`resolve_dif()`](https://drjoshmcgrane.github.io/rasch/reference/resolve_dif.md))
+  one conversion over every calibrated column, so a six-item test with
+  one item split ran from 0 to 7 although each person answers one copy
+  of the split item and six items in all, and the frequencies counted
+  the groups’ mutually exclusive copies together. The table now holds
+  one conversion per test form, the copies a set of persons answered
+  together with every unsplit item, under a leading `form` column that
+  names those copies, each form converting its own raw score and
+  counting its own complete responders; the report says why the forms
+  differ, and a split fit no person completed gets that explanation in
+  place of the table. An unsplit fit’s table is unchanged.
+
 - The Shiny app calibrates items jointly from responses and judgements.
   Paired comparisons or rankings of the items are uploaded as CSV files
   beside the anchors, or come with the new “Joint calibration” example

@@ -167,9 +167,14 @@ column without withholding the terms the design still estimates, which
 are tested on the retained full-rank columns. A term whose own contrasts
 are aliased, or whose Type II degrees of freedom no longer count them
 all, is the one reported as `NA`, as is a term whose robust covariance
-is zero because the model fits the persons who identify it exactly.
-Every withheld row is named in `notes` with the reason that applies to
-it. A withheld DIF test stays in the multiplicity family; a withheld
+is zero because the model fits the persons who identify it exactly. When
+the model fits every person's residual mean exactly, as it can when
+every person of a group in a class interval has the same raw score and
+the same response, no residual variation remains to test against, and
+every test of that item is reported as `NA` under the classical and the
+robust variances alike rather than computed from rounding. Every
+withheld row is named in `notes` with the reason that applies to it. A
+withheld DIF test stays in the multiplicity family; a withheld
 class-interval row is a nuisance term, never a member of it, and its
 note and the counts on the `notes` summary say so.
 
