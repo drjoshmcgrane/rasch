@@ -691,6 +691,14 @@ weighted_person_estimates <- function(fit, weights,
 #' Warm estimates at the extremes, giving the extrapolated form of the
 #' conversion table from a WLE analysis.
 #'
+#' A fit with split items (\code{\link{split_items}},
+#' \code{\link{resolve_dif}}) has no common raw score: each person answers
+#' one copy of a split item, so a score summed over every calibrated column
+#' belongs to nobody. The table then holds one conversion per test form,
+#' the copies that a set of persons answered together with every unsplit
+#' item, under a leading \code{form} column that names those copies. Each
+#' form's frequencies count its own complete responders.
+#'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param method \code{"wle"} (Warm, default) or \code{"mle"}.
 #' @param extremes Treatment of the extreme scores. \code{"model"} keeps the
@@ -698,7 +706,8 @@ weighted_person_estimates <- function(fit, weights,
 #'   \code{"extrapolated"} applies the geometric extrapolation.
 #' @return A data frame with \code{score}, \code{theta}, \code{se},
 #'   \code{freq}, \code{cum_pct} (omitted when no complete responders
-#'   exist), and \code{extrapolated}; \code{NULL} when the fitted items do not
+#'   exist), and \code{extrapolated}, preceded by \code{form} when the fit
+#'   has split items; \code{NULL} when the fitted items do not
 #'   share one discrimination or an item is represented by several MFRM or
 #'   EFRM response cells.
 #' @references
@@ -726,18 +735,73 @@ score_table <- function(fit, method = c("wle", "mle"),
          call. = FALSE)
   method <- match.arg(method); extremes <- match.arg(extremes)
   if (is.null(fit$score_table)) return(NULL)
-  tab <- fit$score_table[, c("score", "theta", "se")]
-  M <- max(tab$score)
   disc <- if (is.null(fit$disc)) 1 else fit$disc[1]
-  se_of <- function(th) .common_person_se(th, fit$tau_list, disc)
+  forms <- .split_forms(fit)
+  if (is.null(forms))
+    return(.score_table_form(fit$score_table[, c("score", "theta", "se")],
+                             fit$tau_list, fit$X, disc, method, extremes))
+  # nobody answered a whole form: no conversion describes anyone
+  if (!length(forms)) return(NULL)
+  tabs <- lapply(forms, function(f) {
+    idx <- match(f$items, fit$items$item)
+    tau <- fit$tau_list[idx]
+    pe <- person_wle(tau, disc = disc)
+    tab <- data.frame(score = seq_along(pe$theta) - 1L,
+                      theta = unname(pe$theta), se = unname(pe$se))
+    data.frame(form = f$label,
+               .score_table_form(tab, tau, fit$X[f$rows, idx, drop = FALSE],
+                                 disc, method, extremes, counts = TRUE),
+               stringsAsFactors = FALSE)
+  })
+  out <- do.call(rbind, tabs)
+  rownames(out) <- NULL
+  if (all(out$freq == 0L)) out$freq <- out$cum_pct <- NULL
+  out
+}
+
+# The test forms of a split fit: the sets of split copies that persons
+# answered, one copy of every split item, each with the unsplit items. A
+# person who answered no copy of some split item, through missing data or a
+# level the item was not split for, is a complete responder of no form.
+# NULL when no item is split; an empty list when no person answered a form.
+.split_forms <- function(fit) {
+  if (is.null(fit$split_map)) return(NULL)
+  map <- .split_source_map(fit)
+  by_source <- split(names(map), unname(map))
+  multi <- by_source[lengths(by_source) > 1L]
+  if (!length(multi)) return(NULL)
+  copies <- unlist(multi, use.names = FALSE)
+  keep <- names(map)[!map %in% names(multi)]
+  obs <- !is.na(fit$X[, copies, drop = FALSE])
+  rows <- which(Reduce(`&`, lapply(multi, function(cp)
+    rowSums(obs[, cp, drop = FALSE]) == 1L)))
+  if (!length(rows)) return(list())
+  key <- apply(obs[rows, , drop = FALSE], 1L, function(r)
+    paste(as.integer(!r), collapse = ""))
+  lapply(sort(unique(key)), function(k) {
+    r <- rows[key == k]
+    answered <- copies[obs[r[1L], ]]
+    list(label = paste(answered, collapse = ", "),
+         items = c(keep, answered), rows = r)
+  })
+}
+
+# One conversion over one item set: tab holds the Warm estimates by score,
+# tau the thresholds of the items and X the responses of the persons the
+# conversion is for. Frequencies count X's complete responders; with counts
+# the columns are present even when there are none.
+.score_table_form <- function(tab, tau_list, X, disc, method, extremes,
+                              counts = FALSE) {
+  M <- max(tab$score)
+  se_of <- function(th) .common_person_se(th, tau_list, disc)
   if (method == "mle") {
-    interval <- .person_root_interval(fit$tau_list, disc)
+    interval <- .person_root_interval(tau_list, disc)
     for (r in seq_len(M - 1)) {
       # the ML equation is sum(disc*(x_i - E_i)) = 0: the common
       # discrimination cancels, so the root solves r = sum(E), not
       # r = sum(disc*E)
       tab$theta[tab$score == r] <- uniroot(function(th)
-        r - sum(vapply(fit$tau_list, function(tt)
+        r - sum(vapply(tau_list, function(tt)
           item_moments(th, tt, disc = disc)$E, 0)),
         interval, tol = 1e-9 / disc)$root
     }
@@ -765,12 +829,13 @@ score_table <- function(fit, method = c("wle", "mle"),
     tab$se[c(1, M + 1)] <- ext_se
     tab$extrapolated[c(1, M + 1)] <- TRUE
   }
-  raw <- rowSums(fit$X)
-  freq <- as.integer(table(factor(raw[stats::complete.cases(fit$X)],
+  raw <- rowSums(X)
+  freq <- as.integer(table(factor(raw[stats::complete.cases(X)],
                                   levels = 0:M)))
-  if (sum(freq) > 0) {
+  if (sum(freq) > 0 || counts) {
     tab$freq <- freq
-    tab$cum_pct <- 100 * cumsum(freq) / sum(freq)
+    tab$cum_pct <- if (sum(freq) > 0) 100 * cumsum(freq) / sum(freq) else
+      NA_real_
   }
   tab
 }

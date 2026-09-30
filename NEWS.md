@@ -54,6 +54,18 @@
   with that reason under the classical, HC3 and CR3 variances; the
   within-person tests apply the same judgement to their pooled residual.
   Estimates and every other test are unchanged.
+* `score_table()` and the score-to-measure section of the reports and
+  the CSV export gave a split fit (`split_items()`, `resolve_dif()`) one
+  conversion over every calibrated column, so a six-item test with one
+  item split ran from 0 to 7 although each person answers one copy of the
+  split item and six items in all, and the frequencies counted the groups'
+  mutually exclusive copies together. The table now holds one conversion
+  per test form, the copies a set of persons answered together with every
+  unsplit item, under a leading `form` column that names those copies,
+  each form converting its own raw score and counting its own complete
+  responders; the report says why the forms differ, and a split fit no
+  person completed gets that explanation in place of the table. An
+  unsplit fit's table is unchanged.
 
 * The Shiny app calibrates items jointly from responses and judgements.
   Paired comparisons or rankings of the items are uploaded as CSV files

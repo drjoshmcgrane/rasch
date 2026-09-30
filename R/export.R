@@ -596,7 +596,9 @@ save_outputs <- function(fit, dir, formats = c("png", "pdf"), width = 9,
     wtab(attr(person_weight_result$table, "weighting", exact = TRUE),
          "person_estimate_external_weights")
   }
-  if (!is.null(fit$score_table)) wtab(score_table(fit), "score_to_measure")
+  # a split fit whose forms nobody answered in full has no conversion to write
+  st <- if (!is.null(fit$score_table)) score_table(fit)
+  if (!is.null(st)) wtab(st, "score_to_measure")
   ctt <- tryCatch(ctt_table(fit), error = function(e) NULL)
   if (!is.null(ctt)) wtab(ctt$table, "traditional_statistics")
   cd_all <- do.call(rbind, lapply(fit$items$item, function(it) {

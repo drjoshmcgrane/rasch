@@ -22,7 +22,8 @@ estimator's own values; these are \code{NA} for MLE.
 \value{
 A data frame with \code{score}, \code{theta}, \code{se},
   \code{freq}, \code{cum_pct} (omitted when no complete responders
-  exist), and \code{extrapolated}; \code{NULL} when the fitted items do not
+  exist), and \code{extrapolated}, preceded by \code{form} when the fit
+  has split items; \code{NULL} when the fitted items do not
   share one discrimination or an item is represented by several MFRM or
   EFRM response cells.
 }
@@ -47,6 +48,14 @@ error at an extrapolated location is \eqn{1/\sqrt{I(\theta)}} evaluated
 there. With \code{method = "wle"} the extrapolation replaces the finite
 Warm estimates at the extremes, giving the extrapolated form of the
 conversion table from a WLE analysis.
+
+A fit with split items (\code{\link{split_items}},
+\code{\link{resolve_dif}}) has no common raw score: each person answers
+one copy of a split item, so a score summed over every calibrated column
+belongs to nobody. The table then holds one conversion per test form,
+the copies that a set of persons answered together with every unsplit
+item, under a leading \code{form} column that names those copies. Each
+form's frequencies count its own complete responders.
 }
 \examples{
 set.seed(1)
