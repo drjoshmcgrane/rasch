@@ -2,7 +2,7 @@
 
 Expected total score against person location. Structural fits draw one
 curve for each observed item pattern within the frame or facet design,
-as defined by
+and a fit with split items one curve per test form, as defined by
 [`test_information`](https://drjoshmcgrane.github.io/rasch/reference/test_information.md).
 
 ## Usage

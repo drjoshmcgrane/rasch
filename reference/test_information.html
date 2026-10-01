@@ -7,7 +7,11 @@
   };
 </script><script src="../lightswitch.js"></script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/Source_Sans_3-0.4.10/font.css" rel="stylesheet"><link href="../deps/JetBrains_Mono-0.4.10/font.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Test information function — test_information"><meta name="description" content="Fisher information over a grid of person locations, with the corresponding
 standard error of measurement. Ordinary Rasch fits return one whole-test
-curve. EFRM fits return one curve per person group and per item
+curve; a fit with split items (split_items,
+resolve_dif) returns one curve per test form, the unsplit
+items with the copies a set of persons answered, since the copies of a
+split item are answered by different persons and never inform one
+measure together. EFRM fits return one curve per person group and per item
 administration pattern actually observed within that group (in a linking
 design, persons who took only the core set get a core-only curve, and the
 linking subsample gets the pooled one). MFRM fits return one curve per
@@ -21,7 +25,11 @@ an unanswered item carries no information about the person who left it,
 so no pattern is merged into a fuller one and no curve of theirs is
 drawn over a design nobody was administered."><meta property="og:description" content="Fisher information over a grid of person locations, with the corresponding
 standard error of measurement. Ordinary Rasch fits return one whole-test
-curve. EFRM fits return one curve per person group and per item
+curve; a fit with split items (split_items,
+resolve_dif) returns one curve per test form, the unsplit
+items with the copies a set of persons answered, since the copies of a
+split item are answered by different persons and never inform one
+measure together. EFRM fits return one curve per person group and per item
 administration pattern actually observed within that group (in a linking
 design, persons who took only the core set get a core-only curve, and the
 linking subsample gets the pooled one). MFRM fits return one curve per
@@ -76,7 +84,11 @@ drawn over a design nobody was administered."><meta property="og:image" content=
     <div class="ref-description section level2">
     <p>Fisher information over a grid of person locations, with the corresponding
 standard error of measurement. Ordinary Rasch fits return one whole-test
-curve. EFRM fits return one curve per person group and per item
+curve; a fit with split items (<code><a href="split_items.html">split_items</a></code>,
+<code><a href="resolve_dif.html">resolve_dif</a></code>) returns one curve per test form, the unsplit
+items with the copies a set of persons answered, since the copies of a
+split item are answered by different persons and never inform one
+measure together. EFRM fits return one curve per person group and per item
 administration pattern actually observed within that group (in a linking
 design, persons who took only the core set get a core-only curve, and the
 linking subsample gets the pooled one). MFRM fits return one curve per
@@ -120,7 +132,9 @@ the selection are returned once.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame with <code>theta</code>, <code>info</code>, and <code>sem</code>. For
   EFRM and MFRM fits it also contains a <code>design</code> column identifying
-  the administrable frame or facet design.</p>
+  the administrable frame or facet design; for a fit with split items,
+  the test form, named by the copies it holds and by the split items it
+  holds no copy of.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

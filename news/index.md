@@ -89,6 +89,37 @@
   differ, and a split fit no person completed gets that explanation in
   place of the table. An unsplit fit’s table is unchanged.
 
+- [`test_information()`](https://drjoshmcgrane.github.io/rasch/reference/test_information.md),
+  [`plot_tif()`](https://drjoshmcgrane.github.io/rasch/reference/plot_tif.md),
+  [`plot_tcc()`](https://drjoshmcgrane.github.io/rasch/reference/plot_tcc.md)
+  and the information curve of
+  [`plot_pimap()`](https://drjoshmcgrane.github.io/rasch/reference/plot_pimap.md)
+  summed every calibrated column of a split fit, so a six-item test with
+  two items split by group drew an eight-item characteristic curve and
+  claimed the information of both groups’ copies at once, in one such
+  test a standard error of measurement of 0.78 at the centre where each
+  group’s six-item form has 0.91 or 0.93. They now describe each test
+  form, the unsplit items with the copies a set of persons answered, as
+  one design named by those copies, as the extended-frame and many-facet
+  designs already were; `plot_pimap(group = )` draws the forms the
+  selected persons answered, and an item selection names the forms
+  within the selection. An unsplit fit’s curve is unchanged.
+
+- A split copy left alone by
+  [`drop_items()`](https://drjoshmcgrane.github.io/rasch/reference/drop_items.md),
+  as `I1 (a)` after `I1 (b)` is dropped, was taken for an unsplit item
+  answered by everyone, so
+  [`score_table()`](https://drjoshmcgrane.github.io/rasch/reference/score_table.md)
+  and the reports gave the other group, which answered no copy of the
+  item, the six-item conversion of the first group in place of its own
+  five-item one, in one such test up to 1.4 logits away. The copy keeps
+  its provenance: a person who answered no copy of a split item, because
+  the copy was dropped, the person’s level was not split or the response
+  is missing, takes the form without that item, named `without I1`, with
+  its own conversion and its own frequencies and information curve. The
+  self-contained HTML report, which wrote an empty section for a split
+  fit with no conversion, says why in its place.
+
 - The Shiny app calibrates items jointly from responses and judgements.
   Paired comparisons or rankings of the items are uploaded as CSV files
   beside the anchors, or come with the new “Joint calibration” example

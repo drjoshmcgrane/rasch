@@ -1,7 +1,8 @@
 # Plot the test information function
 
 Test information across the logit scale with the standard error of
-measurement overlaid on a second axis.
+measurement overlaid on a second axis, one curve per design of
+[`test_information`](https://drjoshmcgrane.github.io/rasch/reference/test_information.md).
 
 ## Usage
 

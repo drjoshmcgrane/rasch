@@ -40,7 +40,7 @@ plot_pimap(
 
   Whether to overlay the test information function on a separate
   right-hand axis. Fits with more than one administrable design receive
-  one curve per design.
+  one curve per design, a fit with split items one per test form.
 
 - group:
 
@@ -57,7 +57,8 @@ plot_pimap(
   as the whole instrument. The information curve follows the same item
   selection; for an extended-frame fit it also follows the response
   cells occupied by the selected person group. For EFRM and MFRM, only
-  response patterns present in that person group are shown.
+  response patterns present in that person group are shown, and for a
+  fit with split items only the forms its persons answered.
 
 ## Value
 

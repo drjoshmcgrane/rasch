@@ -63,8 +63,10 @@ has no common raw score: each person answers one copy of a split item,
 so a score summed over every calibrated column belongs to nobody. The
 table then holds one conversion per test form, the copies that a set of
 persons answered together with every unsplit item, under a leading
-`form` column that names those copies. Each form's frequencies count its
-own complete responders.
+`form` column that names those copies. A person who answered no copy of
+a split item, because the copy was dropped, the person's level was not
+split or the response is missing, takes the form without that item,
+named so. Each form's frequencies count its own complete responders.
 
 ## References
 

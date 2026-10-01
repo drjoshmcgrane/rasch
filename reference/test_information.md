@@ -2,19 +2,25 @@
 
 Fisher information over a grid of person locations, with the
 corresponding standard error of measurement. Ordinary Rasch fits return
-one whole-test curve. EFRM fits return one curve per person group and
-per item administration pattern actually observed within that group (in
-a linking design, persons who took only the core set get a core-only
-curve, and the linking subsample gets the pooled one). MFRM fits return
-one curve per observed item-by-facet pattern for a person, so ratings
-that jointly inform the same person measure are added and mutually
-exclusive designs remain separate. Partly answered sets or facet
-conditions contribute only their observed items; a missing response is
-not treated as an administered item when defining these patterns. Where
-item nonresponse leaves nearly every person a pattern of their own, that
-is what these fits return: an unanswered item carries no information
-about the person who left it, so no pattern is merged into a fuller one
-and no curve of theirs is drawn over a design nobody was administered.
+one whole-test curve; a fit with split items
+([`split_items`](https://drjoshmcgrane.github.io/rasch/reference/split_items.md),
+[`resolve_dif`](https://drjoshmcgrane.github.io/rasch/reference/resolve_dif.md))
+returns one curve per test form, the unsplit items with the copies a set
+of persons answered, since the copies of a split item are answered by
+different persons and never inform one measure together. EFRM fits
+return one curve per person group and per item administration pattern
+actually observed within that group (in a linking design, persons who
+took only the core set get a core-only curve, and the linking subsample
+gets the pooled one). MFRM fits return one curve per observed
+item-by-facet pattern for a person, so ratings that jointly inform the
+same person measure are added and mutually exclusive designs remain
+separate. Partly answered sets or facet conditions contribute only their
+observed items; a missing response is not treated as an administered
+item when defining these patterns. Where item nonresponse leaves nearly
+every person a pattern of their own, that is what these fits return: an
+unanswered item carries no information about the person who left it, so
+no pattern is merged into a fuller one and no curve of theirs is drawn
+over a design nobody was administered.
 
 ## Usage
 
@@ -45,7 +51,8 @@ test_information(fit, grid = NULL, items = NULL)
 
 A data frame with `theta`, `info`, and `sem`. For EFRM and MFRM fits it
 also contains a `design` column identifying the administrable frame or
-facet design.
+facet design; for a fit with split items, the test form, named by the
+copies it holds and by the split items it holds no copy of.
 
 ## Details
 
