@@ -16,7 +16,8 @@ Called for its plotting side effect; invisibly \code{NULL}.
 }
 \description{
 Test information across the logit scale with the standard error of
-measurement overlaid on a second axis.
+measurement overlaid on a second axis, one curve per design of
+\code{\link{test_information}}.
 }
 \examples{
 set.seed(1)

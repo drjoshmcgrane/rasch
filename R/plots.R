@@ -638,7 +638,8 @@ plot_threshold_prob <- function(fit, item, grid = NULL,
 #'   labelled tick marks beyond the most extreme plotted estimate.
 #' @param information Whether to overlay the test information function on a
 #'   separate right-hand axis. Fits with more than one administrable design
-#'   receive one curve per design.
+#'   receive one curve per design, a fit with split items one per test
+#'   form.
 #' @param group Optional person-group level: one level of a fitted person
 #'   factor, restricting the person distribution to those persons. A level
 #'   no fitted factor carries is an error.
@@ -649,7 +650,8 @@ plot_threshold_prob <- function(fit, item, grid = NULL,
 #'   cannot be read as the whole instrument. The information curve follows
 #'   the same item selection; for an extended-frame fit it also follows the
 #'   response cells occupied by the selected person group. For EFRM and
-#'   MFRM, only response patterns present in that person group are shown.
+#'   MFRM, only response patterns present in that person group are shown,
+#'   and for a fit with split items only the forms its persons answered.
 #' @return Called for its plotting side effect; invisibly \code{NULL}.
 #' @examples
 #' set.seed(1)
@@ -752,10 +754,11 @@ plot_pimap <- function(fit, bins = 35, xlim = NULL, information = FALSE,
     # one-group EFRM map carrying every group's curves, would read as
     # precision the selection does not have
     information_fit <- fit
-    if (structural && !is.null(group)) {
-      # Retain the calibration, but identify administrations only among the
-      # selected persons. Restricting frame columns alone cannot distinguish
-      # subgroups who answered different items within the same frame.
+    if (!is.null(group) && (structural || !is.null(fit$split_map))) {
+      # Retain the calibration, but identify administrations, or the forms
+      # of a split fit, only among the selected persons. Restricting frame
+      # columns alone cannot distinguish subgroups who answered different
+      # items within the same frame.
       information_fit$X <- fit$X[keep_p %in% TRUE, , drop = FALSE]
     }
     ti <- test_information(information_fit, grid, items = info_idx)
@@ -1048,7 +1051,8 @@ plot_threshold_map <- function(fit, order_by_location = TRUE) {
 #'
 #' Expected total score against person location. Structural fits draw one
 #' curve for each observed item pattern within the frame or facet design,
-#' as defined by \code{\link{test_information}}.
+#' and a fit with split items one curve per test form, as defined by
+#' \code{\link{test_information}}.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param grid Logit grid.
@@ -1089,7 +1093,8 @@ plot_tcc <- function(fit, grid = NULL) {
 #' Plot the test information function
 #'
 #' Test information across the logit scale with the standard error of
-#' measurement overlaid on a second axis.
+#' measurement overlaid on a second axis, one curve per design of
+#' \code{\link{test_information}}.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param grid Logit grid.

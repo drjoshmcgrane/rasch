@@ -20,12 +20,18 @@ the selection are returned once.}
 \value{
 A data frame with \code{theta}, \code{info}, and \code{sem}. For
   EFRM and MFRM fits it also contains a \code{design} column identifying
-  the administrable frame or facet design.
+  the administrable frame or facet design; for a fit with split items,
+  the test form, named by the copies it holds and by the split items it
+  holds no copy of.
 }
 \description{
 Fisher information over a grid of person locations, with the corresponding
 standard error of measurement. Ordinary Rasch fits return one whole-test
-curve. EFRM fits return one curve per person group and per item
+curve; a fit with split items (\code{\link{split_items}},
+\code{\link{resolve_dif}}) returns one curve per test form, the unsplit
+items with the copies a set of persons answered, since the copies of a
+split item are answered by different persons and never inform one
+measure together. EFRM fits return one curve per person group and per item
 administration pattern actually observed within that group (in a linking
 design, persons who took only the core set get a core-only curve, and the
 linking subsample gets the pooled one). MFRM fits return one curve per

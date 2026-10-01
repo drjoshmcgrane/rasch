@@ -24,7 +24,8 @@ labelled tick marks beyond the most extreme plotted estimate.}
 
 \item{information}{Whether to overlay the test information function on a
 separate right-hand axis. Fits with more than one administrable design
-receive one curve per design.}
+receive one curve per design, a fit with split items one per test
+form.}
 
 \item{group}{Optional person-group level: one level of a fitted person
 factor, restricting the person distribution to those persons. A level
@@ -37,7 +38,8 @@ items. The selection is named in the legend, so a restricted map
 cannot be read as the whole instrument. The information curve follows
 the same item selection; for an extended-frame fit it also follows the
 response cells occupied by the selected person group. For EFRM and
-MFRM, only response patterns present in that person group are shown.}
+MFRM, only response patterns present in that person group are shown,
+and for a fit with split items only the forms its persons answered.}
 }
 \value{
 Called for its plotting side effect; invisibly \code{NULL}.

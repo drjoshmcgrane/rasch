@@ -504,7 +504,7 @@ chisq_detail <- function(fit, item) {
 
 # Display label of one design block, built from the block's own columns, so a
 # block restricted to an item selection never names items outside it.
-.design_label <- function(fit, cols) {
+.design_label <- function(fit, cols, within = seq_along(fit$tau_list)) {
   vm <- fit$virtual_map
   if (inherits(fit, "rasch_efrm")) {
     g <- vm$group[cols[1L]]
@@ -535,13 +535,20 @@ chisq_detail <- function(fit, item) {
              else "")
     }, "")
     paste(parts, collapse = " + ")
-  } else "test"
+  } else {
+    # a split fit's designs are its forms, named by the copies they hold;
+    # a block restricted to an item selection is named within the selection
+    map <- .split_source_map(fit)[colnames(fit$X)[within]]
+    if (length(.split_copies(map)))
+      .split_form_label(map, colnames(fit$X)[cols]) else "test"
+  }
 }
 
 # Administrable virtual-item blocks of a fit: one per design a person
-# could actually take. Ordinary fits: the whole test. EFRM: one block per
-# person group AND exact observed item pattern in that group. MFRM: one
-# block per observed item-by-facet pattern for a person. Every pattern is
+# could actually take. Ordinary fits: the whole test, or with split items
+# one block per test form persons answered. EFRM: one block per person
+# group AND exact observed item pattern in that group. MFRM: one block per
+# observed item-by-facet pattern for a person. Every pattern is
 # taken at face value, including where item nonresponse leaves nearly
 # every person a pattern of their own: an item a person left unanswered
 # carries no information about where that person is, so the curve that
@@ -598,6 +605,16 @@ chisq_detail <- function(fit, item) {
       labs[dup] <- paste0(labs[dup], " [design ", seq_along(labs)[dup], "]")
     }
     names(blocks) <- make.unique(labs)
+  } else {
+    # a split item gives each group its own copy, so the forms persons
+    # answered, the unsplit items with one copy of each split item or none,
+    # are the designs: the calibrated columns together are a form nobody
+    # took, whose curve would claim the information of every copy at once
+    forms <- .split_forms(fit)
+    if (length(forms)) {
+      blocks <- lapply(forms, function(f) match(f$items, fit$items$item))
+      names(blocks) <- make.unique(vapply(forms, `[[`, "", "label"))
+    }
   }
   blocks
 }
@@ -606,7 +623,11 @@ chisq_detail <- function(fit, item) {
 #'
 #' Fisher information over a grid of person locations, with the corresponding
 #' standard error of measurement. Ordinary Rasch fits return one whole-test
-#' curve. EFRM fits return one curve per person group and per item
+#' curve; a fit with split items (\code{\link{split_items}},
+#' \code{\link{resolve_dif}}) returns one curve per test form, the unsplit
+#' items with the copies a set of persons answered, since the copies of a
+#' split item are answered by different persons and never inform one
+#' measure together. EFRM fits return one curve per person group and per item
 #' administration pattern actually observed within that group (in a linking
 #' design, persons who took only the core set get a core-only curve, and the
 #' linking subsample gets the pooled one). MFRM fits return one curve per
@@ -640,7 +661,9 @@ chisq_detail <- function(fit, item) {
 #'   the selection are returned once.
 #' @return A data frame with \code{theta}, \code{info}, and \code{sem}. For
 #'   EFRM and MFRM fits it also contains a \code{design} column identifying
-#'   the administrable frame or facet design.
+#'   the administrable frame or facet design; for a fit with split items,
+#'   the test form, named by the copies it holds and by the split items it
+#'   holds no copy of.
 #' @references
 #' Andrich, D. and Marais, I. (2019). A Course in Rasch Measurement Theory:
 #' Measuring in the Educational, Social and Health Sciences. Springer.
@@ -735,7 +758,7 @@ test_information <- function(fit, grid = NULL, items = NULL) {
     # label must name only the items that produced the numbers
     blocks <- blocks[!duplicated(vapply(blocks, paste, "", collapse = "+"))]
     names(blocks) <- make.unique(vapply(blocks, function(ii)
-      .design_label(fit, ii), ""))
+      .design_label(fit, ii, within = keep), ""))
   }
   ans <- lapply(seq_along(blocks), function(j) {
     ii <- blocks[[j]]

@@ -1242,8 +1242,22 @@ report_html <- function(fit, file, title = "Rasch measurement analysis",
     "<h2>Test characteristic and information</h2>",
     shot(function() plot_tcc(fit), "tcc"),
     shot(function() plot_tif(fit), "tif"),
-    if (!is.null(fit$score_table)) s("<h2>Score to measure</h2>",
-      .html_table(score_table(fit))) else "",
+    if (!is.null(fit$score_table)) {
+      st <- score_table(fit)
+      s("<h2>Score to measure</h2>",
+        if (is.null(st))
+          paste("<p class='note'>Not available: no person answered a form",
+                "of the split calibration, so no raw-score conversion",
+                "describes anyone.</p>")
+        else if ("form" %in% names(st))
+          s(paste("<p class='note'>A split item gives each group its own",
+                  "copy, so no raw score is common to every person. Each",
+                  "form, named by the copies its persons answered and by",
+                  "the split items they answered no copy of, converts its",
+                  "own raw score over the unsplit items and those",
+                  "copies.</p>"), .html_table(st))
+        else .html_table(st))
+    } else "",
     "<h2>Fit residual distributions</h2>",
     shot(function() plot_resid_dist(fit, "items"), "resid_items"),
     shot(function() plot_resid_dist(fit, "persons"), "resid_persons"),

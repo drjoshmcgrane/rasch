@@ -213,14 +213,15 @@ if (!is_btl) {
     cat("\n# Score to measure\n\n")
     st <- score_table(fit)
     if (is.null(st)) {
-      cat("Not available: no person answered a whole form of the split",
+      cat("Not available: no person answered a form of the split",
           "calibration, so no raw-score conversion describes anyone.\n\n")
     } else {
       if ("form" %in% names(st))
         cat("A split item gives each group its own copy, so no raw score",
             "is common to every person. Each form, named by the copies its",
-            "persons answered, converts its own raw score over the unsplit",
-            "items and those copies.\n\n")
+            "persons answered and by the split items they answered no copy",
+            "of, converts its own raw score over the unsplit items and",
+            "those copies.\n\n")
       print(show_table(st))
     }
   }

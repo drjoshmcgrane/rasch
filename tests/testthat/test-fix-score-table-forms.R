@@ -69,7 +69,7 @@ test_that("the estimator and extreme-score options apply per form", {
   }
 })
 
-test_that("persons who answered no copy of a split item belong to no form", {
+test_that("persons who answered no copy of a split item take the form without it", {
   s <- sim_split_fit()
   X2 <- s$X
   X2[1:5, "I3"] <- NA          # group a persons without the split item
@@ -77,15 +77,24 @@ test_that("persons who answered no copy of a split item belong to no form", {
   fit <- split_items(rasch(data.frame(X2, grp = s$g), factors = "grp"),
                      "I3", by = "grp")
   forms <- rasch:::.split_forms(fit)
-  expect_length(forms, 2L)
-  expect_identical(vapply(forms, `[[`, "", "label"), c("I3 (a)", "I3 (b)"))
-  # the five without any copy are in no form; the three with a missing
-  # unsplit item are in group a's form but are not complete responders
+  expect_length(forms, 3L)
+  expect_identical(vapply(forms, `[[`, "", "label"),
+                   c("I3 (a)", "I3 (b)", "without I3"))
+  # the five without any copy answered the five unsplit items, their own
+  # form; the three with a missing unsplit item are in group a's form but
+  # are not complete responders
+  expect_identical(forms[[3L]]$rows, 1:5)
+  expect_identical(forms[[3L]]$items, paste0("I", c(1, 2, 4, 5, 6)))
   expect_identical(sort(unlist(lapply(forms, `[[`, "rows"))),
-                    setdiff(seq_len(nrow(X2)), 1:5))
+                   seq_len(nrow(X2)))
   st <- score_table(fit)
   expect_equal(sum(st$freq[st$form == "I3 (a)"]), 200L - 8L)
   expect_equal(sum(st$freq[st$form == "I3 (b)"]), 200L)
+  expect_equal(sum(st$freq[st$form == "without I3"]), 5L)
+  expect_identical(st$score[st$form == "without I3"], 0:5)
+  idx <- match(forms[[3L]]$items, fit$items$item)
+  expect_equal(st$theta[st$form == "without I3"],
+               unname(person_wle(fit$tau_list[idx])$theta))
   expect_equal(max(st$score), 6L)
 
   # a form nobody completed keeps its conversion, with empty counts
@@ -96,9 +105,11 @@ test_that("persons who answered no copy of a split item belong to no form", {
   expect_true(all(is.na(st2$cum_pct[st2$form == "I3 (b)"])))
   expect_equal(st2$theta[st2$form == "I3 (b)"], st$theta[st$form == "I3 (b)"])
 
-  # and when no person answered a whole form, there is no table
+  # when every person answered every copy, no split form was taken and
+  # there is no table; no split of this package produces such responses
   gone <- fit
-  gone$X[, c("I3 (a)", "I3 (b)")] <- NA
+  gone$X[, "I3 (a)"] <- 1L
+  gone$X[, "I3 (b)"] <- 0L
   expect_identical(rasch:::.split_forms(gone), list())
   expect_null(score_table(gone))
 })
@@ -156,15 +167,16 @@ test_that("the reports and the CSV export carry the per-form conversion", {
   expect_identical(names(got)[1:2], c("form", "score"))
   expect_equal(max(got$score), 6L)
 
-  # a split fit nobody completed writes no conversion and says why
+  # a split fit with no form taken writes no conversion and says why
   gone <- s$split
-  gone$X[, c("I3 (a)", "I3 (b)")] <- NA
+  gone$X[, "I3 (a)"] <- 1L
+  gone$X[, "I3 (b)"] <- 0L
   md2 <- tempfile(fileext = ".md")
   out2 <- tempfile("rasch-forms-")
   on.exit(unlink(c(md2, out2), recursive = TRUE), add = TRUE)
   report_document(gone, md2, format = "md")
   lines2 <- readLines(md2, warn = FALSE)
-  expect_true(any(grepl("Not available: no person answered a whole form",
+  expect_true(any(grepl("Not available: no person answered a form",
                         lines2, fixed = TRUE)))
   expect_warning(save_outputs(gone, out2, formats = "png",
                               item_plots = FALSE), "pca_loadings")

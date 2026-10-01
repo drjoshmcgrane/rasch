@@ -44,6 +44,57 @@
   unique(source)
 }
 
+# The split copies of a calibration: every item whose source is another
+# item. A source keeps its copies after some of them are dropped, so one
+# surviving copy is still a copy and not an unsplit item answered by all.
+.split_copies <- function(map) names(map)[map != names(map)]
+
+# Label of one form of a split fit from the names of its items: the copies
+# it holds, then the split items it holds no copy of.
+.split_form_label <- function(map, items) {
+  copies <- .split_copies(map)
+  held <- copies[copies %in% items]
+  absent <- setdiff(unique(unname(map[copies])), map[held])
+  paste(c(held, if (length(absent)) paste("without", .and_list(absent))),
+        collapse = ", ")
+}
+
+.and_list <- function(x) {
+  n <- length(x)
+  if (n < 2L) return(paste(x, collapse = ""))
+  paste0(paste(x[-n], collapse = ", "), " and ", x[n])
+}
+
+# The test forms of a split fit: the sets of split copies that persons
+# answered, at most one copy of every split item, each with the unsplit
+# items. A person who answered no copy of a split item takes the form
+# without it, whether the copy was dropped, the person's level was not
+# split or the response is missing: the items a person answered are the
+# only ones a conversion of that person's raw score can be over, and the
+# only ones that carry information about where the person is. Each form
+# holds its label, its items in calibration order and the rows of its
+# persons. NULL when no item is split; an empty list when no person
+# answered a form, every person having answered several copies of some
+# item, which no split of this package produces.
+.split_forms <- function(fit) {
+  map <- .split_source_map(fit)
+  copies <- .split_copies(map)
+  if (!length(copies)) return(NULL)
+  obs <- !is.na(fit$X[, copies, drop = FALSE])
+  per_source <- lapply(split(copies, unname(map[copies])), function(cp)
+    rowSums(obs[, cp, drop = FALSE]))
+  rows <- which(Reduce(`&`, lapply(per_source, `<=`, 1L)) &
+                  rowSums(!is.na(fit$X)) > 0L)
+  if (!length(rows)) return(list())
+  key <- apply(obs[rows, , drop = FALSE], 1L, function(r)
+    paste(as.integer(!r), collapse = ""))
+  lapply(sort(unique(key)), function(k) {
+    r <- rows[key == k]
+    items <- setdiff(colnames(fit$X), copies[!obs[r[1L], ]])
+    list(label = .split_form_label(map, items), items = items, rows = r)
+  })
+}
+
 #' Combine items into subtests and re-analyse
 #'
 #' Replaces each nominated item group by a polytomous super-item whose score is

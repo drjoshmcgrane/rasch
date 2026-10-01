@@ -696,8 +696,11 @@ weighted_person_estimates <- function(fit, weights,
 #' one copy of a split item, so a score summed over every calibrated column
 #' belongs to nobody. The table then holds one conversion per test form,
 #' the copies that a set of persons answered together with every unsplit
-#' item, under a leading \code{form} column that names those copies. Each
-#' form's frequencies count its own complete responders.
+#' item, under a leading \code{form} column that names those copies. A
+#' person who answered no copy of a split item, because the copy was
+#' dropped, the person's level was not split or the response is missing,
+#' takes the form without that item, named so. Each form's frequencies
+#' count its own complete responders.
 #'
 #' @param fit A fitted object from \code{\link{rasch}}.
 #' @param method \code{"wle"} (Warm, default) or \code{"mle"}.
@@ -757,33 +760,6 @@ score_table <- function(fit, method = c("wle", "mle"),
   rownames(out) <- NULL
   if (all(out$freq == 0L)) out$freq <- out$cum_pct <- NULL
   out
-}
-
-# The test forms of a split fit: the sets of split copies that persons
-# answered, one copy of every split item, each with the unsplit items. A
-# person who answered no copy of some split item, through missing data or a
-# level the item was not split for, is a complete responder of no form.
-# NULL when no item is split; an empty list when no person answered a form.
-.split_forms <- function(fit) {
-  if (is.null(fit$split_map)) return(NULL)
-  map <- .split_source_map(fit)
-  by_source <- split(names(map), unname(map))
-  multi <- by_source[lengths(by_source) > 1L]
-  if (!length(multi)) return(NULL)
-  copies <- unlist(multi, use.names = FALSE)
-  keep <- names(map)[!map %in% names(multi)]
-  obs <- !is.na(fit$X[, copies, drop = FALSE])
-  rows <- which(Reduce(`&`, lapply(multi, function(cp)
-    rowSums(obs[, cp, drop = FALSE]) == 1L)))
-  if (!length(rows)) return(list())
-  key <- apply(obs[rows, , drop = FALSE], 1L, function(r)
-    paste(as.integer(!r), collapse = ""))
-  lapply(sort(unique(key)), function(k) {
-    r <- rows[key == k]
-    answered <- copies[obs[r[1L], ]]
-    list(label = paste(answered, collapse = ", "),
-         items = c(keep, answered), rows = r)
-  })
 }
 
 # One conversion over one item set: tab holds the Warm estimates by score,
